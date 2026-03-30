@@ -3,7 +3,13 @@
 import pytest
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 
-from sleap_io.model.roi import ROI, AnnotationType, _rasterize_geometry
+from sleap_io.model.roi import (
+    ROI,
+    AnnotationType,
+    PredictedROI,
+    UserROI,
+    _rasterize_geometry,
+)
 from sleap_io.model.video import Video
 
 
@@ -282,3 +288,43 @@ def test_roi_geo_interface_defaults():
     assert props["category"] == ""
     assert props["source"] == ""
     assert props["frame_idx"] is None
+
+
+def test_roi_is_predicted():
+    roi = ROI(geometry=box(0, 0, 5, 5))
+    assert roi.is_predicted is False
+
+    user_roi = UserROI(geometry=box(0, 0, 5, 5))
+    assert user_roi.is_predicted is False
+    assert isinstance(user_roi, ROI)
+
+    pred_roi = PredictedROI(geometry=box(0, 0, 5, 5), score=0.9)
+    assert pred_roi.is_predicted is True
+    assert isinstance(pred_roi, ROI)
+    assert pred_roi.score == 0.9
+
+
+def test_user_roi():
+    roi = UserROI.from_polygon([(0, 0), (10, 0), (10, 10), (0, 10)], name="arena")
+    assert roi.name == "arena"
+    assert not roi.is_predicted
+    assert roi.area > 0
+
+
+def test_predicted_roi():
+    roi = PredictedROI(geometry=box(0, 0, 5, 5), score=0.75, category="arena")
+    assert roi.score == 0.75
+    assert roi.is_predicted
+    assert roi.category == "arena"
+
+
+def test_roi_from_bbox_deprecation():
+    with pytest.warns(DeprecationWarning, match="ROI.from_bbox"):
+        roi = ROI.from_bbox(0, 0, 10, 10)
+    assert roi.is_bbox
+
+
+def test_roi_from_xyxy_deprecation():
+    with pytest.warns(DeprecationWarning, match="ROI.from_xyxy"):
+        roi = ROI.from_xyxy(0, 0, 10, 10)
+    assert roi.is_bbox

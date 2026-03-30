@@ -4,7 +4,11 @@ import numpy as np
 import pytest
 
 from sleap_io.model.instance import Track
-from sleap_io.model.label_image import LabelImage
+from sleap_io.model.label_image import (
+    LabelImage,
+    PredictedLabelImage,
+    UserLabelImage,
+)
 from sleap_io.model.mask import SegmentationMask
 from sleap_io.model.video import Video
 
@@ -438,3 +442,63 @@ def test_labels_integration():
 
     # Combined filters
     assert labels.get_label_images(video=vid1, track=t1) == [li1]
+
+
+def test_info_score():
+    info = LabelImage.Info(category="neuron", score=0.95)
+    assert info.score == 0.95
+
+    info_no_score = LabelImage.Info(category="neuron")
+    assert info_no_score.score is None
+
+
+def test_label_image_is_predicted():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = LabelImage(data=data)
+    assert li.is_predicted is False
+
+    user_li = UserLabelImage(data=data)
+    assert user_li.is_predicted is False
+    assert isinstance(user_li, LabelImage)
+
+    pred_li = PredictedLabelImage(data=data, score=0.9)
+    assert pred_li.is_predicted is True
+    assert isinstance(pred_li, LabelImage)
+    assert pred_li.score == 0.9
+
+
+def test_user_label_image():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    t1 = Track(name="1")
+    li = UserLabelImage(
+        data=data,
+        objects={1: LabelImage.Info(track=t1, category="neuron")},
+    )
+    assert not li.is_predicted
+    assert li.n_objects == 2
+    assert t1 in li
+
+
+def test_predicted_label_image():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    t1 = Track(name="1")
+    li = PredictedLabelImage(
+        data=data,
+        objects={
+            1: LabelImage.Info(track=t1, category="neuron", score=0.9),
+            2: LabelImage.Info(category="glia", score=0.7),
+        },
+        score=0.85,
+    )
+    assert li.is_predicted
+    assert li.score == 0.85
+    assert li.objects[1].score == 0.9
+    assert li.objects[2].score == 0.7
+
+
+def test_predicted_label_image_with_score_map():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    score_map = np.random.rand(2, 2).astype(np.float32)
+    li = PredictedLabelImage(data=data, score=0.85, score_map=score_map)
+    assert li.score_map is not None
+    assert li.score_map.shape == (2, 2)

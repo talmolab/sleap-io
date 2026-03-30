@@ -3,7 +3,13 @@
 import numpy as np
 import pytest
 
-from sleap_io.model.mask import SegmentationMask, _decode_rle, _encode_rle
+from sleap_io.model.mask import (
+    PredictedSegmentationMask,
+    SegmentationMask,
+    UserSegmentationMask,
+    _decode_rle,
+    _encode_rle,
+)
 
 
 def test_encode_rle_all_zeros():
@@ -137,3 +143,55 @@ def test_segmentation_mask_to_polygon_nonconvex():
 
     # The polygon area should be close to the actual mask area (not inflated)
     assert roi.geometry.area == pytest.approx(actual_area, abs=2)
+
+
+def test_segmentation_mask_is_predicted():
+    data = np.zeros((5, 5), dtype=bool)
+    mask = SegmentationMask.from_numpy(data)
+    assert mask.is_predicted is False
+
+    user_mask = UserSegmentationMask.from_numpy(data)
+    assert user_mask.is_predicted is False
+    assert isinstance(user_mask, SegmentationMask)
+
+    pred_mask = PredictedSegmentationMask.from_numpy(data, score=0.95)
+    assert pred_mask.is_predicted is True
+    assert isinstance(pred_mask, SegmentationMask)
+    assert pred_mask.score == 0.95
+
+
+def test_user_segmentation_mask():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    mask = UserSegmentationMask.from_numpy(data, name="cell", category="neuron")
+    assert mask.name == "cell"
+    assert mask.category == "neuron"
+    assert mask.area == 12
+    assert not mask.is_predicted
+
+
+def test_predicted_segmentation_mask():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    mask = PredictedSegmentationMask.from_numpy(data, score=0.85, category="neuron")
+    assert mask.score == 0.85
+    assert mask.is_predicted
+    assert mask.area == 12
+    assert mask.score_map is None
+
+
+def test_predicted_segmentation_mask_with_score_map():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    score_map = np.random.rand(10, 10).astype(np.float32)
+    mask = PredictedSegmentationMask.from_numpy(data, score=0.85, score_map=score_map)
+    assert mask.score == 0.85
+    assert mask.score_map is not None
+    assert mask.score_map.shape == (10, 10)
+
+
+def test_segmentation_mask_instance_idx():
+    mask = SegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
+    assert mask._instance_idx == -1
+    mask._instance_idx = 3
+    assert mask._instance_idx == 3

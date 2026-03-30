@@ -5511,6 +5511,133 @@ def test_labels_copy_preserves_rois_and_masks(slp_minimal, tmp_path):
     assert len(lazy_labels.rois) == 1
 
 
+def test_labels_copy_preserves_label_images(slp_minimal, tmp_path):
+    """Test that lazy copy preserves label_images."""
+    from sleap_io.model.label_image import LabelImage
+
+    labels = load_slp(slp_minimal)
+    video = labels.videos[0]
+    track = Track(name="t1")
+
+    li = LabelImage(
+        data=np.array([[0, 1], [2, 0]], dtype=np.int32),
+        objects={
+            1: LabelImage.Info(track=track, category="neuron"),
+            2: LabelImage.Info(category="glia"),
+        },
+        video=video,
+        frame_idx=0,
+    )
+    labels.label_images.append(li)
+    labels.tracks.append(track)
+
+    # Save and reload lazily
+    out_path = tmp_path / "with_li.slp"
+    labels.save(str(out_path))
+    lazy_labels = load_slp(str(out_path), lazy=True)
+
+    assert len(lazy_labels.label_images) == 1
+
+    # Copy the lazy labels
+    labels_copy = lazy_labels.copy()
+    assert len(labels_copy.label_images) == 1
+    assert labels_copy.label_images[0].n_objects == 2
+
+    # Verify independence
+    labels_copy.label_images.clear()
+    assert len(lazy_labels.label_images) == 1
+
+
+def test_labels_materialize_label_images(tmp_path):
+    """materialize() deep copies label_images, relinking video/track refs."""
+    from sleap_io.model.label_image import LabelImage
+
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+    skeleton = Skeleton(["A"])
+
+    li = LabelImage(
+        data=np.array([[0, 1], [2, 0]], dtype=np.int32),
+        objects={
+            1: LabelImage.Info(track=track, category="neuron"),
+            2: LabelImage.Info(category="glia"),
+        },
+        video=video,
+        frame_idx=0,
+    )
+
+    labels = Labels(
+        videos=[video],
+        tracks=[track],
+        skeletons=[skeleton],
+        label_images=[li],
+    )
+    path = str(tmp_path / "test.slp")
+    sleap_io.save_slp(labels, path)
+
+    lazy = sleap_io.load_slp(path, lazy=True)
+    materialized = lazy.materialize()
+
+    assert len(materialized.label_images) == 1
+    mat_li = materialized.label_images[0]
+
+    # Video reference points to new copy
+    assert mat_li.video is materialized.videos[0]
+    assert mat_li.video is not lazy.videos[0]
+
+    # Track in objects points to new copy
+    for info in mat_li.objects.values():
+        if info.track is not None:
+            assert info.track is materialized.tracks[0]
+            assert info.track is not lazy.tracks[0]
+
+
+def test_labels_get_masks_predicted():
+    """get_masks filters by predicted flag."""
+    from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
+
+    user_mask = UserSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), category="a"
+    )
+    pred_mask = PredictedSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), category="b", score=0.9
+    )
+    labels = Labels(masks=[user_mask, pred_mask])
+
+    assert len(labels.get_masks()) == 2
+    assert labels.get_masks(predicted=True) == [pred_mask]
+    assert labels.get_masks(predicted=False) == [user_mask]
+
+
+def test_labels_get_rois_predicted():
+    """get_rois filters by predicted flag."""
+    from shapely.geometry import box
+
+    from sleap_io.model.roi import PredictedROI, UserROI
+
+    user_roi = UserROI(geometry=box(0, 0, 5, 5), category="a")
+    pred_roi = PredictedROI(geometry=box(0, 0, 5, 5), category="b", score=0.8)
+    labels = Labels(rois=[user_roi, pred_roi])
+
+    assert len(labels.get_rois()) == 2
+    assert labels.get_rois(predicted=True) == [pred_roi]
+    assert labels.get_rois(predicted=False) == [user_roi]
+
+
+def test_labels_get_label_images_predicted():
+    """get_label_images filters by predicted flag."""
+    from sleap_io.model.label_image import PredictedLabelImage, UserLabelImage
+
+    data = np.array([[0, 1]], dtype=np.int32)
+    user_li = UserLabelImage(data=data)
+    pred_li = PredictedLabelImage(data=data, score=0.9)
+    labels = Labels(label_images=[user_li, pred_li])
+
+    assert len(labels.get_label_images()) == 2
+    assert labels.get_label_images(predicted=True) == [pred_li]
+    assert labels.get_label_images(predicted=False) == [user_li]
+
+
 def test_labels_get_bboxes():
     """get_bboxes filters by video, frame, category, and predicted."""
     video = Video(filename="test.mp4")

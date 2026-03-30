@@ -85,9 +85,13 @@ from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance3D, PredictedInstance3D
-from sleap_io.model.label_image import LabelImage
-from sleap_io.model.mask import SegmentationMask
-from sleap_io.model.roi import ROI
+from sleap_io.model.label_image import LabelImage, PredictedLabelImage, UserLabelImage
+from sleap_io.model.mask import (
+    PredictedSegmentationMask,
+    SegmentationMask,
+    UserSegmentationMask,
+)
+from sleap_io.model.roi import ROI, PredictedROI, UserROI
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
@@ -5877,3 +5881,236 @@ def test_instance_group_to_dict_warns_on_unknown_identity(camera_group_345):
         )
 
     assert "identity_idx" not in result
+
+
+# -- Predicted variant round-trip tests --
+
+
+def test_slp_mask_instance_roundtrip(tmp_path):
+    """Mask instance associations survive save/reload."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    inst = Instance.from_numpy([[10, 20]], skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+
+    mask = UserSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool),
+        video=video,
+        frame_idx=0,
+        instance=inst,
+        category="cell",
+    )
+
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        masks=[mask],
+    )
+
+    path = str(tmp_path / "mask_inst.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 1
+    rm = loaded.masks[0]
+    assert rm.instance is not None
+    assert rm.category == "cell"
+    assert isinstance(rm, UserSegmentationMask)
+
+
+def test_slp_predicted_mask_roundtrip(tmp_path):
+    """PredictedSegmentationMask round-trips with score."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    mask = PredictedSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool),
+        video=video,
+        frame_idx=0,
+        category="cell",
+        score=0.95,
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        masks=[mask],
+    )
+
+    path = str(tmp_path / "pred_mask.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 1
+    rm = loaded.masks[0]
+    assert isinstance(rm, PredictedSegmentationMask)
+    assert rm.score == pytest.approx(0.95, abs=1e-5)
+    assert rm.category == "cell"
+    np.testing.assert_array_equal(rm.data, np.ones((5, 5), dtype=bool))
+
+    # Verify format_id bumped to 1.9
+    format_id = read_hdf5_attrs(path, "metadata", "format_id")
+    assert format_id == 1.9
+
+
+def test_slp_predicted_mask_score_map_roundtrip(tmp_path):
+    """PredictedSegmentationMask with score_map survives round-trip."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    score_map = np.random.rand(8, 8).astype(np.float32)
+    mask = PredictedSegmentationMask.from_numpy(
+        np.ones((8, 8), dtype=bool),
+        video=video,
+        frame_idx=0,
+        score=0.9,
+        score_map=score_map,
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        masks=[mask],
+    )
+
+    path = str(tmp_path / "pred_mask_sm.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    rm = loaded.masks[0]
+    assert isinstance(rm, PredictedSegmentationMask)
+    assert rm.score_map is not None
+    np.testing.assert_allclose(rm.score_map, score_map, atol=1e-6)
+
+
+def test_slp_predicted_roi_roundtrip(tmp_path):
+    """PredictedROI round-trips with score."""
+    from shapely.geometry import box
+
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    roi = PredictedROI(
+        geometry=box(0, 0, 10, 10),
+        video=video,
+        frame_idx=0,
+        category="arena",
+        score=0.85,
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        rois=[roi],
+    )
+
+    path = str(tmp_path / "pred_roi.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.rois) == 1
+    rr = loaded.rois[0]
+    assert isinstance(rr, PredictedROI)
+    assert rr.score == pytest.approx(0.85, abs=1e-5)
+    assert rr.category == "arena"
+
+
+def test_slp_user_roi_roundtrip(tmp_path):
+    """UserROI round-trips preserving type."""
+    from shapely.geometry import Polygon
+
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    # Use a non-rectangular polygon so it doesn't get migrated to BoundingBox
+    roi = UserROI(
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (5, 15), (0, 10)]),
+        video=video,
+        frame_idx=0,
+        category="arena",
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        rois=[roi],
+    )
+
+    path = str(tmp_path / "user_roi.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.rois) == 1
+    rr = loaded.rois[0]
+    assert isinstance(rr, UserROI)
+    assert not rr.is_predicted
+
+
+def test_slp_predicted_label_image_roundtrip(tmp_path):
+    """PredictedLabelImage round-trips with scores."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    t1 = Track(name="t1")
+
+    data = np.zeros((6, 6), dtype=np.int32)
+    data[1:4, 1:4] = 1
+
+    li = PredictedLabelImage(
+        data=data,
+        objects={
+            1: LabelImage.Info(track=t1, category="neuron", score=0.92),
+        },
+        video=video,
+        frame_idx=0,
+        score=0.88,
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[t1],
+        label_images=[li],
+    )
+
+    path = str(tmp_path / "pred_li.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.label_images) == 1
+    rli = loaded.label_images[0]
+    assert isinstance(rli, PredictedLabelImage)
+    assert rli.score == pytest.approx(0.88, abs=1e-5)
+    assert rli.objects[1].score == pytest.approx(0.92, abs=1e-5)
+    assert rli.objects[1].category == "neuron"
+    np.testing.assert_array_equal(rli.data, data)
+
+
+def test_slp_backward_compat_no_predicted_fields(tmp_path):
+    """Files without is_predicted columns read as base classes (backward compat)."""
+    # Write a file with the OLD format (no predicted fields)
+    # by manually creating the old-style datasets
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    mask = SegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool),
+        video=video,
+        frame_idx=0,
+        category="cell",
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        masks=[mask],
+    )
+
+    path = str(tmp_path / "old_format.slp")
+    save_slp(labels, path)
+
+    # Verify the file can be read back
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 1
+    # Base SegmentationMask (not User* or Predicted*) is fine for old files
+    assert loaded.masks[0].category == "cell"
