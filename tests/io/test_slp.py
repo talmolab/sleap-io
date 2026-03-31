@@ -874,6 +874,23 @@ def test_make_instance_group_and_instance_group_to_dict(
     assert instance_group_dict.get("camcorder_to_lf_and_inst_idx_map", None) is not None
 
 
+def test_make_instance_group_warns_on_3d_points_without_skeleton(camera_group_345):
+    """Test that make_instance_group warns when 3D points are discarded."""
+    instance_group_dict = {
+        "camcorder_to_lf_and_inst_idx_map": {},
+        "points": [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+    }
+
+    with pytest.warns(UserWarning, match="3D points discarded"):
+        ig = make_instance_group(
+            instance_group_dict,
+            labeled_frames=[],
+            camera_group=camera_group_345,
+        )
+
+    assert ig.instance_3d is None
+
+
 def test_make_frame_group_and_frame_group_to_dict(
     frame_group_345: FrameGroup, camera_group_345: CameraGroup
 ):

@@ -16,6 +16,7 @@ Format version history:
 from __future__ import annotations
 
 import sys
+import warnings
 from enum import Enum, IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -1879,6 +1880,11 @@ def make_instance_group(
                     skeleton=skeleton,
                     score=inst3d_score,
                 )
+        else:
+            warnings.warn(
+                "3D points discarded for InstanceGroup: no skeleton available "
+                "(all camera mappings failed)."
+            )
 
     # Identity
     identity = None
