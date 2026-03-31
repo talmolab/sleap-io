@@ -5773,3 +5773,31 @@ def test_multiple_sessions_shared_identities(tmp_path, camera_group_345):
         id(loaded.identities[0]),
         id(loaded.identities[1]),
     }
+
+
+def test_legacy_pre19_sessions_load():
+    """Test that pre-1.9 .slp files load correctly with the new reader."""
+    labels = read_labels("tests/data/legacy_pre19_sessions.slp")
+
+    assert len(labels.sessions) == 1
+    session = labels.sessions[0]
+    assert len(session.camera_group.cameras) == 2
+
+    frame_groups = list(session.frame_groups.values())
+    assert len(frame_groups) == 1
+
+    fg = frame_groups[0]
+    assert len(fg.instance_groups) == 1
+
+    ig = fg.instance_groups[0]
+    assert len(ig.instance_by_camera) == 2
+    assert ig.score == 0.85
+
+    # Pre-1.9 files have no Identity or Instance3D
+    assert ig.identity is None
+    assert ig.instance_3d is None
+
+    # Verify instance data survived
+    for inst in ig.instance_by_camera.values():
+        assert inst.skeleton is not None
+        assert len(inst.skeleton) == 2
