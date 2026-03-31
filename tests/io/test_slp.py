@@ -891,6 +891,36 @@ def test_make_instance_group_warns_on_3d_points_without_skeleton(camera_group_34
     assert ig.instance_3d is None
 
 
+def test_make_instance_group_warns_on_identity_idx_out_of_bounds(camera_group_345):
+    """Test that make_instance_group warns on out-of-bounds identity_idx."""
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    video1 = Video(filename="v1.mp4")
+    video2 = Video(filename="v2.mp4")
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    instance_group_dict = {
+        "camcorder_to_lf_and_inst_idx_map": {"0": ("0", "0"), "1": ("1", "0")},
+        "identity_idx": 99,
+    }
+    identities = [Identity(name="mouse_A")]
+
+    with pytest.warns(UserWarning, match="identity_idx 99 out of range"):
+        ig = make_instance_group(
+            instance_group_dict,
+            labeled_frames=[lf1, lf2],
+            camera_group=camera_group_345,
+            identities=identities,
+        )
+
+    assert ig.identity is None
+
+
 def test_make_frame_group_and_frame_group_to_dict(
     frame_group_345: FrameGroup, camera_group_345: CameraGroup
 ):

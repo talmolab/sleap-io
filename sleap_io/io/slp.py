@@ -1890,7 +1890,14 @@ def make_instance_group(
     identity = None
     identity_idx = instance_group_dict.pop("identity_idx", None)
     if identity_idx is not None and identities is not None:
-        identity = identities[int(identity_idx)]
+        idx = int(identity_idx)
+        if 0 <= idx < len(identities):
+            identity = identities[idx]
+        else:
+            warnings.warn(
+                f"identity_idx {idx} out of range "
+                f"(max {len(identities) - 1}); identity set to None."
+            )
 
     # Metadata contains any information that the class does not deserialize.
     metadata = instance_group_dict  # Remaining keys are metadata.
