@@ -513,8 +513,12 @@ class InstanceGroup:
             for inst in self._instance_by_camera.values():
                 skeleton = inst.skeleton
                 break
-            if skeleton is not None:
-                self._instance_3d = Instance3D(points=value, skeleton=skeleton)
+            if skeleton is None:
+                raise ValueError(
+                    "Cannot set 3D points: no skeleton available from "
+                    "instance_by_camera."
+                )
+            self._instance_3d = Instance3D(points=value, skeleton=skeleton)
 
     def get_instance(self, camera: Camera) -> Instance | None:
         """Get `Instance` associated with `camera`.

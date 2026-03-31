@@ -787,3 +787,11 @@ def test_instance_group_points_setter():
     ig.points = None
     assert ig.points is None
     assert ig.instance_3d is None
+
+
+def test_instance_group_points_setter_raises_without_skeleton():
+    """Test that setting points raises ValueError when no skeleton is available."""
+    ig = InstanceGroup(instance_by_camera={})
+
+    with pytest.raises(ValueError, match="no skeleton available"):
+        ig.points = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
