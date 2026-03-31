@@ -5818,3 +5818,32 @@ def test_legacy_pre19_sessions_load():
     for inst in ig.instance_by_camera.values():
         assert inst.skeleton is not None
         assert len(inst.skeleton) == 2
+
+
+def test_instance_group_to_dict_warns_on_unknown_identity(camera_group_345):
+    """Test that instance_group_to_dict warns when identity is not in identities list."""
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    unknown_identity = Identity(name="unknown_animal")
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+        identity=unknown_identity,
+    )
+
+    instance_to_lf_and_inst_idx = {inst1: (0, 0), inst2: (1, 0)}
+
+    known_identities = [Identity(name="other_animal")]
+
+    with pytest.warns(UserWarning, match="not found in Labels.identities"):
+        result = instance_group_to_dict(
+            instance_group=ig,
+            instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
+            camera_group=camera_group_345,
+            identities=known_identities,
+        )
+
+    assert "identity_idx" not in result

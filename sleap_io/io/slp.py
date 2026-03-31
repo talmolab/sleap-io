@@ -2209,7 +2209,10 @@ def instance_group_to_dict(
             identity_idx = identities.index(instance_group.identity)
             instance_group_dict["identity_idx"] = identity_idx
         except ValueError:
-            pass
+            warnings.warn(
+                f"Identity '{instance_group.identity.name}' not found in "
+                "Labels.identities; identity dropped during save."
+            )
 
     instance_group_dict.update(instance_group.metadata)
 
