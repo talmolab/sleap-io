@@ -78,9 +78,12 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "InstanceGroup",
             "RecordingSession",
         ],
+        "model.identity": ["Identity"],
         "model.instance": [
             "Instance",
+            "Instance3D",
             "PredictedInstance",
+            "PredictedInstance3D",
             "Track",
         ],
         "model.labeled_frame": ["LabeledFrame"],

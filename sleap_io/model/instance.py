@@ -1052,3 +1052,83 @@ class PredictedInstance(Instance):
             self.points[node]["score"] = 1.0
 
         self.points[node]["visible"] = True
+
+
+@attrs.define(eq=False)
+class Instance3D:
+    """A 3D pose instance with keypoints in world coordinates.
+
+    Stores triangulated (or otherwise derived) 3D keypoints. Always associated
+    with an InstanceGroup that contains the source 2D instances.
+
+    Attributes:
+        points: 3D keypoint coordinates as (N, 3) float64 array.
+            NaN values indicate missing/unresolved keypoints.
+        skeleton: The skeleton defining keypoint semantics.
+        score: Optional instance-level confidence score.
+        metadata: Arbitrary metadata dictionary.
+    """
+
+    points: np.ndarray = attrs.field(
+        converter=lambda x: np.array(x, dtype="float64") if x is not None else None
+    )
+    skeleton: Skeleton = attrs.field()
+    score: float | None = attrs.field(
+        default=None, converter=attrs.converters.optional(float)
+    )
+    metadata: dict = attrs.field(
+        factory=dict, validator=attrs.validators.instance_of(dict)
+    )
+
+    def __repr__(self) -> str:
+        """Return a readable representation of the 3D instance."""
+        n_valid = 0
+        if self.points is not None:
+            n_valid = int(np.sum(~np.isnan(self.points).any(axis=1)))
+        n_total = len(self.skeleton.nodes)
+        return f"Instance3D(n_points={n_valid}/{n_total})"
+
+    @property
+    def n_visible(self) -> int:
+        """Number of non-NaN 3D keypoints."""
+        if self.points is None:
+            return 0
+        return int(np.sum(~np.isnan(self.points).any(axis=1)))
+
+    @property
+    def is_empty(self) -> bool:
+        """Whether all keypoints are NaN or points is None."""
+        return self.n_visible == 0
+
+    def numpy(self) -> np.ndarray:
+        """Return 3D points as (N, 3) float64 array."""
+        if self.points is None:
+            return np.full((len(self.skeleton.nodes), 3), np.nan, dtype="float64")
+        return self.points.copy()
+
+
+@attrs.define(eq=False)
+class PredictedInstance3D(Instance3D):
+    """A predicted 3D pose instance with per-keypoint confidence scores.
+
+    Extends Instance3D with per-point scores from triangulation confidence
+    or other prediction methods.
+
+    Attributes:
+        point_scores: Per-keypoint confidence scores as (N,) float64 array.
+            NaN values for missing keypoints.
+    """
+
+    point_scores: np.ndarray = attrs.field(
+        default=None,
+        converter=lambda x: np.array(x, dtype="float64") if x is not None else None,
+    )
+
+    def __repr__(self) -> str:
+        """Return a readable representation of the predicted 3D instance."""
+        n_valid = 0
+        if self.points is not None:
+            n_valid = int(np.sum(~np.isnan(self.points).any(axis=1)))
+        n_total = len(self.skeleton.nodes)
+        score_str = f", score={self.score:.3f}" if self.score is not None else ""
+        return f"PredictedInstance3D(n_points={n_valid}/{n_total}{score_str})"

@@ -53,6 +53,7 @@ from sleap_io.io.slp import (
     prepare_frames_to_embed,
     process_and_embed_frames,
     read_bboxes,
+    read_identities,
     read_instances,
     read_labels,
     read_labels_set,
@@ -70,6 +71,7 @@ from sleap_io.io.slp import (
     session_to_dict,
     video_to_dict,
     write_bboxes,
+    write_identities,
     write_labels,
     write_lfs,
     write_metadata,
@@ -81,6 +83,8 @@ from sleap_io.io.slp import (
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.identity import Identity
+from sleap_io.model.instance import Instance3D, PredictedInstance3D
 from sleap_io.model.label_image import LabelImage
 from sleap_io.model.mask import SegmentationMask
 from sleap_io.model.roi import ROI
@@ -840,7 +844,7 @@ def test_make_instance_group_and_instance_group_to_dict(
         camera_group=camera_group_345,
     )
     assert instance_group_dict["score"] == instance_group._score
-    assert np.array_equal(instance_group_dict["points"], instance_group._points)
+    assert np.array_equal(instance_group_dict["points"], instance_group.points.tolist())
 
     # Test from dict
 
@@ -850,7 +854,7 @@ def test_make_instance_group_and_instance_group_to_dict(
         camera_group=camera_group_345,
     )
     assert instance_group_0._score == instance_group._score
-    assert np.array_equal(instance_group_0._points, instance_group._points)
+    assert np.array_equal(instance_group_0.points, instance_group.points)
     assert instance_group_0.metadata == instance_group.metadata
     assert len(instance_group_0._instance_by_camera) == len(
         instance_group._instance_by_camera
@@ -868,6 +872,53 @@ def test_make_instance_group_and_instance_group_to_dict(
     assert instance_group_dict.get("points", None) is not None
     assert instance_group_dict.get("score", None) is not None
     assert instance_group_dict.get("camcorder_to_lf_and_inst_idx_map", None) is not None
+
+
+def test_make_instance_group_warns_on_3d_points_without_skeleton(camera_group_345):
+    """Test that make_instance_group warns when 3D points are discarded."""
+    instance_group_dict = {
+        "camcorder_to_lf_and_inst_idx_map": {},
+        "points": [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+    }
+
+    with pytest.warns(UserWarning, match="3D points discarded"):
+        ig = make_instance_group(
+            instance_group_dict,
+            labeled_frames=[],
+            camera_group=camera_group_345,
+        )
+
+    assert ig.instance_3d is None
+
+
+def test_make_instance_group_warns_on_identity_idx_out_of_bounds(camera_group_345):
+    """Test that make_instance_group warns on out-of-bounds identity_idx."""
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    video1 = Video(filename="v1.mp4")
+    video2 = Video(filename="v2.mp4")
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    instance_group_dict = {
+        "camcorder_to_lf_and_inst_idx_map": {"0": ("0", "0"), "1": ("1", "0")},
+        "identity_idx": 99,
+    }
+    identities = [Identity(name="mouse_A")]
+
+    with pytest.warns(UserWarning, match="identity_idx 99 out of range"):
+        ig = make_instance_group(
+            instance_group_dict,
+            labeled_frames=[lf1, lf2],
+            camera_group=camera_group_345,
+            identities=identities,
+        )
+
+    assert ig.identity is None
 
 
 def test_make_frame_group_and_frame_group_to_dict(
@@ -5189,3 +5240,640 @@ def test_read_h5wasm_instances_float64_indices(tmp_path):
     assert inst0.track is None
     np.testing.assert_array_equal(inst0["A"]["xy"], [10.0, 20.0])
     np.testing.assert_array_equal(inst0["B"]["xy"], [30.0, 40.0])
+
+
+def test_identity_round_trip(tmp_path):
+    """Test Identity serialization round-trip."""
+    labels_path = str(tmp_path / "test.slp")
+
+    identities = [
+        Identity(name="mouse_A", color="#ff0000"),
+        Identity(name="mouse_B"),
+        Identity(name="mouse_C", color="#00ff00", metadata={"age": 12}),
+    ]
+
+    # Write and read back
+    with h5py.File(labels_path, "w"):
+        pass  # Create empty file
+
+    write_identities(labels_path, identities)
+    loaded = read_identities(labels_path)
+
+    assert len(loaded) == 3
+    assert loaded[0].name == "mouse_A"
+    assert loaded[0].color == "#ff0000"
+    assert loaded[1].name == "mouse_B"
+    assert loaded[1].color is None
+    assert loaded[2].name == "mouse_C"
+    assert loaded[2].color == "#00ff00"
+    assert loaded[2].metadata == {"age": 12}
+
+
+def test_identity_empty_round_trip(tmp_path):
+    """Test that empty identities list doesn't create dataset."""
+    labels_path = str(tmp_path / "test.slp")
+    with h5py.File(labels_path, "w"):
+        pass
+
+    write_identities(labels_path, [])
+    loaded = read_identities(labels_path)
+    assert loaded == []
+
+
+def test_labels_with_identities_round_trip(tmp_path):
+    """Test full Labels round-trip with identities."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    identities = [
+        Identity(name="mouse_A", color="#ff0000"),
+        Identity(name="mouse_B"),
+    ]
+    labels = Labels(
+        skeletons=[skeleton],
+        identities=identities,
+    )
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    assert len(loaded.identities) == 2
+    assert loaded.identities[0].name == "mouse_A"
+    assert loaded.identities[0].color == "#ff0000"
+    assert loaded.identities[1].name == "mouse_B"
+
+
+def test_format_version_1_9_with_identities(tmp_path):
+    """Test format version bumps to 1.9 when identities are present."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    labels = Labels(
+        skeletons=[skeleton],
+        identities=[Identity(name="mouse_A")],
+    )
+    write_labels(labels_path, labels)
+
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    assert format_id == 1.9
+
+
+def test_format_version_no_identities(tmp_path):
+    """Test format version stays below 1.9 when no identities."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    labels = Labels(skeletons=[skeleton])
+    write_labels(labels_path, labels)
+
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    assert format_id < 1.9
+
+
+def test_instance_group_3d_round_trip(tmp_path, camera_group_345):
+    """Test Instance3D round-trip through session serialization."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    original_points = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    inst_3d = Instance3D(points=original_points.copy(), skeleton=skeleton)
+
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+        instance_3d=inst_3d,
+    )
+
+    video1 = Video(filename="cam1.mp4")
+    video2 = Video(filename="cam2.mp4")
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    fg = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig],
+        labeled_frame_by_camera={cam1: lf1, cam2: lf2},
+    )
+
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: video1, cam2: video2},
+        camera_by_video={video1: cam1, video2: cam2},
+        frame_group_by_frame_idx={0: fg},
+    )
+
+    labels = Labels(
+        labeled_frames=[lf1, lf2],
+        videos=[video1, video2],
+        skeletons=[skeleton],
+        sessions=[session],
+    )
+
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    assert len(loaded.sessions) == 1
+    loaded_session = loaded.sessions[0]
+    loaded_fg = list(loaded_session.frame_groups.values())[0]
+    loaded_ig = loaded_fg.instance_groups[0]
+    np.testing.assert_array_almost_equal(loaded_ig.points, original_points)
+
+
+def test_predicted_instance_3d_round_trip(tmp_path, camera_group_345):
+    """Test PredictedInstance3D round-trip through session serialization."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    identity = Identity(name="mouse_A")
+    pred_3d = PredictedInstance3D(
+        points=np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+        skeleton=skeleton,
+        score=0.95,
+        point_scores=np.array([0.9, 0.8]),
+    )
+
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+        instance_3d=pred_3d,
+        identity=identity,
+    )
+
+    video1 = Video(filename="cam1.mp4")
+    video2 = Video(filename="cam2.mp4")
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    fg = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig],
+        labeled_frame_by_camera={cam1: lf1, cam2: lf2},
+    )
+
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: video1, cam2: video2},
+        camera_by_video={video1: cam1, video2: cam2},
+        frame_group_by_frame_idx={0: fg},
+    )
+
+    labels = Labels(
+        labeled_frames=[lf1, lf2],
+        videos=[video1, video2],
+        skeletons=[skeleton],
+        sessions=[session],
+        identities=[identity],
+    )
+
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    # Check identities
+    assert len(loaded.identities) == 1
+    assert loaded.identities[0].name == "mouse_A"
+
+    # Check Instance3D round-trip
+    loaded_ig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    np.testing.assert_array_almost_equal(
+        loaded_ig.points,
+        np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+    )
+
+    # Check it's a PredictedInstance3D
+    assert isinstance(loaded_ig.instance_3d, PredictedInstance3D)
+    assert loaded_ig.instance_3d.score == 0.95
+    np.testing.assert_array_almost_equal(
+        loaded_ig.instance_3d.point_scores,
+        np.array([0.9, 0.8]),
+    )
+
+    # Check identity was preserved
+    assert loaded_ig.identity is loaded.identities[0]
+
+
+def test_multiple_instance_groups_different_identities(tmp_path, camera_group_345):
+    """Test multiple InstanceGroups per FrameGroup with different identities."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    id_mouse_a = Identity(name="mouse_A", color="#ff0000")
+    id_mouse_b = Identity(name="mouse_B", color="#00ff00")
+
+    # Animal A instances
+    inst_a_cam1 = Instance({"A": [10, 20], "B": [30, 40]}, skeleton=skeleton)
+    inst_a_cam2 = Instance({"A": [15, 25], "B": [35, 45]}, skeleton=skeleton)
+
+    # Animal B instances
+    inst_b_cam1 = Instance({"A": [50, 60], "B": [70, 80]}, skeleton=skeleton)
+    inst_b_cam2 = Instance({"A": [55, 65], "B": [75, 85]}, skeleton=skeleton)
+
+    ig_a = InstanceGroup(
+        instance_by_camera={cam1: inst_a_cam1, cam2: inst_a_cam2},
+        instance_3d=Instance3D(
+            points=np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+            skeleton=skeleton,
+        ),
+        identity=id_mouse_a,
+        score=0.95,
+    )
+    ig_b = InstanceGroup(
+        instance_by_camera={cam1: inst_b_cam1, cam2: inst_b_cam2},
+        instance_3d=Instance3D(
+            points=np.array([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]]),
+            skeleton=skeleton,
+        ),
+        identity=id_mouse_b,
+        score=0.85,
+    )
+
+    video1 = Video(filename="cam1.mp4")
+    video2 = Video(filename="cam2.mp4")
+    lf1 = LabeledFrame(
+        video=video1,
+        frame_idx=0,
+        instances=[inst_a_cam1, inst_b_cam1],
+    )
+    lf2 = LabeledFrame(
+        video=video2,
+        frame_idx=0,
+        instances=[inst_a_cam2, inst_b_cam2],
+    )
+
+    fg = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig_a, ig_b],
+        labeled_frame_by_camera={cam1: lf1, cam2: lf2},
+    )
+
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: video1, cam2: video2},
+        camera_by_video={video1: cam1, video2: cam2},
+        frame_group_by_frame_idx={0: fg},
+    )
+
+    labels = Labels(
+        labeled_frames=[lf1, lf2],
+        videos=[video1, video2],
+        skeletons=[skeleton],
+        sessions=[session],
+        identities=[id_mouse_a, id_mouse_b],
+    )
+
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    # Check both identities loaded
+    assert len(loaded.identities) == 2
+    assert loaded.identities[0].name == "mouse_A"
+    assert loaded.identities[0].color == "#ff0000"
+    assert loaded.identities[1].name == "mouse_B"
+    assert loaded.identities[1].color == "#00ff00"
+
+    # Check both instance groups have correct identity mappings
+    loaded_fg = list(loaded.sessions[0].frame_groups.values())[0]
+    assert len(loaded_fg.instance_groups) == 2
+
+    loaded_ig_a = loaded_fg.instance_groups[0]
+    loaded_ig_b = loaded_fg.instance_groups[1]
+
+    assert loaded_ig_a.identity is loaded.identities[0]
+    assert loaded_ig_a.identity.name == "mouse_A"
+    assert loaded_ig_a.score == 0.95
+    np.testing.assert_array_almost_equal(
+        loaded_ig_a.points, np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    )
+
+    assert loaded_ig_b.identity is loaded.identities[1]
+    assert loaded_ig_b.identity.name == "mouse_B"
+    assert loaded_ig_b.score == 0.85
+    np.testing.assert_array_almost_equal(
+        loaded_ig_b.points, np.array([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
+    )
+
+
+def test_instance_group_identity_without_3d(tmp_path, camera_group_345):
+    """Test InstanceGroup with identity but no Instance3D."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    identity = Identity(name="mouse_A")
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+        identity=identity,
+    )
+
+    video1 = Video(filename="cam1.mp4")
+    video2 = Video(filename="cam2.mp4")
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    fg = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig],
+        labeled_frame_by_camera={cam1: lf1, cam2: lf2},
+    )
+
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: video1, cam2: video2},
+        camera_by_video={video1: cam1, video2: cam2},
+        frame_group_by_frame_idx={0: fg},
+    )
+
+    labels = Labels(
+        labeled_frames=[lf1, lf2],
+        videos=[video1, video2],
+        skeletons=[skeleton],
+        sessions=[session],
+        identities=[identity],
+    )
+
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    loaded_ig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    assert loaded_ig.identity is loaded.identities[0]
+    assert loaded_ig.identity.name == "mouse_A"
+    assert loaded_ig.instance_3d is None
+    assert loaded_ig.points is None
+
+
+def test_instance_3d_score_without_point_scores(tmp_path, camera_group_345):
+    """Test Instance3D with score but no point_scores."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    inst_3d = Instance3D(
+        points=np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+        skeleton=skeleton,
+        score=0.88,
+    )
+
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+        instance_3d=inst_3d,
+    )
+
+    video1 = Video(filename="cam1.mp4")
+    video2 = Video(filename="cam2.mp4")
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    fg = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig],
+        labeled_frame_by_camera={cam1: lf1, cam2: lf2},
+    )
+
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: video1, cam2: video2},
+        camera_by_video={video1: cam1, video2: cam2},
+        frame_group_by_frame_idx={0: fg},
+    )
+
+    labels = Labels(
+        labeled_frames=[lf1, lf2],
+        videos=[video1, video2],
+        skeletons=[skeleton],
+        sessions=[session],
+    )
+
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    loaded_ig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    assert loaded_ig.instance_3d is not None
+    assert not isinstance(loaded_ig.instance_3d, PredictedInstance3D)
+    assert loaded_ig.instance_3d.score == 0.88
+    np.testing.assert_array_almost_equal(
+        loaded_ig.points, np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    )
+
+
+def test_session_metadata_track_identity_map_round_trip(tmp_path, camera_group_345):
+    """Test track_identity_map in session metadata round-trips through SLP."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+    )
+
+    video1 = Video(filename="cam1.mp4")
+    video2 = Video(filename="cam2.mp4")
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    fg = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig],
+        labeled_frame_by_camera={cam1: lf1, cam2: lf2},
+    )
+
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: video1, cam2: video2},
+        camera_by_video={video1: cam1, video2: cam2},
+        frame_group_by_frame_idx={0: fg},
+        metadata={
+            "track_identity_map": {"cam_top:0": 0, "cam_side:0": 0},
+            "frame_identity_map": {"5:cam_top:0": 1},
+        },
+    )
+
+    labels = Labels(
+        labeled_frames=[lf1, lf2],
+        videos=[video1, video2],
+        skeletons=[skeleton],
+        sessions=[session],
+    )
+
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    loaded_session = loaded.sessions[0]
+    assert "track_identity_map" in loaded_session.metadata
+    assert loaded_session.metadata["track_identity_map"] == {
+        "cam_top:0": 0,
+        "cam_side:0": 0,
+    }
+    assert "frame_identity_map" in loaded_session.metadata
+    assert loaded_session.metadata["frame_identity_map"] == {"5:cam_top:0": 1}
+
+
+def test_multiple_sessions_shared_identities(tmp_path, camera_group_345):
+    """Test two sessions referencing the same Identity objects."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    id_a = Identity(name="mouse_A")
+    id_b = Identity(name="mouse_B")
+
+    # Session 1
+    inst1_s1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2_s1 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+    ig_s1 = InstanceGroup(
+        instance_by_camera={cam1: inst1_s1, cam2: inst2_s1},
+        identity=id_a,
+    )
+    vid1_s1 = Video(filename="session1_cam1.mp4")
+    vid2_s1 = Video(filename="session1_cam2.mp4")
+    lf1_s1 = LabeledFrame(video=vid1_s1, frame_idx=0, instances=[inst1_s1])
+    lf2_s1 = LabeledFrame(video=vid2_s1, frame_idx=0, instances=[inst2_s1])
+    fg_s1 = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig_s1],
+        labeled_frame_by_camera={cam1: lf1_s1, cam2: lf2_s1},
+    )
+    session1 = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: vid1_s1, cam2: vid2_s1},
+        camera_by_video={vid1_s1: cam1, vid2_s1: cam2},
+        frame_group_by_frame_idx={0: fg_s1},
+    )
+
+    # Session 2 — same identities, different instances
+    inst1_s2 = Instance({"A": [10, 11], "B": [12, 13]}, skeleton=skeleton)
+    inst2_s2 = Instance({"A": [14, 15], "B": [16, 17]}, skeleton=skeleton)
+    ig_s2 = InstanceGroup(
+        instance_by_camera={cam1: inst1_s2, cam2: inst2_s2},
+        identity=id_b,
+    )
+    vid1_s2 = Video(filename="session2_cam1.mp4")
+    vid2_s2 = Video(filename="session2_cam2.mp4")
+    lf1_s2 = LabeledFrame(video=vid1_s2, frame_idx=0, instances=[inst1_s2])
+    lf2_s2 = LabeledFrame(video=vid2_s2, frame_idx=0, instances=[inst2_s2])
+    fg_s2 = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig_s2],
+        labeled_frame_by_camera={cam1: lf1_s2, cam2: lf2_s2},
+    )
+    session2 = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: vid1_s2, cam2: vid2_s2},
+        camera_by_video={vid1_s2: cam1, vid2_s2: cam2},
+        frame_group_by_frame_idx={0: fg_s2},
+    )
+
+    labels = Labels(
+        labeled_frames=[lf1_s1, lf2_s1, lf1_s2, lf2_s2],
+        videos=[vid1_s1, vid2_s1, vid1_s2, vid2_s2],
+        skeletons=[skeleton],
+        sessions=[session1, session2],
+        identities=[id_a, id_b],
+    )
+
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    # Both sessions loaded
+    assert len(loaded.sessions) == 2
+    assert len(loaded.identities) == 2
+
+    # Session 1 references identity 0 (mouse_A)
+    loaded_ig_s1 = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    assert loaded_ig_s1.identity is loaded.identities[0]
+    assert loaded_ig_s1.identity.name == "mouse_A"
+
+    # Session 2 references identity 1 (mouse_B)
+    loaded_ig_s2 = list(loaded.sessions[1].frame_groups.values())[0].instance_groups[0]
+    assert loaded_ig_s2.identity is loaded.identities[1]
+    assert loaded_ig_s2.identity.name == "mouse_B"
+
+    # Both reference the same Identity objects from Labels.identities
+    all_identities = set()
+    for session in loaded.sessions:
+        for fg in session.frame_groups.values():
+            for ig in fg.instance_groups:
+                if ig.identity is not None:
+                    all_identities.add(id(ig.identity))
+    assert len(all_identities) == 2
+    assert all_identities == {
+        id(loaded.identities[0]),
+        id(loaded.identities[1]),
+    }
+
+
+def test_legacy_pre19_sessions_load():
+    """Test that pre-1.9 .slp files load correctly with the new reader."""
+    labels = read_labels("tests/data/legacy_pre19_sessions.slp")
+
+    assert len(labels.sessions) == 1
+    session = labels.sessions[0]
+    assert len(session.camera_group.cameras) == 2
+
+    frame_groups = list(session.frame_groups.values())
+    assert len(frame_groups) == 1
+
+    fg = frame_groups[0]
+    assert len(fg.instance_groups) == 1
+
+    ig = fg.instance_groups[0]
+    assert len(ig.instance_by_camera) == 2
+    assert ig.score == 0.85
+
+    # Pre-1.9 files have no Identity or Instance3D
+    assert ig.identity is None
+    assert ig.instance_3d is None
+
+    # Verify instance data survived
+    for inst in ig.instance_by_camera.values():
+        assert inst.skeleton is not None
+        assert len(inst.skeleton) == 2
+
+
+def test_instance_group_to_dict_warns_on_unknown_identity(camera_group_345):
+    """Test instance_group_to_dict warns when identity not in identities."""
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    unknown_identity = Identity(name="unknown_animal")
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+        identity=unknown_identity,
+    )
+
+    instance_to_lf_and_inst_idx = {inst1: (0, 0), inst2: (1, 0)}
+
+    known_identities = [Identity(name="other_animal")]
+
+    with pytest.warns(UserWarning, match="not found in Labels.identities"):
+        result = instance_group_to_dict(
+            instance_group=ig,
+            instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
+            camera_group=camera_group_345,
+            identities=known_identities,
+        )
+
+    assert "identity_idx" not in result

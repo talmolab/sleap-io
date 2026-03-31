@@ -13,7 +13,8 @@ from sleap_io.model.camera import (
     RecordingSession,
     rodrigues_transformation,
 )
-from sleap_io.model.instance import Instance
+from sleap_io.model.identity import Identity
+from sleap_io.model.instance import Instance, Instance3D, PredictedInstance3D
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
@@ -387,7 +388,8 @@ def test_instance_group_init(
     instance_group = InstanceGroup()
     assert instance_group._instance_by_camera == {}
     assert instance_group._score is None
-    assert instance_group._points is None
+    assert instance_group._instance_3d is None
+    assert instance_group.points is None
     assert instance_group.metadata == {}
 
     # Test with non-defaults
@@ -397,13 +399,14 @@ def test_instance_group_init(
         for cam in camera_group.cameras
     }
     score = 0.5
-    points = np.random.rand(10, 3).astype(np.float32)
+    points = np.random.rand(2, 3).astype(np.float32)
     assert points.dtype == np.float32
+    instance_3d = Instance3D(points=points, skeleton=skeleton)
     metadata = {"observation": 72317}
     instance_group = InstanceGroup(
         instance_by_camera=instance_by_camera,
         score=score,
-        points=points,
+        instance_3d=instance_3d,
         metadata=metadata,
     )
     assert instance_group.instances == list(instance_by_camera.values())
@@ -413,8 +416,9 @@ def test_instance_group_init(
         == instance_group.instances[-1]
     )
     assert instance_group._score == score
-    assert instance_group._points.dtype == np.float64
-    assert np.array_equal(instance_group._points, points.astype(np.float64))
+    assert instance_group.points.dtype == np.float64
+    assert np.array_equal(instance_group.points, points.astype(np.float64))
+    assert instance_group.instance_3d is instance_3d
     assert instance_group.metadata == metadata
 
 
@@ -442,12 +446,13 @@ def test_instance_group_properties():
     )
     assert instance_group.score == test_score
 
-    # Test points property
+    # Test points property via instance_3d
     test_points = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    instance_3d = Instance3D(points=test_points, skeleton=skeleton)
     instance_group = InstanceGroup(
-        instance_by_camera=instance_by_camera, points=test_points
+        instance_by_camera=instance_by_camera, instance_3d=instance_3d
     )
-    assert instance_group.points is instance_group._points
+    assert instance_group.points is instance_group.instance_3d.points
     np.testing.assert_array_equal(instance_group.points, test_points)
 
 
@@ -671,3 +676,122 @@ def test_recording_session_cameras():
     video_2 = Video(filename="test_video_2.mp4")
     session.add_video(video=video_2, camera=camera_2)
     assert session.cameras == [camera_1, camera_2]
+
+
+def test_instance_3d():
+    """Test Instance3D construction and properties."""
+    skeleton = Skeleton(["A", "B", "C"])
+    points = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [np.nan, np.nan, np.nan]])
+    inst = Instance3D(points=points, skeleton=skeleton)
+
+    assert inst.n_visible == 2
+    assert not inst.is_empty
+    assert inst.score is None
+    np.testing.assert_array_equal(inst.points[:2], points[:2])
+
+    # Test numpy() returns copy
+    arr = inst.numpy()
+    assert arr.shape == (3, 3)
+    arr[0, 0] = 999
+    assert inst.points[0, 0] != 999
+
+    # Test repr
+    assert "Instance3D(n_points=2/3)" == repr(inst)
+
+
+def test_instance_3d_empty():
+    """Test Instance3D with all NaN points."""
+    skeleton = Skeleton(["A", "B"])
+    inst = Instance3D(points=np.full((2, 3), np.nan), skeleton=skeleton)
+    assert inst.n_visible == 0
+    assert inst.is_empty
+
+
+def test_instance_3d_none_points():
+    """Test Instance3D with None points."""
+    skeleton = Skeleton(["A", "B"])
+    inst = Instance3D(points=None, skeleton=skeleton)
+    assert inst.n_visible == 0
+    assert inst.is_empty
+    arr = inst.numpy()
+    assert arr.shape == (2, 3)
+    assert np.all(np.isnan(arr))
+
+
+def test_instance_3d_with_score():
+    """Test Instance3D with score."""
+    skeleton = Skeleton(["A"])
+    inst = Instance3D(
+        points=np.array([[1.0, 2.0, 3.0]]),
+        skeleton=skeleton,
+        score=0.95,
+    )
+    assert inst.score == 0.95
+
+
+def test_predicted_instance_3d():
+    """Test PredictedInstance3D construction."""
+    skeleton = Skeleton(["A", "B"])
+    points = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    point_scores = np.array([0.9, 0.8])
+
+    inst = PredictedInstance3D(
+        points=points,
+        skeleton=skeleton,
+        score=0.85,
+        point_scores=point_scores,
+    )
+    assert inst.n_visible == 2
+    assert inst.score == 0.85
+    np.testing.assert_array_equal(inst.point_scores, point_scores)
+    assert "PredictedInstance3D(n_points=2/2, score=0.850)" == repr(inst)
+
+
+def test_instance_group_with_identity():
+    """Test InstanceGroup with identity field."""
+    skeleton = Skeleton(["A", "B"])
+    cam = Camera(name="cam1")
+    inst = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    identity = Identity(name="mouse_A")
+
+    ig = InstanceGroup(
+        instance_by_camera={cam: inst},
+        identity=identity,
+    )
+    assert ig.identity is identity
+    assert 'identity="mouse_A"' in repr(ig)
+
+
+def test_instance_group_points_setter():
+    """Test InstanceGroup.points setter creates Instance3D."""
+    skeleton = Skeleton(["A", "B"])
+    cam = Camera(name="cam1")
+    inst = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+
+    ig = InstanceGroup(instance_by_camera={cam: inst})
+    assert ig.points is None
+    assert ig.instance_3d is None
+
+    # Set points via setter
+    pts = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    ig.points = pts
+    assert ig.instance_3d is not None
+    np.testing.assert_array_equal(ig.points, pts)
+
+    # Update points
+    new_pts = np.array([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
+    ig.points = new_pts
+    np.testing.assert_array_equal(ig.points, new_pts)
+
+    # Set to None
+    ig.points = None
+    assert ig.points is None
+    assert ig.instance_3d is None
+
+
+def test_instance_group_points_setter_raises_without_skeleton():
+    """Test that setting points raises ValueError when no skeleton is available."""
+    ig = InstanceGroup(instance_by_camera={})
+
+    with pytest.raises(ValueError, match="no skeleton available"):
+        ig.points = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
