@@ -5851,7 +5851,7 @@ def test_legacy_pre19_sessions_load():
 
 
 def test_instance_group_to_dict_warns_on_unknown_identity(camera_group_345):
-    """Test that instance_group_to_dict warns when identity is not in identities list."""
+    """Test instance_group_to_dict warns when identity not in identities."""
     skeleton = Skeleton(["A", "B"])
     cam1, cam2 = camera_group_345.cameras
 
