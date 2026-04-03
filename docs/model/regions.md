@@ -8,46 +8,54 @@ via `labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`.
 
 sleap-io provides four spatial annotation types with different trade-offs:
 
-- **`BoundingBox`** — axis-aligned or rotated rectangles, stored as center +
-  dimensions. Has `UserBoundingBox` and `PredictedBoundingBox` subtypes for
+- **`BoundingBox`** — axis-aligned or rotated rectangles, stored as corner
+  coordinates. Has `UserBoundingBox` and `PredictedBoundingBox` subtypes for
   distinguishing human annotations from model outputs.
 - **`ROI`** — arbitrary vector geometry via Shapely (polygons, multi-polygons,
-  etc.). Can be static (whole video) or per-frame.
+  etc.). Can be static (whole video) or per-frame. Has `UserROI` and
+  `PredictedROI` subtypes.
 - **`SegmentationMask`** — per-pixel binary masks stored as run-length encoding
-  for compactness. One mask per object.
+  for compactness. One mask per object. Has `UserSegmentationMask` and
+  `PredictedSegmentationMask` subtypes.
 - **`LabelImage`** — dense per-pixel integer label image storing **all** objects
   for a frame in one array. Standard output of instance segmentation tools like
   [Cellpose](https://www.cellpose.org/) and
-  [StarDist](https://github.com/stardist/stardist).
+  [StarDist](https://github.com/stardist/stardist). Has `UserLabelImage` and
+  `PredictedLabelImage` subtypes.
 
-All four can be associated with a video, frame, track, and instance. They are
-stored on [`Labels`](labels.md) via `labels.bboxes`, `labels.rois`, `labels.masks`,
-and `labels.label_images`, and can be converted between each other
-(bbox -> ROI -> mask, label image <-> masks).
+All four base classes are **abstract** — use the `User*` or `Predicted*`
+subclass to create instances. All four can be associated with a video, frame,
+track, and instance. They are stored on [`Labels`](labels.md) via
+`labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`, and
+can be converted between each other (bbox -> ROI -> mask, label image <-> masks).
 
 ---
 
 ## Bounding boxes
 
-A `BoundingBox` represents a rectangular region defined by its center
-coordinates, dimensions, and an optional rotation angle. Bounding boxes are the
-primary annotation type for object detection workflows.
+A `BoundingBox` represents a rectangular region defined by its corner
+coordinates (`x1`, `y1`, `x2`, `y2`) and an optional rotation angle. Bounding
+boxes are the primary annotation type for object detection workflows.
+`BoundingBox` is abstract — use `UserBoundingBox` or `PredictedBoundingBox`.
 
-### From center and dimensions
+### Direct construction
 
 ```pycon
 >>> import sleap_io as sio
->>> import numpy as np
 >>> video = sio.Video("test.mp4", open_backend=False)
->>> bbox = sio.BoundingBox(
-...     x_center=100, y_center=200, width=50, height=80,
+>>> bbox = sio.UserBoundingBox(
+...     x1=75, y1=160, x2=125, y2=240,
 ...     video=video, frame_idx=0,
 ... )
 >>> print(bbox.area)
 >>> print(bbox.xyxy)
->>> print(bbox.corners)
+>>> print(bbox.x_center)  # computed property
+>>> print(bbox.width)      # computed property
 
 ```
+
+The `x_center`, `y_center`, `width`, and `height` fields are available as
+read-only computed properties.
 
 ### From corner coordinates
 
@@ -57,7 +65,7 @@ corner coordinates:
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
->>> bbox2 = sio.BoundingBox.from_xyxy(75, 160, 125, 240, video=video, frame_idx=0)
+>>> bbox2 = sio.UserBoundingBox.from_xyxy(75, 160, 125, 240, video=video, frame_idx=0)
 >>> print(bbox2.x_center)
 >>> print(bbox2.width)
 
@@ -69,7 +77,7 @@ the top-left corner:
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
->>> bbox3 = sio.BoundingBox.from_xywh(75, 160, 50, 80, video=video, frame_idx=0)
+>>> bbox3 = sio.UserBoundingBox.from_xywh(75, 160, 50, 80, video=video, frame_idx=0)
 >>> print(bbox3.x_center)
 >>> print(bbox3.y_center)
 
@@ -84,12 +92,12 @@ model predictions. `PredictedBoundingBox` adds a `score` field for confidence:
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> user_bbox = sio.UserBoundingBox(
-...     x_center=100, y_center=200, width=50, height=80,
+...     x1=75, y1=160, x2=125, y2=240,
 ...     video=video, frame_idx=0,
 ... )
 >>> print(user_bbox.is_predicted)
 >>> pred_bbox = sio.PredictedBoundingBox(
-...     x_center=100, y_center=200, width=50, height=80,
+...     x1=75, y1=160, x2=125, y2=240,
 ...     video=video, frame_idx=0, score=0.95,
 ... )
 >>> print(pred_bbox.score)
@@ -106,8 +114,8 @@ meaningful for axis-aligned rectangles:
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
->>> rotated = sio.BoundingBox(
-...     x_center=100, y_center=200, width=50, height=80,
+>>> rotated = sio.UserBoundingBox(
+...     x1=75, y1=160, x2=125, y2=240,
 ...     angle=0.785, video=video, frame_idx=0,
 ... )
 >>> print(rotated.is_rotated)
@@ -138,7 +146,7 @@ An `ROI` represents a vector geometry annotation using
 [Shapely](https://shapely.readthedocs.io/) geometries. ROIs are suitable for
 defining arenas, exclusion zones, or arbitrary spatial regions: anything that
 is naturally described by a polygon or set of polygons rather than a simple
-rectangle.
+rectangle. `ROI` is abstract — use `UserROI` or `PredictedROI`.
 
 ### Static vs. temporal ROIs
 
@@ -146,24 +154,12 @@ An ROI is **static** when `frame_idx` is `None`, meaning it applies to all
 frames of the video (e.g., an arena boundary). When `frame_idx` is set, the ROI
 applies only to that specific frame.
 
-### From corner coordinates
-
-```pycon
->>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
->>> roi = sio.ROI.from_xyxy(10, 20, 100, 200, video=video)
->>> print(roi.area)
->>> print(roi.bounds)
->>> print(roi.is_static)
-
-```
-
 ### From polygon coordinates
 
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
->>> roi_poly = sio.ROI.from_polygon(
+>>> roi_poly = sio.UserROI.from_polygon(
 ...     [(0, 0), (100, 0), (100, 100), (0, 100)],
 ...     video=video,
 ... )
@@ -172,14 +168,18 @@ applies only to that specific frame.
 
 ```
 
-### From a bounding box (xywh)
+### From Shapely geometry
+
+Construct an ROI directly from any Shapely geometry object:
 
 ```pycon
 >>> import sleap_io as sio
+>>> from shapely.geometry import box
 >>> video = sio.Video("test.mp4", open_backend=False)
->>> roi_bbox = sio.ROI.from_bbox(10, 20, 90, 180, video=video)
->>> print(roi_bbox.area)
->>> print(roi_bbox.is_bbox)
+>>> roi = sio.UserROI(geometry=box(10, 20, 100, 200), video=video)
+>>> print(roi.area)
+>>> print(roi.bounds)
+>>> print(roi.is_static)
 
 ```
 
@@ -190,8 +190,8 @@ Any `BoundingBox` can be converted to an `ROI` with `.to_roi()`:
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
->>> bbox = sio.BoundingBox(
-...     x_center=100, y_center=200, width=50, height=80,
+>>> bbox = sio.UserBoundingBox(
+...     x1=75, y1=160, x2=125, y2=240,
 ...     video=video, frame_idx=0,
 ... )
 >>> roi_from_bbox = bbox.to_roi()
@@ -206,7 +206,7 @@ For disjoint regions, use `from_multi_polygon`:
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
->>> roi_multi = sio.ROI.from_multi_polygon(
+>>> roi_multi = sio.UserROI.from_multi_polygon(
 ...     [
 ...         [(0, 0), (10, 0), (10, 10), (0, 10)],
 ...         [(50, 50), (60, 50), (60, 60), (50, 60)],
@@ -222,7 +222,7 @@ Multi-geometry ROIs can be split into individual ROIs with `.explode()`:
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
->>> roi_multi = sio.ROI.from_multi_polygon(
+>>> roi_multi = sio.UserROI.from_multi_polygon(
 ...     [
 ...         [(0, 0), (10, 0), (10, 10), (0, 10)],
 ...         [(50, 50), (60, 50), (60, 60), (50, 60)],
@@ -242,8 +242,30 @@ GeoJSON-aware tools:
 
 ```pycon
 >>> import sleap_io as sio
->>> roi = sio.ROI.from_xyxy(0, 0, 10, 10)
+>>> from shapely.geometry import box
+>>> roi = sio.UserROI(geometry=box(0, 0, 10, 10))
 >>> print(roi.__geo_interface__["type"])
+
+```
+
+### User vs. predicted ROIs
+
+`UserROI` and `PredictedROI` distinguish human annotations from model
+predictions. `PredictedROI` adds a `score` field for confidence:
+
+```pycon
+>>> import sleap_io as sio
+>>> from shapely.geometry import box
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> user_roi = sio.UserROI(
+...     geometry=box(10, 20, 100, 200), video=video,
+... )
+>>> print(user_roi.is_predicted)
+>>> pred_roi = sio.PredictedROI(
+...     geometry=box(10, 20, 100, 200), video=video, score=0.92,
+... )
+>>> print(pred_roi.score)
+>>> print(pred_roi.is_predicted)
 
 ```
 
@@ -254,7 +276,8 @@ GeoJSON-aware tools:
 A `SegmentationMask` stores per-pixel binary annotations in a compact
 run-length encoded (RLE) format. RLE avoids storing the full raster array,
 making masks efficient for storage and serialization while still supporting
-fast conversion to and from numpy arrays.
+fast conversion to and from numpy arrays. `SegmentationMask` is abstract — use
+`UserSegmentationMask` or `PredictedSegmentationMask`.
 
 ### From a numpy array
 
@@ -264,7 +287,7 @@ fast conversion to and from numpy arrays.
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> mask_data = np.zeros((480, 640), dtype=bool)
 >>> mask_data[100:200, 150:300] = True  # rectangular region
->>> mask = sio.SegmentationMask.from_numpy(
+>>> mask = sio.UserSegmentationMask.from_numpy(
 ...     mask_data, video=video, frame_idx=0,
 ... )
 >>> print(mask.area)
@@ -282,7 +305,7 @@ The `.data` property decodes the RLE back to a full boolean array:
 >>> import sleap_io as sio
 >>> mask_data = np.zeros((100, 100), dtype=bool)
 >>> mask_data[20:40, 30:60] = True
->>> mask = sio.SegmentationMask.from_numpy(mask_data)
+>>> mask = sio.UserSegmentationMask.from_numpy(mask_data)
 >>> decoded = mask.data
 >>> print(decoded.shape)
 >>> print(decoded.dtype)
@@ -300,10 +323,35 @@ all foreground pixels as `(x, y, width, height)`:
 >>> import sleap_io as sio
 >>> mask_data = np.zeros((100, 100), dtype=bool)
 >>> mask_data[20:40, 30:60] = True
->>> mask = sio.SegmentationMask.from_numpy(mask_data)
+>>> mask = sio.UserSegmentationMask.from_numpy(mask_data)
 >>> print(mask.bbox)
 
 ```
+
+### User vs. predicted segmentation masks
+
+`UserSegmentationMask` and `PredictedSegmentationMask` distinguish human
+annotations from model predictions. `PredictedSegmentationMask` adds `score`
+and optional `score_map` fields:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> mask_data = np.zeros((100, 100), dtype=bool)
+>>> mask_data[20:40, 30:60] = True
+>>> user_mask = sio.UserSegmentationMask.from_numpy(mask_data)
+>>> print(user_mask.is_predicted)
+>>> pred_mask = sio.PredictedSegmentationMask.from_numpy(
+...     mask_data, score=0.87,
+... )
+>>> print(pred_mask.score)
+>>> print(pred_mask.score_map)  # None unless explicitly set
+
+```
+
+The `score_map` field is an optional dense `float32` array of shape `(H, W)`
+providing pixel-level confidence. It is stored separately in the SLP format
+using zlib compression to avoid bloating files.
 
 ---
 
@@ -314,7 +362,8 @@ frame, where each pixel value encodes which object occupies that pixel. Unlike a
 `SegmentationMask` — which is a binary mask for a single object — a
 `LabelImage` stores **all** objects in one integer array. Background pixels are
 `0`, and each positive integer identifies a distinct object. The `objects` dict
-maps these IDs to metadata (track, category, name).
+maps these IDs to metadata (track, category, name). `LabelImage` is abstract —
+use `UserLabelImage` or `PredictedLabelImage`.
 
 ### From a numpy array
 
@@ -327,7 +376,7 @@ Pass an integer array where each unique positive value is an object:
 >>> data = np.zeros((128, 128), dtype=np.int32)
 >>> data[10:40, 10:40] = 1   # object 1
 >>> data[60:90, 60:90] = 2   # object 2
->>> li = sio.LabelImage.from_numpy(data)
+>>> li = sio.UserLabelImage.from_numpy(data)
 >>> print(li.n_objects)
 >>> print(li.label_ids)
 >>> print(li.tracks)
@@ -344,7 +393,7 @@ can supply explicit tracks and categories:
 >>> data[10:40, 10:40] = 1
 >>> data[60:90, 60:90] = 2
 >>> tracks = [sio.Track(name="cell_A"), sio.Track(name="cell_B")]
->>> li = sio.LabelImage.from_numpy(
+>>> li = sio.UserLabelImage.from_numpy(
 ...     data,
 ...     tracks=tracks,
 ...     categories=["neuron", "glia"],
@@ -363,7 +412,7 @@ explicit control:
 >>> data = np.zeros((128, 128), dtype=np.int32)
 >>> data[10:40, 10:40] = 5
 >>> data[60:90, 60:90] = 10
->>> li = sio.LabelImage.from_numpy(
+>>> li = sio.UserLabelImage.from_numpy(
 ...     data,
 ...     tracks={5: sio.Track(name="A"), 10: sio.Track(name="B")},
 ...     categories={5: "neuron", 10: "glia"},
@@ -381,13 +430,13 @@ inherited from each mask's metadata:
 ```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
->>> mask1 = sio.SegmentationMask.from_numpy(
+>>> mask1 = sio.UserSegmentationMask.from_numpy(
 ...     np.ones((64, 64), dtype=bool), track=sio.Track(name="A"),
 ... )
->>> mask2 = sio.SegmentationMask.from_numpy(
+>>> mask2 = sio.UserSegmentationMask.from_numpy(
 ...     np.ones((64, 64), dtype=bool), track=sio.Track(name="B"),
 ... )
->>> li = sio.LabelImage.from_masks([mask1, mask2])
+>>> li = sio.UserLabelImage.from_masks([mask1, mask2])
 >>> print(li.n_objects)
 >>> print(li.tracks)
 
@@ -401,7 +450,7 @@ For full control, construct directly with the `data` array and `objects` dict:
 >>> import numpy as np
 >>> import sleap_io as sio
 >>> data = np.array([[0, 1], [2, 0]], dtype=np.int32)
->>> li = sio.LabelImage(
+>>> li = sio.UserLabelImage(
 ...     data=data,
 ...     objects={
 ...         1: sio.LabelImage.Info(
@@ -426,6 +475,7 @@ Each non-zero label ID can have a `LabelImage.Info` entry in the `objects` dict:
 | `category`  | `str`                            | Semantic class label (e.g., `"neuron"`)    |
 | `name`      | `str`                            | Human-readable name (e.g., `"cell_042"`)   |
 | `instance`  | [`Instance`](poses.md) `\| None`| Linked pose instance                       |
+| `score`     | `float \| None`                  | Per-object confidence score                |
 
 Label IDs not present in `objects` are treated as having default (empty)
 metadata.
@@ -440,7 +490,7 @@ Index with a `Track` to get the binary mask for that object:
 >>> data = np.zeros((64, 64), dtype=np.int32)
 >>> data[10:30, 10:30] = 1
 >>> track = sio.Track(name="cell_A")
->>> li = sio.LabelImage.from_numpy(data, tracks={1: track})
+>>> li = sio.UserLabelImage.from_numpy(data, tracks={1: track})
 >>> mask = li[track]
 >>> print(mask.dtype)
 >>> print(mask.sum())
@@ -476,12 +526,38 @@ objects and reconstructed from them:
 >>> data = np.zeros((64, 64), dtype=np.int32)
 >>> data[10:30, 10:30] = 1
 >>> data[40:60, 40:60] = 2
->>> li = sio.LabelImage.from_numpy(data)
+>>> li = sio.UserLabelImage.from_numpy(data)
 >>> masks = li.to_masks()
 >>> print(len(masks))
 >>> print(masks[0].area)
->>> li2 = sio.LabelImage.from_masks(masks)
+>>> li2 = sio.UserLabelImage.from_masks(masks)
 >>> print(li2.n_objects)
+
+```
+
+### User vs. predicted label images
+
+`UserLabelImage` and `PredictedLabelImage` distinguish human annotations from
+model predictions. `PredictedLabelImage` adds `score` and optional `score_map`
+fields, and per-object scores can be set via `LabelImage.Info.score`:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> data = np.zeros((128, 128), dtype=np.int32)
+>>> data[10:40, 10:40] = 1
+>>> data[60:90, 60:90] = 2
+>>> pred_li = sio.PredictedLabelImage(
+...     data=data,
+...     objects={
+...         1: sio.LabelImage.Info(category="neuron", score=0.92),
+...         2: sio.LabelImage.Info(category="glia", score=0.78),
+...     },
+...     score=0.88,
+... )
+>>> print(pred_li.is_predicted)
+>>> print(pred_li.score)
+>>> print(pred_li.objects[1].score)
 
 ```
 
@@ -499,17 +575,18 @@ geometrically meaningful:
 | `ROI`               | `SegmentationMask`    | `roi.to_mask(height, width)`      |
 | `SegmentationMask`  | `ROI` (polygon)       | `mask.to_polygon()`               |
 | `LabelImage`        | `list[SegmentationMask]` | `li.to_masks()`                |
-| `list[SegmentationMask]` | `LabelImage`     | `LabelImage.from_masks(masks)`    |
+| `list[SegmentationMask]` | `LabelImage`     | `UserLabelImage.from_masks(masks)` |
 
 All conversions preserve metadata (video, frame_idx, track, instance, name,
-category, source) when applicable.
+category, source) when applicable. Conversions always return `User*` types —
+geometric conversion does not preserve prediction semantics.
 
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> # BoundingBox -> ROI -> SegmentationMask -> polygon ROI
->>> bbox = sio.BoundingBox(
-...     x_center=50, y_center=50, width=20, height=30,
+>>> bbox = sio.UserBoundingBox(
+...     x1=40, y1=35, x2=60, y2=65,
 ...     video=video, frame_idx=0,
 ... )
 >>> roi = bbox.to_roi()
@@ -528,10 +605,11 @@ category, source) when applicable.
 ``` mermaid
 classDiagram
     class BoundingBox:::regions {
-        +float x_center
-        +float y_center
-        +float width
-        +float height
+        <<abstract>>
+        +float x1
+        +float y1
+        +float x2
+        +float y2
         +float angle
         +to_roi()
         +to_mask()
@@ -543,6 +621,7 @@ classDiagram
     }
 
     class ROI:::regions {
+        <<abstract>>
         +geometry
         +str name
         +is_static
@@ -550,19 +629,38 @@ classDiagram
         +explode()
     }
 
+    class UserROI:::regions
+    class PredictedROI:::regions {
+        +float score
+    }
+
     class SegmentationMask:::regions {
+        <<abstract>>
         +rle_counts
         +int height
         +int width
         +to_polygon()
     }
 
+    class UserSegmentationMask:::regions
+    class PredictedSegmentationMask:::regions {
+        +float score
+        +ndarray score_map
+    }
+
     class LabelImage:::regions {
+        <<abstract>>
         +ndarray data
         +dict objects
         +to_masks()
         +from_masks()
         +from_numpy()
+    }
+
+    class UserLabelImage:::regions
+    class PredictedLabelImage:::regions {
+        +float score
+        +ndarray score_map
     }
 
     class Labels:::labels {
@@ -574,6 +672,12 @@ classDiagram
 
     BoundingBox <|-- UserBoundingBox
     BoundingBox <|-- PredictedBoundingBox
+    ROI <|-- UserROI
+    ROI <|-- PredictedROI
+    SegmentationMask <|-- UserSegmentationMask
+    SegmentationMask <|-- PredictedSegmentationMask
+    LabelImage <|-- UserLabelImage
+    LabelImage <|-- PredictedLabelImage
     BoundingBox --> ROI : to_roi()
     BoundingBox --> SegmentationMask : to_mask()
     ROI --> SegmentationMask : to_mask()
@@ -607,6 +711,18 @@ classDiagram
 
 ::: sleap_io.ROI
 
+::: sleap_io.UserROI
+
+::: sleap_io.PredictedROI
+
 ::: sleap_io.SegmentationMask
 
+::: sleap_io.UserSegmentationMask
+
+::: sleap_io.PredictedSegmentationMask
+
 ::: sleap_io.LabelImage
+
+::: sleap_io.UserLabelImage
+
+::: sleap_io.PredictedLabelImage
