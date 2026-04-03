@@ -331,6 +331,7 @@ class ROI:
         from shapely.geometry import GeometryCollection, MultiPolygon
 
         if isinstance(self.geometry, (MultiPolygon, GeometryCollection)):
+            extra = {"score": self.score} if hasattr(self, "score") else {}
             return [
                 type(self)(
                     geometry=geom,
@@ -341,6 +342,7 @@ class ROI:
                     frame_idx=self.frame_idx,
                     track=self.track,
                     instance=self.instance,
+                    **extra,
                 )
                 for geom in self.geometry.geoms
             ]

@@ -2798,7 +2798,14 @@ def read_bboxes(
         if isinstance(node, h5py.Group):
             return _read_bboxes_columnar(node, videos, tracks, instances)
         else:
-            return _read_bboxes_legacy(labels_path, node[:], videos, tracks, instances)
+            # Read data and attrs in one open, pass to legacy reader
+            bbox_data = node[:]
+            categories = json.loads(node.attrs.get("categories", "[]"))
+            names = json.loads(node.attrs.get("names", "[]"))
+            sources = json.loads(node.attrs.get("sources", "[]"))
+            return _read_bboxes_legacy(
+                bbox_data, categories, names, sources, videos, tracks, instances
+            )
 
 
 def _read_bboxes_columnar(
@@ -2875,8 +2882,10 @@ def _read_bboxes_columnar(
 
 
 def _read_bboxes_legacy(
-    labels_path: str,
     bbox_data: np.ndarray,
+    categories: list[str],
+    names: list[str],
+    sources: list[str],
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None,
@@ -2884,13 +2893,6 @@ def _read_bboxes_legacy(
     """Read bboxes from legacy structured array format (pre-v2.0)."""
     if len(bbox_data) == 0:
         return []
-
-    # Read string metadata from JSON attributes
-    with h5py.File(labels_path, "r") as f:
-        bbox_ds = f["bboxes"]
-        categories = json.loads(bbox_ds.attrs.get("categories", "[]"))
-        names = json.loads(bbox_ds.attrs.get("names", "[]"))
-        sources = json.loads(bbox_ds.attrs.get("sources", "[]"))
 
     bboxes: list[BoundingBox] = []
     for i, row in enumerate(bbox_data):
