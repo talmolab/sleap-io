@@ -11,8 +11,10 @@ SLP files can contain:
 - **Tracks** for identity tracking across frames ([`Track`][sleap_io.Track])
 - **Suggestions** for frames to label ([`SuggestionFrame`][sleap_io.SuggestionFrame])
 - **Recording sessions** for multi-camera setups ([`RecordingSession`][sleap_io.RecordingSession])
+- **Bounding boxes** for object detection and tracking ([`BoundingBox`][sleap_io.BoundingBox])
 - **Regions of interest** (ROIs) with vector geometry ([`ROI`][sleap_io.ROI])
 - **Segmentation masks** with run-length encoding ([`SegmentationMask`][sleap_io.SegmentationMask])
+- **Label images** for dense per-pixel instance segmentation ([`LabelImage`][sleap_io.LabelImage])
 
 ## HDF5 Layout
 
@@ -36,17 +38,51 @@ file.slp
 ├── /pred_points                 # Dataset: Predicted points (structured array)
 ├── /negative_frames             # Dataset: Negative frame markers (optional)
 │
+├── /bboxes/                     # Group: Columnar bounding box storage (Format 2.0+)
+│   ├── x1                       # Dataset: float64 top-left x
+│   ├── y1                       # Dataset: float64 top-left y
+│   ├── x2                       # Dataset: float64 bottom-right x
+│   ├── y2                       # Dataset: float64 bottom-right y
+│   ├── angle                    # Dataset: float64 rotation angle (radians)
+│   ├── video                    # Dataset: int32 video index
+│   ├── frame_idx                # Dataset: int64 frame index
+│   ├── track                    # Dataset: int32 track index
+│   ├── instance                 # Dataset: int32 instance index
+│   ├── is_predicted             # Dataset: uint8 (0=user, 1=predicted)
+│   ├── score                    # Dataset: float32 confidence score
+│   ├── category                 # Dataset: vlen str category labels
+│   ├── name                     # Dataset: vlen str name labels
+│   └── source                   # Dataset: vlen str source labels
+│
 ├── /rois                        # Dataset: ROI metadata (structured array, optional)
-│   ├── @categories              # Attribute: JSON array of category strings
-│   ├── @names                   # Attribute: JSON array of name strings
-│   └── @sources                 # Attribute: JSON array of source strings
+│   ├── @categories              # Attribute: JSON array (legacy fallback)
+│   ├── @names                   # Attribute: JSON array (legacy fallback)
+│   └── @sources                 # Attribute: JSON array (legacy fallback)
 ├── /roi_wkb                     # Dataset: Packed WKB geometry bytes (uint8 array)
+├── /roi_categories              # Dataset: vlen string, one per ROI (Format 1.9+)
+├── /roi_names                   # Dataset: vlen string, one per ROI (Format 1.9+)
+├── /roi_sources                 # Dataset: vlen string, one per ROI (Format 1.9+)
 │
 ├── /masks                       # Dataset: Mask metadata (structured array, optional)
-│   ├── @categories              # Attribute: JSON array of category strings
-│   ├── @names                   # Attribute: JSON array of name strings
-│   └── @sources                 # Attribute: JSON array of source strings
+│   ├── @categories              # Attribute: JSON array (legacy fallback)
+│   ├── @names                   # Attribute: JSON array (legacy fallback)
+│   └── @sources                 # Attribute: JSON array (legacy fallback)
 ├── /mask_rle                    # Dataset: Packed RLE bytes (uint8 array)
+├── /mask_categories             # Dataset: vlen string, one per mask (Format 1.9+)
+├── /mask_names                  # Dataset: vlen string, one per mask (Format 1.9+)
+├── /mask_sources                # Dataset: vlen string, one per mask (Format 1.9+)
+│
+├── /mask_score_map_index        # Dataset: Score map index for masks (Format 1.9+)
+├── /mask_score_maps             # Dataset: Packed score map data for masks (Format 1.9+)
+├── /label_image_score_map_index # Dataset: Score map index for label images (Format 1.9+)
+├── /label_image_score_maps      # Dataset: Packed score map data for label images (Format 1.9+)
+│
+├── /label_images                # Dataset: Label image metadata (Format 1.8+)
+├── /label_image_objects         # Dataset: Per-object metadata (Format 1.8+)
+├── /label_image_data            # Dataset: Packed pixel data, zlib-compressed (Format 1.8+)
+├── /label_image_sources         # Dataset: vlen string, one per label image (Format 1.9+)
+├── /label_image_obj_categories  # Dataset: vlen string, one per object (Format 1.9+)
+├── /label_image_obj_names       # Dataset: vlen string, one per object (Format 1.9+)
 │
 └── /video{N}/                   # Group: Per-video embedded data (one per video)
     ├── /video                   # Dataset: Embedded image data
@@ -747,48 +783,51 @@ labels.append(new_frame)  # Now works
 
 ## Bounding Boxes
 
-[`BoundingBox`][sleap_io.BoundingBox] annotations store axis-aligned or oriented bounding boxes for object detection and tracking workflows. Bounding box support was introduced in format 1.7.
+[`BoundingBox`][sleap_io.BoundingBox] annotations store axis-aligned or oriented bounding boxes for object detection and tracking workflows. Bounding box support was introduced in format 1.7. Format 2.0+ uses columnar storage under the `/bboxes/` HDF5 group.
 
-### BoundingBox Dataset
+### Columnar Datasets (Format 2.0+)
 
-Bounding box data is stored in a single structured array dataset:
+Bounding box data is stored as individual datasets within the `/bboxes/` HDF5 group:
 
-- `/bboxes`: Structured array containing bounding box geometry, metadata, and class information
-
-### BoundingBox Dtype
-
-```python
-bbox_dtype = np.dtype([
-    ("x_center", "f8"),     # Center x-coordinate in pixels
-    ("y_center", "f8"),     # Center y-coordinate in pixels
-    ("width", "f8"),        # Box width in pixels
-    ("height", "f8"),       # Box height in pixels
-    ("angle", "f8"),        # Rotation angle in radians (0 = axis-aligned)
-    ("video", "i4"),        # Video index (-1 if none)
-    ("frame_idx", "i8"),    # Frame index (-1 if none)
-    ("track", "i4"),        # Track index (-1 if none)
-    ("instance", "i4"),     # Instance index (-1 if none)
-    ("is_predicted", "u1"), # 0 = UserBoundingBox, 1 = PredictedBoundingBox
-    ("score", "f4"),        # Confidence score (NaN for user bboxes)
-])
-```
+| Dataset | Dtype | Description |
+|---------|-------|-------------|
+| `x1` | `float64` | Top-left x-coordinate in pixels |
+| `y1` | `float64` | Top-left y-coordinate in pixels |
+| `x2` | `float64` | Bottom-right x-coordinate in pixels |
+| `y2` | `float64` | Bottom-right y-coordinate in pixels |
+| `angle` | `float64` | Rotation angle in radians (0 = axis-aligned) |
+| `video` | `int32` | Video index (-1 if none) |
+| `frame_idx` | `int64` | Frame index (-1 if none) |
+| `track` | `int32` | Track index (-1 if none) |
+| `instance` | `int32` | Instance index (-1 if none) |
+| `is_predicted` | `uint8` | 0 = UserBoundingBox, 1 = PredictedBoundingBox |
+| `score` | `float32` | Confidence score (NaN for user bboxes) |
+| `category` | vlen `str` | Category label per bounding box |
+| `name` | vlen `str` | Name label per bounding box |
+| `source` | vlen `str` | Source label per bounding box |
 
 ### User vs Predicted
 
-- `is_predicted = 0`: [`UserBoundingBox`][sleap_io.UserBoundingBox] — human-annotated
-- `is_predicted = 1`: [`PredictedBoundingBox`][sleap_io.PredictedBoundingBox] — model-predicted, `score` contains the confidence value
+- `is_predicted = 0`: [`UserBoundingBox`][sleap_io.UserBoundingBox] -- human-annotated
+- `is_predicted = 1`: [`PredictedBoundingBox`][sleap_io.PredictedBoundingBox] -- model-predicted, `score` contains the confidence value
 
 ### String Metadata
 
-String metadata follows the same pattern as ROIs. JSON-encoded HDF5 attributes on the `/bboxes` dataset store `categories`, `names`, and `sources` arrays.
+String metadata (`category`, `name`, `source`) is stored as vlen string datasets within the `/bboxes/` group, one entry per bounding box.
 
 ### Optional Dataset
 
-The `/bboxes` dataset is only written when the [`Labels`][sleap_io.Labels] object contains bounding boxes. On read, a missing dataset defaults to an empty list.
+The `/bboxes/` group is only written when the [`Labels`][sleap_io.Labels] object contains bounding boxes. On read, a missing group defaults to an empty list.
+
+!!! note "Legacy format (1.7--1.9)"
+    Older SLP files store bounding boxes as a single structured array dataset (`/bboxes`)
+    with `x_center`, `y_center`, `width`, `height` columns and JSON-encoded string
+    attributes. The reader auto-detects whether `/bboxes` is a group (format 2.0+) or a
+    dataset (legacy) and handles both transparently.
 
 ### Migration from Format 1.5/1.6
 
-When reading older files without a `/bboxes` dataset, any ROIs with axis-aligned rectangular geometry (`is_bbox = True`) are automatically migrated to [`UserBoundingBox`][sleap_io.UserBoundingBox] objects in `Labels.bboxes`. The migrated ROIs are removed from `Labels.rois`.
+When reading older files without a `/bboxes` dataset or group, any ROIs with axis-aligned rectangular geometry (`is_bbox = True`) are automatically migrated to [`UserBoundingBox`][sleap_io.UserBoundingBox] objects in `Labels.bboxes`. The migrated ROIs are removed from `Labels.rois`.
 
 ## Regions of Interest (ROIs)
 
@@ -811,32 +850,46 @@ roi_dtype = np.dtype([
     ("video", "i4"),            # Video index (-1 if none)
     ("frame_idx", "i8"),        # Frame index (-1 for static ROIs)
     ("track", "i4"),            # Track index (-1 if none)
-    ("score", "f4"),            # Legacy field, always written as NaN
+    ("is_predicted", "u1"),     # 0 = UserROI, 1 = PredictedROI (Format 1.9+)
+    ("score", "f4"),            # Confidence score (NaN for user ROIs) (Format 1.9+)
     ("wkb_start", "u8"),       # Start byte offset into /roi_wkb
     ("wkb_end", "u8"),         # End byte offset into /roi_wkb
     ("instance", "i4"),        # Instance index (-1 if none) (Format 1.6+)
 ])
 ```
 
-!!! note "Legacy fields"
-    The `annotation_type` and `score` columns are retained in the on-disk dtype
-    for backward compatibility with older readers but are no longer used. Writers
-    always set `annotation_type = 0` and `score = NaN`. Use the `category` string
-    attribute for semantic classification and [`BoundingBox`][sleap_io.BoundingBox]
-    for detection annotations with scores.
+!!! note "Legacy and predicted fields"
+    The `annotation_type` column is retained in the on-disk dtype for backward
+    compatibility with older readers but is no longer used. Writers always set
+    `annotation_type = 0`. Use the `category` string metadata for semantic
+    classification and [`BoundingBox`][sleap_io.BoundingBox] for detection
+    annotations.
+
+    The `is_predicted` field distinguishes [`UserROI`][sleap_io.UserROI] (`0`)
+    from [`PredictedROI`][sleap_io.PredictedROI] (`1`). The `score` field stores
+    the confidence value for predicted ROIs (NaN for user ROIs).
 
 ### String Metadata
 
-String metadata fields (`categories`, `names`, `sources`) are stored as JSON-encoded HDF5 attributes on the `/rois` dataset:
+Format 1.9+ stores ROI string metadata as vlen HDF5 string datasets at the root level:
+
+- `/roi_categories`: One category string per ROI
+- `/roi_names`: One name string per ROI
+- `/roi_sources`: One source string per ROI
+
+The reader checks for these datasets first. For pre-1.9 files, it falls back to JSON-encoded HDF5 attributes on the `/rois` dataset (`@categories`, `@names`, `@sources`).
 
 ```python
-# Example attribute values
+# Format 1.9+ (vlen string datasets)
+f["/roi_categories"]  # ["arena", "nest"]
+f["/roi_names"]       # ["arena_boundary", "nest_region"]
+f["/roi_sources"]     # ["manual", "model_v2"]
+
+# Pre-1.9 legacy (JSON attributes on /rois dataset)
 rois_dataset.attrs["categories"]  # '["arena", "nest"]'
 rois_dataset.attrs["names"]       # '["arena_boundary", "nest_region"]'
 rois_dataset.attrs["sources"]     # '["manual", "model_v2"]'
 ```
-
-Each attribute is a JSON array with one entry per ROI, corresponding by index.
 
 ### Static vs Temporal ROIs
 
@@ -870,24 +923,143 @@ mask_dtype = np.dtype([
     ("video", "i4"),            # Video index (-1 if none)
     ("frame_idx", "i8"),        # Frame index (-1 for static masks)
     ("track", "i4"),            # Track index (-1 if none)
-    ("score", "f4"),            # Legacy field, always written as NaN
+    ("instance", "i4"),         # Instance index (-1 if none) (Format 1.9+)
+    ("is_predicted", "u1"),     # 0 = UserSegmentationMask, 1 = Predicted (Format 1.9+)
+    ("score", "f4"),            # Confidence score (NaN for user masks) (Format 1.9+)
     ("rle_start", "u8"),       # Start byte offset into /mask_rle
     ("rle_end", "u8"),         # End byte offset into /mask_rle
 ])
 ```
 
-!!! note "Legacy fields"
-    As with ROIs, `annotation_type` and `score` are retained for backward
-    compatibility but ignored on read. Writers always set
-    `annotation_type = 2` (SEGMENTATION) and `score = NaN`.
+!!! note "Legacy and predicted fields"
+    The `annotation_type` column is retained for backward compatibility but
+    ignored on read. Writers always set `annotation_type = 2` (SEGMENTATION).
+
+    The `is_predicted` field distinguishes `UserSegmentationMask` (`0`) from
+    `PredictedSegmentationMask` (`1`). The `score` field stores the confidence
+    value for predicted masks (NaN for user masks).
 
 ### String Metadata
 
-String metadata follows the same pattern as ROIs. JSON-encoded HDF5 attributes on the `/masks` dataset store `categories`, `names`, and `sources` arrays.
+Format 1.9+ stores mask string metadata as vlen HDF5 string datasets at the root level:
+
+- `/mask_categories`: One category string per mask
+- `/mask_names`: One name string per mask
+- `/mask_sources`: One source string per mask
+
+The reader checks for these datasets first. For pre-1.9 files, it falls back to JSON-encoded HDF5 attributes on the `/masks` dataset (`@categories`, `@names`, `@sources`).
 
 ### Optional Dataset
 
 The `/masks` and `/mask_rle` datasets are only written when the [`Labels`][sleap_io.Labels] object contains masks. On read, missing datasets default to empty lists.
+
+## Score Map Datasets
+
+Score maps store per-pixel confidence values for predicted segmentation masks and label images. These datasets are only written when `PredictedSegmentationMask` or `PredictedLabelImage` objects have a `score_map` set.
+
+### Mask Score Maps
+
+Mask score maps are stored across two datasets:
+
+- `/mask_score_map_index`: Structured array indexing into the packed data
+- `/mask_score_maps`: Packed `uint8` array of zlib-compressed `float32` score map data
+
+#### Index Dtype
+
+```python
+mask_score_map_index_dtype = np.dtype([
+    ("mask_idx", "u4"),     # Index into /masks dataset
+    ("data_start", "u8"),   # Start byte offset into /mask_score_maps
+    ("data_end", "u8"),     # End byte offset into /mask_score_maps
+    ("height", "u4"),       # Score map height in pixels
+    ("width", "u4"),        # Score map width in pixels
+])
+```
+
+### Label Image Score Maps
+
+Label image score maps follow the same structure:
+
+- `/label_image_score_map_index`: Structured array indexing into the packed data
+- `/label_image_score_maps`: Packed `uint8` array of zlib-compressed `float32` score map data
+
+#### Index Dtype
+
+```python
+label_image_score_map_index_dtype = np.dtype([
+    ("li_idx", "u4"),       # Index into /label_images dataset
+    ("data_start", "u8"),   # Start byte offset into /label_image_score_maps
+    ("data_end", "u8"),     # End byte offset into /label_image_score_maps
+    ("height", "u4"),       # Score map height in pixels
+    ("width", "u4"),        # Score map width in pixels
+])
+```
+
+### Data Format
+
+Score map pixel data is stored as `float32` arrays, compressed with zlib, and packed into a single `uint8` byte array. Each score map's compressed bytes are located at the byte range `[data_start, data_end)` in the corresponding packed dataset.
+
+### Optional Datasets
+
+The score map datasets are only written when at least one predicted mask or label image has a `score_map` set. On read, missing datasets are silently skipped.
+
+## Label Images
+
+[`LabelImage`][sleap_io.LabelImage]s store dense per-pixel instance segmentation data, where each pixel is assigned an integer label corresponding to an object. Label image support was introduced in format 1.8.
+
+### Label Image Datasets
+
+Label image data is stored across three datasets:
+
+- `/label_images`: Structured array containing label image metadata
+- `/label_image_objects`: Structured array containing per-object metadata
+- `/label_image_data`: Packed `uint8` array of zlib-compressed pixel data
+
+### Label Image Dtype
+
+```python
+label_image_dtype = np.dtype([
+    ("video", "i4"),          # Video index (-1 if none)
+    ("frame_idx", "i8"),      # Frame index
+    ("height", "u4"),         # Image height in pixels
+    ("width", "u4"),          # Image width in pixels
+    ("n_objects", "u4"),      # Number of objects in this label image
+    ("objects_start", "u4"),  # Start index into /label_image_objects
+    ("data_start", "u8"),     # Start byte offset into /label_image_data
+    ("data_end", "u8"),       # End byte offset into /label_image_data
+    ("is_predicted", "u1"),   # 0 = UserLabelImage, 1 = Predicted (Format 1.9+)
+    ("score", "f4"),          # Confidence score (NaN for user) (Format 1.9+)
+])
+```
+
+### Objects Dtype
+
+Each object within a label image is described by a row in `/label_image_objects`:
+
+```python
+label_image_object_dtype = np.dtype([
+    ("label_id", "i4"),    # Pixel label value in the image data
+    ("track", "i4"),       # Track index (-1 if none)
+    ("instance", "i4"),    # Instance index (-1 if none)
+    ("score", "f4"),       # Per-object confidence score (Format 1.9+)
+])
+```
+
+### Pixel Data
+
+The pixel data for each label image is stored as an `int32` array, compressed with zlib, and packed into `/label_image_data` as `uint8` bytes. Each label image's compressed bytes are at the byte range `[data_start, data_end)`.
+
+### String Metadata
+
+Format 1.9+ stores label image string metadata as vlen HDF5 string datasets:
+
+- `/label_image_sources`: One source string per label image
+- `/label_image_obj_categories`: One category string per object
+- `/label_image_obj_names`: One name string per object
+
+### Optional Datasets
+
+The label image datasets are only written when the [`Labels`][sleap_io.Labels] object contains label images. On read, missing datasets default to empty lists.
 
 ## Version History
 
@@ -955,18 +1127,32 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 
 **Added label image support.**
 
-- New datasets: `/label_images`, `/label_image_data` for per-pixel segmentation annotations
+- New datasets: `/label_images`, `/label_image_objects`, `/label_image_data` for per-pixel segmentation annotations
 - First-class `LabelImage` type for instance segmentation workflows
 
-### Format 1.9 (Current)
+### Format 1.9
 
-**Added identity and Instance3D support.**
+**Added identity, Instance3D, and predicted variant support.**
 
 - New dataset: `/identities_json` for ground-truth animal identities
 - Extended `InstanceGroup` serialization with `identity_idx`, `instance_3d_score`, and `instance_3d_point_scores` fields
 - `Identity` objects persist across sessions and videos, distinct from per-video `Track`s
 - `Instance3D` and `PredictedInstance3D` provide structured 3D keypoint storage
+- Added `is_predicted` (`u1`) and updated `score` fields to ROI, mask, and label image dtypes for predicted variant support (`PredictedROI`, `PredictedSegmentationMask`, `PredictedLabelImage`)
+- Added `instance` (`i4`) field to mask dtype for mask-instance association
+- Migrated ROI and mask string metadata from JSON attributes to vlen HDF5 string datasets (`/roi_categories`, `/roi_names`, `/roi_sources`, `/mask_categories`, `/mask_names`, `/mask_sources`)
+- Added label image string metadata datasets (`/label_image_sources`, `/label_image_obj_categories`, `/label_image_obj_names`)
+- Added score map datasets (`/mask_score_map_index`, `/mask_score_maps`, `/label_image_score_map_index`, `/label_image_score_maps`)
 - Backward compatible: new fields are optional, old readers skip unknown keys via metadata pass-through
+
+### Format 2.0 (Current)
+
+**Columnar bounding box storage.**
+
+- `/bboxes` changed from a structured array dataset to an HDF5 group with columnar datasets
+- Bounding box coordinates use `x1`/`y1`/`x2`/`y2` (top-left/bottom-right) representation instead of `x_center`/`y_center`/`width`/`height`
+- String metadata (`category`, `name`, `source`) stored as vlen string datasets within the group
+- The reader auto-detects whether `/bboxes` is a group (format 2.0+) or a dataset (legacy 1.7--1.9) and handles both transparently
 
 ## API
 

@@ -1140,6 +1140,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#score-map-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Score Map Datasets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#label-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label Images
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#version-history" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3352,6 +3374,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#score-map-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Score Map Datasets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#label-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label Images
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#version-history" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3405,8 +3449,10 @@
 <li><strong>Tracks</strong> for identity tracking across frames (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Track&lt;/code&gt;" href="../../model/poses/#sleap_io.Track"><code>Track</code></a>)</li>
 <li><strong>Suggestions</strong> for frames to label (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.SuggestionFrame&lt;/code&gt;" href="../../model/labels/#sleap_io.SuggestionFrame"><code>SuggestionFrame</code></a>)</li>
 <li><strong>Recording sessions</strong> for multi-camera setups (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.RecordingSession&lt;/code&gt;" href="../../model/3d/#sleap_io.RecordingSession"><code>RecordingSession</code></a>)</li>
+<li><strong>Bounding boxes</strong> for object detection and tracking (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.BoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.BoundingBox"><code>BoundingBox</code></a>)</li>
 <li><strong>Regions of interest</strong> (ROIs) with vector geometry (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.ROI&lt;/code&gt;" href="../../model/regions/#sleap_io.ROI"><code>ROI</code></a>)</li>
 <li><strong>Segmentation masks</strong> with run-length encoding (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.SegmentationMask&lt;/code&gt;" href="../../model/regions/#sleap_io.SegmentationMask"><code>SegmentationMask</code></a>)</li>
+<li><strong>Label images</strong> for dense per-pixel instance segmentation (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImage&lt;/code&gt;" href="../../model/regions/#sleap_io.LabelImage"><code>LabelImage</code></a>)</li>
 </ul>
 <h2 id="hdf5-layout">HDF5 Layout<a class="headerlink" href="#hdf5-layout" title="Permanent link">&para;</a></h2>
 <p>SLP files have the following hierarchical structure:</p>
@@ -3427,30 +3473,64 @@
 <a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>├── /pred_points                 # Dataset: Predicted points (structured array)
 <a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>├── /negative_frames             # Dataset: Negative frame markers (optional)
 <a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>├── /rois                        # Dataset: ROI metadata (structured array, optional)
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>│   ├── @categories              # Attribute: JSON array of category strings
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>│   ├── @names                   # Attribute: JSON array of name strings
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│   └── @sources                 # Attribute: JSON array of source strings
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>├── /roi_wkb                     # Dataset: Packed WKB geometry bytes (uint8 array)
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>│
-<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>├── /masks                       # Dataset: Mask metadata (structured array, optional)
-<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>│   ├── @categories              # Attribute: JSON array of category strings
-<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>│   ├── @names                   # Attribute: JSON array of name strings
-<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>│   └── @sources                 # Attribute: JSON array of source strings
-<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>├── /mask_rle                    # Dataset: Packed RLE bytes (uint8 array)
-<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>│
-<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>└── /video{N}/                   # Group: Per-video embedded data (one per video)
-<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>    ├── /video                   # Dataset: Embedded image data
-<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>    │   ├── @format              # Attribute: &quot;png&quot;, &quot;jpg&quot;, or &quot;hdf5&quot;
-<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>    │   ├── @channel_order       # Attribute: &quot;RGB&quot; or &quot;BGR&quot;
-<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>    │   ├── @frames              # Attribute: Total frames in source video
-<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>    │   ├── @height              # Attribute: Frame height
-<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>    │   ├── @width               # Attribute: Frame width
-<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>    │   ├── @channels            # Attribute: Number of channels
-<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>    │   └── @fps                 # Attribute: Frames per second (optional)
-<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>    ├── /frame_numbers           # Dataset: Embedded frame indices (int array)
-<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>    └── /source_video/           # Group: Source video metadata
-<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a>        └── @json                # Attribute: JSON with source video info
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>├── /bboxes/                     # Group: Columnar bounding box storage (Format 2.0+)
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>│   ├── x1                       # Dataset: float64 top-left x
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>│   ├── y1                       # Dataset: float64 top-left y
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│   ├── x2                       # Dataset: float64 bottom-right x
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>│   ├── y2                       # Dataset: float64 bottom-right y
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>│   ├── angle                    # Dataset: float64 rotation angle (radians)
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>│   ├── video                    # Dataset: int32 video index
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>│   ├── frame_idx                # Dataset: int64 frame index
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>│   ├── track                    # Dataset: int32 track index
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>│   ├── instance                 # Dataset: int32 instance index
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>│   ├── is_predicted             # Dataset: uint8 (0=user, 1=predicted)
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>│   ├── score                    # Dataset: float32 confidence score
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>│   ├── category                 # Dataset: vlen str category labels
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>│   ├── name                     # Dataset: vlen str name labels
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>│   └── source                   # Dataset: vlen str source labels
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>│
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>├── /rois                        # Dataset: ROI metadata (structured array, optional)
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>│   ├── @categories              # Attribute: JSON array (legacy fallback)
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>│   ├── @names                   # Attribute: JSON array (legacy fallback)
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>│   └── @sources                 # Attribute: JSON array (legacy fallback)
+<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>├── /roi_wkb                     # Dataset: Packed WKB geometry bytes (uint8 array)
+<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>├── /roi_categories              # Dataset: vlen string, one per ROI (Format 1.9+)
+<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>├── /roi_names                   # Dataset: vlen string, one per ROI (Format 1.9+)
+<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a>├── /roi_sources                 # Dataset: vlen string, one per ROI (Format 1.9+)
+<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a>│
+<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a>├── /masks                       # Dataset: Mask metadata (structured array, optional)
+<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a>│   ├── @categories              # Attribute: JSON array (legacy fallback)
+<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a>│   ├── @names                   # Attribute: JSON array (legacy fallback)
+<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a>│   └── @sources                 # Attribute: JSON array (legacy fallback)
+<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a>├── /mask_rle                    # Dataset: Packed RLE bytes (uint8 array)
+<a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a>├── /mask_categories             # Dataset: vlen string, one per mask (Format 1.9+)
+<a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a>├── /mask_names                  # Dataset: vlen string, one per mask (Format 1.9+)
+<a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a>├── /mask_sources                # Dataset: vlen string, one per mask (Format 1.9+)
+<a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a>│
+<a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a>├── /mask_score_map_index        # Dataset: Score map index for masks (Format 1.9+)
+<a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a>├── /mask_score_maps             # Dataset: Packed score map data for masks (Format 1.9+)
+<a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a>├── /label_image_score_map_index # Dataset: Score map index for label images (Format 1.9+)
+<a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a>├── /label_image_score_maps      # Dataset: Packed score map data for label images (Format 1.9+)
+<a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a>│
+<a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a>├── /label_images                # Dataset: Label image metadata (Format 1.8+)
+<a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a>├── /label_image_objects         # Dataset: Per-object metadata (Format 1.8+)
+<a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a>├── /label_image_data            # Dataset: Packed pixel data, zlib-compressed (Format 1.8+)
+<a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a>├── /label_image_sources         # Dataset: vlen string, one per label image (Format 1.9+)
+<a id="__codelineno-0-61" name="__codelineno-0-61" href="#__codelineno-0-61"></a>├── /label_image_obj_categories  # Dataset: vlen string, one per object (Format 1.9+)
+<a id="__codelineno-0-62" name="__codelineno-0-62" href="#__codelineno-0-62"></a>├── /label_image_obj_names       # Dataset: vlen string, one per object (Format 1.9+)
+<a id="__codelineno-0-63" name="__codelineno-0-63" href="#__codelineno-0-63"></a>│
+<a id="__codelineno-0-64" name="__codelineno-0-64" href="#__codelineno-0-64"></a>└── /video{N}/                   # Group: Per-video embedded data (one per video)
+<a id="__codelineno-0-65" name="__codelineno-0-65" href="#__codelineno-0-65"></a>    ├── /video                   # Dataset: Embedded image data
+<a id="__codelineno-0-66" name="__codelineno-0-66" href="#__codelineno-0-66"></a>    │   ├── @format              # Attribute: &quot;png&quot;, &quot;jpg&quot;, or &quot;hdf5&quot;
+<a id="__codelineno-0-67" name="__codelineno-0-67" href="#__codelineno-0-67"></a>    │   ├── @channel_order       # Attribute: &quot;RGB&quot; or &quot;BGR&quot;
+<a id="__codelineno-0-68" name="__codelineno-0-68" href="#__codelineno-0-68"></a>    │   ├── @frames              # Attribute: Total frames in source video
+<a id="__codelineno-0-69" name="__codelineno-0-69" href="#__codelineno-0-69"></a>    │   ├── @height              # Attribute: Frame height
+<a id="__codelineno-0-70" name="__codelineno-0-70" href="#__codelineno-0-70"></a>    │   ├── @width               # Attribute: Frame width
+<a id="__codelineno-0-71" name="__codelineno-0-71" href="#__codelineno-0-71"></a>    │   ├── @channels            # Attribute: Number of channels
+<a id="__codelineno-0-72" name="__codelineno-0-72" href="#__codelineno-0-72"></a>    │   └── @fps                 # Attribute: Frames per second (optional)
+<a id="__codelineno-0-73" name="__codelineno-0-73" href="#__codelineno-0-73"></a>    ├── /frame_numbers           # Dataset: Embedded frame indices (int array)
+<a id="__codelineno-0-74" name="__codelineno-0-74" href="#__codelineno-0-74"></a>    └── /source_video/           # Group: Source video metadata
+<a id="__codelineno-0-75" name="__codelineno-0-75" href="#__codelineno-0-75"></a>        └── @json                # Attribute: JSON with source video info
 </code></pre></div>
 <h3 id="core-datasets">Core Datasets<a class="headerlink" href="#core-datasets" title="Permanent link">&para;</a></h3>
 <table>
@@ -4390,38 +4470,108 @@
 <a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a><span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_frame</span><span class="p">)</span>  <span class="c1"># Now works</span>
 </code></pre></div>
 <h2 id="bounding-boxes">Bounding Boxes<a class="headerlink" href="#bounding-boxes" title="Permanent link">&para;</a></h2>
-<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.BoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.BoundingBox"><code>BoundingBox</code></a> annotations store axis-aligned or oriented bounding boxes for object detection and tracking workflows. Bounding box support was introduced in format 1.7.</p>
-<h3 id="boundingbox-dataset">BoundingBox Dataset<a class="headerlink" href="#boundingbox-dataset" title="Permanent link">&para;</a></h3>
-<p>Bounding box data is stored in a single structured array dataset:</p>
-<ul>
-<li><code>/bboxes</code>: Structured array containing bounding box geometry, metadata, and class information</li>
-</ul>
-<h3 id="boundingbox-dtype">BoundingBox Dtype<a class="headerlink" href="#boundingbox-dtype" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="n">bbox_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>    <span class="p">(</span><span class="s2">&quot;x_center&quot;</span><span class="p">,</span> <span class="s2">&quot;f8&quot;</span><span class="p">),</span>     <span class="c1"># Center x-coordinate in pixels</span>
-<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="p">(</span><span class="s2">&quot;y_center&quot;</span><span class="p">,</span> <span class="s2">&quot;f8&quot;</span><span class="p">),</span>     <span class="c1"># Center y-coordinate in pixels</span>
-<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>    <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;f8&quot;</span><span class="p">),</span>        <span class="c1"># Box width in pixels</span>
-<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>    <span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;f8&quot;</span><span class="p">),</span>       <span class="c1"># Box height in pixels</span>
-<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>    <span class="p">(</span><span class="s2">&quot;angle&quot;</span><span class="p">,</span> <span class="s2">&quot;f8&quot;</span><span class="p">),</span>        <span class="c1"># Rotation angle in radians (0 = axis-aligned)</span>
-<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>    <span class="p">(</span><span class="s2">&quot;video&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>        <span class="c1"># Video index (-1 if none)</span>
-<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>    <span class="p">(</span><span class="s2">&quot;frame_idx&quot;</span><span class="p">,</span> <span class="s2">&quot;i8&quot;</span><span class="p">),</span>    <span class="c1"># Frame index (-1 if none)</span>
-<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>    <span class="p">(</span><span class="s2">&quot;track&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>        <span class="c1"># Track index (-1 if none)</span>
-<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>    <span class="p">(</span><span class="s2">&quot;instance&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>     <span class="c1"># Instance index (-1 if none)</span>
-<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>    <span class="p">(</span><span class="s2">&quot;is_predicted&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span> <span class="c1"># 0 = UserBoundingBox, 1 = PredictedBoundingBox</span>
-<a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>    <span class="p">(</span><span class="s2">&quot;score&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span>        <span class="c1"># Confidence score (NaN for user bboxes)</span>
-<a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="p">])</span>
-</code></pre></div>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.BoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.BoundingBox"><code>BoundingBox</code></a> annotations store axis-aligned or oriented bounding boxes for object detection and tracking workflows. Bounding box support was introduced in format 1.7. Format 2.0+ uses columnar storage under the <code>/bboxes/</code> HDF5 group.</p>
+<h3 id="columnar-datasets-format-20">Columnar Datasets (Format 2.0+)<a class="headerlink" href="#columnar-datasets-format-20" title="Permanent link">&para;</a></h3>
+<p>Bounding box data is stored as individual datasets within the <code>/bboxes/</code> HDF5 group:</p>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>Dtype</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>x1</code></td>
+<td><code>float64</code></td>
+<td>Top-left x-coordinate in pixels</td>
+</tr>
+<tr>
+<td><code>y1</code></td>
+<td><code>float64</code></td>
+<td>Top-left y-coordinate in pixels</td>
+</tr>
+<tr>
+<td><code>x2</code></td>
+<td><code>float64</code></td>
+<td>Bottom-right x-coordinate in pixels</td>
+</tr>
+<tr>
+<td><code>y2</code></td>
+<td><code>float64</code></td>
+<td>Bottom-right y-coordinate in pixels</td>
+</tr>
+<tr>
+<td><code>angle</code></td>
+<td><code>float64</code></td>
+<td>Rotation angle in radians (0 = axis-aligned)</td>
+</tr>
+<tr>
+<td><code>video</code></td>
+<td><code>int32</code></td>
+<td>Video index (-1 if none)</td>
+</tr>
+<tr>
+<td><code>frame_idx</code></td>
+<td><code>int64</code></td>
+<td>Frame index (-1 if none)</td>
+</tr>
+<tr>
+<td><code>track</code></td>
+<td><code>int32</code></td>
+<td>Track index (-1 if none)</td>
+</tr>
+<tr>
+<td><code>instance</code></td>
+<td><code>int32</code></td>
+<td>Instance index (-1 if none)</td>
+</tr>
+<tr>
+<td><code>is_predicted</code></td>
+<td><code>uint8</code></td>
+<td>0 = UserBoundingBox, 1 = PredictedBoundingBox</td>
+</tr>
+<tr>
+<td><code>score</code></td>
+<td><code>float32</code></td>
+<td>Confidence score (NaN for user bboxes)</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>vlen <code>str</code></td>
+<td>Category label per bounding box</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>vlen <code>str</code></td>
+<td>Name label per bounding box</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>vlen <code>str</code></td>
+<td>Source label per bounding box</td>
+</tr>
+</tbody>
+</table>
 <h3 id="user-vs-predicted">User vs Predicted<a class="headerlink" href="#user-vs-predicted" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>is_predicted = 0</code>: <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.UserBoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.UserBoundingBox"><code>UserBoundingBox</code></a> — human-annotated</li>
-<li><code>is_predicted = 1</code>: <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.PredictedBoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.PredictedBoundingBox"><code>PredictedBoundingBox</code></a> — model-predicted, <code>score</code> contains the confidence value</li>
+<li><code>is_predicted = 0</code>: <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.UserBoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.UserBoundingBox"><code>UserBoundingBox</code></a> -- human-annotated</li>
+<li><code>is_predicted = 1</code>: <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.PredictedBoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.PredictedBoundingBox"><code>PredictedBoundingBox</code></a> -- model-predicted, <code>score</code> contains the confidence value</li>
 </ul>
 <h3 id="string-metadata">String Metadata<a class="headerlink" href="#string-metadata" title="Permanent link">&para;</a></h3>
-<p>String metadata follows the same pattern as ROIs. JSON-encoded HDF5 attributes on the <code>/bboxes</code> dataset store <code>categories</code>, <code>names</code>, and <code>sources</code> arrays.</p>
+<p>String metadata (<code>category</code>, <code>name</code>, <code>source</code>) is stored as vlen string datasets within the <code>/bboxes/</code> group, one entry per bounding box.</p>
 <h3 id="optional-dataset_4">Optional Dataset<a class="headerlink" href="#optional-dataset_4" title="Permanent link">&para;</a></h3>
-<p>The <code>/bboxes</code> dataset is only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels"><code>Labels</code></a> object contains bounding boxes. On read, a missing dataset defaults to an empty list.</p>
+<p>The <code>/bboxes/</code> group is only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels"><code>Labels</code></a> object contains bounding boxes. On read, a missing group defaults to an empty list.</p>
+<div class="admonition note">
+<p class="admonition-title">Legacy format (1.7--1.9)</p>
+<p>Older SLP files store bounding boxes as a single structured array dataset (<code>/bboxes</code>)
+with <code>x_center</code>, <code>y_center</code>, <code>width</code>, <code>height</code> columns and JSON-encoded string
+attributes. The reader auto-detects whether <code>/bboxes</code> is a group (format 2.0+) or a
+dataset (legacy) and handles both transparently.</p>
+</div>
 <h3 id="migration-from-format-1516">Migration from Format 1.5/1.6<a class="headerlink" href="#migration-from-format-1516" title="Permanent link">&para;</a></h3>
-<p>When reading older files without a <code>/bboxes</code> dataset, any ROIs with axis-aligned rectangular geometry (<code>is_bbox = True</code>) are automatically migrated to <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.UserBoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.UserBoundingBox"><code>UserBoundingBox</code></a> objects in <code>Labels.bboxes</code>. The migrated ROIs are removed from <code>Labels.rois</code>.</p>
+<p>When reading older files without a <code>/bboxes</code> dataset or group, any ROIs with axis-aligned rectangular geometry (<code>is_bbox = True</code>) are automatically migrated to <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.UserBoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.UserBoundingBox"><code>UserBoundingBox</code></a> objects in <code>Labels.bboxes</code>. The migrated ROIs are removed from <code>Labels.rois</code>.</p>
 <h2 id="regions-of-interest-rois">Regions of Interest (ROIs)<a class="headerlink" href="#regions-of-interest-rois" title="Permanent link">&para;</a></h2>
 <p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.ROI&lt;/code&gt;" href="../../model/regions/#sleap_io.ROI"><code>ROI</code></a>s store vector geometry annotations such as polygons and other shapes. ROI support was introduced in format 1.5.</p>
 <h3 id="roi-datasets">ROI Datasets<a class="headerlink" href="#roi-datasets" title="Permanent link">&para;</a></h3>
@@ -4432,33 +4582,47 @@
 </ul>
 <p>Each ROI's geometry is stored as a WKB blob in <code>/roi_wkb</code>, with <code>/rois</code> providing the byte range via <code>wkb_start</code> and <code>wkb_end</code> offsets.</p>
 <h3 id="roi-dtype">ROI Dtype<a class="headerlink" href="#roi-dtype" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="n">roi_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>    <span class="p">(</span><span class="s2">&quot;annotation_type&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span>  <span class="c1"># Legacy field, always written as 0</span>
-<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>    <span class="p">(</span><span class="s2">&quot;video&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>            <span class="c1"># Video index (-1 if none)</span>
-<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>    <span class="p">(</span><span class="s2">&quot;frame_idx&quot;</span><span class="p">,</span> <span class="s2">&quot;i8&quot;</span><span class="p">),</span>        <span class="c1"># Frame index (-1 for static ROIs)</span>
-<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>    <span class="p">(</span><span class="s2">&quot;track&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>            <span class="c1"># Track index (-1 if none)</span>
-<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>    <span class="p">(</span><span class="s2">&quot;score&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span>            <span class="c1"># Legacy field, always written as NaN</span>
-<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>    <span class="p">(</span><span class="s2">&quot;wkb_start&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>       <span class="c1"># Start byte offset into /roi_wkb</span>
-<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>    <span class="p">(</span><span class="s2">&quot;wkb_end&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>         <span class="c1"># End byte offset into /roi_wkb</span>
-<a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>    <span class="p">(</span><span class="s2">&quot;instance&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>        <span class="c1"># Instance index (-1 if none) (Format 1.6+)</span>
-<a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="p">])</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="n">roi_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>    <span class="p">(</span><span class="s2">&quot;annotation_type&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span>  <span class="c1"># Legacy field, always written as 0</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="p">(</span><span class="s2">&quot;video&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>            <span class="c1"># Video index (-1 if none)</span>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>    <span class="p">(</span><span class="s2">&quot;frame_idx&quot;</span><span class="p">,</span> <span class="s2">&quot;i8&quot;</span><span class="p">),</span>        <span class="c1"># Frame index (-1 for static ROIs)</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>    <span class="p">(</span><span class="s2">&quot;track&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>            <span class="c1"># Track index (-1 if none)</span>
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>    <span class="p">(</span><span class="s2">&quot;is_predicted&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span>     <span class="c1"># 0 = UserROI, 1 = PredictedROI (Format 1.9+)</span>
+<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>    <span class="p">(</span><span class="s2">&quot;score&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span>            <span class="c1"># Confidence score (NaN for user ROIs) (Format 1.9+)</span>
+<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>    <span class="p">(</span><span class="s2">&quot;wkb_start&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>       <span class="c1"># Start byte offset into /roi_wkb</span>
+<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>    <span class="p">(</span><span class="s2">&quot;wkb_end&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>         <span class="c1"># End byte offset into /roi_wkb</span>
+<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>    <span class="p">(</span><span class="s2">&quot;instance&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>        <span class="c1"># Instance index (-1 if none) (Format 1.6+)</span>
+<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="p">])</span>
 </code></pre></div>
 <div class="admonition note">
-<p class="admonition-title">Legacy fields</p>
-<p>The <code>annotation_type</code> and <code>score</code> columns are retained in the on-disk dtype
-for backward compatibility with older readers but are no longer used. Writers
-always set <code>annotation_type = 0</code> and <code>score = NaN</code>. Use the <code>category</code> string
-attribute for semantic classification and <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.BoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.BoundingBox"><code>BoundingBox</code></a>
-for detection annotations with scores.</p>
+<p class="admonition-title">Legacy and predicted fields</p>
+<p>The <code>annotation_type</code> column is retained in the on-disk dtype for backward
+compatibility with older readers but is no longer used. Writers always set
+<code>annotation_type = 0</code>. Use the <code>category</code> string metadata for semantic
+classification and <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.BoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.BoundingBox"><code>BoundingBox</code></a> for detection
+annotations.</p>
+<p>The <code>is_predicted</code> field distinguishes <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.UserROI&lt;/code&gt;" href="../../model/regions/#sleap_io.UserROI"><code>UserROI</code></a> (<code>0</code>)
+from <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.PredictedROI&lt;/code&gt;" href="../../model/regions/#sleap_io.PredictedROI"><code>PredictedROI</code></a> (<code>1</code>). The <code>score</code> field stores
+the confidence value for predicted ROIs (NaN for user ROIs).</p>
 </div>
 <h3 id="string-metadata_1">String Metadata<a class="headerlink" href="#string-metadata_1" title="Permanent link">&para;</a></h3>
-<p>String metadata fields (<code>categories</code>, <code>names</code>, <code>sources</code>) are stored as JSON-encoded HDF5 attributes on the <code>/rois</code> dataset:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Example attribute values</span>
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">rois_dataset</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;categories&quot;</span><span class="p">]</span>  <span class="c1"># &#39;[&quot;arena&quot;, &quot;nest&quot;]&#39;</span>
-<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="n">rois_dataset</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;names&quot;</span><span class="p">]</span>       <span class="c1"># &#39;[&quot;arena_boundary&quot;, &quot;nest_region&quot;]&#39;</span>
-<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="n">rois_dataset</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;sources&quot;</span><span class="p">]</span>     <span class="c1"># &#39;[&quot;manual&quot;, &quot;model_v2&quot;]&#39;</span>
+<p>Format 1.9+ stores ROI string metadata as vlen HDF5 string datasets at the root level:</p>
+<ul>
+<li><code>/roi_categories</code>: One category string per ROI</li>
+<li><code>/roi_names</code>: One name string per ROI</li>
+<li><code>/roi_sources</code>: One source string per ROI</li>
+</ul>
+<p>The reader checks for these datasets first. For pre-1.9 files, it falls back to JSON-encoded HDF5 attributes on the <code>/rois</code> dataset (<code>@categories</code>, <code>@names</code>, <code>@sources</code>).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Format 1.9+ (vlen string datasets)</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">f</span><span class="p">[</span><span class="s2">&quot;/roi_categories&quot;</span><span class="p">]</span>  <span class="c1"># [&quot;arena&quot;, &quot;nest&quot;]</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="n">f</span><span class="p">[</span><span class="s2">&quot;/roi_names&quot;</span><span class="p">]</span>       <span class="c1"># [&quot;arena_boundary&quot;, &quot;nest_region&quot;]</span>
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="n">f</span><span class="p">[</span><span class="s2">&quot;/roi_sources&quot;</span><span class="p">]</span>     <span class="c1"># [&quot;manual&quot;, &quot;model_v2&quot;]</span>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>
+<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="c1"># Pre-1.9 legacy (JSON attributes on /rois dataset)</span>
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="n">rois_dataset</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;categories&quot;</span><span class="p">]</span>  <span class="c1"># &#39;[&quot;arena&quot;, &quot;nest&quot;]&#39;</span>
+<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="n">rois_dataset</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;names&quot;</span><span class="p">]</span>       <span class="c1"># &#39;[&quot;arena_boundary&quot;, &quot;nest_region&quot;]&#39;</span>
+<a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="n">rois_dataset</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;sources&quot;</span><span class="p">]</span>     <span class="c1"># &#39;[&quot;manual&quot;, &quot;model_v2&quot;]&#39;</span>
 </code></pre></div>
-<p>Each attribute is a JSON array with one entry per ROI, corresponding by index.</p>
 <h3 id="static-vs-temporal-rois">Static vs Temporal ROIs<a class="headerlink" href="#static-vs-temporal-rois" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Static ROIs</strong>: <code>frame_idx = -1</code>. Apply globally (e.g., arena boundaries).</li>
@@ -4476,28 +4640,117 @@ for detection annotations with scores.</p>
 </ul>
 <p>The RLE encoding stores <code>uint32</code> run-length counts packed as little-endian <code>uint8</code> bytes. Each mask's RLE data is located in <code>/mask_rle</code> at the byte range specified by <code>rle_start</code> and <code>rle_end</code>.</p>
 <h3 id="mask-dtype">Mask Dtype<a class="headerlink" href="#mask-dtype" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="n">mask_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>    <span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>           <span class="c1"># Mask height in pixels</span>
-<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>    <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>            <span class="c1"># Mask width in pixels</span>
-<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>    <span class="p">(</span><span class="s2">&quot;annotation_type&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span>  <span class="c1"># Legacy field, always written as 2</span>
-<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="p">(</span><span class="s2">&quot;video&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>            <span class="c1"># Video index (-1 if none)</span>
-<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>    <span class="p">(</span><span class="s2">&quot;frame_idx&quot;</span><span class="p">,</span> <span class="s2">&quot;i8&quot;</span><span class="p">),</span>        <span class="c1"># Frame index (-1 for static masks)</span>
-<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>    <span class="p">(</span><span class="s2">&quot;track&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>            <span class="c1"># Track index (-1 if none)</span>
-<a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>    <span class="p">(</span><span class="s2">&quot;score&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span>            <span class="c1"># Legacy field, always written as NaN</span>
-<a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a>    <span class="p">(</span><span class="s2">&quot;rle_start&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>       <span class="c1"># Start byte offset into /mask_rle</span>
-<a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>    <span class="p">(</span><span class="s2">&quot;rle_end&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>         <span class="c1"># End byte offset into /mask_rle</span>
-<a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a><span class="p">])</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="n">mask_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>    <span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>           <span class="c1"># Mask height in pixels</span>
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>    <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>            <span class="c1"># Mask width in pixels</span>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>    <span class="p">(</span><span class="s2">&quot;annotation_type&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span>  <span class="c1"># Legacy field, always written as 2</span>
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>    <span class="p">(</span><span class="s2">&quot;video&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>            <span class="c1"># Video index (-1 if none)</span>
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>    <span class="p">(</span><span class="s2">&quot;frame_idx&quot;</span><span class="p">,</span> <span class="s2">&quot;i8&quot;</span><span class="p">),</span>        <span class="c1"># Frame index (-1 for static masks)</span>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>    <span class="p">(</span><span class="s2">&quot;track&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>            <span class="c1"># Track index (-1 if none)</span>
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>    <span class="p">(</span><span class="s2">&quot;instance&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>         <span class="c1"># Instance index (-1 if none) (Format 1.9+)</span>
+<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>    <span class="p">(</span><span class="s2">&quot;is_predicted&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span>     <span class="c1"># 0 = UserSegmentationMask, 1 = Predicted (Format 1.9+)</span>
+<a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>    <span class="p">(</span><span class="s2">&quot;score&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span>            <span class="c1"># Confidence score (NaN for user masks) (Format 1.9+)</span>
+<a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>    <span class="p">(</span><span class="s2">&quot;rle_start&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>       <span class="c1"># Start byte offset into /mask_rle</span>
+<a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a>    <span class="p">(</span><span class="s2">&quot;rle_end&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>         <span class="c1"># End byte offset into /mask_rle</span>
+<a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a><span class="p">])</span>
 </code></pre></div>
 <div class="admonition note">
-<p class="admonition-title">Legacy fields</p>
-<p>As with ROIs, <code>annotation_type</code> and <code>score</code> are retained for backward
-compatibility but ignored on read. Writers always set
-<code>annotation_type = 2</code> (SEGMENTATION) and <code>score = NaN</code>.</p>
+<p class="admonition-title">Legacy and predicted fields</p>
+<p>The <code>annotation_type</code> column is retained for backward compatibility but
+ignored on read. Writers always set <code>annotation_type = 2</code> (SEGMENTATION).</p>
+<p>The <code>is_predicted</code> field distinguishes <code>UserSegmentationMask</code> (<code>0</code>) from
+<code>PredictedSegmentationMask</code> (<code>1</code>). The <code>score</code> field stores the confidence
+value for predicted masks (NaN for user masks).</p>
 </div>
 <h3 id="string-metadata_2">String Metadata<a class="headerlink" href="#string-metadata_2" title="Permanent link">&para;</a></h3>
-<p>String metadata follows the same pattern as ROIs. JSON-encoded HDF5 attributes on the <code>/masks</code> dataset store <code>categories</code>, <code>names</code>, and <code>sources</code> arrays.</p>
+<p>Format 1.9+ stores mask string metadata as vlen HDF5 string datasets at the root level:</p>
+<ul>
+<li><code>/mask_categories</code>: One category string per mask</li>
+<li><code>/mask_names</code>: One name string per mask</li>
+<li><code>/mask_sources</code>: One source string per mask</li>
+</ul>
+<p>The reader checks for these datasets first. For pre-1.9 files, it falls back to JSON-encoded HDF5 attributes on the <code>/masks</code> dataset (<code>@categories</code>, <code>@names</code>, <code>@sources</code>).</p>
 <h3 id="optional-dataset_6">Optional Dataset<a class="headerlink" href="#optional-dataset_6" title="Permanent link">&para;</a></h3>
 <p>The <code>/masks</code> and <code>/mask_rle</code> datasets are only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels"><code>Labels</code></a> object contains masks. On read, missing datasets default to empty lists.</p>
+<h2 id="score-map-datasets">Score Map Datasets<a class="headerlink" href="#score-map-datasets" title="Permanent link">&para;</a></h2>
+<p>Score maps store per-pixel confidence values for predicted segmentation masks and label images. These datasets are only written when <code>PredictedSegmentationMask</code> or <code>PredictedLabelImage</code> objects have a <code>score_map</code> set.</p>
+<h3 id="mask-score-maps">Mask Score Maps<a class="headerlink" href="#mask-score-maps" title="Permanent link">&para;</a></h3>
+<p>Mask score maps are stored across two datasets:</p>
+<ul>
+<li><code>/mask_score_map_index</code>: Structured array indexing into the packed data</li>
+<li><code>/mask_score_maps</code>: Packed <code>uint8</code> array of zlib-compressed <code>float32</code> score map data</li>
+</ul>
+<h4 id="index-dtype">Index Dtype<a class="headerlink" href="#index-dtype" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="n">mask_score_map_index_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>    <span class="p">(</span><span class="s2">&quot;mask_idx&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>     <span class="c1"># Index into /masks dataset</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>    <span class="p">(</span><span class="s2">&quot;data_start&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>   <span class="c1"># Start byte offset into /mask_score_maps</span>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>    <span class="p">(</span><span class="s2">&quot;data_end&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>     <span class="c1"># End byte offset into /mask_score_maps</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>       <span class="c1"># Score map height in pixels</span>
+<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>    <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>        <span class="c1"># Score map width in pixels</span>
+<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="p">])</span>
+</code></pre></div>
+<h3 id="label-image-score-maps">Label Image Score Maps<a class="headerlink" href="#label-image-score-maps" title="Permanent link">&para;</a></h3>
+<p>Label image score maps follow the same structure:</p>
+<ul>
+<li><code>/label_image_score_map_index</code>: Structured array indexing into the packed data</li>
+<li><code>/label_image_score_maps</code>: Packed <code>uint8</code> array of zlib-compressed <code>float32</code> score map data</li>
+</ul>
+<h4 id="index-dtype_1">Index Dtype<a class="headerlink" href="#index-dtype_1" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="n">label_image_score_map_index_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>    <span class="p">(</span><span class="s2">&quot;li_idx&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>       <span class="c1"># Index into /label_images dataset</span>
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>    <span class="p">(</span><span class="s2">&quot;data_start&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>   <span class="c1"># Start byte offset into /label_image_score_maps</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>    <span class="p">(</span><span class="s2">&quot;data_end&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>     <span class="c1"># End byte offset into /label_image_score_maps</span>
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>    <span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>       <span class="c1"># Score map height in pixels</span>
+<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>    <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>        <span class="c1"># Score map width in pixels</span>
+<a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="p">])</span>
+</code></pre></div>
+<h3 id="data-format">Data Format<a class="headerlink" href="#data-format" title="Permanent link">&para;</a></h3>
+<p>Score map pixel data is stored as <code>float32</code> arrays, compressed with zlib, and packed into a single <code>uint8</code> byte array. Each score map's compressed bytes are located at the byte range <code>[data_start, data_end)</code> in the corresponding packed dataset.</p>
+<h3 id="optional-datasets">Optional Datasets<a class="headerlink" href="#optional-datasets" title="Permanent link">&para;</a></h3>
+<p>The score map datasets are only written when at least one predicted mask or label image has a <code>score_map</code> set. On read, missing datasets are silently skipped.</p>
+<h2 id="label-images">Label Images<a class="headerlink" href="#label-images" title="Permanent link">&para;</a></h2>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImage&lt;/code&gt;" href="../../model/regions/#sleap_io.LabelImage"><code>LabelImage</code></a>s store dense per-pixel instance segmentation data, where each pixel is assigned an integer label corresponding to an object. Label image support was introduced in format 1.8.</p>
+<h3 id="label-image-datasets">Label Image Datasets<a class="headerlink" href="#label-image-datasets" title="Permanent link">&para;</a></h3>
+<p>Label image data is stored across three datasets:</p>
+<ul>
+<li><code>/label_images</code>: Structured array containing label image metadata</li>
+<li><code>/label_image_objects</code>: Structured array containing per-object metadata</li>
+<li><code>/label_image_data</code>: Packed <code>uint8</code> array of zlib-compressed pixel data</li>
+</ul>
+<h3 id="label-image-dtype">Label Image Dtype<a class="headerlink" href="#label-image-dtype" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="n">label_image_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>    <span class="p">(</span><span class="s2">&quot;video&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>          <span class="c1"># Video index (-1 if none)</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>    <span class="p">(</span><span class="s2">&quot;frame_idx&quot;</span><span class="p">,</span> <span class="s2">&quot;i8&quot;</span><span class="p">),</span>      <span class="c1"># Frame index</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>         <span class="c1"># Image height in pixels</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>          <span class="c1"># Image width in pixels</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>    <span class="p">(</span><span class="s2">&quot;n_objects&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>      <span class="c1"># Number of objects in this label image</span>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>    <span class="p">(</span><span class="s2">&quot;objects_start&quot;</span><span class="p">,</span> <span class="s2">&quot;u4&quot;</span><span class="p">),</span>  <span class="c1"># Start index into /label_image_objects</span>
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>    <span class="p">(</span><span class="s2">&quot;data_start&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>     <span class="c1"># Start byte offset into /label_image_data</span>
+<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>    <span class="p">(</span><span class="s2">&quot;data_end&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>       <span class="c1"># End byte offset into /label_image_data</span>
+<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>    <span class="p">(</span><span class="s2">&quot;is_predicted&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span>   <span class="c1"># 0 = UserLabelImage, 1 = Predicted (Format 1.9+)</span>
+<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>    <span class="p">(</span><span class="s2">&quot;score&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span>          <span class="c1"># Confidence score (NaN for user) (Format 1.9+)</span>
+<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="p">])</span>
+</code></pre></div>
+<h3 id="objects-dtype">Objects Dtype<a class="headerlink" href="#objects-dtype" title="Permanent link">&para;</a></h3>
+<p>Each object within a label image is described by a row in <code>/label_image_objects</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="n">label_image_object_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>    <span class="p">(</span><span class="s2">&quot;label_id&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>    <span class="c1"># Pixel label value in the image data</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>    <span class="p">(</span><span class="s2">&quot;track&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>       <span class="c1"># Track index (-1 if none)</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>    <span class="p">(</span><span class="s2">&quot;instance&quot;</span><span class="p">,</span> <span class="s2">&quot;i4&quot;</span><span class="p">),</span>    <span class="c1"># Instance index (-1 if none)</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>    <span class="p">(</span><span class="s2">&quot;score&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span>       <span class="c1"># Per-object confidence score (Format 1.9+)</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="p">])</span>
+</code></pre></div>
+<h3 id="pixel-data">Pixel Data<a class="headerlink" href="#pixel-data" title="Permanent link">&para;</a></h3>
+<p>The pixel data for each label image is stored as an <code>int32</code> array, compressed with zlib, and packed into <code>/label_image_data</code> as <code>uint8</code> bytes. Each label image's compressed bytes are at the byte range <code>[data_start, data_end)</code>.</p>
+<h3 id="string-metadata_3">String Metadata<a class="headerlink" href="#string-metadata_3" title="Permanent link">&para;</a></h3>
+<p>Format 1.9+ stores label image string metadata as vlen HDF5 string datasets:</p>
+<ul>
+<li><code>/label_image_sources</code>: One source string per label image</li>
+<li><code>/label_image_obj_categories</code>: One category string per object</li>
+<li><code>/label_image_obj_names</code>: One name string per object</li>
+</ul>
+<h3 id="optional-datasets_1">Optional Datasets<a class="headerlink" href="#optional-datasets_1" title="Permanent link">&para;</a></h3>
+<p>The label image datasets are only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels"><code>Labels</code></a> object contains label images. On read, missing datasets default to empty lists.</p>
 <h2 id="version-history">Version History<a class="headerlink" href="#version-history" title="Permanent link">&para;</a></h2>
 <p>The SLP format has evolved through several versions, tracked by the <code>format_id</code> attribute in <code>/metadata</code>.</p>
 <h3 id="format-10">Format 1.0<a class="headerlink" href="#format-10" title="Permanent link">&para;</a></h3>
@@ -4551,17 +4804,30 @@ compatibility but ignored on read. Writers always set
 <h3 id="format-18">Format 1.8<a class="headerlink" href="#format-18" title="Permanent link">&para;</a></h3>
 <p><strong>Added label image support.</strong></p>
 <ul>
-<li>New datasets: <code>/label_images</code>, <code>/label_image_data</code> for per-pixel segmentation annotations</li>
+<li>New datasets: <code>/label_images</code>, <code>/label_image_objects</code>, <code>/label_image_data</code> for per-pixel segmentation annotations</li>
 <li>First-class <code>LabelImage</code> type for instance segmentation workflows</li>
 </ul>
-<h3 id="format-19-current">Format 1.9 (Current)<a class="headerlink" href="#format-19-current" title="Permanent link">&para;</a></h3>
-<p><strong>Added identity and Instance3D support.</strong></p>
+<h3 id="format-19">Format 1.9<a class="headerlink" href="#format-19" title="Permanent link">&para;</a></h3>
+<p><strong>Added identity, Instance3D, and predicted variant support.</strong></p>
 <ul>
 <li>New dataset: <code>/identities_json</code> for ground-truth animal identities</li>
 <li>Extended <code>InstanceGroup</code> serialization with <code>identity_idx</code>, <code>instance_3d_score</code>, and <code>instance_3d_point_scores</code> fields</li>
 <li><code>Identity</code> objects persist across sessions and videos, distinct from per-video <code>Track</code>s</li>
 <li><code>Instance3D</code> and <code>PredictedInstance3D</code> provide structured 3D keypoint storage</li>
+<li>Added <code>is_predicted</code> (<code>u1</code>) and updated <code>score</code> fields to ROI, mask, and label image dtypes for predicted variant support (<code>PredictedROI</code>, <code>PredictedSegmentationMask</code>, <code>PredictedLabelImage</code>)</li>
+<li>Added <code>instance</code> (<code>i4</code>) field to mask dtype for mask-instance association</li>
+<li>Migrated ROI and mask string metadata from JSON attributes to vlen HDF5 string datasets (<code>/roi_categories</code>, <code>/roi_names</code>, <code>/roi_sources</code>, <code>/mask_categories</code>, <code>/mask_names</code>, <code>/mask_sources</code>)</li>
+<li>Added label image string metadata datasets (<code>/label_image_sources</code>, <code>/label_image_obj_categories</code>, <code>/label_image_obj_names</code>)</li>
+<li>Added score map datasets (<code>/mask_score_map_index</code>, <code>/mask_score_maps</code>, <code>/label_image_score_map_index</code>, <code>/label_image_score_maps</code>)</li>
 <li>Backward compatible: new fields are optional, old readers skip unknown keys via metadata pass-through</li>
+</ul>
+<h3 id="format-20-current">Format 2.0 (Current)<a class="headerlink" href="#format-20-current" title="Permanent link">&para;</a></h3>
+<p><strong>Columnar bounding box storage.</strong></p>
+<ul>
+<li><code>/bboxes</code> changed from a structured array dataset to an HDF5 group with columnar datasets</li>
+<li>Bounding box coordinates use <code>x1</code>/<code>y1</code>/<code>x2</code>/<code>y2</code> (top-left/bottom-right) representation instead of <code>x_center</code>/<code>y_center</code>/<code>width</code>/<code>height</code></li>
+<li>String metadata (<code>category</code>, <code>name</code>, <code>source</code>) stored as vlen string datasets within the group</li>
+<li>The reader auto-detects whether <code>/bboxes</code> is a group (format 2.0+) or a dataset (legacy 1.7--1.9) and handles both transparently</li>
 </ul>
 <h2 id="api">API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h2>
 <h3 id="high-level-functions">High-Level Functions<a class="headerlink" href="#high-level-functions" title="Permanent link">&para;</a></h3>
@@ -7546,7 +7812,7 @@ labels.materialize() first.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;vm&quot;&gt;__dict__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;mappingproxy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;({&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;__module__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;sleap_io.io.slp_lazy&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__firstlineno__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;696&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__doc__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;List-like proxy that materializes LabeledFrame objects on access.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;This provides backward compatibility for code that accesses&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.labeled_frames directly. Frames are created on-demand when&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;accessed via indexing or iteration.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;Mutations are blocked with helpful error messages suggesting to call&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.materialize() first.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__init__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1cdf4c0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__len__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__len__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1cdf560&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__getitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__getitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1cdf9c0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__iter__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__iter__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1bd82c0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__repr__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1bd8360&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;_mutation_error&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;_mutation_error&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1bd8400&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;append&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;append&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1bd84a0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;extend&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;extend&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1bd8540&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;insert&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;insert&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1bd85e0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__setitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__setitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1bd8680&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__delitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__delitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7facf1bd8720&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__static_attributes__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;_store&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,),&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;vm&quot;&gt;__dict__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;mappingproxy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;({&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;__module__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;sleap_io.io.slp_lazy&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__firstlineno__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;696&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__doc__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;List-like proxy that materializes LabeledFrame objects on access.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;This provides backward compatibility for code that accesses&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.labeled_frames directly. Frames are created on-demand when&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;accessed via indexing or iteration.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;Mutations are blocked with helpful error messages suggesting to call&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.materialize() first.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__init__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeddb560&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__len__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__len__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeddb600&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__getitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__getitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeddba60&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__iter__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__iter__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeec4360&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__repr__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeec4400&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;_mutation_error&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;_mutation_error&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeec44a0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;append&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;append&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeec4540&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;extend&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;extend&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeec45e0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;insert&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;insert&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeec4680&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__setitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__setitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeec4720&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__delitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__delitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f44eeec47c0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__static_attributes__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;_store&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,),&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-class-attribute&quot;&gt;&lt;code&gt;class-attribute&lt;/code&gt;&lt;/small&gt;
@@ -7648,7 +7914,7 @@ labels.materialize() first.</p>
 
 
 <h5 id="sleap_io.io.slp_lazy.LazyFrameList.__dict__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__dict__</span> <span class="o">=</span> <span class="n">mappingproxy</span><span class="p">({</span><span class="s1">&#39;__module__&#39;</span><span class="p">:</span> <span class="s1">&#39;sleap_io.io.slp_lazy&#39;</span><span class="p">,</span> <span class="s1">&#39;__firstlineno__&#39;</span><span class="p">:</span> <span class="mi">696</span><span class="p">,</span> <span class="s1">&#39;__doc__&#39;</span><span class="p">:</span> <span class="s1">&#39;List-like proxy that materializes LabeledFrame objects on access.</span><span class="se">\n\n</span><span class="s1">This provides backward compatibility for code that accesses</span><span class="se">\n</span><span class="s1">labels.labeled_frames directly. Frames are created on-demand when</span><span class="se">\n</span><span class="s1">accessed via indexing or iteration.</span><span class="se">\n\n</span><span class="s1">Mutations are blocked with helpful error messages suggesting to call</span><span class="se">\n</span><span class="s1">labels.materialize() first.</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;__init__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__init__</span> <span class="n">at</span> <span class="mh">0x7facf1cdf4c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__len__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__len__</span> <span class="n">at</span> <span class="mh">0x7facf1cdf560</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__getitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__getitem__</span> <span class="n">at</span> <span class="mh">0x7facf1cdf9c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__iter__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__iter__</span> <span class="n">at</span> <span class="mh">0x7facf1bd82c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__repr__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__repr__</span> <span class="n">at</span> <span class="mh">0x7facf1bd8360</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;_mutation_error&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">_mutation_error</span> <span class="n">at</span> <span class="mh">0x7facf1bd8400</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;append&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">append</span> <span class="n">at</span> <span class="mh">0x7facf1bd84a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;extend&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">extend</span> <span class="n">at</span> <span class="mh">0x7facf1bd8540</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;insert&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">insert</span> <span class="n">at</span> <span class="mh">0x7facf1bd85e0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__setitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__setitem__</span> <span class="n">at</span> <span class="mh">0x7facf1bd8680</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__delitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__delitem__</span> <span class="n">at</span> <span class="mh">0x7facf1bd8720</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__static_attributes__&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;_store&#39;</span><span class="p">,),</span> <span class="s1">&#39;__dict__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__dict__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__weakref__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__weakref__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">})</span></code>
+            <code class="highlight language-python"><span class="vm">__dict__</span> <span class="o">=</span> <span class="n">mappingproxy</span><span class="p">({</span><span class="s1">&#39;__module__&#39;</span><span class="p">:</span> <span class="s1">&#39;sleap_io.io.slp_lazy&#39;</span><span class="p">,</span> <span class="s1">&#39;__firstlineno__&#39;</span><span class="p">:</span> <span class="mi">696</span><span class="p">,</span> <span class="s1">&#39;__doc__&#39;</span><span class="p">:</span> <span class="s1">&#39;List-like proxy that materializes LabeledFrame objects on access.</span><span class="se">\n\n</span><span class="s1">This provides backward compatibility for code that accesses</span><span class="se">\n</span><span class="s1">labels.labeled_frames directly. Frames are created on-demand when</span><span class="se">\n</span><span class="s1">accessed via indexing or iteration.</span><span class="se">\n\n</span><span class="s1">Mutations are blocked with helpful error messages suggesting to call</span><span class="se">\n</span><span class="s1">labels.materialize() first.</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;__init__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__init__</span> <span class="n">at</span> <span class="mh">0x7f44eeddb560</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__len__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__len__</span> <span class="n">at</span> <span class="mh">0x7f44eeddb600</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__getitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__getitem__</span> <span class="n">at</span> <span class="mh">0x7f44eeddba60</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__iter__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__iter__</span> <span class="n">at</span> <span class="mh">0x7f44eeec4360</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__repr__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__repr__</span> <span class="n">at</span> <span class="mh">0x7f44eeec4400</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;_mutation_error&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">_mutation_error</span> <span class="n">at</span> <span class="mh">0x7f44eeec44a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;append&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">append</span> <span class="n">at</span> <span class="mh">0x7f44eeec4540</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;extend&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">extend</span> <span class="n">at</span> <span class="mh">0x7f44eeec45e0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;insert&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">insert</span> <span class="n">at</span> <span class="mh">0x7f44eeec4680</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__setitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__setitem__</span> <span class="n">at</span> <span class="mh">0x7f44eeec4720</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__delitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__delitem__</span> <span class="n">at</span> <span class="mh">0x7f44eeec47c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__static_attributes__&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;_store&#39;</span><span class="p">,),</span> <span class="s1">&#39;__dict__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__dict__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__weakref__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__weakref__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">})</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>

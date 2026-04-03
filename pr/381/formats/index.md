@@ -532,12 +532,13 @@ Each ROI is serialized as a GeoJSON Feature with geometry and metadata propertie
 
 ```python
 import sleap_io as sio
-from sleap_io.model.roi import ROI
+from sleap_io.model.roi import UserROI
+from shapely.geometry import box
 
 # Create some ROIs
 rois = [
-    ROI.from_bbox(100, 200, 50, 80, name="box1", category="animal"),
-    ROI.from_polygon([(0, 0), (50, 0), (50, 50)], name="region"),
+    UserROI(geometry=box(100, 200, 150, 280), name="box1", category="animal"),
+    UserROI.from_polygon([(0, 0), (50, 0), (50, 50)], name="region"),
 ]
 
 # Save to GeoJSON

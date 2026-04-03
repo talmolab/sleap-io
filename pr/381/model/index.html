@@ -3048,26 +3048,45 @@
     }
 
     class ROI:::regions {
+        &lt;&lt;abstract&gt;&gt;
         +geometry
         +str name
     }
     class SegmentationMask:::regions {
+        &lt;&lt;abstract&gt;&gt;
         +rle_counts
         +int height
         +int width
     }
     class BoundingBox:::regions {
-        +float x_center
-        +float y_center
-        +float width
-        +float height
+        &lt;&lt;abstract&gt;&gt;
+        +float x1
+        +float y1
+        +float x2
+        +float y2
     }
     class UserBoundingBox:::regions
     class PredictedBoundingBox:::regions {
         +float score
     }
 
+    class UserROI:::regions
+    class PredictedROI:::regions {
+        +float score
+    }
+    class UserSegmentationMask:::regions
+    class PredictedSegmentationMask:::regions {
+        +float score
+        +ndarray score_map
+    }
+    class UserLabelImage:::regions
+    class PredictedLabelImage:::regions {
+        +float score
+        +ndarray score_map
+    }
+
     class LabelImage:::regions {
+        &lt;&lt;abstract&gt;&gt;
         +ndarray data
         +dict objects
         +int n_objects
@@ -3098,6 +3117,12 @@
 
     BoundingBox &lt;|-- UserBoundingBox
     BoundingBox &lt;|-- PredictedBoundingBox
+    ROI &lt;|-- UserROI
+    ROI &lt;|-- PredictedROI
+    SegmentationMask &lt;|-- UserSegmentationMask
+    SegmentationMask &lt;|-- PredictedSegmentationMask
+    LabelImage &lt;|-- UserLabelImage
+    LabelImage &lt;|-- PredictedLabelImage
     LabelImage --&gt; SegmentationMask : to_masks()
 
     classDef poses fill:#0097a7,stroke:#00796b,color:#fff
@@ -3224,6 +3249,36 @@
 <td><a href="regions/"><code>PredictedBoundingBox</code></a></td>
 <td><a href="regions/">Regions</a></td>
 <td>Model-predicted bounding box with score</td>
+</tr>
+<tr>
+<td><a href="regions/"><code>UserROI</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Human-annotated region of interest</td>
+</tr>
+<tr>
+<td><a href="regions/"><code>PredictedROI</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Model-predicted region of interest with score</td>
+</tr>
+<tr>
+<td><a href="regions/"><code>UserSegmentationMask</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Human-annotated segmentation mask</td>
+</tr>
+<tr>
+<td><a href="regions/"><code>PredictedSegmentationMask</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Model-predicted segmentation mask with score</td>
+</tr>
+<tr>
+<td><a href="regions/"><code>UserLabelImage</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Human-annotated label image</td>
+</tr>
+<tr>
+<td><a href="regions/"><code>PredictedLabelImage</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Model-predicted label image with score</td>
 </tr>
 <tr>
 <td><a href="regions/"><code>LabelImage</code></a></td>

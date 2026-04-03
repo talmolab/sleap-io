@@ -95,26 +95,45 @@ classDiagram
     }
 
     class ROI:::regions {
+        <<abstract>>
         +geometry
         +str name
     }
     class SegmentationMask:::regions {
+        <<abstract>>
         +rle_counts
         +int height
         +int width
     }
     class BoundingBox:::regions {
-        +float x_center
-        +float y_center
-        +float width
-        +float height
+        <<abstract>>
+        +float x1
+        +float y1
+        +float x2
+        +float y2
     }
     class UserBoundingBox:::regions
     class PredictedBoundingBox:::regions {
         +float score
     }
 
+    class UserROI:::regions
+    class PredictedROI:::regions {
+        +float score
+    }
+    class UserSegmentationMask:::regions
+    class PredictedSegmentationMask:::regions {
+        +float score
+        +ndarray score_map
+    }
+    class UserLabelImage:::regions
+    class PredictedLabelImage:::regions {
+        +float score
+        +ndarray score_map
+    }
+
     class LabelImage:::regions {
+        <<abstract>>
         +ndarray data
         +dict objects
         +int n_objects
@@ -145,6 +164,12 @@ classDiagram
 
     BoundingBox <|-- UserBoundingBox
     BoundingBox <|-- PredictedBoundingBox
+    ROI <|-- UserROI
+    ROI <|-- PredictedROI
+    SegmentationMask <|-- UserSegmentationMask
+    SegmentationMask <|-- PredictedSegmentationMask
+    LabelImage <|-- UserLabelImage
+    LabelImage <|-- PredictedLabelImage
     LabelImage --> SegmentationMask : to_masks()
 
     classDef poses fill:#0097a7,stroke:#00796b,color:#fff
@@ -180,6 +205,12 @@ classDiagram
 | [`BoundingBox`](regions.md) | [Regions](regions.md) | Axis-aligned or rotated bounding box |
 | [`UserBoundingBox`](regions.md) | [Regions](regions.md) | Human-annotated bounding box |
 | [`PredictedBoundingBox`](regions.md) | [Regions](regions.md) | Model-predicted bounding box with score |
+| [`UserROI`](regions.md) | [Regions](regions.md) | Human-annotated region of interest |
+| [`PredictedROI`](regions.md) | [Regions](regions.md) | Model-predicted region of interest with score |
+| [`UserSegmentationMask`](regions.md) | [Regions](regions.md) | Human-annotated segmentation mask |
+| [`PredictedSegmentationMask`](regions.md) | [Regions](regions.md) | Model-predicted segmentation mask with score |
+| [`UserLabelImage`](regions.md) | [Regions](regions.md) | Human-annotated label image |
+| [`PredictedLabelImage`](regions.md) | [Regions](regions.md) | Model-predicted label image with score |
 | [`LabelImage`](regions.md) | [Regions](regions.md) | Dense integer label image for instance segmentation |
 
 !!! tip "Hands-on examples"
