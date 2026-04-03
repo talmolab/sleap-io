@@ -37,7 +37,7 @@ from sleap_io.io.ultralytics import (
     write_roi_label_file,
 )
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
-from sleap_io.model.roi import ROI
+from sleap_io.model.roi import UserROI
 
 
 def test_parse_data_yaml(ultralytics_data_yaml):
@@ -1485,17 +1485,17 @@ def test_write_bbox_label_file(tmp_path):
     """Test writing and reading back bounding boxes via write_bbox_label_file."""
     bboxes = [
         UserBoundingBox(
-            x_center=100.0,
-            y_center=50.0,
-            width=80.0,
-            height=60.0,
+            x1=60.0,
+            y1=20.0,
+            x2=140.0,
+            y2=80.0,
             category="cat",
         ),
         PredictedBoundingBox(
-            x_center=50.0,
-            y_center=25.0,
-            width=40.0,
-            height=30.0,
+            x1=30.0,
+            y1=10.0,
+            x2=70.0,
+            y2=40.0,
             category="dog",
             score=0.9,
         ),
@@ -1556,7 +1556,7 @@ def test_write_roi_labels_splitting(tmp_path):
         img_path = tmp_path / f"img_{i}.png"
         iio.imwrite(str(img_path), img)
         video = Video.from_filename(str(img_path))
-        roi = ROI.from_bbox(5, 5, 20, 20, category="obj", video=video, frame_idx=0)
+        roi = UserROI.from_bbox(5, 5, 20, 20, category="obj", video=video, frame_idx=0)
         rois.append(roi)
 
     labels = Labels(rois=rois)
@@ -1593,7 +1593,7 @@ def test_write_roi_label_file_multipolygon(tmp_path):
     poly2 = Polygon([(60, 60), (100, 60), (100, 100), (60, 100)])
     multi = MultiPolygon([poly1, poly2])
 
-    roi = ROI(
+    roi = UserROI(
         geometry=multi,
         category="obj",
     )
@@ -1613,7 +1613,7 @@ def test_write_roi_label_file_hole_warning(tmp_path):
     hole = [(25, 25), (50, 25), (50, 50), (25, 50)]
     poly_with_hole = Polygon(exterior, [hole])
 
-    roi = ROI(
+    roi = UserROI(
         geometry=poly_with_hole,
         category="obj",
     )
@@ -1630,18 +1630,18 @@ def test_write_bbox_label_file_predicted_score(tmp_path):
     """PredictedBoundingBox score should be written as 6th value."""
     bboxes = [
         PredictedBoundingBox(
-            x_center=100,
-            y_center=50,
-            width=80,
-            height=60,
+            x1=60,
+            y1=20,
+            x2=140,
+            y2=80,
             category="cat",
             score=0.85,
         ),
         UserBoundingBox(
-            x_center=50,
-            y_center=25,
-            width=40,
-            height=30,
+            x1=30,
+            y1=10,
+            x2=70,
+            y2=40,
             category="dog",
         ),
     ]

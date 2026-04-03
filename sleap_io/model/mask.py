@@ -106,6 +106,14 @@ class SegmentationMask:
     instance: "Instance | None" = attrs.field(default=None)
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
 
+    def __attrs_post_init__(self):
+        """Validate that this class is not instantiated directly."""
+        if type(self) is SegmentationMask:
+            raise TypeError(
+                "SegmentationMask is abstract. "
+                "Use UserSegmentationMask or PredictedSegmentationMask."
+            )
+
     @property
     def is_predicted(self) -> bool:
         """Whether this mask is a model prediction."""
@@ -185,7 +193,7 @@ class SegmentationMask:
         from shapely.geometry import Polygon, box
         from shapely.ops import unary_union
 
-        from sleap_io.model.roi import ROI
+        from sleap_io.model.roi import UserROI
 
         mask = self.data
         rectangles = []
@@ -202,7 +210,7 @@ class SegmentationMask:
         else:
             geometry = unary_union(rectangles)
 
-        return ROI(
+        return UserROI(
             geometry=geometry,
             name=self.name,
             category=self.category,

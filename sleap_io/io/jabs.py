@@ -12,7 +12,7 @@ import numpy as np
 from sleap_io.model.instance import PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.roi import ROI
+from sleap_io.model.roi import ROI, UserROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 from sleap_io.model.video import Video
 
@@ -239,7 +239,7 @@ def _static_object_to_roi(name: str, coords: np.ndarray, video: Video) -> ROI:
         geometry = MultiPoint([(float(x), float(y)) for x, y in coords])
 
     category = "arena" if name == "corners" else "anchor"
-    return ROI(
+    return UserROI(
         geometry=geometry,
         name=name,
         category=category,

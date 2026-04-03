@@ -319,7 +319,10 @@ class Labels:
                 new_bbox._instance_idx = -1
             new_bboxes.append(new_bbox)
 
-        # Deep copy label images, relinking videos and tracks within objects
+        # Build instance identity set for relinking label image objects
+        instance_set = {id(inst): inst for inst in all_instances}
+
+        # Deep copy label images, relinking videos, tracks, and instances
         new_label_images = []
         for li in self.label_images:
             new_li = deepcopy(li)
@@ -327,10 +330,16 @@ class Labels:
                 new_li.video = video_map.get(id(li.video), new_li.video)
             # Use ORIGINAL li.objects for id lookup, set on deepcopy
             for label_id, orig_info in li.objects.items():
-                if orig_info.track is not None and label_id in new_li.objects:
-                    new_li.objects[label_id].track = track_map.get(
-                        id(orig_info.track), new_li.objects[label_id].track
-                    )
+                if label_id in new_li.objects:
+                    if orig_info.track is not None:
+                        new_li.objects[label_id].track = track_map.get(
+                            id(orig_info.track), new_li.objects[label_id].track
+                        )
+                    if orig_info.instance is not None:
+                        new_li.objects[label_id].instance = instance_set.get(
+                            id(orig_info.instance),
+                            new_li.objects[label_id].instance,
+                        )
             new_label_images.append(new_li)
 
         return Labels(

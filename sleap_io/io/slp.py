@@ -13,6 +13,7 @@ Format version history:
     - 1.9: Added identity dataset (/identities_json), Instance3D support,
             predicted variants (is_predicted, score) for masks/ROIs/label images;
             instance association for masks; string datasets for metadata
+    - 2.0: Columnar bounding box storage (/bboxes group with x1/y1/x2/y2 datasets)
 """
 
 from __future__ import annotations
@@ -1443,12 +1444,12 @@ def write_metadata(labels_path: str, labels: Labels):
         mask.instance is not None or mask._instance_idx >= 0 for mask in labels.masks
     )
     has_identities = len(labels.identities) > 0
-    if has_predicted_annotations or has_mask_instances:
+    if labels.bboxes:
+        format_id = 2.0
+    elif has_predicted_annotations or has_mask_instances:
         format_id = 1.9
     elif labels.label_images:
         format_id = 1.8
-    elif labels.bboxes:
-        format_id = 1.7
     elif has_instance_rois:
         format_id = 1.6
     elif labels.rois or labels.masks:
@@ -2658,12 +2659,8 @@ def read_rois(
             roi = PredictedROI(
                 score=score_val if not np.isnan(score_val) else 0.0, **kwargs
             )
-        elif "is_predicted" in row.dtype.names:
-            # v1.9+ file with is_predicted=False -> UserROI
-            roi = UserROI(**kwargs)
         else:
-            # Pre-v1.9 file -> base ROI class for backward compat
-            roi = ROI(**kwargs)
+            roi = UserROI(**kwargs)
 
         # Store raw index for deferred resolution (lazy loading)
         roi._instance_idx = instance_idx
@@ -2793,36 +2790,107 @@ def read_bboxes(
         A list of BoundingBox objects. Returns an empty list if no bboxes are
         stored.
     """
-    try:
-        bbox_data = read_hdf5_dataset(labels_path, "bboxes")
-    except KeyError:
-        return []
+    with h5py.File(labels_path, "r") as f:
+        if "bboxes" not in f:
+            return []
 
+        node = f["bboxes"]
+        if isinstance(node, h5py.Group):
+            return _read_bboxes_columnar(node, videos, tracks, instances)
+        else:
+            return _read_bboxes_legacy(labels_path, node[:], videos, tracks, instances)
+
+
+def _read_bboxes_columnar(
+    grp: "h5py.Group",
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None,
+) -> list[BoundingBox]:
+    """Read bboxes from columnar /bboxes group (v2.0+ format)."""
+    x1_arr = grp["x1"][:]
+    y1_arr = grp["y1"][:]
+    x2_arr = grp["x2"][:]
+    y2_arr = grp["y2"][:]
+    angle_arr = grp["angle"][:]
+    video_arr = grp["video"][:]
+    frame_idx_arr = grp["frame_idx"][:]
+    track_arr = grp["track"][:]
+    instance_arr = grp["instance"][:]
+    is_predicted_arr = grp["is_predicted"][:]
+    score_arr = grp["score"][:]
+    category_arr = grp["category"][:]
+    name_arr = grp["name"][:]
+    source_arr = grp["source"][:]
+
+    bboxes: list[BoundingBox] = []
+    for i in range(len(x1_arr)):
+        video_idx = int(video_arr[i])
+        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
+
+        frame_idx_val = int(frame_idx_arr[i])
+        frame_idx = None if frame_idx_val == -1 else frame_idx_val
+
+        track_idx = int(track_arr[i])
+        track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
+
+        instance_idx = int(instance_arr[i])
+        instance = (
+            instances[instance_idx]
+            if instances is not None and 0 <= instance_idx < len(instances)
+            else None
+        )
+
+        cat = category_arr[i]
+        category = cat.decode() if isinstance(cat, bytes) else str(cat)
+        nm = name_arr[i]
+        name = nm.decode() if isinstance(nm, bytes) else str(nm)
+        src = source_arr[i]
+        source = src.decode() if isinstance(src, bytes) else str(src)
+
+        kwargs = dict(
+            x1=float(x1_arr[i]),
+            y1=float(y1_arr[i]),
+            x2=float(x2_arr[i]),
+            y2=float(y2_arr[i]),
+            angle=float(angle_arr[i]),
+            video=video,
+            frame_idx=frame_idx,
+            track=track,
+            instance=instance,
+            category=category,
+            name=name,
+            source=source,
+        )
+
+        if bool(is_predicted_arr[i]):
+            bbox = PredictedBoundingBox(score=float(score_arr[i]), **kwargs)
+        else:
+            bbox = UserBoundingBox(**kwargs)
+
+        bbox._instance_idx = instance_idx
+        bboxes.append(bbox)
+
+    return bboxes
+
+
+def _read_bboxes_legacy(
+    labels_path: str,
+    bbox_data: np.ndarray,
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None,
+) -> list[BoundingBox]:
+    """Read bboxes from legacy structured array format (pre-v2.0)."""
     if len(bbox_data) == 0:
         return []
 
-    # Read string metadata from string datasets first, fall back to JSON attributes
+    # Read string metadata from JSON attributes
     with h5py.File(labels_path, "r") as f:
-        bbox_grp = f["bboxes"]
-        if "bbox_categories" in f:
-            categories = [
-                s.decode() if isinstance(s, bytes) else s
-                for s in f["bbox_categories"][:]
-            ]
-        else:
-            categories = json.loads(bbox_grp.attrs.get("categories", "[]"))
-        if "bbox_names" in f:
-            names = [
-                s.decode() if isinstance(s, bytes) else s for s in f["bbox_names"][:]
-            ]
-        else:
-            names = json.loads(bbox_grp.attrs.get("names", "[]"))
-        if "bbox_sources" in f:
-            sources = [
-                s.decode() if isinstance(s, bytes) else s for s in f["bbox_sources"][:]
-            ]
-        else:
-            sources = json.loads(bbox_grp.attrs.get("sources", "[]"))
+        bbox_ds = f["bboxes"]
+        categories = json.loads(bbox_ds.attrs.get("categories", "[]"))
+        names = json.loads(bbox_ds.attrs.get("names", "[]"))
+        sources = json.loads(bbox_ds.attrs.get("sources", "[]"))
 
     bboxes: list[BoundingBox] = []
     for i, row in enumerate(bbox_data):
@@ -2842,11 +2910,17 @@ def read_bboxes(
             else None
         )
 
+        # Legacy format uses x_center/y_center/width/height -> convert to x1y1x2y2
+        xc = float(row["x_center"])
+        yc = float(row["y_center"])
+        w = float(row["width"])
+        h = float(row["height"])
+
         kwargs = dict(
-            x_center=float(row["x_center"]),
-            y_center=float(row["y_center"]),
-            width=float(row["width"]),
-            height=float(row["height"]),
+            x1=xc - w / 2,
+            y1=yc - h / 2,
+            x2=xc + w / 2,
+            y2=yc + h / 2,
             angle=float(row["angle"]),
             video=video,
             frame_idx=frame_idx,
@@ -2863,7 +2937,6 @@ def read_bboxes(
         else:
             bbox = UserBoundingBox(**kwargs)
 
-        # Store raw index for deferred resolution (lazy loading)
         bbox._instance_idx = instance_idx
         bboxes.append(bbox)
 
@@ -2891,70 +2964,66 @@ def write_bboxes(
     if not bboxes:
         return
 
-    bbox_dtype = np.dtype(
-        [
-            ("x_center", "f8"),
-            ("y_center", "f8"),
-            ("width", "f8"),
-            ("height", "f8"),
-            ("angle", "f8"),
-            ("video", "i4"),
-            ("frame_idx", "i8"),
-            ("track", "i4"),
-            ("instance", "i4"),
-            ("is_predicted", "u1"),
-            ("score", "f4"),
-        ]
-    )
-
-    bbox_rows = []
+    n = len(bboxes)
+    x1_arr = np.empty(n, dtype=np.float64)
+    y1_arr = np.empty(n, dtype=np.float64)
+    x2_arr = np.empty(n, dtype=np.float64)
+    y2_arr = np.empty(n, dtype=np.float64)
+    angle_arr = np.empty(n, dtype=np.float64)
+    video_arr = np.empty(n, dtype=np.int32)
+    frame_idx_arr = np.empty(n, dtype=np.int64)
+    track_arr = np.empty(n, dtype=np.int32)
+    instance_arr = np.empty(n, dtype=np.int32)
+    is_predicted_arr = np.empty(n, dtype=np.uint8)
+    score_arr = np.empty(n, dtype=np.float32)
     categories = []
     names = []
     sources = []
 
-    for bbox in bboxes:
-        video_idx = videos.index(bbox.video) if bbox.video in videos else -1
-        frame_idx = bbox.frame_idx if bbox.frame_idx is not None else -1
-        track_idx = tracks.index(bbox.track) if bbox.track in tracks else -1
+    for i, bbox in enumerate(bboxes):
+        x1_arr[i] = bbox.x1
+        y1_arr[i] = bbox.y1
+        x2_arr[i] = bbox.x2
+        y2_arr[i] = bbox.y2
+        angle_arr[i] = bbox.angle
 
-        instance_idx = bbox._instance_idx  # Use stored index as default
+        video_arr[i] = videos.index(bbox.video) if bbox.video in videos else -1
+        frame_idx_arr[i] = bbox.frame_idx if bbox.frame_idx is not None else -1
+        track_arr[i] = tracks.index(bbox.track) if bbox.track in tracks else -1
+
+        instance_idx = bbox._instance_idx
         if instances is not None and bbox.instance is not None:
             try:
                 instance_idx = instances.index(bbox.instance)
             except ValueError:
-                pass  # Keep stored _instance_idx
+                pass
+        instance_arr[i] = instance_idx
 
         is_predicted = isinstance(bbox, PredictedBoundingBox)
-        score = bbox.score if is_predicted else float("nan")
-
-        bbox_rows.append(
-            (
-                bbox.x_center,
-                bbox.y_center,
-                bbox.width,
-                bbox.height,
-                bbox.angle,
-                video_idx,
-                frame_idx,
-                track_idx,
-                instance_idx,
-                int(is_predicted),
-                score,
-            )
-        )
+        is_predicted_arr[i] = int(is_predicted)
+        score_arr[i] = bbox.score if is_predicted else float("nan")
 
         categories.append(bbox.category)
         names.append(bbox.name)
         sources.append(bbox.source)
 
-    bbox_array = np.array(bbox_rows, dtype=bbox_dtype)
-
+    str_dt = h5py.special_dtype(vlen=str)
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("bboxes", data=bbox_array, dtype=bbox_dtype)
-        str_dt = h5py.special_dtype(vlen=str)
-        f.create_dataset("bbox_categories", data=categories, dtype=str_dt)
-        f.create_dataset("bbox_names", data=names, dtype=str_dt)
-        f.create_dataset("bbox_sources", data=sources, dtype=str_dt)
+        grp = f.create_group("bboxes")
+        grp.create_dataset("x1", data=x1_arr)
+        grp.create_dataset("y1", data=y1_arr)
+        grp.create_dataset("x2", data=x2_arr)
+        grp.create_dataset("y2", data=y2_arr)
+        grp.create_dataset("angle", data=angle_arr)
+        grp.create_dataset("video", data=video_arr)
+        grp.create_dataset("frame_idx", data=frame_idx_arr)
+        grp.create_dataset("track", data=track_arr)
+        grp.create_dataset("instance", data=instance_arr)
+        grp.create_dataset("is_predicted", data=is_predicted_arr)
+        grp.create_dataset("score", data=score_arr)
+        grp.create_dataset("category", data=categories, dtype=str_dt)
+        grp.create_dataset("name", data=names, dtype=str_dt)
+        grp.create_dataset("source", data=sources, dtype=str_dt)
 
 
 def read_masks(
@@ -2990,7 +3059,8 @@ def read_masks(
     except KeyError:
         return []
 
-    # Read string metadata from string datasets first, fall back to JSON attributes
+    # Read string metadata and score maps in a single file open
+    score_map_by_idx: dict[int, np.ndarray] = {}
     with h5py.File(labels_path, "r") as f:
         mask_grp = f["masks"]
         if "mask_categories" in f:
@@ -3013,16 +3083,19 @@ def read_masks(
         else:
             sources = json.loads(mask_grp.attrs.get("sources", "[]"))
 
-    # Read score maps if available
-    score_map_index = None
-    score_map_data = None
-    try:
-        with h5py.File(labels_path, "r") as f:
-            if "mask_score_map_index" in f:
-                score_map_index = f["mask_score_map_index"][:]
-                score_map_data = f["mask_score_maps"][:]
-    except KeyError:
-        pass
+        # Read and index score maps if available
+        if "mask_score_map_index" in f:
+            sm_index = f["mask_score_map_index"][:]
+            sm_data = f["mask_score_maps"][:]
+            for sm_row in sm_index:
+                sm_start = int(sm_row["data_start"])
+                sm_end = int(sm_row["data_end"])
+                sm_h = int(sm_row["height"])
+                sm_w = int(sm_row["width"])
+                sm_compressed = sm_data[sm_start:sm_end]
+                score_map_by_idx[int(sm_row["mask_idx"])] = np.frombuffer(
+                    zlib.decompress(sm_compressed.tobytes()), dtype=np.float32
+                ).reshape(sm_h, sm_w)
 
     masks = []
     for i, row in enumerate(mask_data):
@@ -3071,20 +3144,7 @@ def read_masks(
 
         if is_predicted:
             # Check for score map
-            sm = None
-            if score_map_index is not None:
-                for sm_row in score_map_index:
-                    if int(sm_row["mask_idx"]) == i:
-                        sm_start = int(sm_row["data_start"])
-                        sm_end = int(sm_row["data_end"])
-                        sm_h = int(sm_row["height"])
-                        sm_w = int(sm_row["width"])
-                        sm_compressed = score_map_data[sm_start:sm_end]
-                        sm = np.frombuffer(
-                            zlib.decompress(sm_compressed.tobytes()),
-                            dtype=np.float32,
-                        ).reshape(sm_h, sm_w)
-                        break
+            sm = score_map_by_idx.get(i)
             mask = PredictedSegmentationMask(
                 score=score_val if not np.isnan(score_val) else 0.0,
                 score_map=sm,
@@ -3284,7 +3344,8 @@ def read_label_images(
         ]
         obj_data = np.array([], dtype=obj_dtype)
 
-    # Read string metadata from string datasets first, fall back to JSON attributes
+    # Read string metadata and score maps in a single file open
+    li_score_map_by_idx: dict[int, np.ndarray] = {}
     with h5py.File(labels_path, "r") as f:
         if "label_image_obj_categories" in f:
             categories = [
@@ -3319,16 +3380,19 @@ def read_label_images(
         else:
             sources = []
 
-    # Read score maps if available
-    li_score_map_index = None
-    li_score_map_data = None
-    try:
-        with h5py.File(labels_path, "r") as f:
-            if "label_image_score_map_index" in f:
-                li_score_map_index = f["label_image_score_map_index"][:]
-                li_score_map_data = f["label_image_score_maps"][:]
-    except KeyError:
-        pass
+        # Read and index score maps if available
+        if "label_image_score_map_index" in f:
+            sm_index = f["label_image_score_map_index"][:]
+            sm_data = f["label_image_score_maps"][:]
+            for sm_row in sm_index:
+                sm_start = int(sm_row["data_start"])
+                sm_end = int(sm_row["data_end"])
+                sm_h = int(sm_row["height"])
+                sm_w = int(sm_row["width"])
+                sm_compressed = sm_data[sm_start:sm_end]
+                li_score_map_by_idx[int(sm_row["li_idx"])] = np.frombuffer(
+                    zlib.decompress(sm_compressed.tobytes()), dtype=np.float32
+                ).reshape(sm_h, sm_w)
 
     label_images: list[LabelImage] = []
     for i, row in enumerate(li_data):
@@ -3404,20 +3468,7 @@ def read_label_images(
 
         if is_predicted:
             # Check for score map
-            sm = None
-            if li_score_map_index is not None:
-                for sm_row in li_score_map_index:
-                    if int(sm_row["li_idx"]) == i:
-                        sm_start = int(sm_row["data_start"])
-                        sm_end = int(sm_row["data_end"])
-                        sm_h = int(sm_row["height"])
-                        sm_w = int(sm_row["width"])
-                        sm_compressed = li_score_map_data[sm_start:sm_end]
-                        sm = np.frombuffer(
-                            zlib.decompress(sm_compressed.tobytes()),
-                            dtype=np.float32,
-                        ).reshape(sm_h, sm_w)
-                        break
+            sm = li_score_map_by_idx.get(i)
             label_images.append(
                 PredictedLabelImage(
                     score=score_val if not np.isnan(score_val) else 0.0,

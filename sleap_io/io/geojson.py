@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sleap_io.model.roi import ROI
+from sleap_io.model.roi import ROI, UserROI
 
 
 def write_rois(rois: list[ROI], filename: str | Path) -> None:
@@ -86,7 +86,7 @@ def _feature_to_roi(feature: dict) -> ROI:
     geometry = shape(feature["geometry"])
     props = feature.get("properties") or {}
 
-    return ROI(
+    return UserROI(
         geometry=geometry,
         name=props.get("name", ""),
         category=props.get("category", ""),

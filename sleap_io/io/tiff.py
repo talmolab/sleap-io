@@ -185,7 +185,7 @@ def read_label_images(
     """
     import tifffile
 
-    from sleap_io.model.label_image import LabelImage
+    from sleap_io.model.label_image import UserLabelImage
 
     path = Path(path)
     sidecar = _read_sidecar(path)
@@ -216,7 +216,7 @@ def read_label_images(
         for frame_idx, data in enumerate(frames_data):
             objects = _build_objects_dict(data, track_map, cat_map)
             result.append(
-                LabelImage(
+                UserLabelImage(
                     data=data,
                     objects=objects,
                     video=video,
@@ -246,7 +246,7 @@ def read_label_images(
     for frame_idx, data in enumerate(frames_data):
         objects = _build_objects_dict(data, track_map, cat_map)
         result.append(
-            LabelImage(
+            UserLabelImage(
                 data=data,
                 objects=objects,
                 video=video,

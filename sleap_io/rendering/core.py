@@ -1383,14 +1383,14 @@ def render_video(
                     max(0, y1) : min(oh, y2), max(0, x1) : min(ow, x2)
                 ]
             elif _is_label_image(frame_overlay):
-                from sleap_io.model.label_image import LabelImage
+                from sleap_io.model.label_image import UserLabelImage
 
                 x1, y1, x2, y2 = crop_bounds
                 oh, ow = frame_overlay.data.shape[:2]
                 cropped_data = frame_overlay.data[
                     max(0, y1) : min(oh, y2), max(0, x1) : min(ow, x2)
                 ]
-                cropped_overlay = LabelImage(
+                cropped_overlay = UserLabelImage(
                     data=cropped_data,
                     objects=frame_overlay.objects,
                     frame_idx=frame_overlay.frame_idx,

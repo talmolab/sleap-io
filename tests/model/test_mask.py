@@ -58,9 +58,15 @@ def test_decode_rle_empty():
     assert not mask.any()
 
 
+def test_segmentation_mask_abstract():
+    """SegmentationMask cannot be instantiated directly."""
+    with pytest.raises(TypeError, match="SegmentationMask is abstract"):
+        SegmentationMask(rle_counts=np.array([25], dtype=np.uint32), height=5, width=5)
+
+
 def test_segmentation_mask_identity_equality():
-    mask1 = SegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
-    mask2 = SegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
+    mask1 = UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
+    mask2 = UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
     assert mask1 is not mask2
     assert mask1 != mask2
 
@@ -69,7 +75,7 @@ def test_segmentation_mask_from_numpy():
     data = np.zeros((10, 15), dtype=bool)
     data[2:5, 3:8] = True
 
-    mask = SegmentationMask.from_numpy(data, name="test")
+    mask = UserSegmentationMask.from_numpy(data, name="test")
     assert mask.height == 10
     assert mask.width == 15
     assert mask.name == "test"
@@ -79,7 +85,7 @@ def test_segmentation_mask_data():
     original = np.zeros((10, 10), dtype=bool)
     original[3:7, 2:8] = True
 
-    mask = SegmentationMask.from_numpy(original)
+    mask = UserSegmentationMask.from_numpy(original)
     decoded = mask.data
     np.testing.assert_array_equal(original, decoded)
 
@@ -88,7 +94,7 @@ def test_segmentation_mask_area():
     data = np.zeros((10, 10), dtype=bool)
     data[2:5, 3:7] = True  # 3 rows * 4 cols = 12 pixels
 
-    mask = SegmentationMask.from_numpy(data)
+    mask = UserSegmentationMask.from_numpy(data)
     assert mask.area == 12
 
 
@@ -96,7 +102,7 @@ def test_segmentation_mask_bbox():
     data = np.zeros((20, 20), dtype=bool)
     data[5:10, 3:8] = True
 
-    mask = SegmentationMask.from_numpy(data)
+    mask = UserSegmentationMask.from_numpy(data)
     x, y, w, h = mask.bbox
     assert x == 3.0
     assert y == 5.0
@@ -106,7 +112,7 @@ def test_segmentation_mask_bbox():
 
 def test_segmentation_mask_bbox_empty():
     data = np.zeros((10, 10), dtype=bool)
-    mask = SegmentationMask.from_numpy(data)
+    mask = UserSegmentationMask.from_numpy(data)
     assert mask.bbox == (0.0, 0.0, 0.0, 0.0)
 
 
@@ -114,7 +120,7 @@ def test_segmentation_mask_to_polygon():
     data = np.zeros((20, 20), dtype=bool)
     data[5:15, 5:15] = True
 
-    mask = SegmentationMask.from_numpy(data, name="test_mask", category="cat")
+    mask = UserSegmentationMask.from_numpy(data, name="test_mask", category="cat")
     roi = mask.to_polygon()
 
     assert roi.name == "test_mask"
@@ -124,7 +130,7 @@ def test_segmentation_mask_to_polygon():
 
 def test_segmentation_mask_to_polygon_empty():
     data = np.zeros((10, 10), dtype=bool)
-    mask = SegmentationMask.from_numpy(data)
+    mask = UserSegmentationMask.from_numpy(data)
     roi = mask.to_polygon()
     assert roi.geometry.is_empty
 
@@ -138,7 +144,7 @@ def test_segmentation_mask_to_polygon_nonconvex():
     data[7:10, 0:8] = True  # Bottom bar
     actual_area = data.sum()
 
-    mask = SegmentationMask.from_numpy(data)
+    mask = UserSegmentationMask.from_numpy(data)
     roi = mask.to_polygon()
 
     # The polygon area should be close to the actual mask area (not inflated)
@@ -147,7 +153,7 @@ def test_segmentation_mask_to_polygon_nonconvex():
 
 def test_segmentation_mask_is_predicted():
     data = np.zeros((5, 5), dtype=bool)
-    mask = SegmentationMask.from_numpy(data)
+    mask = UserSegmentationMask.from_numpy(data)
     assert mask.is_predicted is False
 
     user_mask = UserSegmentationMask.from_numpy(data)
@@ -191,7 +197,7 @@ def test_predicted_segmentation_mask_with_score_map():
 
 
 def test_segmentation_mask_instance_idx():
-    mask = SegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
+    mask = UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
     assert mask._instance_idx == -1
     mask._instance_idx = 3
     assert mask._instance_idx == 3

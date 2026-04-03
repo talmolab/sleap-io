@@ -74,6 +74,10 @@ class LabelImage:
 
     def __attrs_post_init__(self):
         """Validate and normalize data array on construction."""
+        if type(self) is LabelImage:
+            raise TypeError(
+                "LabelImage is abstract. Use UserLabelImage or PredictedLabelImage."
+            )
         if self.data.ndim != 2:
             raise ValueError(f"LabelImage data must be 2D, got shape {self.data.shape}")
         if np.any(self.data < 0):
@@ -292,7 +296,7 @@ class LabelImage:
         Returns:
             A list of ``SegmentationMask`` objects, one per object.
         """
-        from sleap_io.model.mask import SegmentationMask
+        from sleap_io.model.mask import UserSegmentationMask
 
         result = []
         for label_id in np.sort(self.label_ids):
@@ -300,7 +304,7 @@ class LabelImage:
             info = self.objects.get(lid, LabelImage.Info())
             binary_mask = self.data == lid
             result.append(
-                SegmentationMask.from_numpy(
+                UserSegmentationMask.from_numpy(
                     binary_mask,
                     name=info.name,
                     category=info.category,

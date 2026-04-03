@@ -201,8 +201,8 @@ def test_roi_to_static_object_coords_unsupported_geometry():
     """Test that unsupported geometry types return None."""
     from shapely.geometry import LineString
 
-    from sleap_io.model.roi import ROI
+    from sleap_io.model.roi import UserROI
 
-    roi = ROI(geometry=LineString([(0, 0), (1, 1)]), name="line")
+    roi = UserROI(geometry=LineString([(0, 0), (1, 1)]), name="line")
     result = _roi_to_static_object_coords(roi)
     assert result is None

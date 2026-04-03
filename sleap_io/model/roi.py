@@ -92,6 +92,11 @@ class ROI:
     # the raw instance_idx so it can be resolved later or written back as-is.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
 
+    def __attrs_post_init__(self):
+        """Validate that this class is not instantiated directly."""
+        if type(self) is ROI:
+            raise TypeError("ROI is abstract. Use UserROI or PredictedROI.")
+
     @property
     def is_predicted(self) -> bool:
         """Whether this ROI is a model prediction."""
@@ -293,12 +298,12 @@ class ROI:
         Returns:
             A `SegmentationMask` with the rasterized geometry.
         """
-        from sleap_io.model.mask import SegmentationMask
+        from sleap_io.model.mask import UserSegmentationMask
 
         # Rasterize geometry to binary mask
         mask = _rasterize_geometry(self.geometry, height, width)
 
-        return SegmentationMask.from_numpy(
+        return UserSegmentationMask.from_numpy(
             mask,
             name=self.name,
             category=self.category,
@@ -327,7 +332,7 @@ class ROI:
 
         if isinstance(self.geometry, (MultiPolygon, GeometryCollection)):
             return [
-                ROI(
+                type(self)(
                     geometry=geom,
                     name=self.name,
                     category=self.category,

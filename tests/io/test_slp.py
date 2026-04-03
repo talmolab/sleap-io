@@ -88,10 +88,9 @@ from sleap_io.model.instance import Instance3D, PredictedInstance3D
 from sleap_io.model.label_image import LabelImage, PredictedLabelImage, UserLabelImage
 from sleap_io.model.mask import (
     PredictedSegmentationMask,
-    SegmentationMask,
     UserSegmentationMask,
 )
-from sleap_io.model.roi import ROI, PredictedROI, UserROI
+from sleap_io.model.roi import PredictedROI, UserROI
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
@@ -4278,8 +4277,8 @@ def test_slp_roi_roundtrip(tmp_path):
     """Test SLP round-trip with ROIs."""
     video = Video(filename="test.mp4")
     track = Track(name="animal1")
-    roi1 = ROI.from_bbox(10, 20, 30, 40, video=video, name="bbox1", category="cat")
-    roi2 = ROI.from_polygon(
+    roi1 = UserROI.from_bbox(10, 20, 30, 40, video=video, name="bbox1", category="cat")
+    roi2 = UserROI.from_polygon(
         [(0, 0), (100, 0), (50, 100)],
         video=video,
         frame_idx=5,
@@ -4326,7 +4325,7 @@ def test_slp_mask_roundtrip(tmp_path):
     mask_data = np.zeros((20, 30), dtype=bool)
     mask_data[5:15, 10:25] = True
 
-    mask = SegmentationMask.from_numpy(
+    mask = UserSegmentationMask.from_numpy(
         mask_data,
         video=video,
         frame_idx=3,
@@ -4379,10 +4378,12 @@ def test_slp_lazy_roi_roundtrip(tmp_path):
     """Test lazy loading round-trip preserves ROIs and masks."""
     video = Video(filename="test.mp4")
     # Use a non-rectangular polygon so it isn't migrated to BoundingBox
-    roi = ROI.from_polygon([(0, 0), (100, 0), (50, 100)], video=video, name="triangle")
+    roi = UserROI.from_polygon(
+        [(0, 0), (100, 0), (50, 100)], video=video, name="triangle"
+    )
     mask_data = np.zeros((10, 10), dtype=bool)
     mask_data[2:8, 3:7] = True
-    mask = SegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+    mask = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
 
     skeleton = Skeleton(nodes=["A"])
     labels = Labels(videos=[video], skeletons=[skeleton], rois=[roi], masks=[mask])
@@ -4500,7 +4501,7 @@ def test_roi_instance_serialization(tmp_path):
     )
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
 
-    roi = ROI(
+    roi = UserROI(
         geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
         frame_idx=0,
@@ -4531,7 +4532,7 @@ def test_roi_instance_lazy_roundtrip(tmp_path):
         skeleton=skeleton,
     )
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
-    roi = ROI(
+    roi = UserROI(
         geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
         frame_idx=0,
@@ -4569,7 +4570,7 @@ def test_roi_instance_lazy_materialize(tmp_path):
         skeleton=skeleton,
     )
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
-    roi = ROI(
+    roi = UserROI(
         geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
         frame_idx=0,
@@ -4596,10 +4597,10 @@ def test_slp_bbox_roundtrip(tmp_path):
     video = Video(filename="test.mp4")
     track = Track(name="animal1")
     bbox1 = UserBoundingBox(
-        x_center=50.0,
-        y_center=60.0,
-        width=100.0,
-        height=80.0,
+        x1=0.0,
+        y1=20.0,
+        x2=100.0,
+        y2=100.0,
         video=video,
         frame_idx=0,
         name="bbox1",
@@ -4607,10 +4608,10 @@ def test_slp_bbox_roundtrip(tmp_path):
         source="manual",
     )
     bbox2 = UserBoundingBox(
-        x_center=200.0,
-        y_center=150.0,
-        width=50.0,
-        height=30.0,
+        x1=175.0,
+        y1=135.0,
+        x2=225.0,
+        y2=165.0,
         angle=0.5,
         video=video,
         frame_idx=3,
@@ -4677,19 +4678,19 @@ def test_slp_predicted_bbox_roundtrip(tmp_path):
     """Test SLP round-trip with PredictedBoundingBox including score."""
     video = Video(filename="test.mp4")
     user_bbox = UserBoundingBox(
-        x_center=10.0,
-        y_center=20.0,
-        width=30.0,
-        height=40.0,
+        x1=-5.0,
+        y1=0.0,
+        x2=25.0,
+        y2=40.0,
         video=video,
         frame_idx=0,
         category="cat",
     )
     pred_bbox = PredictedBoundingBox(
-        x_center=100.0,
-        y_center=200.0,
-        width=50.0,
-        height=60.0,
+        x1=75.0,
+        y1=170.0,
+        x2=125.0,
+        y2=230.0,
         video=video,
         frame_idx=1,
         category="dog",
@@ -4731,7 +4732,7 @@ def test_slp_bbox_migration(tmp_path):
     track = Track(name="animal1")
 
     # Create ROIs: one bbox-shaped, one non-bbox polygon
-    roi_bbox = ROI.from_bbox(
+    roi_bbox = UserROI.from_bbox(
         10,
         20,
         100,
@@ -4742,7 +4743,7 @@ def test_slp_bbox_migration(tmp_path):
         name="bbox_roi",
         category="mouse",
     )
-    roi_polygon = ROI.from_polygon(
+    roi_polygon = UserROI.from_polygon(
         [(0, 0), (100, 0), (50, 100)],
         video=video,
         frame_idx=1,
@@ -4790,20 +4791,20 @@ def test_slp_bbox_lazy_roundtrip(tmp_path):
     """Test lazy load and save with bounding boxes."""
     video = Video(filename="test.mp4")
     bbox = UserBoundingBox(
-        x_center=50.0,
-        y_center=60.0,
-        width=100.0,
-        height=80.0,
+        x1=0.0,
+        y1=20.0,
+        x2=100.0,
+        y2=100.0,
         video=video,
         frame_idx=0,
         name="lazy_bbox",
         category="mouse",
     )
     pred_bbox = PredictedBoundingBox(
-        x_center=150.0,
-        y_center=160.0,
-        width=40.0,
-        height=50.0,
+        x1=130.0,
+        y1=135.0,
+        x2=170.0,
+        y2=185.0,
         video=video,
         frame_idx=1,
         category="fly",
@@ -4850,13 +4851,13 @@ def test_slp_bbox_lazy_roundtrip(tmp_path):
 
 
 def test_slp_format_id_1_7(tmp_path):
-    """Test that files with bboxes get format_id 1.7."""
+    """Test that files with bboxes get format_id 2.0 (columnar bbox storage)."""
     video = Video(filename="test.mp4")
     bbox = UserBoundingBox(
-        x_center=50.0,
-        y_center=60.0,
-        width=100.0,
-        height=80.0,
+        x1=0.0,
+        y1=20.0,
+        x2=100.0,
+        y2=100.0,
         video=video,
     )
 
@@ -4871,7 +4872,7 @@ def test_slp_format_id_1_7(tmp_path):
     save_slp(labels, path)
 
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
-    assert format_id == 1.7
+    assert format_id == 2.0
 
     # Verify that without bboxes, format_id is lower
     labels_no_bbox = Labels(videos=[video], skeletons=[skeleton])
@@ -4893,7 +4894,7 @@ def test_label_image_slp_roundtrip(tmp_path):
     data[1:3, 2:5] = 1  # object 1
     data[5:7, 6:9] = 2  # object 2
 
-    li = LabelImage(
+    li = UserLabelImage(
         data=data,
         objects={
             1: LabelImage.Info(track=t1, category="neuron", name="n1"),
@@ -4965,7 +4966,7 @@ def test_label_image_slp_format_version(tmp_path):
     data = np.zeros((4, 4), dtype=np.int32)
     data[0:2, 0:2] = 1
 
-    li = LabelImage(data=data, video=video, frame_idx=0)
+    li = UserLabelImage(data=data, video=video, frame_idx=0)
 
     skeleton = Skeleton(nodes=["A"])
     labels = Labels(
@@ -4989,7 +4990,7 @@ def test_label_image_slp_lazy(tmp_path):
     data = np.zeros((6, 6), dtype=np.int32)
     data[1:4, 1:4] = 1
 
-    li = LabelImage(
+    li = UserLabelImage(
         data=data,
         objects={1: LabelImage.Info(track=t1, category="cell")},
         video=video,
@@ -6087,30 +6088,53 @@ def test_slp_predicted_label_image_roundtrip(tmp_path):
 
 
 def test_slp_backward_compat_no_predicted_fields(tmp_path):
-    """Files without is_predicted columns read as base classes (backward compat)."""
-    # Write a file with the OLD format (no predicted fields)
-    # by manually creating the old-style datasets
+    """Files with pre-v1.9 dtypes (no is_predicted column) read as base classes."""
+    import json
+
+    from sleap_io.model.mask import _encode_rle
+
+    # Write a minimal SLP file with old-style mask dtype (no is_predicted/instance)
+    path = str(tmp_path / "old_format.slp")
     video = Video(filename="test.mp4")
     skeleton = Skeleton(nodes=["A"])
 
-    mask = SegmentationMask.from_numpy(
-        np.ones((5, 5), dtype=bool),
-        video=video,
-        frame_idx=0,
-        category="cell",
-    )
-
-    labels = Labels(
-        videos=[video],
-        skeletons=[skeleton],
-        masks=[mask],
-    )
-
-    path = str(tmp_path / "old_format.slp")
+    labels = Labels(videos=[video], skeletons=[skeleton])
     save_slp(labels, path)
 
-    # Verify the file can be read back
+    # Manually add a mask dataset using the pre-v1.9 dtype
+    old_mask_dtype = np.dtype(
+        [
+            ("height", "u4"),
+            ("width", "u4"),
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("rle_start", "u8"),
+            ("rle_end", "u8"),
+        ]
+    )
+    rle = _encode_rle(np.ones((5, 5), dtype=bool))
+    rle_bytes = rle.astype(np.uint32).tobytes()
+    rle_flat = np.frombuffer(rle_bytes, dtype=np.uint8)
+
+    mask_row = np.array(
+        [(5, 5, 0, 0, 0, -1, float("nan"), 0, len(rle_flat))],
+        dtype=old_mask_dtype,
+    )
+
+    with h5py.File(path, "a") as f:
+        ds = f.create_dataset("masks", data=mask_row, dtype=old_mask_dtype)
+        ds.attrs["categories"] = json.dumps(["cell"])
+        ds.attrs["names"] = json.dumps([""])
+        ds.attrs["sources"] = json.dumps([""])
+        f.create_dataset("mask_rle", data=rle_flat, dtype=np.uint8)
+
     loaded = load_slp(path, open_videos=False)
     assert len(loaded.masks) == 1
-    # Base SegmentationMask (not User* or Predicted*) is fine for old files
-    assert loaded.masks[0].category == "cell"
+    rm = loaded.masks[0]
+    # Pre-v1.9 files should read as UserSegmentationMask (default, not Predicted)
+    assert type(rm) is UserSegmentationMask
+    assert rm.category == "cell"
+    np.testing.assert_array_equal(rm.data, np.ones((5, 5), dtype=bool))
