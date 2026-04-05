@@ -10,7 +10,7 @@ from shapely.geometry import box
 
 import sleap_io as sio
 from sleap_io.model.bbox import UserBoundingBox
-from sleap_io.model.label_image import UserLabelImage
+from sleap_io.model.label_image import PredictedLabelImage, UserLabelImage
 from sleap_io.model.mask import UserSegmentationMask
 from sleap_io.model.roi import UserROI
 from sleap_io.rendering import render_video
@@ -3078,3 +3078,60 @@ def test_render_video_overlay_label_images():
     assert np.all(frames[0][0:5, 0:5, :] == 0)
     # Frame 1: region (30:45, 30:45) should be colored
     assert not np.all(frames[1][30:45, 30:45] == 0)
+
+
+def test_render_video_crop_with_user_label_image_overlay():
+    """render_video with crop + UserLabelImage overlay should crop the label image."""
+    labels_obj = _make_synthetic_labels(n_frames=1, h=50, w=50)
+
+    label_data = np.zeros((50, 50), dtype=np.int32)
+    label_data[20:40, 20:40] = 1
+    li = UserLabelImage(data=label_data, frame_idx=0)
+
+    frames = render_video(
+        labels_obj,
+        save_path=None,
+        background="black",
+        overlay=[li],
+        overlay_alpha=0.5,
+        crop=(10, 10, 40, 40),
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # Cropped to (10,10)-(40,40) -> 30x30
+    assert frames[0].shape == (30, 30, 3)
+    # Label region (20:40, 20:40) maps to (10:30, 10:30) in cropped coords
+    assert not np.all(frames[0][10:30, 10:30] == 0)
+
+
+def test_render_video_crop_with_predicted_label_image_overlay():
+    """render_video with crop + PredictedLabelImage overlay should preserve score."""
+    labels_obj = _make_synthetic_labels(n_frames=1, h=50, w=50)
+
+    label_data = np.zeros((50, 50), dtype=np.int32)
+    label_data[20:40, 20:40] = 1
+    li = PredictedLabelImage(
+        data=label_data,
+        frame_idx=0,
+        score=0.9,
+        score_map=np.ones((50, 50), dtype=np.float32) * 0.8,
+    )
+
+    frames = render_video(
+        labels_obj,
+        save_path=None,
+        background="black",
+        overlay=[li],
+        overlay_alpha=0.5,
+        crop=(10, 10, 40, 40),
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # Cropped to (10,10)-(40,40) -> 30x30
+    assert frames[0].shape == (30, 30, 3)
+    # Label region (20:40, 20:40) maps to (10:30, 10:30) in cropped coords
+    assert not np.all(frames[0][10:30, 10:30] == 0)

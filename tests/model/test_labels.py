@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_equal
+from shapely.geometry import box
 
 import sleap_io
 from sleap_io import (
@@ -20,6 +21,7 @@ from sleap_io import (
     Track,
     Video,
     load_slp,
+    save_slp,
 )
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.label_image import (
@@ -41,7 +43,6 @@ from sleap_io.model.matching import (
     VideoMatchMethod,
 )
 from sleap_io.model.roi import PredictedROI, UserROI
-from shapely.geometry import box
 
 
 def test_labels():
@@ -5745,3 +5746,45 @@ def test_get_masks_query():
     result = labels.get_masks(video=video, frame_idx=0)
     assert len(result) == 2
     assert new_mask in result
+
+
+def test_labels_copy_with_annotation_refs(labels_all_annotations, tmp_path):
+    """Test lazy copy path relinks label_image video/track/instance refs."""
+    # Save and reload to create file-backed (lazy) Labels
+    path = str(tmp_path / "all_annots.slp")
+    save_slp(labels_all_annotations, path)
+    loaded = load_slp(path, open_videos=False)
+
+    # Exercise the lazy copy path
+    labels_copy = loaded.copy()
+
+    # All 6 label_images (3 User + 3 Predicted) are present
+    assert len(labels_copy.label_images) == 6
+
+    # Label images are deep copies, not the same objects
+    assert labels_copy.label_images[0] is not loaded.label_images[0]
+
+    # UserLabelImage and PredictedLabelImage types are preserved
+    user_lis = [
+        li for li in labels_copy.label_images if isinstance(li, UserLabelImage)
+    ]
+    pred_lis = [
+        li for li in labels_copy.label_images if isinstance(li, PredictedLabelImage)
+    ]
+    assert len(user_lis) == 3
+    assert len(pred_lis) == 3
+
+    # Video references point to the copy's video, not the original's
+    for li in labels_copy.label_images:
+        if li.video is not None:
+            assert li.video in labels_copy.videos
+
+    # Track references in objects are valid tracks from the copy
+    for li in labels_copy.label_images:
+        for info in li.objects.values():
+            if info.track is not None:
+                assert info.track in labels_copy.tracks
+
+    # Mutating the copy does not affect the original
+    labels_copy.label_images.clear()
+    assert len(loaded.label_images) == 6

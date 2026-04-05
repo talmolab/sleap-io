@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import shutil
 import sys
+import zlib
 from pathlib import Path
 from unittest import mock
 
 import h5py
 import numpy as np
 import pytest
+import shapely
 import simplejson as json
 
 from sleap_io import (
@@ -6138,3 +6140,247 @@ def test_slp_backward_compat_no_predicted_fields(tmp_path):
     assert type(rm) is UserSegmentationMask
     assert rm.category == "cell"
     np.testing.assert_array_equal(rm.data, np.ones((5, 5), dtype=bool))
+
+
+def test_slp_all_annotations_roundtrip(labels_all_annotations, tmp_path):
+    """Round-trip all annotation types through SLP and verify data integrity."""
+    labels = labels_all_annotations
+    path = tmp_path / "all_annotations.slp"
+
+    # Save and reload
+    save_slp(labels, str(path))
+    loaded = load_slp(str(path), open_videos=False)
+
+    # --- Annotation counts ---
+    assert len(loaded.masks) == 6
+    assert len(loaded.rois) == 6
+    assert len(loaded.bboxes) == 6
+    assert len(loaded.label_images) == 6
+
+    # --- Type preservation ---
+    user_masks = [m for m in loaded.masks if type(m) is UserSegmentationMask]
+    pred_masks = [m for m in loaded.masks if type(m) is PredictedSegmentationMask]
+    assert len(user_masks) == 3
+    assert len(pred_masks) == 3
+
+    user_rois = [r for r in loaded.rois if type(r) is UserROI]
+    pred_rois = [r for r in loaded.rois if type(r) is PredictedROI]
+    assert len(user_rois) == 3
+    assert len(pred_rois) == 3
+
+    user_bboxes = [b for b in loaded.bboxes if type(b) is UserBoundingBox]
+    pred_bboxes = [b for b in loaded.bboxes if type(b) is PredictedBoundingBox]
+    assert len(user_bboxes) == 3
+    assert len(pred_bboxes) == 3
+
+    user_lis = [li for li in loaded.label_images if type(li) is UserLabelImage]
+    pred_lis = [li for li in loaded.label_images if type(li) is PredictedLabelImage]
+    assert len(user_lis) == 3
+    assert len(pred_lis) == 3
+
+    # --- Predicted scores ---
+    for pm in pred_masks:
+        assert pm.score == pytest.approx(0.92)
+    for pr in pred_rois:
+        assert pr.score == pytest.approx(0.88)
+    for pb in pred_bboxes:
+        assert pb.score == pytest.approx(0.97)
+    for pli in pred_lis:
+        assert pli.score == pytest.approx(0.88)
+
+    # --- Metadata: name, category, source preserved ---
+    for orig, reloaded in zip(labels.masks, loaded.masks):
+        assert reloaded.name == orig.name
+        assert reloaded.category == orig.category
+        assert reloaded.source == orig.source
+
+    for orig, reloaded in zip(labels.rois, loaded.rois):
+        assert reloaded.name == orig.name
+        assert reloaded.category == orig.category
+        assert reloaded.source == orig.source
+
+    for orig, reloaded in zip(labels.bboxes, loaded.bboxes):
+        assert reloaded.name == orig.name
+        assert reloaded.category == orig.category
+        assert reloaded.source == orig.source
+
+    for orig, reloaded in zip(labels.label_images, loaded.label_images):
+        assert reloaded.source == orig.source
+
+    # --- Instance links restored ---
+    for lf in loaded.labeled_frames:
+        frame_masks = [m for m in loaded.masks if m.frame_idx == lf.frame_idx]
+        for m in frame_masks:
+            assert m.instance is not None
+            assert m.instance in lf.instances
+
+        frame_rois = [r for r in loaded.rois if r.frame_idx == lf.frame_idx]
+        for r in frame_rois:
+            assert r.instance is not None
+            assert r.instance in lf.instances
+
+        frame_bboxes = [b for b in loaded.bboxes if b.frame_idx == lf.frame_idx]
+        for b in frame_bboxes:
+            assert b.instance is not None
+            assert b.instance in lf.instances
+
+    # --- Track links restored ---
+    track_names = {t.name for t in loaded.tracks}
+    assert "fly_0" in track_names
+    assert "fly_1" in track_names
+
+    for m in loaded.masks:
+        assert m.track is not None
+        assert m.track.name in track_names
+
+    for r in loaded.rois:
+        assert r.track is not None
+        assert r.track.name in track_names
+
+    for b in loaded.bboxes:
+        assert b.track is not None
+        assert b.track.name in track_names
+
+    # --- Mask pixel data round-trips exactly ---
+    for orig, reloaded in zip(labels.masks, loaded.masks):
+        assert np.array_equal(orig.data, reloaded.data)
+
+    # --- Label image pixel data round-trips exactly ---
+    for orig, reloaded in zip(labels.label_images, loaded.label_images):
+        assert np.array_equal(orig.data, reloaded.data)
+
+    # --- Score maps round-trip closely ---
+    for orig_m, reloaded_m in zip(labels.masks, loaded.masks):
+        if isinstance(orig_m, PredictedSegmentationMask):
+            assert reloaded_m.score_map is not None
+            assert np.allclose(orig_m.score_map, reloaded_m.score_map, atol=1e-5)
+
+    for orig_li, reloaded_li in zip(labels.label_images, loaded.label_images):
+        if isinstance(orig_li, PredictedLabelImage):
+            assert reloaded_li.score_map is not None
+            assert np.allclose(orig_li.score_map, reloaded_li.score_map, atol=1e-5)
+
+    # --- Bounding box coordinates match ---
+    for orig, reloaded in zip(labels.bboxes, loaded.bboxes):
+        assert reloaded.x1 == pytest.approx(orig.x1)
+        assert reloaded.y1 == pytest.approx(orig.y1)
+        assert reloaded.x2 == pytest.approx(orig.x2)
+        assert reloaded.y2 == pytest.approx(orig.y2)
+
+
+def test_slp_backward_compat_roi_json_attrs(tmp_path):
+    """ROIs written with pre-v1.9 format (metadata in JSON attrs) can still be read."""
+    path = str(tmp_path / "old_roi.slp")
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    labels = Labels(videos=[video], skeletons=[skeleton])
+    save_slp(labels, path)
+
+    # Old dtype without is_predicted column
+    old_roi_dtype = np.dtype(
+        [
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("wkb_start", "u8"),
+            ("wkb_end", "u8"),
+            ("instance", "i4"),
+        ]
+    )
+
+    # Create a non-rectangular polygon (circle) so it won't be migrated to bboxes
+    circle = shapely.Point(30, 40).buffer(15)
+    wkb_bytes = shapely.to_wkb(circle)
+    wkb_flat = np.frombuffer(wkb_bytes, dtype=np.uint8)
+
+    roi_row = np.array(
+        [(0, 0, -1, -1, float("nan"), 0, len(wkb_flat), -1)],
+        dtype=old_roi_dtype,
+    )
+
+    with h5py.File(path, "a") as f:
+        ds = f.create_dataset("rois", data=roi_row, dtype=old_roi_dtype)
+        ds.attrs["categories"] = json.dumps(["arena"])
+        ds.attrs["names"] = json.dumps(["test_roi"])
+        ds.attrs["sources"] = json.dumps(["manual"])
+        f.create_dataset("roi_wkb", data=wkb_flat, dtype=np.uint8)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.rois) == 1
+    roi = loaded.rois[0]
+    # No is_predicted column → defaults to UserROI
+    assert type(roi) is UserROI
+    assert roi.category == "arena"
+    assert roi.name == "test_roi"
+    assert roi.source == "manual"
+    assert roi.geometry.bounds == circle.bounds
+
+
+def test_slp_backward_compat_label_image_json_attrs(tmp_path):
+    """Label images with pre-v1.9 format (metadata in JSON attrs) can still be read."""
+    path = str(tmp_path / "old_li.slp")
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    labels = Labels(videos=[video], skeletons=[skeleton])
+    save_slp(labels, path)
+
+    # Old label_images dtype without is_predicted or score columns
+    old_li_dtype = np.dtype(
+        [
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("height", "u4"),
+            ("width", "u4"),
+            ("n_objects", "u4"),
+            ("objects_start", "u4"),
+            ("data_start", "u8"),
+            ("data_end", "u8"),
+        ]
+    )
+
+    # Create a small 4x4 label image with label ID 1 in the top-left quadrant
+    data = np.zeros((4, 4), dtype=np.int32)
+    data[:2, :2] = 1
+    compressed = zlib.compress(data.tobytes())
+    pixel_flat = np.frombuffer(compressed, dtype=np.uint8)
+
+    li_row = np.array(
+        [(0, 0, 4, 4, 1, 0, 0, len(pixel_flat))],
+        dtype=old_li_dtype,
+    )
+
+    # Old objects dtype without score column
+    old_obj_dtype = np.dtype(
+        [
+            ("label_id", "i4"),
+            ("track", "i4"),
+            ("instance", "i4"),
+        ]
+    )
+    obj_row = np.array([(1, -1, -1)], dtype=old_obj_dtype)
+
+    with h5py.File(path, "a") as f:
+        li_ds = f.create_dataset(
+            "label_images", data=li_row, dtype=old_li_dtype
+        )
+        li_ds.attrs["sources"] = json.dumps(["manual"])
+        f.create_dataset("label_image_data", data=pixel_flat, dtype=np.uint8)
+        obj_ds = f.create_dataset(
+            "label_image_objects", data=obj_row, dtype=old_obj_dtype
+        )
+        obj_ds.attrs["categories"] = json.dumps(["cell"])
+        obj_ds.attrs["names"] = json.dumps(["obj1"])
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.label_images) == 1
+    li = loaded.label_images[0]
+    # No is_predicted column → defaults to UserLabelImage
+    assert type(li) is UserLabelImage
+    assert li.source == "manual"
+    assert li.objects[1].category == "cell"
+    assert li.objects[1].name == "obj1"
+    np.testing.assert_array_equal(li.data, data)
