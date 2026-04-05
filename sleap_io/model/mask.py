@@ -7,7 +7,7 @@ to and from numpy arrays and polygon representations.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import attrs
 import numpy as np
@@ -72,6 +72,23 @@ def _decode_rle(rle_counts: np.ndarray, height: int, width: int) -> np.ndarray:
     return flat.reshape(height, width)
 
 
+def _resize_nearest(array: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
+    """Nearest-neighbor resize of a 2D array using numpy index mapping.
+
+    Args:
+        array: 2D array of shape (H, W).
+        target_h: Target height.
+        target_w: Target width.
+
+    Returns:
+        Resized array of shape (target_h, target_w).
+    """
+    h, w = array.shape[:2]
+    row_idx = (np.arange(target_h) * h / target_h).astype(int).clip(0, h - 1)
+    col_idx = (np.arange(target_w) * w / target_w).astype(int).clip(0, w - 1)
+    return array[np.ix_(row_idx, col_idx)]
+
+
 @attrs.define(eq=False)
 class SegmentationMask:
     """A segmentation mask stored as run-length encoded (RLE) data.
@@ -88,6 +105,12 @@ class SegmentationMask:
         frame_idx: Optional frame index. If `None`, the mask is static.
         track: Optional `Track` this mask is associated with.
         instance: Optional `Instance` this mask is associated with.
+        scale: Resolution ratio ``(sx, sy)`` where ``sx = mask_width / image_width``
+            and ``sy = mask_height / image_height``. ``(1.0, 1.0)`` means full
+            resolution. ``(0.5, 0.5)`` means half resolution (each mask pixel
+            covers 2x2 image pixels). Coordinate mapping:
+            ``image_coord = mask_coord / scale + offset``.
+        offset: Origin ``(x, y)`` of the mask in image pixel coordinates.
 
     Notes:
         Masks use identity-based equality (two mask objects are only equal if they
@@ -105,6 +128,8 @@ class SegmentationMask:
     track: "Track | None" = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
+    scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
+    offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))
 
     def __attrs_post_init__(self):
         """Validate that this class is not instantiated directly."""
@@ -113,27 +138,86 @@ class SegmentationMask:
                 "SegmentationMask is abstract. "
                 "Use UserSegmentationMask or PredictedSegmentationMask."
             )
+        if self.scale[0] <= 0 or self.scale[1] <= 0:
+            raise ValueError(f"Scale values must be positive, got {self.scale}.")
 
     @property
     def is_predicted(self) -> bool:
         """Whether this mask is a model prediction."""
         return isinstance(self, PredictedSegmentationMask)
 
+    @property
+    def has_spatial_transform(self) -> bool:
+        """Whether this mask has non-default scale or offset."""
+        return self.scale != (1.0, 1.0) or self.offset != (0.0, 0.0)
+
+    @property
+    def image_extent(self) -> tuple[int, int]:
+        """Image-space ``(height, width)`` this mask covers (excluding offset).
+
+        Computed as ``(int(height / scale_y), int(width / scale_x))``.
+        """
+        return (
+            int(self.height / self.scale[1]),
+            int(self.width / self.scale[0]),
+        )
+
+    def resampled(self, target_height: int, target_width: int) -> Self:
+        """Return a new mask resampled to the target dimensions.
+
+        The returned mask has ``scale=(1.0, 1.0)`` and ``offset=(0.0, 0.0)``
+        with the mask data resized using nearest-neighbor interpolation.
+
+        Args:
+            target_height: Target height in pixels.
+            target_width: Target width in pixels.
+
+        Returns:
+            A new mask of the same concrete type with resampled data.
+        """
+        resized = _resize_nearest(self.data, target_height, target_width)
+        kwargs: dict = dict(
+            name=self.name,
+            category=self.category,
+            source=self.source,
+            video=self.video,
+            frame_idx=self.frame_idx,
+            track=self.track,
+            instance=self.instance,
+            scale=(1.0, 1.0),
+            offset=(0.0, 0.0),
+        )
+        if isinstance(self, PredictedSegmentationMask):
+            kwargs["score"] = self.score
+            if self.score_map is not None:
+                kwargs["score_map"] = _resize_nearest(
+                    self.score_map, target_height, target_width
+                )
+            kwargs["score_map_scale"] = (1.0, 1.0)
+            kwargs["score_map_offset"] = (0.0, 0.0)
+        return type(self).from_numpy(resized, **kwargs)
+
     @classmethod
     def from_numpy(
         cls,
         mask: np.ndarray,
+        stride: float | None = None,
         **kwargs,
     ) -> "SegmentationMask":
         """Create a SegmentationMask from a 2D numpy array.
 
         Args:
             mask: A 2D boolean or uint8 numpy array of shape (height, width).
-            **kwargs: Additional keyword arguments passed to the constructor.
+            stride: Convenience for setting isotropic scale. If provided, sets
+                ``scale = (1/stride, 1/stride)``. Overrides ``scale`` in kwargs.
+            **kwargs: Additional keyword arguments passed to the constructor
+                (including ``scale``, ``offset``, ``name``, ``category``, etc.).
 
         Returns:
             A `SegmentationMask` with RLE-encoded data.
         """
+        if stride is not None:
+            kwargs["scale"] = (1.0 / stride, 1.0 / stride)
         height, width = mask.shape
         rle_counts = _encode_rle(mask)
         return cls(rle_counts=rle_counts, height=height, width=width, **kwargs)
@@ -155,7 +239,11 @@ class SegmentationMask:
 
     @property
     def bbox(self) -> tuple[float, float, float, float]:
-        """Bounding box of the mask as (x, y, width, height).
+        """Bounding box of the mask as (x, y, width, height) in image coordinates.
+
+        When ``scale`` or ``offset`` are non-default, the bounding box is
+        transformed from mask-pixel space to image-pixel space using
+        ``image_coord = mask_coord / scale + offset``.
 
         Returns:
             A tuple of (x, y, width, height) for the tightest axis-aligned
@@ -172,11 +260,13 @@ class SegmentationMask:
         rmin, rmax = np.where(rows)[0][[0, -1]]
         cmin, cmax = np.where(cols)[0][[0, -1]]
 
+        sx, sy = self.scale
+        ox, oy = self.offset
         return (
-            float(cmin),
-            float(rmin),
-            float(cmax - cmin + 1),
-            float(rmax - rmin + 1),
+            float(cmin / sx + ox),
+            float(rmin / sy + oy),
+            float((cmax - cmin + 1) / sx),
+            float((rmax - rmin + 1) / sy),
         )
 
     def to_polygon(self) -> "ROI":
@@ -185,6 +275,9 @@ class SegmentationMask:
         Builds pixel-aligned rectangles for each horizontal run of foreground
         pixels, then merges them with Shapely's ``unary_union`` to produce an
         exact polygon boundary. Handles non-convex shapes and holes correctly.
+
+        When ``scale`` or ``offset`` are non-default, the polygon coordinates
+        are transformed from mask-pixel space to image-pixel space.
 
         Returns:
             An `ROI` with polygon geometry derived from the mask. Returns an
@@ -195,6 +288,9 @@ class SegmentationMask:
 
         from sleap_io.model.roi import UserROI
 
+        sx, sy = self.scale
+        ox, oy = self.offset
+
         mask = self.data
         rectangles = []
         for y in range(self.height):
@@ -203,7 +299,9 @@ class SegmentationMask:
             starts = np.where(diff == 1)[0]
             ends = np.where(diff == -1)[0]
             for s, e in zip(starts, ends):
-                rectangles.append(box(s, y, e, y + 1))
+                rectangles.append(
+                    box(s / sx + ox, y / sy + oy, e / sx + ox, (y + 1) / sy + oy)
+                )
 
         if not rectangles:
             geometry = Polygon()
@@ -238,7 +336,13 @@ class PredictedSegmentationMask(SegmentationMask):
         score_map: Optional dense pixel-level confidence map of shape (H, W)
             as float32. This can be large and is stored separately in the SLP
             format. If ``None``, only the object-level score is available.
+        score_map_scale: Resolution ratio ``(sx, sy)`` for the score map,
+            independent of the mask's own ``scale``. Defaults to ``(1.0, 1.0)``.
+        score_map_offset: Origin ``(x, y)`` of the score map in image pixel
+            coordinates. Defaults to ``(0.0, 0.0)``.
     """
 
     score: float = attrs.field(default=0.0)
     score_map: np.ndarray | None = attrs.field(default=None)
+    score_map_scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
+    score_map_offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))
