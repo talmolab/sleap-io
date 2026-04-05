@@ -6364,9 +6364,7 @@ def test_slp_backward_compat_label_image_json_attrs(tmp_path):
     obj_row = np.array([(1, -1, -1)], dtype=old_obj_dtype)
 
     with h5py.File(path, "a") as f:
-        li_ds = f.create_dataset(
-            "label_images", data=li_row, dtype=old_li_dtype
-        )
+        li_ds = f.create_dataset("label_images", data=li_row, dtype=old_li_dtype)
         li_ds.attrs["sources"] = json.dumps(["manual"])
         f.create_dataset("label_image_data", data=pixel_flat, dtype=np.uint8)
         obj_ds = f.create_dataset(

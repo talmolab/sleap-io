@@ -5765,9 +5765,7 @@ def test_labels_copy_with_annotation_refs(labels_all_annotations, tmp_path):
     assert labels_copy.label_images[0] is not loaded.label_images[0]
 
     # UserLabelImage and PredictedLabelImage types are preserved
-    user_lis = [
-        li for li in labels_copy.label_images if isinstance(li, UserLabelImage)
-    ]
+    user_lis = [li for li in labels_copy.label_images if isinstance(li, UserLabelImage)]
     pred_lis = [
         li for li in labels_copy.label_images if isinstance(li, PredictedLabelImage)
     ]

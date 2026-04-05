@@ -91,9 +91,7 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     instance=inst,
                 )
             else:
-                score_map = np.where(
-                    mask_data, 0.95, 0.05
-                ).astype(np.float32)
+                score_map = np.where(mask_data, 0.95, 0.05).astype(np.float32)
                 mask = PredictedSegmentationMask.from_numpy(
                     mask_data,
                     name=f"mask_f{fi}_i{ii}",
@@ -198,9 +196,7 @@ def make_labels_all_annotations() -> sleap_io.Labels:
         all_label_images.append(user_li)
 
         # Predicted label image with score_map and per-object scores
-        pred_score_map = np.where(
-            li_data > 0, 0.9, 0.05
-        ).astype(np.float32)
+        pred_score_map = np.where(li_data > 0, 0.9, 0.05).astype(np.float32)
         pred_li = PredictedLabelImage(
             data=li_data.copy(),
             objects={
