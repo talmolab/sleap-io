@@ -2172,6 +2172,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../model/identity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    identity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../model/instance/" class="md-nav__link">
         
   
@@ -3458,7 +3486,7 @@ one Track per unique ID found across all frames.</p>
 <a id="__codelineno-0-185" name="__codelineno-0-185"></a><a href="#__codelineno-0-185"><span class="linenos" data-linenos="185 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-186" name="__codelineno-0-186"></a><a href="#__codelineno-0-186"><span class="linenos" data-linenos="186 "></span></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">tifffile</span>
 <a id="__codelineno-0-187" name="__codelineno-0-187"></a><a href="#__codelineno-0-187"><span class="linenos" data-linenos="187 "></span></a>
-<a id="__codelineno-0-188" name="__codelineno-0-188"></a><a href="#__codelineno-0-188"><span class="linenos" data-linenos="188 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.label_image</span><span class="w"> </span><span class="kn">import</span> <span class="n">LabelImage</span>
+<a id="__codelineno-0-188" name="__codelineno-0-188"></a><a href="#__codelineno-0-188"><span class="linenos" data-linenos="188 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.label_image</span><span class="w"> </span><span class="kn">import</span> <span class="n">UserLabelImage</span>
 <a id="__codelineno-0-189" name="__codelineno-0-189"></a><a href="#__codelineno-0-189"><span class="linenos" data-linenos="189 "></span></a>
 <a id="__codelineno-0-190" name="__codelineno-0-190"></a><a href="#__codelineno-0-190"><span class="linenos" data-linenos="190 "></span></a>    <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
 <a id="__codelineno-0-191" name="__codelineno-0-191"></a><a href="#__codelineno-0-191"><span class="linenos" data-linenos="191 "></span></a>    <span class="n">sidecar</span> <span class="o">=</span> <span class="n">_read_sidecar</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
@@ -3489,7 +3517,7 @@ one Track per unique ID found across all frames.</p>
 <a id="__codelineno-0-216" name="__codelineno-0-216"></a><a href="#__codelineno-0-216"><span class="linenos" data-linenos="216 "></span></a>        <span class="k">for</span> <span class="n">frame_idx</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">frames_data</span><span class="p">):</span>
 <a id="__codelineno-0-217" name="__codelineno-0-217"></a><a href="#__codelineno-0-217"><span class="linenos" data-linenos="217 "></span></a>            <span class="n">objects</span> <span class="o">=</span> <span class="n">_build_objects_dict</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">track_map</span><span class="p">,</span> <span class="n">cat_map</span><span class="p">)</span>
 <a id="__codelineno-0-218" name="__codelineno-0-218"></a><a href="#__codelineno-0-218"><span class="linenos" data-linenos="218 "></span></a>            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-219" name="__codelineno-0-219"></a><a href="#__codelineno-0-219"><span class="linenos" data-linenos="219 "></span></a>                <span class="n">LabelImage</span><span class="p">(</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a><a href="#__codelineno-0-219"><span class="linenos" data-linenos="219 "></span></a>                <span class="n">UserLabelImage</span><span class="p">(</span>
 <a id="__codelineno-0-220" name="__codelineno-0-220"></a><a href="#__codelineno-0-220"><span class="linenos" data-linenos="220 "></span></a>                    <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
 <a id="__codelineno-0-221" name="__codelineno-0-221"></a><a href="#__codelineno-0-221"><span class="linenos" data-linenos="221 "></span></a>                    <span class="n">objects</span><span class="o">=</span><span class="n">objects</span><span class="p">,</span>
 <a id="__codelineno-0-222" name="__codelineno-0-222"></a><a href="#__codelineno-0-222"><span class="linenos" data-linenos="222 "></span></a>                    <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span>
@@ -3519,7 +3547,7 @@ one Track per unique ID found across all frames.</p>
 <a id="__codelineno-0-246" name="__codelineno-0-246"></a><a href="#__codelineno-0-246"><span class="linenos" data-linenos="246 "></span></a>    <span class="k">for</span> <span class="n">frame_idx</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">frames_data</span><span class="p">):</span>
 <a id="__codelineno-0-247" name="__codelineno-0-247"></a><a href="#__codelineno-0-247"><span class="linenos" data-linenos="247 "></span></a>        <span class="n">objects</span> <span class="o">=</span> <span class="n">_build_objects_dict</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">track_map</span><span class="p">,</span> <span class="n">cat_map</span><span class="p">)</span>
 <a id="__codelineno-0-248" name="__codelineno-0-248"></a><a href="#__codelineno-0-248"><span class="linenos" data-linenos="248 "></span></a>        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a><a href="#__codelineno-0-249"><span class="linenos" data-linenos="249 "></span></a>            <span class="n">LabelImage</span><span class="p">(</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><a href="#__codelineno-0-249"><span class="linenos" data-linenos="249 "></span></a>            <span class="n">UserLabelImage</span><span class="p">(</span>
 <a id="__codelineno-0-250" name="__codelineno-0-250"></a><a href="#__codelineno-0-250"><span class="linenos" data-linenos="250 "></span></a>                <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
 <a id="__codelineno-0-251" name="__codelineno-0-251"></a><a href="#__codelineno-0-251"><span class="linenos" data-linenos="251 "></span></a>                <span class="n">objects</span><span class="o">=</span><span class="n">objects</span><span class="p">,</span>
 <a id="__codelineno-0-252" name="__codelineno-0-252"></a><a href="#__codelineno-0-252"><span class="linenos" data-linenos="252 "></span></a>                <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span>
