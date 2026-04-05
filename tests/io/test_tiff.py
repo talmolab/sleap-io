@@ -260,3 +260,53 @@ def test_empty_label_image_roundtrip(tmp_path):
     np.testing.assert_array_equal(result[0].data, data)
     assert result[0].n_objects == 0
     assert len(result[0].objects) == 0
+
+
+def test_tiff_spatial_metadata_roundtrip(tmp_path):
+    """Write and read back a LabelImage with scale/offset via sidecar."""
+    data = _make_label_array(8, 8, 2)
+    li = UserLabelImage(data=data, frame_idx=0, scale=(0.5, 0.5), offset=(10.0, 20.0))
+
+    tiff_path = tmp_path / "spatial.tif"
+    write_label_images(tiff_path, [li])
+    result = read_label_images(tiff_path)
+
+    assert len(result) == 1
+    assert result[0].scale == (0.5, 0.5)
+    assert result[0].offset == (10.0, 20.0)
+    assert result[0].has_spatial_transform is True
+
+
+def test_tiff_default_spatial_roundtrip(tmp_path):
+    """LabelImage with default scale/offset reads back with defaults."""
+    data = _make_label_array(8, 8, 2)
+    li = UserLabelImage(data=data, frame_idx=0)
+
+    tiff_path = tmp_path / "default.tif"
+    write_label_images(tiff_path, [li])
+    result = read_label_images(tiff_path)
+
+    assert len(result) == 1
+    assert result[0].scale == (1.0, 1.0)
+    assert result[0].offset == (0.0, 0.0)
+    assert result[0].has_spatial_transform is False
+
+
+def test_tiff_sidecar_v1_compat(tmp_path):
+    """Old sidecar without scale/offset loads with defaults."""
+    data = _make_label_array(8, 8, 2)
+    li = UserLabelImage(data=data, frame_idx=0)
+
+    tiff_path = tmp_path / "old.tif"
+    write_label_images(tiff_path, [li])
+
+    # Manually write a v1 sidecar (no scale/offset)
+    sidecar_path = tmp_path / "old.tif.meta.json"
+    sidecar = {"format": "sleap-io-label-image-meta", "version": 1, "objects": {}}
+    with open(sidecar_path, "w") as f:
+        json.dump(sidecar, f)
+
+    result = read_label_images(tiff_path)
+    assert len(result) == 1
+    assert result[0].scale == (1.0, 1.0)
+    assert result[0].offset == (0.0, 0.0)

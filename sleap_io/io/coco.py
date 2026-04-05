@@ -843,17 +843,23 @@ def convert_labels(
         if image_id >= image_id_counter:
             image_id_counter = image_id + 1
 
-        mask_data = seg_mask.data
+        # COCO expects full-frame masks; resample if scaled/offset
+        export_mask = seg_mask
+        if seg_mask.has_spatial_transform:
+            target_h, target_w = seg_mask.image_extent
+            export_mask = seg_mask.resampled(target_h, target_w)
+
+        mask_data = export_mask.data
         rle = _encode_coco_rle(mask_data)
 
-        bbox_xywh = seg_mask.bbox
+        bbox_xywh = export_mask.bbox
         annotation = {
             "id": annotation_id_counter,
             "image_id": image_id,
             "category_id": category_id,
             "segmentation": rle,
             "bbox": list(bbox_xywh),
-            "area": float(seg_mask.area),
+            "area": float(export_mask.area),
             "iscrowd": 1,
         }
 
