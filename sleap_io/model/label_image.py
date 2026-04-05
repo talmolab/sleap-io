@@ -11,13 +11,19 @@ array.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, Self
+import sys
+from typing import TYPE_CHECKING, Iterator
 
 import attrs
 import numpy as np
 from attrs import Factory
 
 if TYPE_CHECKING:
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
+
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.video import Video

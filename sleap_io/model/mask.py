@@ -7,12 +7,18 @@ to and from numpy arrays and polygon representations.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self
+import sys
+from typing import TYPE_CHECKING
 
 import attrs
 import numpy as np
 
 if TYPE_CHECKING:
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
+
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.roi import ROI
     from sleap_io.model.video import Video
