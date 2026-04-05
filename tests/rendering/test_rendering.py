@@ -2185,7 +2185,6 @@ class TestTopLevelAPI:
 
 def test_draw_rois_outline():
     """draw_rois should draw ROI outlines on an image."""
-    from sleap_io.model.roi import UserROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -2200,7 +2199,6 @@ def test_draw_rois_outline():
 
 def test_draw_rois_with_fill():
     """draw_rois with fill_alpha should fill the interior."""
-    from sleap_io.model.roi import UserROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -2213,7 +2211,6 @@ def test_draw_rois_with_fill():
 
 def test_draw_masks():
     """draw_masks should draw colored overlays for masks."""
-    from sleap_io.model.mask import UserSegmentationMask
     from sleap_io.rendering.overlays import draw_masks
 
     img = np.ones((50, 50, 3), dtype=np.uint8) * 100
@@ -2242,7 +2239,6 @@ def test_draw_rois_point():
     """draw_rois should draw a marker for Point geometry ROIs."""
     from shapely.geometry import Point
 
-    from sleap_io.model.roi import UserROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -2260,7 +2256,6 @@ def test_draw_rois_linestring():
     """draw_rois should draw lines for LineString geometry ROIs."""
     from shapely.geometry import LineString
 
-    from sleap_io.model.roi import UserROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -2280,7 +2275,6 @@ def test_draw_rois_geometry_collection():
     """draw_rois should recurse into GeometryCollection components."""
     from shapely.geometry import GeometryCollection, LineString, Point
 
-    from sleap_io.model.roi import UserROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -2298,7 +2292,6 @@ def test_draw_rois_geometry_collection():
 
 def test_draw_rois_multi_polygon():
     """draw_rois should draw all polygons in a MultiPolygon."""
-    from sleap_io.model.roi import UserROI
     from sleap_io.rendering.overlays import draw_rois
 
     roi = UserROI.from_multi_polygon(
@@ -2319,7 +2312,6 @@ def test_draw_rois_multi_point():
     """draw_rois should draw markers for all points in a MultiPoint."""
     from shapely.geometry import MultiPoint
 
-    from sleap_io.model.roi import UserROI
     from sleap_io.rendering.overlays import draw_rois
 
     geom = MultiPoint([(20, 20), (60, 60)])
@@ -2336,7 +2328,6 @@ def test_draw_rois_multi_linestring():
     """draw_rois should draw all lines in a MultiLineString."""
     from shapely.geometry import MultiLineString
 
-    from sleap_io.model.roi import UserROI
     from sleap_io.rendering.overlays import draw_rois
 
     geom = MultiLineString([[(10, 10), (10, 30)], [(50, 50), (50, 70)]])
@@ -2353,7 +2344,6 @@ def test_draw_rois_polygon_with_hole():
     """draw_rois with fill should respect polygon holes."""
     from shapely.geometry import Polygon
 
-    from sleap_io.model.roi import UserROI
     from sleap_io.rendering.overlays import draw_rois
 
     exterior = [(10, 10), (60, 10), (60, 60), (10, 60)]
@@ -2376,7 +2366,6 @@ def test_draw_rois_polygon_with_hole():
 
 def test_draw_bboxes_basic():
     """draw_bboxes should draw axis-aligned bbox outlines on an image."""
-    from sleap_io.model.bbox import UserBoundingBox
     from sleap_io.rendering.overlays import draw_bboxes
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -2396,7 +2385,6 @@ def test_draw_bboxes_rotated():
     """draw_bboxes should draw rotated bboxes using polylines."""
     import math
 
-    from sleap_io.model.bbox import UserBoundingBox
     from sleap_io.rendering.overlays import draw_bboxes
 
     img = np.zeros((200, 200, 3), dtype=np.uint8)
@@ -2413,7 +2401,6 @@ def test_draw_bboxes_rotated():
 
 def test_draw_bboxes_fill():
     """draw_bboxes with fill_alpha > 0 should fill the bbox interior."""
-    from sleap_io.model.bbox import UserBoundingBox
     from sleap_io.rendering.overlays import draw_bboxes
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)

@@ -22,8 +22,13 @@ from sleap_io import (
     load_slp,
 )
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.label_image import (
+    LabelImage,
+    PredictedLabelImage,
+    UserLabelImage,
+)
 from sleap_io.model.labels import Labels
-from sleap_io.model.mask import UserSegmentationMask
+from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
 from sleap_io.model.matching import (
     InstanceMatcher,
     InstanceMatchMethod,
@@ -35,7 +40,8 @@ from sleap_io.model.matching import (
     VideoMatcher,
     VideoMatchMethod,
 )
-from sleap_io.model.roi import UserROI
+from sleap_io.model.roi import PredictedROI, UserROI
+from shapely.geometry import box
 
 
 def test_labels():
@@ -5515,8 +5521,6 @@ def test_labels_copy_preserves_rois_and_masks(slp_minimal, tmp_path):
 
 def test_labels_copy_preserves_label_images(slp_minimal, tmp_path):
     """Test that lazy copy preserves label_images."""
-    from sleap_io.model.label_image import LabelImage, UserLabelImage
-
     labels = load_slp(slp_minimal)
     video = labels.videos[0]
     track = Track(name="t1")
@@ -5552,8 +5556,6 @@ def test_labels_copy_preserves_label_images(slp_minimal, tmp_path):
 
 def test_labels_materialize_label_images(tmp_path):
     """materialize() deep copies label_images, relinking video/track refs."""
-    from sleap_io.model.label_image import LabelImage, UserLabelImage
-
     video = Video(filename="test.mp4")
     track = Track(name="t1")
     skeleton = Skeleton(["A"])
@@ -5596,8 +5598,6 @@ def test_labels_materialize_label_images(tmp_path):
 
 def test_labels_get_masks_predicted():
     """get_masks filters by predicted flag."""
-    from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
-
     user_mask = UserSegmentationMask.from_numpy(
         np.ones((5, 5), dtype=bool), category="a"
     )
@@ -5613,10 +5613,6 @@ def test_labels_get_masks_predicted():
 
 def test_labels_get_rois_predicted():
     """get_rois filters by predicted flag."""
-    from shapely.geometry import box
-
-    from sleap_io.model.roi import PredictedROI, UserROI
-
     user_roi = UserROI(geometry=box(0, 0, 5, 5), category="a")
     pred_roi = PredictedROI(geometry=box(0, 0, 5, 5), category="b", score=0.8)
     labels = Labels(rois=[user_roi, pred_roi])
@@ -5628,8 +5624,6 @@ def test_labels_get_rois_predicted():
 
 def test_labels_get_label_images_predicted():
     """get_label_images filters by predicted flag."""
-    from sleap_io.model.label_image import PredictedLabelImage, UserLabelImage
-
     data = np.array([[0, 1]], dtype=np.int32)
     user_li = UserLabelImage(data=data)
     pred_li = PredictedLabelImage(data=data, score=0.9)
