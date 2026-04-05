@@ -136,15 +136,35 @@ def draw_masks(
     for i, mask in enumerate(masks):
         mask_color = colors[i] if colors is not None else color
         mask_data = mask.data
-        h, w = mask_data.shape
         img_h, img_w = image.shape[:2]
 
-        # Clip to image bounds
-        draw_h = min(h, img_h)
-        draw_w = min(w, img_w)
+        if mask.has_spatial_transform:
+            from sleap_io.model.mask import _resize_nearest
 
-        region = image[:draw_h, :draw_w]
-        mask_region = mask_data[:draw_h, :draw_w]
+            # Compute image-space placement
+            target_h, target_w = mask.image_extent
+            resized = _resize_nearest(mask_data, target_h, target_w)
+
+            ox, oy = mask.offset
+            y0 = max(0, int(oy))
+            x0 = max(0, int(ox))
+            y1 = min(img_h, int(oy) + target_h)
+            x1 = min(img_w, int(ox) + target_w)
+
+            if y1 <= y0 or x1 <= x0:
+                continue
+
+            # Slice within the resized mask (handles negative offset)
+            my0 = y0 - int(oy)
+            mx0 = x0 - int(ox)
+            region = image[y0:y1, x0:x1]
+            mask_region = resized[my0 : my0 + (y1 - y0), mx0 : mx0 + (x1 - x0)]
+        else:
+            h, w = mask_data.shape
+            draw_h = min(h, img_h)
+            draw_w = min(w, img_w)
+            region = image[:draw_h, :draw_w]
+            mask_region = mask_data[:draw_h, :draw_w]
 
         # Blend color into masked pixels
         overlay = np.array(mask_color, dtype=np.float32)
@@ -163,6 +183,8 @@ def draw_label_image(
     outline: bool = False,
     outline_width: int = 1,
     outline_color: tuple[int, int, int] | None = None,
+    scale: tuple[float, float] = (1.0, 1.0),
+    offset: tuple[float, float] = (0.0, 0.0),
 ) -> np.ndarray:
     """Draw an integer label image as a colored overlay on an image.
 
@@ -184,6 +206,8 @@ def draw_label_image(
             ``outline=True``).
         outline_color: RGB color for outlines. If ``None``, uses a darkened
             version of each region's fill color.
+        scale: Resolution ratio ``(sx, sy)`` for coordinate mapping.
+        offset: Origin ``(x, y)`` in image pixel coordinates.
 
     Returns:
         The modified image array.
@@ -206,14 +230,39 @@ def draw_label_image(
     for label_id in unique_ids:
         lut[label_id] = palette_colors[int(label_id) % len(palette_colors)]
 
-    # Clip labels to image size
     img_h, img_w = image.shape[:2]
-    lab_h, lab_w = labels.shape[:2]
-    draw_h = min(lab_h, img_h)
-    draw_w = min(lab_w, img_w)
+    has_transform = scale != (1.0, 1.0) or offset != (0.0, 0.0)
 
-    region = image[:draw_h, :draw_w]
-    label_region = labels[:draw_h, :draw_w]
+    if has_transform:
+        from sleap_io.model.mask import _resize_nearest
+
+        sx, sy = scale
+        lab_h, lab_w = labels.shape[:2]
+        target_h = int(lab_h / sy)
+        target_w = int(lab_w / sx)
+        resized_labels = _resize_nearest(labels, target_h, target_w)
+
+        ox, oy = offset
+        y0 = max(0, int(oy))
+        x0 = max(0, int(ox))
+        y1 = min(img_h, int(oy) + target_h)
+        x1 = min(img_w, int(ox) + target_w)
+
+        if y1 <= y0 or x1 <= x0:
+            return image
+
+        my0 = y0 - int(oy)
+        mx0 = x0 - int(ox)
+        region = image[y0:y1, x0:x1]
+        label_region = resized_labels[my0 : my0 + (y1 - y0), mx0 : mx0 + (x1 - x0)]
+        draw_h = y1 - y0
+        draw_w = x1 - x0
+    else:
+        lab_h, lab_w = labels.shape[:2]
+        draw_h = min(lab_h, img_h)
+        draw_w = min(lab_w, img_w)
+        region = image[:draw_h, :draw_w]
+        label_region = labels[:draw_h, :draw_w]
 
     # Vectorized blending: apply colored overlay where labels > 0
     fg_mask = label_region > 0
@@ -230,9 +279,15 @@ def draw_label_image(
 
     # Draw outlines if requested
     if outline:
-        _draw_label_outlines(
-            image, labels, draw_h, draw_w, outline_width, outline_color, lut
-        )
+        if has_transform:
+            # For transformed labels, draw outlines on the placed region
+            _draw_label_outlines(
+                image, labels, draw_h, draw_w, outline_width, outline_color, lut
+            )
+        else:
+            _draw_label_outlines(
+                image, labels, draw_h, draw_w, outline_width, outline_color, lut
+            )
 
     return image
 

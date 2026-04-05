@@ -508,3 +508,140 @@ def test_predicted_label_image_with_score_map():
     li = PredictedLabelImage(data=data, score=0.85, score_map=score_map)
     assert li.score_map is not None
     assert li.score_map.shape == (2, 2)
+
+
+def test_label_image_scale_offset_defaults():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = UserLabelImage(data=data)
+    assert li.scale == (1.0, 1.0)
+    assert li.offset == (0.0, 0.0)
+    assert li.has_spatial_transform is False
+
+
+def test_label_image_scale_offset_custom():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = UserLabelImage(data=data, scale=(0.5, 0.5), offset=(10.0, 20.0))
+    assert li.scale == (0.5, 0.5)
+    assert li.offset == (10.0, 20.0)
+    assert li.has_spatial_transform is True
+
+
+def test_label_image_scale_validation():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    with pytest.raises(ValueError, match="Scale values must be positive"):
+        UserLabelImage(data=data, scale=(0.0, 1.0))
+
+
+def test_label_image_image_extent():
+    data = np.zeros((10, 20), dtype=np.int32)
+    li = UserLabelImage(data=data, scale=(0.5, 0.5))
+    assert li.image_extent == (20, 40)
+
+
+def test_label_image_resampled():
+    data = np.array(
+        [[0, 1, 1, 0], [2, 2, 0, 0], [0, 0, 3, 3], [0, 0, 0, 0]], dtype=np.int32
+    )
+    li = UserLabelImage(
+        data=data,
+        objects={
+            1: LabelImage.Info(category="a"),
+            2: LabelImage.Info(category="b"),
+            3: LabelImage.Info(category="c"),
+        },
+        scale=(0.5, 0.5),
+        offset=(10.0, 20.0),
+    )
+
+    resampled = li.resampled(8, 8)
+    assert resampled.height == 8
+    assert resampled.width == 8
+    assert resampled.scale == (1.0, 1.0)
+    assert resampled.offset == (0.0, 0.0)
+    assert resampled.has_spatial_transform is False
+    assert isinstance(resampled, UserLabelImage)
+    assert set(resampled.objects.keys()) == {1, 2, 3}
+    assert resampled.objects[1].category == "a"
+
+
+def test_predicted_label_image_resampled():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    score_map = np.random.rand(2, 2).astype(np.float32)
+    li = PredictedLabelImage(
+        data=data,
+        score=0.9,
+        score_map=score_map,
+        scale=(0.5, 0.5),
+        score_map_scale=(0.25, 0.25),
+    )
+
+    resampled = li.resampled(4, 4)
+    assert isinstance(resampled, PredictedLabelImage)
+    assert resampled.score == 0.9
+    assert resampled.score_map is not None
+    assert resampled.score_map.shape == (4, 4)
+    assert resampled.score_map_scale == (1.0, 1.0)
+    assert resampled.score_map_offset == (0.0, 0.0)
+
+
+def test_predicted_label_image_score_map_spatial():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = PredictedLabelImage(
+        data=data,
+        score_map_scale=(0.5, 0.5),
+        score_map_offset=(5.0, 10.0),
+    )
+    assert li.score_map_scale == (0.5, 0.5)
+    assert li.score_map_offset == (5.0, 10.0)
+
+
+def test_from_masks_propagates_scale_offset():
+    m1 = UserSegmentationMask.from_numpy(
+        np.array([[True, False], [False, False]]),
+        scale=(0.5, 0.5),
+        offset=(10.0, 20.0),
+    )
+    m2 = UserSegmentationMask.from_numpy(
+        np.array([[False, False], [False, True]]),
+        scale=(0.5, 0.5),
+        offset=(10.0, 20.0),
+    )
+    li = UserLabelImage.from_masks([m1, m2])
+    assert li.scale == (0.5, 0.5)
+    assert li.offset == (10.0, 20.0)
+
+
+def test_from_masks_inconsistent_scale_raises():
+    m1 = UserSegmentationMask.from_numpy(
+        np.array([[True, False], [False, False]]),
+        scale=(0.5, 0.5),
+    )
+    m2 = UserSegmentationMask.from_numpy(
+        np.array([[False, False], [False, True]]),
+        scale=(1.0, 1.0),
+    )
+    with pytest.raises(ValueError, match="same scale and offset"):
+        UserLabelImage.from_masks([m1, m2])
+
+
+def test_from_masks_inconsistent_offset_raises():
+    m1 = UserSegmentationMask.from_numpy(
+        np.array([[True, False], [False, False]]),
+        offset=(0.0, 0.0),
+    )
+    m2 = UserSegmentationMask.from_numpy(
+        np.array([[False, False], [False, True]]),
+        offset=(10.0, 20.0),
+    )
+    with pytest.raises(ValueError, match="same scale and offset"):
+        UserLabelImage.from_masks([m1, m2])
+
+
+def test_to_masks_propagates_scale_offset():
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = UserLabelImage(data=data, scale=(0.5, 0.5), offset=(10.0, 20.0))
+    masks = li.to_masks()
+    assert len(masks) == 2
+    for m in masks:
+        assert m.scale == (0.5, 0.5)
+        assert m.offset == (10.0, 20.0)

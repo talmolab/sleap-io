@@ -11,6 +11,7 @@ array.
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING, Iterator
 
 import attrs
@@ -18,6 +19,11 @@ import numpy as np
 from attrs import Factory
 
 if TYPE_CHECKING:
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
+
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.video import Video
@@ -41,6 +47,11 @@ class LabelImage:
         video: Associated ``Video``.
         frame_idx: Frame index. ``None`` means static (applies to all frames).
         source: Source identifier string.
+        scale: Resolution ratio ``(sx, sy)`` where ``sx = label_width / image_width``
+            and ``sy = label_height / image_height``. ``(1.0, 1.0)`` means full
+            resolution. ``(0.5, 0.5)`` means half resolution. Coordinate mapping:
+            ``image_coord = label_coord / scale + offset``.
+        offset: Origin ``(x, y)`` of the label image in image pixel coordinates.
     """
 
     @attrs.define
@@ -66,6 +77,8 @@ class LabelImage:
     video: "Video | None" = attrs.field(default=None)
     frame_idx: int | None = attrs.field(default=None)
     source: str = attrs.field(default="")
+    scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
+    offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))
 
     @property
     def is_predicted(self) -> bool:
@@ -84,6 +97,8 @@ class LabelImage:
             raise ValueError("LabelImage data must not contain negative values.")
         if self.data.dtype != np.int32:
             self.data = self.data.astype(np.int32)
+        if self.scale[0] <= 0 or self.scale[1] <= 0:
+            raise ValueError(f"Scale values must be positive, got {self.scale}.")
 
     @property
     def height(self) -> int:
@@ -94,6 +109,58 @@ class LabelImage:
     def width(self) -> int:
         """Width of the label image in pixels."""
         return self.data.shape[1]
+
+    @property
+    def has_spatial_transform(self) -> bool:
+        """Whether this label image has non-default scale or offset."""
+        return self.scale != (1.0, 1.0) or self.offset != (0.0, 0.0)
+
+    @property
+    def image_extent(self) -> tuple[int, int]:
+        """Image-space ``(height, width)`` this label image covers (excluding offset).
+
+        Computed as ``(int(height / scale_y), int(width / scale_x))``.
+        """
+        return (
+            int(self.height / self.scale[1]),
+            int(self.width / self.scale[0]),
+        )
+
+    def resampled(self, target_height: int, target_width: int) -> Self:
+        """Return a new label image resampled to the target dimensions.
+
+        The returned label image has ``scale=(1.0, 1.0)`` and
+        ``offset=(0.0, 0.0)`` with the data resized using nearest-neighbor
+        interpolation to preserve label IDs.
+
+        Args:
+            target_height: Target height in pixels.
+            target_width: Target width in pixels.
+
+        Returns:
+            A new label image of the same concrete type with resampled data.
+        """
+        from sleap_io.model.mask import _resize_nearest
+
+        resized = _resize_nearest(self.data, target_height, target_width)
+        kwargs: dict = dict(
+            data=resized,
+            objects={lid: attrs.evolve(info) for lid, info in self.objects.items()},
+            video=self.video,
+            frame_idx=self.frame_idx,
+            source=self.source,
+            scale=(1.0, 1.0),
+            offset=(0.0, 0.0),
+        )
+        if isinstance(self, PredictedLabelImage):
+            kwargs["score"] = self.score
+            if self.score_map is not None:
+                kwargs["score_map"] = _resize_nearest(
+                    self.score_map, target_height, target_width
+                )
+            kwargs["score_map_scale"] = (1.0, 1.0)
+            kwargs["score_map_offset"] = (0.0, 0.0)
+        return type(self)(**kwargs)
 
     @property
     def n_objects(self) -> int:
@@ -250,15 +317,21 @@ class LabelImage:
         and name are inherited from each mask's metadata. Overlapping pixels
         are assigned to the last mask in the list.
 
+        All masks must share the same ``scale`` and ``offset``. The resulting
+        ``LabelImage`` inherits the shared spatial metadata (unless overridden
+        via ``**kwargs``).
+
         Args:
-            masks: Binary masks. Must all have the same height and width.
+            masks: Binary masks. Must all have the same height, width, scale,
+                and offset.
             **kwargs: Passed to the LabelImage constructor.
 
         Returns:
             A ``LabelImage`` composing all masks.
 
         Raises:
-            ValueError: If masks have inconsistent shapes or the list is empty.
+            ValueError: If masks have inconsistent shapes, scale/offset, or the
+                list is empty.
         """
         if not masks:
             raise ValueError("Cannot create LabelImage from empty mask list.")
@@ -270,6 +343,20 @@ class LabelImage:
                     f"All masks must have the same shape. "
                     f"Expected ({height}, {width}), got ({m.height}, {m.width})."
                 )
+
+        scales = {m.scale for m in masks}
+        offsets = {m.offset for m in masks}
+        if len(scales) > 1 or len(offsets) > 1:
+            raise ValueError(
+                "All masks must share the same scale and offset. "
+                "Use mask.resampled() to align them first."
+            )
+
+        # Inherit spatial metadata from masks unless explicitly overridden.
+        if "scale" not in kwargs:
+            kwargs["scale"] = masks[0].scale
+        if "offset" not in kwargs:
+            kwargs["offset"] = masks[0].offset
 
         data = np.zeros((height, width), dtype=np.int32)
         objects: dict[int, LabelImage.Info] = {}
@@ -290,8 +377,8 @@ class LabelImage:
         """Decompose into per-object binary SegmentationMasks.
 
         Returns one SegmentationMask per unique non-zero label. Each mask
-        inherits track, category, name, instance, video, frame_idx, and source
-        from the corresponding ``LabelImage.Info`` entry.
+        inherits track, category, name, instance, video, frame_idx, source,
+        scale, and offset from the ``LabelImage``.
 
         Returns:
             A list of ``SegmentationMask`` objects, one per object.
@@ -313,6 +400,8 @@ class LabelImage:
                     video=self.video,
                     frame_idx=self.frame_idx,
                     source=self.source,
+                    scale=self.scale,
+                    offset=self.offset,
                 )
             )
         return result
@@ -334,7 +423,13 @@ class PredictedLabelImage(LabelImage):
         score_map: Optional dense pixel-level confidence map of shape (H, W)
             as float32. This can be large and is stored separately in the SLP
             format. If ``None``, only per-object scores in ``Info`` are available.
+        score_map_scale: Resolution ratio ``(sx, sy)`` for the score map,
+            independent of the label image's own ``scale``.
+        score_map_offset: Origin ``(x, y)`` of the score map in image pixel
+            coordinates.
     """
 
     score: float = attrs.field(default=0.0)
     score_map: np.ndarray | None = attrs.field(default=None)
+    score_map_scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
+    score_map_offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))

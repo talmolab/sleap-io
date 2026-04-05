@@ -2566,6 +2566,74 @@ def test_draw_label_image_size_mismatch():
     assert not np.array_equal(result[10, 10], [128, 128, 128])
 
 
+def test_draw_masks_half_resolution():
+    """draw_masks with scale=(0.5, 0.5) should cover the full image."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 100
+    # Half-resolution mask (50x50) covering full 100x100 image
+    mask_data = np.ones((50, 50), dtype=bool)
+    mask = UserSegmentationMask.from_numpy(mask_data, scale=(0.5, 0.5))
+
+    result = draw_masks(img, [mask], color=(255, 0, 0), alpha=0.5)
+    # The entire image should be blended (mask covers full frame)
+    assert result[0, 0, 0] > 100  # Top-left
+    assert result[99, 99, 0] > 100  # Bottom-right
+    assert result[50, 50, 0] > 100  # Center
+
+
+def test_draw_masks_with_offset():
+    """draw_masks with offset should place mask at the correct position."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 100
+    mask_data = np.ones((20, 20), dtype=bool)
+    mask = UserSegmentationMask.from_numpy(mask_data, offset=(30.0, 40.0))
+
+    result = draw_masks(img, [mask], color=(255, 0, 0), alpha=0.5)
+    # Mask should be at (x=30, y=40) to (x=50, y=60)
+    assert result[45, 35, 0] > 100  # Inside mask region
+    assert result[10, 10].tolist() == [100, 100, 100]  # Outside mask region
+    assert result[70, 70].tolist() == [100, 100, 100]  # Also outside
+
+
+def test_draw_masks_scale_and_offset():
+    """draw_masks with both scale and offset should work correctly."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 100
+    # 10x10 mask at half res, offset to (20, 30) -> covers (20,30) to (40,50)
+    mask_data = np.ones((10, 10), dtype=bool)
+    mask = UserSegmentationMask.from_numpy(
+        mask_data, scale=(0.5, 0.5), offset=(20.0, 30.0)
+    )
+
+    result = draw_masks(img, [mask], color=(255, 0, 0), alpha=0.5)
+    assert result[35, 25, 0] > 100  # Inside
+    assert result[0, 0].tolist() == [100, 100, 100]  # Outside
+
+
+def test_draw_label_image_half_resolution():
+    """draw_label_image with scale should upscale labels to cover full image."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+    # Half-res labels
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:40, 10:40] = 1
+
+    result = draw_label_image(img, labels, alpha=0.5, scale=(0.5, 0.5))
+    # Center should be modified (label covers most of the image)
+    assert not np.array_equal(result[50, 50], [128, 128, 128])
+    # Corner should be unchanged (no label there in image space)
+    assert result[0, 0].tolist() == [128, 128, 128]
+
+
+def test_draw_label_image_with_offset():
+    """draw_label_image with offset should place labels at correct position."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+    labels = np.zeros((20, 20), dtype=np.int32)
+    labels[5:15, 5:15] = 1
+
+    result = draw_label_image(img, labels, alpha=0.5, offset=(30.0, 40.0))
+    # Inside offset region should be modified
+    assert not np.array_equal(result[47, 37], [128, 128, 128])
+    # Origin should be unchanged
+    assert result[0, 0].tolist() == [128, 128, 128]
+
+
 # ============================================================================
 # render_image overlay integration tests
 # ============================================================================

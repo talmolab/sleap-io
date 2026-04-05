@@ -1683,6 +1683,29 @@ class TestCOCOROIMaskIO:
         )
         np.testing.assert_array_equal(decoded, mask_arr)
 
+    def test_coco_mask_scaled_export(self, tmp_path):
+        """Scaled mask should be resampled to image extent for COCO export."""
+        from sleap_io.model.mask import UserSegmentationMask
+
+        # Half-resolution 5x5 mask (covers 10x10 in image space)
+        mask_arr = np.ones((5, 5), dtype=bool)
+        video = sio.Video.from_filename(["img1.png"])
+        seg_mask = UserSegmentationMask.from_numpy(
+            mask_arr, category="cell", video=video, frame_idx=0, scale=(0.5, 0.5)
+        )
+
+        labels = sio.Labels(masks=[seg_mask])
+
+        json_path = tmp_path / "mask_scaled.json"
+        coco.write_labels(labels, json_path)
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        ann = data["annotations"][0]
+        # Resampled to image extent: 10x10
+        assert ann["segmentation"]["size"] == [10, 10]
+
     def test_coco_detection_only_read(self, tmp_path):
         """Test reading a detection-only COCO JSON (no keypoints)."""
         # Create image files so they can be resolved

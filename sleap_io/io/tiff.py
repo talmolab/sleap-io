@@ -57,11 +57,20 @@ def _write_sidecar(path: Path, label_images: list[LabelImage]) -> None:
                     entry["category"] = info.category
                 objects[key] = entry
 
-    sidecar = {
+    # Check if any label image has non-default spatial metadata
+    has_spatial = any(li.has_spatial_transform for li in label_images)
+
+    sidecar: dict = {
         "format": "sleap-io-label-image-meta",
-        "version": 1,
+        "version": 2 if has_spatial else 1,
         "objects": objects,
     }
+    if has_spatial and label_images:
+        # Use spatial metadata from first label image (all should share it
+        # for a consistent stack).
+        sidecar["scale"] = list(label_images[0].scale)
+        sidecar["offset"] = list(label_images[0].offset)
+
     sidecar_path = Path(str(path) + ".meta.json")
     with open(sidecar_path, "w") as f:
         json.dump(sidecar, f, indent=2)
@@ -190,6 +199,17 @@ def read_label_images(
     path = Path(path)
     sidecar = _read_sidecar(path)
 
+    # Read spatial metadata from sidecar (v2+)
+    sidecar_scale = (1.0, 1.0)
+    sidecar_offset = (0.0, 0.0)
+    if sidecar is not None:
+        if "scale" in sidecar:
+            s = sidecar["scale"]
+            sidecar_scale = (float(s[0]), float(s[1]))
+        if "offset" in sidecar:
+            o = sidecar["offset"]
+            sidecar_offset = (float(o[0]), float(o[1]))
+
     if path.is_dir():
         tiff_files = sorted(list(path.glob("*.tif")) + list(path.glob("*.tiff")))
         if not tiff_files:
@@ -221,6 +241,8 @@ def read_label_images(
                     objects=objects,
                     video=video,
                     frame_idx=frame_idx,
+                    scale=sidecar_scale,
+                    offset=sidecar_offset,
                 )
             )
         return result
@@ -251,6 +273,8 @@ def read_label_images(
                 objects=objects,
                 video=video,
                 frame_idx=frame_idx,
+                scale=sidecar_scale,
+                offset=sidecar_offset,
             )
         )
 

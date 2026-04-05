@@ -9,6 +9,7 @@ from sleap_io.model.mask import (
     UserSegmentationMask,
     _decode_rle,
     _encode_rle,
+    _resize_nearest,
 )
 
 
@@ -201,3 +202,165 @@ def test_segmentation_mask_instance_idx():
     assert mask._instance_idx == -1
     mask._instance_idx = 3
     assert mask._instance_idx == 3
+
+
+def test_resize_nearest():
+    arr = np.array([[1, 2], [3, 4]])
+    result = _resize_nearest(arr, 4, 4)
+    assert result.shape == (4, 4)
+    assert result[0, 0] == 1
+    assert result[0, 2] == 2
+    assert result[2, 0] == 3
+    assert result[2, 2] == 4
+
+
+def test_resize_nearest_bool():
+    mask = np.zeros((4, 4), dtype=bool)
+    mask[0:2, 0:2] = True
+    result = _resize_nearest(mask, 8, 8)
+    assert result.shape == (8, 8)
+    assert result[:4, :4].all()
+    assert not result[4:, :].any()
+
+
+def test_segmentation_mask_scale_offset_defaults():
+    mask = UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
+    assert mask.scale == (1.0, 1.0)
+    assert mask.offset == (0.0, 0.0)
+    assert mask.has_spatial_transform is False
+
+
+def test_segmentation_mask_scale_offset_custom():
+    mask = UserSegmentationMask.from_numpy(
+        np.zeros((5, 5), dtype=bool), scale=(0.5, 0.5), offset=(10.0, 20.0)
+    )
+    assert mask.scale == (0.5, 0.5)
+    assert mask.offset == (10.0, 20.0)
+    assert mask.has_spatial_transform is True
+
+
+def test_segmentation_mask_scale_validation():
+    with pytest.raises(ValueError, match="Scale values must be positive"):
+        UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool), scale=(0.0, 1.0))
+    with pytest.raises(ValueError, match="Scale values must be positive"):
+        UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool), scale=(1.0, -1.0))
+
+
+def test_segmentation_mask_image_extent():
+    mask = UserSegmentationMask.from_numpy(
+        np.zeros((10, 20), dtype=bool), scale=(0.5, 0.5)
+    )
+    assert mask.image_extent == (20, 40)
+
+    mask2 = UserSegmentationMask.from_numpy(
+        np.zeros((10, 10), dtype=bool), scale=(0.25, 0.25)
+    )
+    assert mask2.image_extent == (40, 40)
+
+    mask3 = UserSegmentationMask.from_numpy(np.zeros((10, 10), dtype=bool))
+    assert mask3.image_extent == (10, 10)
+
+
+def test_segmentation_mask_from_numpy_stride():
+    mask = UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool), stride=2)
+    assert mask.scale == (0.5, 0.5)
+    assert mask.has_spatial_transform is True
+
+    mask4 = UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool), stride=4)
+    assert mask4.scale == (0.25, 0.25)
+
+
+def test_segmentation_mask_resampled():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    mask = UserSegmentationMask.from_numpy(
+        data, scale=(0.5, 0.5), offset=(10.0, 20.0), name="cell", category="neuron"
+    )
+
+    resampled = mask.resampled(20, 20)
+    assert resampled.height == 20
+    assert resampled.width == 20
+    assert resampled.scale == (1.0, 1.0)
+    assert resampled.offset == (0.0, 0.0)
+    assert resampled.name == "cell"
+    assert resampled.category == "neuron"
+    assert resampled.has_spatial_transform is False
+    assert resampled.data.any()
+    assert isinstance(resampled, UserSegmentationMask)
+
+
+def test_predicted_segmentation_mask_resampled():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    score_map = np.random.rand(10, 10).astype(np.float32)
+    mask = PredictedSegmentationMask.from_numpy(
+        data,
+        score=0.9,
+        score_map=score_map,
+        scale=(0.5, 0.5),
+        score_map_scale=(0.25, 0.25),
+    )
+
+    resampled = mask.resampled(20, 20)
+    assert isinstance(resampled, PredictedSegmentationMask)
+    assert resampled.score == 0.9
+    assert resampled.score_map is not None
+    assert resampled.score_map.shape == (20, 20)
+    assert resampled.score_map_scale == (1.0, 1.0)
+    assert resampled.score_map_offset == (0.0, 0.0)
+
+
+def test_predicted_segmentation_mask_score_map_spatial():
+    mask = PredictedSegmentationMask.from_numpy(
+        np.zeros((5, 5), dtype=bool),
+        score_map_scale=(0.5, 0.5),
+        score_map_offset=(5.0, 10.0),
+    )
+    assert mask.score_map_scale == (0.5, 0.5)
+    assert mask.score_map_offset == (5.0, 10.0)
+
+
+def test_segmentation_mask_bbox_with_scale():
+    data = np.zeros((20, 20), dtype=bool)
+    data[5:10, 3:8] = True
+    mask = UserSegmentationMask.from_numpy(data, scale=(0.5, 0.5))
+    x, y, w, h = mask.bbox
+    assert x == pytest.approx(6.0)  # 3 / 0.5
+    assert y == pytest.approx(10.0)  # 5 / 0.5
+    assert w == pytest.approx(10.0)  # 5 / 0.5
+    assert h == pytest.approx(10.0)  # 5 / 0.5
+
+
+def test_segmentation_mask_bbox_with_offset():
+    data = np.zeros((20, 20), dtype=bool)
+    data[5:10, 3:8] = True
+    mask = UserSegmentationMask.from_numpy(data, offset=(10.0, 20.0))
+    x, y, w, h = mask.bbox
+    assert x == pytest.approx(13.0)  # 3 + 10
+    assert y == pytest.approx(25.0)  # 5 + 20
+    assert w == pytest.approx(5.0)
+    assert h == pytest.approx(5.0)
+
+
+def test_segmentation_mask_to_polygon_with_scale():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:4, 3:6] = True
+    mask = UserSegmentationMask.from_numpy(data, scale=(0.5, 0.5))
+    roi = mask.to_polygon()
+    bounds = roi.geometry.bounds  # (minx, miny, maxx, maxy)
+    assert bounds[0] == pytest.approx(6.0)  # 3 / 0.5
+    assert bounds[1] == pytest.approx(4.0)  # 2 / 0.5
+    assert bounds[2] == pytest.approx(12.0)  # 6 / 0.5
+    assert bounds[3] == pytest.approx(8.0)  # 4 / 0.5
+
+
+def test_segmentation_mask_to_polygon_with_offset():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:4, 3:6] = True
+    mask = UserSegmentationMask.from_numpy(data, offset=(10.0, 20.0))
+    roi = mask.to_polygon()
+    bounds = roi.geometry.bounds
+    assert bounds[0] == pytest.approx(13.0)  # 3 + 10
+    assert bounds[1] == pytest.approx(22.0)  # 2 + 20
+    assert bounds[2] == pytest.approx(16.0)  # 6 + 10
+    assert bounds[3] == pytest.approx(24.0)  # 4 + 20

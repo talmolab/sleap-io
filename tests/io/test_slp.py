@@ -5987,6 +5987,158 @@ def test_slp_predicted_mask_score_map_roundtrip(tmp_path):
     np.testing.assert_allclose(rm.score_map, score_map, atol=1e-6)
 
 
+def test_slp_mask_spatial_metadata_roundtrip(tmp_path):
+    """Mask scale/offset survives SLP round-trip."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    mask = UserSegmentationMask.from_numpy(
+        np.ones((10, 10), dtype=bool),
+        video=video,
+        frame_idx=0,
+        scale=(0.5, 0.5),
+        offset=(10.0, 20.0),
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        masks=[mask],
+    )
+
+    path = str(tmp_path / "mask_spatial.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    rm = loaded.masks[0]
+    assert rm.scale[0] == pytest.approx(0.5)
+    assert rm.scale[1] == pytest.approx(0.5)
+    assert rm.offset[0] == pytest.approx(10.0)
+    assert rm.offset[1] == pytest.approx(20.0)
+    assert rm.has_spatial_transform is True
+
+
+def test_slp_mask_default_spatial_roundtrip(tmp_path):
+    """Mask with default scale/offset round-trips correctly."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    mask = UserSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), video=video, frame_idx=0
+    )
+
+    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+
+    path = str(tmp_path / "mask_default_spatial.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    rm = loaded.masks[0]
+    assert rm.scale == (1.0, 1.0)
+    assert rm.offset == (0.0, 0.0)
+    assert rm.has_spatial_transform is False
+
+
+def test_slp_predicted_mask_spatial_score_map_roundtrip(tmp_path):
+    """PredictedSegmentationMask with score_map and spatial metadata round-trips."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    score_map = np.random.rand(5, 5).astype(np.float32)
+    mask = PredictedSegmentationMask.from_numpy(
+        np.ones((8, 8), dtype=bool),
+        video=video,
+        frame_idx=0,
+        score=0.85,
+        score_map=score_map,
+        scale=(0.5, 0.5),
+        offset=(5.0, 10.0),
+        score_map_scale=(0.25, 0.25),
+        score_map_offset=(1.0, 2.0),
+    )
+
+    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+
+    path = str(tmp_path / "pred_mask_spatial.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    rm = loaded.masks[0]
+    assert isinstance(rm, PredictedSegmentationMask)
+    assert rm.scale[0] == pytest.approx(0.5)
+    assert rm.offset[0] == pytest.approx(5.0)
+    assert rm.score_map_scale[0] == pytest.approx(0.25)
+    assert rm.score_map_offset[0] == pytest.approx(1.0)
+    assert rm.score_map is not None
+    np.testing.assert_allclose(rm.score_map, score_map, atol=1e-6)
+
+
+def test_slp_label_image_spatial_roundtrip(tmp_path):
+    """LabelImage scale/offset survives SLP round-trip."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = UserLabelImage(
+        data=data,
+        video=video,
+        frame_idx=0,
+        scale=(0.5, 0.5),
+        offset=(10.0, 20.0),
+    )
+
+    labels = Labels(videos=[video], skeletons=[skeleton], label_images=[li])
+
+    path = str(tmp_path / "li_spatial.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    rli = loaded.label_images[0]
+    assert rli.scale[0] == pytest.approx(0.5)
+    assert rli.scale[1] == pytest.approx(0.5)
+    assert rli.offset[0] == pytest.approx(10.0)
+    assert rli.offset[1] == pytest.approx(20.0)
+
+
+def test_slp_spatial_metadata_format_version(tmp_path):
+    """SLP with non-default spatial metadata bumps format_id to 2.1."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    mask = UserSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool),
+        video=video,
+        frame_idx=0,
+        scale=(0.5, 0.5),
+    )
+
+    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+
+    path = str(tmp_path / "spatial_version.slp")
+    save_slp(labels, path)
+
+    format_id = read_hdf5_attrs(path, "metadata", "format_id")
+    assert format_id >= 2.1
+
+
+def test_slp_default_spatial_no_version_bump(tmp_path):
+    """SLP with only default spatial metadata should not bump to 2.1."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    mask = UserSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), video=video, frame_idx=0
+    )
+
+    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+
+    path = str(tmp_path / "default_spatial.slp")
+    save_slp(labels, path)
+
+    format_id = read_hdf5_attrs(path, "metadata", "format_id")
+    assert format_id < 2.1
+
+
 def test_slp_predicted_roi_roundtrip(tmp_path):
     """PredictedROI round-trips with score."""
     from shapely.geometry import box

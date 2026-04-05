@@ -1461,6 +1461,13 @@ def write_metadata(labels_path: str, labels: Labels):
     if has_identities:
         format_id = max(format_id, 1.9)
 
+    # Bump for spatial metadata on dense annotations (new in 2.1)
+    has_spatial_metadata = any(m.has_spatial_transform for m in labels.masks) or any(
+        li.has_spatial_transform for li in labels.label_images
+    )
+    if has_spatial_metadata:
+        format_id = max(format_id, 2.1)
+
     with h5py.File(labels_path, "a") as f:
         grp = f.require_group("metadata")
         grp.attrs["format_id"] = format_id
@@ -3086,6 +3093,9 @@ def read_masks(
             sources = json.loads(mask_grp.attrs.get("sources", "[]"))
 
         # Read and index score maps if available
+        score_map_spatial_by_idx: dict[
+            int, tuple[tuple[float, float], tuple[float, float]]
+        ] = {}
         if "mask_score_map_index" in f:
             sm_index = f["mask_score_map_index"][:]
             sm_data = f["mask_score_maps"][:]
@@ -3095,9 +3105,28 @@ def read_masks(
                 sm_h = int(sm_row["height"])
                 sm_w = int(sm_row["width"])
                 sm_compressed = sm_data[sm_start:sm_end]
-                score_map_by_idx[int(sm_row["mask_idx"])] = np.frombuffer(
+                midx = int(sm_row["mask_idx"])
+                score_map_by_idx[midx] = np.frombuffer(
                     zlib.decompress(sm_compressed.tobytes()), dtype=np.float32
                 ).reshape(sm_h, sm_w)
+                # Read score map spatial metadata (v2.1+)
+                sm_scale = (
+                    float(sm_row["scale_x"])
+                    if "scale_x" in sm_row.dtype.names
+                    else 1.0,
+                    float(sm_row["scale_y"])
+                    if "scale_y" in sm_row.dtype.names
+                    else 1.0,
+                )
+                sm_offset = (
+                    float(sm_row["offset_x"])
+                    if "offset_x" in sm_row.dtype.names
+                    else 0.0,
+                    float(sm_row["offset_y"])
+                    if "offset_y" in sm_row.dtype.names
+                    else 0.0,
+                )
+                score_map_spatial_by_idx[midx] = (sm_scale, sm_offset)
 
     masks = []
     for i, row in enumerate(mask_data):
@@ -3131,6 +3160,16 @@ def read_masks(
         )
         score_val = float(row["score"]) if "score" in row.dtype.names else float("nan")
 
+        # Read spatial metadata (v2.1+)
+        scale = (
+            float(row["scale_x"]) if "scale_x" in row.dtype.names else 1.0,
+            float(row["scale_y"]) if "scale_y" in row.dtype.names else 1.0,
+        )
+        offset = (
+            float(row["offset_x"]) if "offset_x" in row.dtype.names else 0.0,
+            float(row["offset_y"]) if "offset_y" in row.dtype.names else 0.0,
+        )
+
         kwargs = dict(
             rle_counts=rle_counts,
             height=int(row["height"]),
@@ -3142,14 +3181,21 @@ def read_masks(
             frame_idx=frame_idx,
             track=track,
             instance=instance,
+            scale=scale,
+            offset=offset,
         )
 
         if is_predicted:
             # Check for score map
             sm = score_map_by_idx.get(i)
+            sm_spatial = score_map_spatial_by_idx.get(i)
+            sm_scale = sm_spatial[0] if sm_spatial else (1.0, 1.0)
+            sm_offset = sm_spatial[1] if sm_spatial else (0.0, 0.0)
             mask = PredictedSegmentationMask(
                 score=score_val if not np.isnan(score_val) else 0.0,
                 score_map=sm,
+                score_map_scale=sm_scale,
+                score_map_offset=sm_offset,
                 **kwargs,
             )
         else:
@@ -3194,6 +3240,10 @@ def write_masks(
             ("score", "f4"),
             ("rle_start", "u8"),
             ("rle_end", "u8"),
+            ("scale_x", "f4"),
+            ("scale_y", "f4"),
+            ("offset_x", "f4"),
+            ("offset_y", "f4"),
         ]
     )
 
@@ -3240,6 +3290,10 @@ def write_masks(
                 score,
                 rle_start,
                 rle_end,
+                mask.scale[0],
+                mask.scale[1],
+                mask.offset[0],
+                mask.offset[1],
             )
         )
 
@@ -3274,8 +3328,19 @@ def write_masks(
             compressed = zlib.compress(mask.score_map.astype(np.float32).tobytes())
             sm_bytes = np.frombuffer(compressed, dtype=np.uint8)
             sm_end = score_map_offset + len(sm_bytes)
+            sm_h, sm_w = mask.score_map.shape[:2]
             score_map_indices.append(
-                (i, score_map_offset, sm_end, mask.height, mask.width)
+                (
+                    i,
+                    score_map_offset,
+                    sm_end,
+                    sm_h,
+                    sm_w,
+                    mask.score_map_scale[0],
+                    mask.score_map_scale[1],
+                    mask.score_map_offset[0],
+                    mask.score_map_offset[1],
+                )
             )
             score_map_chunks.append(sm_bytes)
             score_map_offset += len(sm_bytes)
@@ -3288,6 +3353,10 @@ def write_masks(
                 ("data_end", "u8"),
                 ("height", "u4"),
                 ("width", "u4"),
+                ("scale_x", "f4"),
+                ("scale_y", "f4"),
+                ("offset_x", "f4"),
+                ("offset_y", "f4"),
             ]
         )
         sm_index_array = np.array(score_map_indices, dtype=sm_index_dtype)
@@ -3383,6 +3452,9 @@ def read_label_images(
             sources = []
 
         # Read and index score maps if available
+        li_score_map_spatial_by_idx: dict[
+            int, tuple[tuple[float, float], tuple[float, float]]
+        ] = {}
         if "label_image_score_map_index" in f:
             sm_index = f["label_image_score_map_index"][:]
             sm_data = f["label_image_score_maps"][:]
@@ -3392,9 +3464,28 @@ def read_label_images(
                 sm_h = int(sm_row["height"])
                 sm_w = int(sm_row["width"])
                 sm_compressed = sm_data[sm_start:sm_end]
-                li_score_map_by_idx[int(sm_row["li_idx"])] = np.frombuffer(
+                lidx = int(sm_row["li_idx"])
+                li_score_map_by_idx[lidx] = np.frombuffer(
                     zlib.decompress(sm_compressed.tobytes()), dtype=np.float32
                 ).reshape(sm_h, sm_w)
+                # Read score map spatial metadata (v2.1+)
+                sm_scale = (
+                    float(sm_row["scale_x"])
+                    if "scale_x" in sm_row.dtype.names
+                    else 1.0,
+                    float(sm_row["scale_y"])
+                    if "scale_y" in sm_row.dtype.names
+                    else 1.0,
+                )
+                sm_offset = (
+                    float(sm_row["offset_x"])
+                    if "offset_x" in sm_row.dtype.names
+                    else 0.0,
+                    float(sm_row["offset_y"])
+                    if "offset_y" in sm_row.dtype.names
+                    else 0.0,
+                )
+                li_score_map_spatial_by_idx[lidx] = (sm_scale, sm_offset)
 
     label_images: list[LabelImage] = []
     for i, row in enumerate(li_data):
@@ -3460,21 +3551,38 @@ def read_label_images(
         )
         score_val = float(row["score"]) if "score" in row.dtype.names else 0.0
 
+        # Read spatial metadata (v2.1+)
+        scale = (
+            float(row["scale_x"]) if "scale_x" in row.dtype.names else 1.0,
+            float(row["scale_y"]) if "scale_y" in row.dtype.names else 1.0,
+        )
+        offset = (
+            float(row["offset_x"]) if "offset_x" in row.dtype.names else 0.0,
+            float(row["offset_y"]) if "offset_y" in row.dtype.names else 0.0,
+        )
+
         kwargs = dict(
             data=data,
             objects=objects,
             video=video,
             frame_idx=frame_idx,
             source=source,
+            scale=scale,
+            offset=offset,
         )
 
         if is_predicted:
             # Check for score map
             sm = li_score_map_by_idx.get(i)
+            sm_spatial = li_score_map_spatial_by_idx.get(i)
+            sm_scale = sm_spatial[0] if sm_spatial else (1.0, 1.0)
+            sm_offset = sm_spatial[1] if sm_spatial else (0.0, 0.0)
             label_images.append(
                 PredictedLabelImage(
                     score=score_val if not np.isnan(score_val) else 0.0,
                     score_map=sm,
+                    score_map_scale=sm_scale,
+                    score_map_offset=sm_offset,
                     **kwargs,
                 )
             )
@@ -3517,6 +3625,10 @@ def write_label_images(
             ("data_end", "u8"),
             ("is_predicted", "u1"),
             ("score", "f4"),
+            ("scale_x", "f4"),
+            ("scale_y", "f4"),
+            ("offset_x", "f4"),
+            ("offset_y", "f4"),
         ]
     )
 
@@ -3587,6 +3699,10 @@ def write_label_images(
                 data_end,
                 int(is_predicted),
                 score,
+                li.scale[0],
+                li.scale[1],
+                li.offset[0],
+                li.offset[1],
             )
         )
 
@@ -3622,8 +3738,19 @@ def write_label_images(
         if isinstance(li, PredictedLabelImage) and li.score_map is not None:
             compressed = zlib.compress(li.score_map.astype(np.float32).tobytes())
             sm_bytes = np.frombuffer(compressed, dtype=np.uint8)
+            sm_h, sm_w = li.score_map.shape[:2]
             li_sm_indices.append(
-                (i, li_sm_offset, li_sm_offset + len(sm_bytes), li.height, li.width)
+                (
+                    i,
+                    li_sm_offset,
+                    li_sm_offset + len(sm_bytes),
+                    sm_h,
+                    sm_w,
+                    li.score_map_scale[0],
+                    li.score_map_scale[1],
+                    li.score_map_offset[0],
+                    li.score_map_offset[1],
+                )
             )
             li_sm_chunks.append(sm_bytes)
             li_sm_offset += len(sm_bytes)
@@ -3636,6 +3763,10 @@ def write_label_images(
                 ("data_end", "u8"),
                 ("height", "u4"),
                 ("width", "u4"),
+                ("scale_x", "f4"),
+                ("scale_y", "f4"),
+                ("offset_x", "f4"),
+                ("offset_y", "f4"),
             ]
         )
         sm_index_array = np.array(li_sm_indices, dtype=sm_index_dtype)
