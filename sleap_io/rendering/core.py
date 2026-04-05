@@ -367,6 +367,8 @@ def _apply_overlay(
             outline=outline,
             outline_width=outline_width,
             outline_color=outline_color,
+            scale=overlay.scale,
+            offset=overlay.offset,
         )
     elif isinstance(overlay, list) and overlay:
         from sleap_io.model.bbox import BoundingBox
