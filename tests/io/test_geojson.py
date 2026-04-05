@@ -8,12 +8,12 @@ from shapely.geometry import LineString, Point
 import sleap_io as sio
 from sleap_io.io.geojson import read_rois, write_rois
 from sleap_io.model.labels import Labels
-from sleap_io.model.roi import ROI
+from sleap_io.model.roi import UserROI
 
 
 def test_write_rois_basic(tmp_path):
     """Written file has FeatureCollection structure with correct feature count."""
-    rois = [ROI.from_bbox(0, 0, 10, 10), ROI.from_bbox(20, 20, 5, 5)]
+    rois = [UserROI.from_bbox(0, 0, 10, 10), UserROI.from_bbox(20, 20, 5, 5)]
     path = tmp_path / "rois.geojson"
     write_rois(rois, path)
 
@@ -29,7 +29,10 @@ def test_write_rois_basic(tmp_path):
 
 def test_read_rois_basic(tmp_path):
     """Write then read back preserves count and geometry type."""
-    rois = [ROI.from_bbox(0, 0, 10, 10), ROI.from_polygon([(0, 0), (5, 0), (5, 5)])]
+    rois = [
+        UserROI.from_bbox(0, 0, 10, 10),
+        UserROI.from_polygon([(0, 0), (5, 0), (5, 5)]),
+    ]
     path = tmp_path / "rois.geojson"
     write_rois(rois, path)
 
@@ -41,7 +44,7 @@ def test_read_rois_basic(tmp_path):
 
 def test_roundtrip_bbox(tmp_path):
     """Bounding box ROI preserves geometry and metadata on roundtrip."""
-    roi = ROI.from_bbox(10, 20, 30, 40, name="my_box", category="det")
+    roi = UserROI.from_bbox(10, 20, 30, 40, name="my_box", category="det")
     path = tmp_path / "bbox.geojson"
     write_rois([roi], path)
     loaded = read_rois(path)
@@ -56,7 +59,7 @@ def test_roundtrip_bbox(tmp_path):
 def test_roundtrip_polygon(tmp_path):
     """Polygon coordinates preserved on roundtrip."""
     coords = [(0, 0), (10, 0), (10, 10), (0, 10)]
-    roi = ROI.from_polygon(coords)
+    roi = UserROI.from_polygon(coords)
     path = tmp_path / "poly.geojson"
     write_rois([roi], path)
     loaded = read_rois(path)
@@ -72,7 +75,7 @@ def test_roundtrip_multi_polygon(tmp_path):
         [(0, 0), (10, 0), (10, 10), (0, 10)],
         [(20, 20), (30, 20), (30, 30), (20, 30)],
     ]
-    roi = ROI.from_multi_polygon(polygons)
+    roi = UserROI.from_multi_polygon(polygons)
     path = tmp_path / "multi.geojson"
     write_rois([roi], path)
     loaded = read_rois(path)
@@ -84,7 +87,7 @@ def test_roundtrip_multi_polygon(tmp_path):
 
 def test_roundtrip_point(tmp_path):
     """Point geometry roundtrips correctly."""
-    roi = ROI(geometry=Point(5, 10), category="anchor")
+    roi = UserROI(geometry=Point(5, 10), category="anchor")
     path = tmp_path / "point.geojson"
     write_rois([roi], path)
     loaded = read_rois(path)
@@ -98,7 +101,7 @@ def test_roundtrip_point(tmp_path):
 
 def test_roundtrip_linestring(tmp_path):
     """LineString geometry roundtrips correctly."""
-    roi = ROI(geometry=LineString([(0, 0), (10, 10), (20, 0)]))
+    roi = UserROI(geometry=LineString([(0, 0), (10, 10), (20, 0)]))
     path = tmp_path / "line.geojson"
     write_rois([roi], path)
     loaded = read_rois(path)
@@ -110,7 +113,7 @@ def test_roundtrip_linestring(tmp_path):
 
 def test_roundtrip_all_metadata(tmp_path):
     """All metadata properties preserved on roundtrip."""
-    roi = ROI.from_bbox(
+    roi = UserROI.from_bbox(
         0,
         0,
         10,
@@ -205,7 +208,7 @@ def test_single_feature_input(tmp_path):
 
 def test_load_file_geojson(tmp_path):
     """sio.load_file with .geojson returns Labels with ROIs."""
-    rois = [ROI.from_bbox(0, 0, 10, 10)]
+    rois = [UserROI.from_bbox(0, 0, 10, 10)]
     path = tmp_path / "test.geojson"
     write_rois(rois, path)
 
@@ -216,7 +219,7 @@ def test_load_file_geojson(tmp_path):
 
 def test_save_file_geojson(tmp_path):
     """sio.save_file with .geojson writes valid GeoJSON."""
-    labels = Labels(rois=[ROI.from_bbox(0, 0, 10, 10)])
+    labels = Labels(rois=[UserROI.from_bbox(0, 0, 10, 10)])
     path = tmp_path / "test.geojson"
     sio.save_file(labels, str(path))
 
@@ -228,7 +231,7 @@ def test_save_file_geojson(tmp_path):
 
 def test_top_level_load_save(tmp_path):
     """sio.load_geojson and sio.save_geojson work at the top level."""
-    rois = [ROI.from_bbox(5, 5, 15, 15, name="top_level")]
+    rois = [UserROI.from_bbox(5, 5, 15, 15, name="top_level")]
     path = str(tmp_path / "top.geojson")
     sio.save_geojson(rois, path)
 

@@ -9,7 +9,7 @@ import tifffile
 
 from sleap_io.io.tiff import read_label_images, write_label_images
 from sleap_io.model.instance import Track
-from sleap_io.model.label_image import LabelImage
+from sleap_io.model.label_image import LabelImage, UserLabelImage
 
 
 def _make_label_array(h: int = 8, w: int = 8, n_objects: int = 2) -> np.ndarray:
@@ -108,7 +108,7 @@ def test_sidecar_roundtrip(tmp_path):
     track_b = Track(name="cell_017")
 
     data = np.array([[1, 1, 3, 3], [1, 1, 3, 3]], dtype=np.int32)
-    li = LabelImage(
+    li = UserLabelImage(
         data=data,
         objects={
             1: LabelImage.Info(track=track_a, category="neuron"),
@@ -183,7 +183,7 @@ def test_write_stack_roundtrip(tmp_path):
                 track=track_lookup[lid_int],
                 category=cat_lookup[lid_int],
             )
-        label_images.append(LabelImage(data=data, objects=objects, frame_idx=i))
+        label_images.append(UserLabelImage(data=data, objects=objects, frame_idx=i))
 
     tiff_path = tmp_path / "roundtrip.tif"
     write_label_images(tiff_path, label_images, stack=True)
@@ -220,7 +220,7 @@ def test_write_directory_roundtrip(tmp_path):
         for lid in ids:
             lid_int = int(lid)
             objects[lid_int] = LabelImage.Info(track=track_lookup[lid_int])
-        label_images.append(LabelImage(data=data, objects=objects, frame_idx=i))
+        label_images.append(UserLabelImage(data=data, objects=objects, frame_idx=i))
 
     dir_path = tmp_path / "frames_dir"
     write_label_images(dir_path, label_images, stack=False)
@@ -250,7 +250,7 @@ def test_write_directory_roundtrip(tmp_path):
 def test_empty_label_image_roundtrip(tmp_path):
     """Write and read back a LabelImage with all-zero data (no objects)."""
     data = np.zeros((4, 4), dtype=np.int32)
-    li = LabelImage(data=data, frame_idx=0)
+    li = UserLabelImage(data=data, frame_idx=0)
 
     tiff_path = tmp_path / "empty.tif"
     write_label_images(tiff_path, [li])

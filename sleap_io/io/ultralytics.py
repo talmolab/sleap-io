@@ -29,7 +29,7 @@ from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingB
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.roi import ROI
+from sleap_io.model.roi import ROI, UserROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
@@ -890,22 +890,22 @@ def parse_label_file(
 
                     if fmt == "detection_conf":
                         score = float(parts[5])
-                        bbox = PredictedBoundingBox(
-                            x_center=x_center_px,
-                            y_center=y_center_px,
-                            width=w_px,
-                            height=h_px,
+                        bbox = PredictedBoundingBox.from_xywh(
+                            x_center_px - w_px / 2,
+                            y_center_px - h_px / 2,
+                            w_px,
+                            h_px,
                             category=category,
                             video=video,
                             frame_idx=frame_idx,
                             score=score,
                         )
                     else:
-                        bbox = UserBoundingBox(
-                            x_center=x_center_px,
-                            y_center=y_center_px,
-                            width=w_px,
-                            height=h_px,
+                        bbox = UserBoundingBox.from_xywh(
+                            x_center_px - w_px / 2,
+                            y_center_px - h_px / 2,
+                            w_px,
+                            h_px,
                             category=category,
                             video=video,
                             frame_idx=frame_idx,
@@ -921,7 +921,7 @@ def parse_label_file(
                         y_px = coord_values[i + 1] * height_px
                         coords.append((x_px, y_px))
 
-                    roi = ROI.from_polygon(
+                    roi = UserROI.from_polygon(
                         coords,
                         category=category,
                         video=video,

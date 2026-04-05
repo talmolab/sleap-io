@@ -9,10 +9,10 @@ import pytest
 from shapely.geometry import box
 
 import sleap_io as sio
-from sleap_io.model.bbox import BoundingBox
-from sleap_io.model.label_image import LabelImage
-from sleap_io.model.mask import SegmentationMask
-from sleap_io.model.roi import ROI
+from sleap_io.model.bbox import UserBoundingBox
+from sleap_io.model.label_image import PredictedLabelImage, UserLabelImage
+from sleap_io.model.mask import UserSegmentationMask
+from sleap_io.model.roi import UserROI
 from sleap_io.rendering import render_video
 from sleap_io.rendering.core import render_image
 from sleap_io.rendering.overlays import (
@@ -2185,11 +2185,10 @@ class TestTopLevelAPI:
 
 def test_draw_rois_outline():
     """draw_rois should draw ROI outlines on an image."""
-    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    roi = ROI.from_bbox(10, 10, 30, 30)
+    roi = UserROI.from_bbox(10, 10, 30, 30)
     result = draw_rois(img, [roi], color=(0, 255, 0), line_width=1)
 
     # The outline should have green pixels on the boundary
@@ -2200,11 +2199,10 @@ def test_draw_rois_outline():
 
 def test_draw_rois_with_fill():
     """draw_rois with fill_alpha should fill the interior."""
-    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    roi = ROI.from_bbox(10, 10, 30, 30)
+    roi = UserROI.from_bbox(10, 10, 30, 30)
     result = draw_rois(img, [roi], color=(255, 0, 0), fill_alpha=1.0)
 
     # Interior should be filled
@@ -2213,13 +2211,12 @@ def test_draw_rois_with_fill():
 
 def test_draw_masks():
     """draw_masks should draw colored overlays for masks."""
-    from sleap_io.model.mask import SegmentationMask
     from sleap_io.rendering.overlays import draw_masks
 
     img = np.ones((50, 50, 3), dtype=np.uint8) * 100
     mask_data = np.zeros((50, 50), dtype=bool)
     mask_data[10:30, 10:30] = True
-    mask = SegmentationMask.from_numpy(mask_data)
+    mask = UserSegmentationMask.from_numpy(mask_data)
 
     result = draw_masks(img, [mask], color=(255, 0, 0), alpha=0.5)
     assert result is img  # Modified in place
@@ -2242,11 +2239,10 @@ def test_draw_rois_point():
     """draw_rois should draw a marker for Point geometry ROIs."""
     from shapely.geometry import Point
 
-    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    roi = ROI(geometry=Point(50, 50))
+    roi = UserROI(geometry=Point(50, 50))
     result = draw_rois(img, [roi], color=(0, 255, 0), line_width=4)
 
     # The center pixel should be colored
@@ -2260,11 +2256,10 @@ def test_draw_rois_linestring():
     """draw_rois should draw lines for LineString geometry ROIs."""
     from shapely.geometry import LineString
 
-    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    roi = ROI(geometry=LineString([(10, 10), (10, 50)]))
+    roi = UserROI(geometry=LineString([(10, 10), (10, 50)]))
     result = draw_rois(img, [roi], color=(0, 0, 255), line_width=1)
 
     # Pixels along the vertical line should be colored
@@ -2280,12 +2275,11 @@ def test_draw_rois_geometry_collection():
     """draw_rois should recurse into GeometryCollection components."""
     from shapely.geometry import GeometryCollection, LineString, Point
 
-    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import draw_rois
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     geom = GeometryCollection([Point(20, 20), LineString([(60, 60), (60, 80)])])
-    roi = ROI(geometry=geom)
+    roi = UserROI(geometry=geom)
     result = draw_rois(img, [roi], color=(255, 0, 0), line_width=2)
 
     # Point marker should be drawn
@@ -2298,10 +2292,9 @@ def test_draw_rois_geometry_collection():
 
 def test_draw_rois_multi_polygon():
     """draw_rois should draw all polygons in a MultiPolygon."""
-    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import draw_rois
 
-    roi = ROI.from_multi_polygon(
+    roi = UserROI.from_multi_polygon(
         [
             [(10, 10), (20, 10), (20, 20), (10, 20)],
             [(50, 50), (60, 50), (60, 60), (50, 60)],
@@ -2319,11 +2312,10 @@ def test_draw_rois_multi_point():
     """draw_rois should draw markers for all points in a MultiPoint."""
     from shapely.geometry import MultiPoint
 
-    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import draw_rois
 
     geom = MultiPoint([(20, 20), (60, 60)])
-    roi = ROI(geometry=geom)
+    roi = UserROI(geometry=geom)
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     result = draw_rois(img, [roi], color=(0, 255, 0), line_width=2)
 
@@ -2336,11 +2328,10 @@ def test_draw_rois_multi_linestring():
     """draw_rois should draw all lines in a MultiLineString."""
     from shapely.geometry import MultiLineString
 
-    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import draw_rois
 
     geom = MultiLineString([[(10, 10), (10, 30)], [(50, 50), (50, 70)]])
-    roi = ROI(geometry=geom)
+    roi = UserROI(geometry=geom)
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     result = draw_rois(img, [roi], color=(0, 0, 255), line_width=1)
 
@@ -2353,13 +2344,12 @@ def test_draw_rois_polygon_with_hole():
     """draw_rois with fill should respect polygon holes."""
     from shapely.geometry import Polygon
 
-    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import draw_rois
 
     exterior = [(10, 10), (60, 10), (60, 60), (10, 60)]
     hole = [(25, 25), (45, 25), (45, 45), (25, 45)]
     geom = Polygon(exterior, [hole])
-    roi = ROI(geometry=geom)
+    roi = UserROI(geometry=geom)
     img = np.zeros((80, 80, 3), dtype=np.uint8)
     result = draw_rois(img, [roi], color=(255, 0, 0), fill_alpha=1.0)
 
@@ -2376,11 +2366,10 @@ def test_draw_rois_polygon_with_hole():
 
 def test_draw_bboxes_basic():
     """draw_bboxes should draw axis-aligned bbox outlines on an image."""
-    from sleap_io.model.bbox import BoundingBox
     from sleap_io.rendering.overlays import draw_bboxes
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    bbox = BoundingBox.from_xyxy(10, 10, 50, 50)
+    bbox = UserBoundingBox.from_xyxy(10, 10, 50, 50)
     result = draw_bboxes(img, [bbox], color=(0, 255, 0), line_width=1)
 
     # The outline should have green pixels on the boundary
@@ -2396,13 +2385,10 @@ def test_draw_bboxes_rotated():
     """draw_bboxes should draw rotated bboxes using polylines."""
     import math
 
-    from sleap_io.model.bbox import BoundingBox
     from sleap_io.rendering.overlays import draw_bboxes
 
     img = np.zeros((200, 200, 3), dtype=np.uint8)
-    bbox = BoundingBox(
-        x_center=100, y_center=100, width=60, height=40, angle=math.pi / 4
-    )
+    bbox = UserBoundingBox(x1=70, y1=80, x2=130, y2=120, angle=math.pi / 4)
     result = draw_bboxes(img, [bbox], color=(0, 0, 255), line_width=2)
 
     # Some pixels around the center should be drawn (rotated outline)
@@ -2415,11 +2401,10 @@ def test_draw_bboxes_rotated():
 
 def test_draw_bboxes_fill():
     """draw_bboxes with fill_alpha > 0 should fill the bbox interior."""
-    from sleap_io.model.bbox import BoundingBox
     from sleap_io.rendering.overlays import draw_bboxes
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    bbox = BoundingBox.from_xyxy(10, 10, 50, 50)
+    bbox = UserBoundingBox.from_xyxy(10, 10, 50, 50)
     result = draw_bboxes(img, [bbox], color=(255, 0, 0), line_width=1, fill_alpha=1.0)
 
     # Interior should be filled with the color
@@ -2465,8 +2450,8 @@ def test_draw_masks_per_mask_colors():
     mask2_data = np.zeros((50, 50), dtype=bool)
     mask2_data[30:40, 30:40] = True
 
-    mask1 = SegmentationMask.from_numpy(mask1_data)
-    mask2 = SegmentationMask.from_numpy(mask2_data)
+    mask1 = UserSegmentationMask.from_numpy(mask1_data)
+    mask2 = UserSegmentationMask.from_numpy(mask2_data)
 
     result = draw_masks(
         img,
@@ -2608,7 +2593,7 @@ def test_render_image_overlay_masks():
     img = np.ones((50, 50, 3), dtype=np.uint8) * 128
     mask_data = np.zeros((50, 50), dtype=bool)
     mask_data[10:30, 10:30] = True
-    mask = SegmentationMask.from_numpy(mask_data)
+    mask = UserSegmentationMask.from_numpy(mask_data)
 
     result = render_image(image=img, overlay=[mask], overlay_alpha=0.5)
     # Masked region should be modified
@@ -2620,7 +2605,7 @@ def test_render_image_overlay_masks():
 def test_render_image_overlay_rois():
     """render_image with overlay= list of ROI should work."""
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    roi = ROI(geometry=box(20, 20, 60, 60))
+    roi = UserROI(geometry=box(20, 20, 60, 60))
 
     result = render_image(image=img, overlay=[roi], overlay_alpha=0.3)
     # ROI region should have color applied
@@ -2630,7 +2615,7 @@ def test_render_image_overlay_rois():
 def test_render_image_overlay_bboxes():
     """render_image with overlay= list of BoundingBox should work."""
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    bbox = BoundingBox(x_center=50, y_center=50, width=40, height=40)
+    bbox = UserBoundingBox(x1=30, y1=30, x2=70, y2=70)
 
     result = render_image(image=img, overlay=[bbox], overlay_alpha=0.3)
     # BBox region should have color applied
@@ -2661,8 +2646,8 @@ def test_render_image_source_none_requires_image():
 def test_draw_rois_per_roi_colors():
     """draw_rois with per-ROI colors should apply different colors to each ROI."""
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    roi1 = ROI.from_bbox(5, 5, 20, 20)
-    roi2 = ROI.from_bbox(60, 60, 20, 20)
+    roi1 = UserROI.from_bbox(5, 5, 20, 20)
+    roi2 = UserROI.from_bbox(60, 60, 20, 20)
 
     result = draw_rois(
         img,
@@ -2685,8 +2670,8 @@ def test_draw_rois_per_roi_colors():
 def test_draw_bboxes_per_bbox_colors():
     """draw_bboxes with per-bbox colors should apply different colors."""
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    bbox1 = BoundingBox.from_xyxy(5, 5, 25, 25)
-    bbox2 = BoundingBox.from_xyxy(60, 60, 80, 80)
+    bbox1 = UserBoundingBox.from_xyxy(5, 5, 25, 25)
+    bbox2 = UserBoundingBox.from_xyxy(60, 60, 80, 80)
 
     result = draw_bboxes(
         img,
@@ -2874,7 +2859,7 @@ def test_render_video_overlay_list_by_frame_idx():
 
     mask_data = np.zeros((64, 64), dtype=bool)
     mask_data[10:30, 10:30] = True
-    mask = SegmentationMask.from_numpy(mask_data)
+    mask = UserSegmentationMask.from_numpy(mask_data)
     mask.frame_idx = 0  # Only apply to frame 0
 
     frames = render_video(
@@ -2898,7 +2883,7 @@ def test_render_video_overlay_static_objects():
 
     mask_data = np.zeros((64, 64), dtype=bool)
     mask_data[10:30, 10:30] = True
-    mask = SegmentationMask.from_numpy(mask_data)
+    mask = UserSegmentationMask.from_numpy(mask_data)
     # frame_idx defaults to None -> should appear on every frame
 
     frames = render_video(
@@ -3031,7 +3016,7 @@ def test_apply_overlay_label_image():
     label_data = np.zeros((50, 50), dtype=np.int32)
     label_data[10:30, 10:30] = 1
 
-    label_img = LabelImage(data=label_data, frame_idx=0)
+    label_img = UserLabelImage(data=label_data, frame_idx=0)
 
     result = _apply_overlay(img, label_img, alpha=0.5)
 
@@ -3051,7 +3036,7 @@ def test_render_image_overlay_label_image_object():
     label_data[5:25, 5:25] = 1
     label_data[25:45, 25:45] = 2
 
-    label_img = LabelImage(data=label_data, frame_idx=0)
+    label_img = UserLabelImage(data=label_data, frame_idx=0)
 
     result = render_image(image=img, overlay=label_img, overlay_alpha=0.5)
 
@@ -3067,11 +3052,11 @@ def test_render_video_overlay_label_images():
     """render_video with overlay=list[LabelImage] should apply per-frame overlays."""
     labels_obj = _make_synthetic_labels(n_frames=2, h=50, w=50)
 
-    li0 = LabelImage(
+    li0 = UserLabelImage(
         data=np.array(np.pad(np.ones((20, 20), dtype=np.int32), ((10, 20), (10, 20)))),
         frame_idx=0,
     )
-    li1 = LabelImage(
+    li1 = UserLabelImage(
         data=np.array(np.pad(np.full((15, 15), 2, dtype=np.int32), ((30, 5), (30, 5)))),
         frame_idx=1,
     )
@@ -3093,3 +3078,60 @@ def test_render_video_overlay_label_images():
     assert np.all(frames[0][0:5, 0:5, :] == 0)
     # Frame 1: region (30:45, 30:45) should be colored
     assert not np.all(frames[1][30:45, 30:45] == 0)
+
+
+def test_render_video_crop_with_user_label_image_overlay():
+    """render_video with crop + UserLabelImage overlay should crop the label image."""
+    labels_obj = _make_synthetic_labels(n_frames=1, h=50, w=50)
+
+    label_data = np.zeros((50, 50), dtype=np.int32)
+    label_data[20:40, 20:40] = 1
+    li = UserLabelImage(data=label_data, frame_idx=0)
+
+    frames = render_video(
+        labels_obj,
+        save_path=None,
+        background="black",
+        overlay=[li],
+        overlay_alpha=0.5,
+        crop=(10, 10, 40, 40),
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # Cropped to (10,10)-(40,40) -> 30x30
+    assert frames[0].shape == (30, 30, 3)
+    # Label region (20:40, 20:40) maps to (10:30, 10:30) in cropped coords
+    assert not np.all(frames[0][10:30, 10:30] == 0)
+
+
+def test_render_video_crop_with_predicted_label_image_overlay():
+    """render_video with crop + PredictedLabelImage overlay should preserve score."""
+    labels_obj = _make_synthetic_labels(n_frames=1, h=50, w=50)
+
+    label_data = np.zeros((50, 50), dtype=np.int32)
+    label_data[20:40, 20:40] = 1
+    li = PredictedLabelImage(
+        data=label_data,
+        frame_idx=0,
+        score=0.9,
+        score_map=np.ones((50, 50), dtype=np.float32) * 0.8,
+    )
+
+    frames = render_video(
+        labels_obj,
+        save_path=None,
+        background="black",
+        overlay=[li],
+        overlay_alpha=0.5,
+        crop=(10, 10, 40, 40),
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # Cropped to (10,10)-(40,40) -> 30x30
+    assert frames[0].shape == (30, 30, 3)
+    # Label region (20:40, 20:40) maps to (10:30, 10:30) in cropped coords
+    assert not np.all(frames[0][10:30, 10:30] == 0)

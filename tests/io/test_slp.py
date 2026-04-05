@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import shutil
 import sys
+import zlib
 from pathlib import Path
 from unittest import mock
 
 import h5py
 import numpy as np
 import pytest
+import shapely
 import simplejson as json
 
 from sleap_io import (
@@ -85,9 +87,12 @@ from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance3D, PredictedInstance3D
-from sleap_io.model.label_image import LabelImage
-from sleap_io.model.mask import SegmentationMask
-from sleap_io.model.roi import ROI
+from sleap_io.model.label_image import LabelImage, PredictedLabelImage, UserLabelImage
+from sleap_io.model.mask import (
+    PredictedSegmentationMask,
+    UserSegmentationMask,
+)
+from sleap_io.model.roi import PredictedROI, UserROI
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
@@ -4274,8 +4279,8 @@ def test_slp_roi_roundtrip(tmp_path):
     """Test SLP round-trip with ROIs."""
     video = Video(filename="test.mp4")
     track = Track(name="animal1")
-    roi1 = ROI.from_bbox(10, 20, 30, 40, video=video, name="bbox1", category="cat")
-    roi2 = ROI.from_polygon(
+    roi1 = UserROI.from_bbox(10, 20, 30, 40, video=video, name="bbox1", category="cat")
+    roi2 = UserROI.from_polygon(
         [(0, 0), (100, 0), (50, 100)],
         video=video,
         frame_idx=5,
@@ -4322,7 +4327,7 @@ def test_slp_mask_roundtrip(tmp_path):
     mask_data = np.zeros((20, 30), dtype=bool)
     mask_data[5:15, 10:25] = True
 
-    mask = SegmentationMask.from_numpy(
+    mask = UserSegmentationMask.from_numpy(
         mask_data,
         video=video,
         frame_idx=3,
@@ -4375,10 +4380,12 @@ def test_slp_lazy_roi_roundtrip(tmp_path):
     """Test lazy loading round-trip preserves ROIs and masks."""
     video = Video(filename="test.mp4")
     # Use a non-rectangular polygon so it isn't migrated to BoundingBox
-    roi = ROI.from_polygon([(0, 0), (100, 0), (50, 100)], video=video, name="triangle")
+    roi = UserROI.from_polygon(
+        [(0, 0), (100, 0), (50, 100)], video=video, name="triangle"
+    )
     mask_data = np.zeros((10, 10), dtype=bool)
     mask_data[2:8, 3:7] = True
-    mask = SegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+    mask = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
 
     skeleton = Skeleton(nodes=["A"])
     labels = Labels(videos=[video], skeletons=[skeleton], rois=[roi], masks=[mask])
@@ -4496,7 +4503,7 @@ def test_roi_instance_serialization(tmp_path):
     )
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
 
-    roi = ROI(
+    roi = UserROI(
         geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
         frame_idx=0,
@@ -4527,7 +4534,7 @@ def test_roi_instance_lazy_roundtrip(tmp_path):
         skeleton=skeleton,
     )
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
-    roi = ROI(
+    roi = UserROI(
         geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
         frame_idx=0,
@@ -4565,7 +4572,7 @@ def test_roi_instance_lazy_materialize(tmp_path):
         skeleton=skeleton,
     )
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
-    roi = ROI(
+    roi = UserROI(
         geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
         frame_idx=0,
@@ -4592,10 +4599,10 @@ def test_slp_bbox_roundtrip(tmp_path):
     video = Video(filename="test.mp4")
     track = Track(name="animal1")
     bbox1 = UserBoundingBox(
-        x_center=50.0,
-        y_center=60.0,
-        width=100.0,
-        height=80.0,
+        x1=0.0,
+        y1=20.0,
+        x2=100.0,
+        y2=100.0,
         video=video,
         frame_idx=0,
         name="bbox1",
@@ -4603,10 +4610,10 @@ def test_slp_bbox_roundtrip(tmp_path):
         source="manual",
     )
     bbox2 = UserBoundingBox(
-        x_center=200.0,
-        y_center=150.0,
-        width=50.0,
-        height=30.0,
+        x1=175.0,
+        y1=135.0,
+        x2=225.0,
+        y2=165.0,
         angle=0.5,
         video=video,
         frame_idx=3,
@@ -4673,19 +4680,19 @@ def test_slp_predicted_bbox_roundtrip(tmp_path):
     """Test SLP round-trip with PredictedBoundingBox including score."""
     video = Video(filename="test.mp4")
     user_bbox = UserBoundingBox(
-        x_center=10.0,
-        y_center=20.0,
-        width=30.0,
-        height=40.0,
+        x1=-5.0,
+        y1=0.0,
+        x2=25.0,
+        y2=40.0,
         video=video,
         frame_idx=0,
         category="cat",
     )
     pred_bbox = PredictedBoundingBox(
-        x_center=100.0,
-        y_center=200.0,
-        width=50.0,
-        height=60.0,
+        x1=75.0,
+        y1=170.0,
+        x2=125.0,
+        y2=230.0,
         video=video,
         frame_idx=1,
         category="dog",
@@ -4727,7 +4734,7 @@ def test_slp_bbox_migration(tmp_path):
     track = Track(name="animal1")
 
     # Create ROIs: one bbox-shaped, one non-bbox polygon
-    roi_bbox = ROI.from_bbox(
+    roi_bbox = UserROI.from_bbox(
         10,
         20,
         100,
@@ -4738,7 +4745,7 @@ def test_slp_bbox_migration(tmp_path):
         name="bbox_roi",
         category="mouse",
     )
-    roi_polygon = ROI.from_polygon(
+    roi_polygon = UserROI.from_polygon(
         [(0, 0), (100, 0), (50, 100)],
         video=video,
         frame_idx=1,
@@ -4786,20 +4793,20 @@ def test_slp_bbox_lazy_roundtrip(tmp_path):
     """Test lazy load and save with bounding boxes."""
     video = Video(filename="test.mp4")
     bbox = UserBoundingBox(
-        x_center=50.0,
-        y_center=60.0,
-        width=100.0,
-        height=80.0,
+        x1=0.0,
+        y1=20.0,
+        x2=100.0,
+        y2=100.0,
         video=video,
         frame_idx=0,
         name="lazy_bbox",
         category="mouse",
     )
     pred_bbox = PredictedBoundingBox(
-        x_center=150.0,
-        y_center=160.0,
-        width=40.0,
-        height=50.0,
+        x1=130.0,
+        y1=135.0,
+        x2=170.0,
+        y2=185.0,
         video=video,
         frame_idx=1,
         category="fly",
@@ -4846,13 +4853,13 @@ def test_slp_bbox_lazy_roundtrip(tmp_path):
 
 
 def test_slp_format_id_1_7(tmp_path):
-    """Test that files with bboxes get format_id 1.7."""
+    """Test that files with bboxes get format_id 2.0 (columnar bbox storage)."""
     video = Video(filename="test.mp4")
     bbox = UserBoundingBox(
-        x_center=50.0,
-        y_center=60.0,
-        width=100.0,
-        height=80.0,
+        x1=0.0,
+        y1=20.0,
+        x2=100.0,
+        y2=100.0,
         video=video,
     )
 
@@ -4867,7 +4874,7 @@ def test_slp_format_id_1_7(tmp_path):
     save_slp(labels, path)
 
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
-    assert format_id == 1.7
+    assert format_id == 2.0
 
     # Verify that without bboxes, format_id is lower
     labels_no_bbox = Labels(videos=[video], skeletons=[skeleton])
@@ -4889,7 +4896,7 @@ def test_label_image_slp_roundtrip(tmp_path):
     data[1:3, 2:5] = 1  # object 1
     data[5:7, 6:9] = 2  # object 2
 
-    li = LabelImage(
+    li = UserLabelImage(
         data=data,
         objects={
             1: LabelImage.Info(track=t1, category="neuron", name="n1"),
@@ -4961,7 +4968,7 @@ def test_label_image_slp_format_version(tmp_path):
     data = np.zeros((4, 4), dtype=np.int32)
     data[0:2, 0:2] = 1
 
-    li = LabelImage(data=data, video=video, frame_idx=0)
+    li = UserLabelImage(data=data, video=video, frame_idx=0)
 
     skeleton = Skeleton(nodes=["A"])
     labels = Labels(
@@ -4985,7 +4992,7 @@ def test_label_image_slp_lazy(tmp_path):
     data = np.zeros((6, 6), dtype=np.int32)
     data[1:4, 1:4] = 1
 
-    li = LabelImage(
+    li = UserLabelImage(
         data=data,
         objects={1: LabelImage.Info(track=t1, category="cell")},
         video=video,
@@ -5877,3 +5884,501 @@ def test_instance_group_to_dict_warns_on_unknown_identity(camera_group_345):
         )
 
     assert "identity_idx" not in result
+
+
+# -- Predicted variant round-trip tests --
+
+
+def test_slp_mask_instance_roundtrip(tmp_path):
+    """Mask instance associations survive save/reload."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    inst = Instance.from_numpy([[10, 20]], skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+
+    mask = UserSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool),
+        video=video,
+        frame_idx=0,
+        instance=inst,
+        category="cell",
+    )
+
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        masks=[mask],
+    )
+
+    path = str(tmp_path / "mask_inst.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 1
+    rm = loaded.masks[0]
+    assert rm.instance is not None
+    assert rm.category == "cell"
+    assert isinstance(rm, UserSegmentationMask)
+
+
+def test_slp_predicted_mask_roundtrip(tmp_path):
+    """PredictedSegmentationMask round-trips with score."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    mask = PredictedSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool),
+        video=video,
+        frame_idx=0,
+        category="cell",
+        score=0.95,
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        masks=[mask],
+    )
+
+    path = str(tmp_path / "pred_mask.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 1
+    rm = loaded.masks[0]
+    assert isinstance(rm, PredictedSegmentationMask)
+    assert rm.score == pytest.approx(0.95, abs=1e-5)
+    assert rm.category == "cell"
+    np.testing.assert_array_equal(rm.data, np.ones((5, 5), dtype=bool))
+
+    # Verify format_id bumped to 1.9
+    format_id = read_hdf5_attrs(path, "metadata", "format_id")
+    assert format_id == 1.9
+
+
+def test_slp_predicted_mask_score_map_roundtrip(tmp_path):
+    """PredictedSegmentationMask with score_map survives round-trip."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    score_map = np.random.rand(8, 8).astype(np.float32)
+    mask = PredictedSegmentationMask.from_numpy(
+        np.ones((8, 8), dtype=bool),
+        video=video,
+        frame_idx=0,
+        score=0.9,
+        score_map=score_map,
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        masks=[mask],
+    )
+
+    path = str(tmp_path / "pred_mask_sm.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    rm = loaded.masks[0]
+    assert isinstance(rm, PredictedSegmentationMask)
+    assert rm.score_map is not None
+    np.testing.assert_allclose(rm.score_map, score_map, atol=1e-6)
+
+
+def test_slp_predicted_roi_roundtrip(tmp_path):
+    """PredictedROI round-trips with score."""
+    from shapely.geometry import box
+
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    roi = PredictedROI(
+        geometry=box(0, 0, 10, 10),
+        video=video,
+        frame_idx=0,
+        category="arena",
+        score=0.85,
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        rois=[roi],
+    )
+
+    path = str(tmp_path / "pred_roi.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.rois) == 1
+    rr = loaded.rois[0]
+    assert isinstance(rr, PredictedROI)
+    assert rr.score == pytest.approx(0.85, abs=1e-5)
+    assert rr.category == "arena"
+
+
+def test_slp_user_roi_roundtrip(tmp_path):
+    """UserROI round-trips preserving type."""
+    from shapely.geometry import Polygon
+
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    # Use a non-rectangular polygon so it doesn't get migrated to BoundingBox
+    roi = UserROI(
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (5, 15), (0, 10)]),
+        video=video,
+        frame_idx=0,
+        category="arena",
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        rois=[roi],
+    )
+
+    path = str(tmp_path / "user_roi.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.rois) == 1
+    rr = loaded.rois[0]
+    assert isinstance(rr, UserROI)
+    assert not rr.is_predicted
+
+
+def test_slp_predicted_label_image_roundtrip(tmp_path):
+    """PredictedLabelImage round-trips with scores."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    t1 = Track(name="t1")
+
+    data = np.zeros((6, 6), dtype=np.int32)
+    data[1:4, 1:4] = 1
+
+    li = PredictedLabelImage(
+        data=data,
+        objects={
+            1: LabelImage.Info(track=t1, category="neuron", score=0.92),
+        },
+        video=video,
+        frame_idx=0,
+        score=0.88,
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[t1],
+        label_images=[li],
+    )
+
+    path = str(tmp_path / "pred_li.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.label_images) == 1
+    rli = loaded.label_images[0]
+    assert isinstance(rli, PredictedLabelImage)
+    assert rli.score == pytest.approx(0.88, abs=1e-5)
+    assert rli.objects[1].score == pytest.approx(0.92, abs=1e-5)
+    assert rli.objects[1].category == "neuron"
+    np.testing.assert_array_equal(rli.data, data)
+
+
+def test_slp_backward_compat_no_predicted_fields(tmp_path):
+    """Files with pre-v1.9 dtypes (no is_predicted column) read as base classes."""
+    import json
+
+    from sleap_io.model.mask import _encode_rle
+
+    # Write a minimal SLP file with old-style mask dtype (no is_predicted/instance)
+    path = str(tmp_path / "old_format.slp")
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    labels = Labels(videos=[video], skeletons=[skeleton])
+    save_slp(labels, path)
+
+    # Manually add a mask dataset using the pre-v1.9 dtype
+    old_mask_dtype = np.dtype(
+        [
+            ("height", "u4"),
+            ("width", "u4"),
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("rle_start", "u8"),
+            ("rle_end", "u8"),
+        ]
+    )
+    rle = _encode_rle(np.ones((5, 5), dtype=bool))
+    rle_bytes = rle.astype(np.uint32).tobytes()
+    rle_flat = np.frombuffer(rle_bytes, dtype=np.uint8)
+
+    mask_row = np.array(
+        [(5, 5, 0, 0, 0, -1, float("nan"), 0, len(rle_flat))],
+        dtype=old_mask_dtype,
+    )
+
+    with h5py.File(path, "a") as f:
+        ds = f.create_dataset("masks", data=mask_row, dtype=old_mask_dtype)
+        ds.attrs["categories"] = json.dumps(["cell"])
+        ds.attrs["names"] = json.dumps([""])
+        ds.attrs["sources"] = json.dumps([""])
+        f.create_dataset("mask_rle", data=rle_flat, dtype=np.uint8)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 1
+    rm = loaded.masks[0]
+    # Pre-v1.9 files should read as UserSegmentationMask (default, not Predicted)
+    assert type(rm) is UserSegmentationMask
+    assert rm.category == "cell"
+    np.testing.assert_array_equal(rm.data, np.ones((5, 5), dtype=bool))
+
+
+def test_slp_all_annotations_roundtrip(labels_all_annotations, tmp_path):
+    """Round-trip all annotation types through SLP and verify data integrity."""
+    labels = labels_all_annotations
+    path = tmp_path / "all_annotations.slp"
+
+    # Save and reload
+    save_slp(labels, str(path))
+    loaded = load_slp(str(path), open_videos=False)
+
+    # --- Annotation counts ---
+    assert len(loaded.masks) == 6
+    assert len(loaded.rois) == 6
+    assert len(loaded.bboxes) == 6
+    assert len(loaded.label_images) == 6
+
+    # --- Type preservation ---
+    user_masks = [m for m in loaded.masks if type(m) is UserSegmentationMask]
+    pred_masks = [m for m in loaded.masks if type(m) is PredictedSegmentationMask]
+    assert len(user_masks) == 3
+    assert len(pred_masks) == 3
+
+    user_rois = [r for r in loaded.rois if type(r) is UserROI]
+    pred_rois = [r for r in loaded.rois if type(r) is PredictedROI]
+    assert len(user_rois) == 3
+    assert len(pred_rois) == 3
+
+    user_bboxes = [b for b in loaded.bboxes if type(b) is UserBoundingBox]
+    pred_bboxes = [b for b in loaded.bboxes if type(b) is PredictedBoundingBox]
+    assert len(user_bboxes) == 3
+    assert len(pred_bboxes) == 3
+
+    user_lis = [li for li in loaded.label_images if type(li) is UserLabelImage]
+    pred_lis = [li for li in loaded.label_images if type(li) is PredictedLabelImage]
+    assert len(user_lis) == 3
+    assert len(pred_lis) == 3
+
+    # --- Predicted scores ---
+    for pm in pred_masks:
+        assert pm.score == pytest.approx(0.92)
+    for pr in pred_rois:
+        assert pr.score == pytest.approx(0.88)
+    for pb in pred_bboxes:
+        assert pb.score == pytest.approx(0.97)
+    for pli in pred_lis:
+        assert pli.score == pytest.approx(0.88)
+
+    # --- Metadata: name, category, source preserved ---
+    for orig, reloaded in zip(labels.masks, loaded.masks):
+        assert reloaded.name == orig.name
+        assert reloaded.category == orig.category
+        assert reloaded.source == orig.source
+
+    for orig, reloaded in zip(labels.rois, loaded.rois):
+        assert reloaded.name == orig.name
+        assert reloaded.category == orig.category
+        assert reloaded.source == orig.source
+
+    for orig, reloaded in zip(labels.bboxes, loaded.bboxes):
+        assert reloaded.name == orig.name
+        assert reloaded.category == orig.category
+        assert reloaded.source == orig.source
+
+    for orig, reloaded in zip(labels.label_images, loaded.label_images):
+        assert reloaded.source == orig.source
+
+    # --- Instance links restored ---
+    for lf in loaded.labeled_frames:
+        frame_masks = [m for m in loaded.masks if m.frame_idx == lf.frame_idx]
+        for m in frame_masks:
+            assert m.instance is not None
+            assert m.instance in lf.instances
+
+        frame_rois = [r for r in loaded.rois if r.frame_idx == lf.frame_idx]
+        for r in frame_rois:
+            assert r.instance is not None
+            assert r.instance in lf.instances
+
+        frame_bboxes = [b for b in loaded.bboxes if b.frame_idx == lf.frame_idx]
+        for b in frame_bboxes:
+            assert b.instance is not None
+            assert b.instance in lf.instances
+
+    # --- Track links restored ---
+    track_names = {t.name for t in loaded.tracks}
+    assert "fly_0" in track_names
+    assert "fly_1" in track_names
+
+    for m in loaded.masks:
+        assert m.track is not None
+        assert m.track.name in track_names
+
+    for r in loaded.rois:
+        assert r.track is not None
+        assert r.track.name in track_names
+
+    for b in loaded.bboxes:
+        assert b.track is not None
+        assert b.track.name in track_names
+
+    # --- Mask pixel data round-trips exactly ---
+    for orig, reloaded in zip(labels.masks, loaded.masks):
+        assert np.array_equal(orig.data, reloaded.data)
+
+    # --- Label image pixel data round-trips exactly ---
+    for orig, reloaded in zip(labels.label_images, loaded.label_images):
+        assert np.array_equal(orig.data, reloaded.data)
+
+    # --- Score maps round-trip closely ---
+    for orig_m, reloaded_m in zip(labels.masks, loaded.masks):
+        if isinstance(orig_m, PredictedSegmentationMask):
+            assert reloaded_m.score_map is not None
+            assert np.allclose(orig_m.score_map, reloaded_m.score_map, atol=1e-5)
+
+    for orig_li, reloaded_li in zip(labels.label_images, loaded.label_images):
+        if isinstance(orig_li, PredictedLabelImage):
+            assert reloaded_li.score_map is not None
+            assert np.allclose(orig_li.score_map, reloaded_li.score_map, atol=1e-5)
+
+    # --- Bounding box coordinates match ---
+    for orig, reloaded in zip(labels.bboxes, loaded.bboxes):
+        assert reloaded.x1 == pytest.approx(orig.x1)
+        assert reloaded.y1 == pytest.approx(orig.y1)
+        assert reloaded.x2 == pytest.approx(orig.x2)
+        assert reloaded.y2 == pytest.approx(orig.y2)
+
+
+def test_slp_backward_compat_roi_json_attrs(tmp_path):
+    """ROIs written with pre-v1.9 format (metadata in JSON attrs) can still be read."""
+    path = str(tmp_path / "old_roi.slp")
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    labels = Labels(videos=[video], skeletons=[skeleton])
+    save_slp(labels, path)
+
+    # Old dtype without is_predicted column
+    old_roi_dtype = np.dtype(
+        [
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("wkb_start", "u8"),
+            ("wkb_end", "u8"),
+            ("instance", "i4"),
+        ]
+    )
+
+    # Create a non-rectangular polygon (circle) so it won't be migrated to bboxes
+    circle = shapely.Point(30, 40).buffer(15)
+    wkb_bytes = shapely.to_wkb(circle)
+    wkb_flat = np.frombuffer(wkb_bytes, dtype=np.uint8)
+
+    roi_row = np.array(
+        [(0, 0, -1, -1, float("nan"), 0, len(wkb_flat), -1)],
+        dtype=old_roi_dtype,
+    )
+
+    with h5py.File(path, "a") as f:
+        ds = f.create_dataset("rois", data=roi_row, dtype=old_roi_dtype)
+        ds.attrs["categories"] = json.dumps(["arena"])
+        ds.attrs["names"] = json.dumps(["test_roi"])
+        ds.attrs["sources"] = json.dumps(["manual"])
+        f.create_dataset("roi_wkb", data=wkb_flat, dtype=np.uint8)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.rois) == 1
+    roi = loaded.rois[0]
+    # No is_predicted column → defaults to UserROI
+    assert type(roi) is UserROI
+    assert roi.category == "arena"
+    assert roi.name == "test_roi"
+    assert roi.source == "manual"
+    assert roi.geometry.bounds == circle.bounds
+
+
+def test_slp_backward_compat_label_image_json_attrs(tmp_path):
+    """Label images with pre-v1.9 format (metadata in JSON attrs) can still be read."""
+    path = str(tmp_path / "old_li.slp")
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    labels = Labels(videos=[video], skeletons=[skeleton])
+    save_slp(labels, path)
+
+    # Old label_images dtype without is_predicted or score columns
+    old_li_dtype = np.dtype(
+        [
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("height", "u4"),
+            ("width", "u4"),
+            ("n_objects", "u4"),
+            ("objects_start", "u4"),
+            ("data_start", "u8"),
+            ("data_end", "u8"),
+        ]
+    )
+
+    # Create a small 4x4 label image with label ID 1 in the top-left quadrant
+    data = np.zeros((4, 4), dtype=np.int32)
+    data[:2, :2] = 1
+    compressed = zlib.compress(data.tobytes())
+    pixel_flat = np.frombuffer(compressed, dtype=np.uint8)
+
+    li_row = np.array(
+        [(0, 0, 4, 4, 1, 0, 0, len(pixel_flat))],
+        dtype=old_li_dtype,
+    )
+
+    # Old objects dtype without score column
+    old_obj_dtype = np.dtype(
+        [
+            ("label_id", "i4"),
+            ("track", "i4"),
+            ("instance", "i4"),
+        ]
+    )
+    obj_row = np.array([(1, -1, -1)], dtype=old_obj_dtype)
+
+    with h5py.File(path, "a") as f:
+        li_ds = f.create_dataset("label_images", data=li_row, dtype=old_li_dtype)
+        li_ds.attrs["sources"] = json.dumps(["manual"])
+        f.create_dataset("label_image_data", data=pixel_flat, dtype=np.uint8)
+        obj_ds = f.create_dataset(
+            "label_image_objects", data=obj_row, dtype=old_obj_dtype
+        )
+        obj_ds.attrs["categories"] = json.dumps(["cell"])
+        obj_ds.attrs["names"] = json.dumps(["obj1"])
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.label_images) == 1
+    li = loaded.label_images[0]
+    # No is_predicted column → defaults to UserLabelImage
+    assert type(li) is UserLabelImage
+    assert li.source == "manual"
+    assert li.objects[1].category == "cell"
+    assert li.objects[1].name == "obj1"
+    np.testing.assert_array_equal(li.data, data)

@@ -297,6 +297,11 @@ class Labels:
                 new_mask.video = video_map.get(id(mask.video), new_mask.video)
             if mask.track is not None:
                 new_mask.track = track_map.get(id(mask.track), new_mask.track)
+            # Resolve deferred instance link from _instance_idx
+            idx = new_mask._instance_idx
+            if new_mask.instance is None and 0 <= idx < len(all_instances):
+                new_mask.instance = all_instances[idx]
+                new_mask._instance_idx = -1
             new_masks.append(new_mask)
 
         # Deep copy bboxes, relinking videos, tracks, and instances
@@ -314,6 +319,29 @@ class Labels:
                 new_bbox._instance_idx = -1
             new_bboxes.append(new_bbox)
 
+        # Build instance identity set for relinking label image objects
+        instance_set = {id(inst): inst for inst in all_instances}
+
+        # Deep copy label images, relinking videos, tracks, and instances
+        new_label_images = []
+        for li in self.label_images:
+            new_li = deepcopy(li)
+            if li.video is not None:
+                new_li.video = video_map.get(id(li.video), new_li.video)
+            # Use ORIGINAL li.objects for id lookup, set on deepcopy
+            for label_id, orig_info in li.objects.items():
+                if label_id in new_li.objects:
+                    if orig_info.track is not None:
+                        new_li.objects[label_id].track = track_map.get(
+                            id(orig_info.track), new_li.objects[label_id].track
+                        )
+                    if orig_info.instance is not None:
+                        new_li.objects[label_id].instance = instance_set.get(
+                            id(orig_info.instance),
+                            new_li.objects[label_id].instance,
+                        )
+            new_label_images.append(new_li)
+
         return Labels(
             labeled_frames=labeled_frames,
             videos=new_videos,
@@ -324,7 +352,7 @@ class Labels:
             rois=new_rois,
             masks=new_masks,
             bboxes=new_bboxes,
-            # _lazy_store is None (not lazy)
+            label_images=new_label_images,
         )
 
     def __attrs_post_init__(self):
@@ -490,6 +518,7 @@ class Labels:
                 rois=[deepcopy(r) for r in self.rois],
                 masks=[deepcopy(m) for m in self.masks],
                 bboxes=[deepcopy(b) for b in self.bboxes],
+                label_images=[deepcopy(li) for li in self.label_images],
                 lazy_store=new_store,
             )
         else:
@@ -1232,6 +1261,7 @@ class Labels:
         category: str | None = None,
         track: "Track | None" = None,
         instance: "Instance | None" = None,
+        predicted: bool | None = None,
     ) -> list["ROI"]:
         """Query ROIs by video, frame, category, track, or instance.
 
@@ -1246,6 +1276,8 @@ class Labels:
                 comparison).
             instance: If specified, only return ROIs for this instance (identity
                 comparison).
+            predicted: If ``True``, only return predicted ROIs. If ``False``,
+                only return user ROIs. If ``None`` (default), return both.
 
         Returns:
             A list of matching ROIs.
@@ -1261,6 +1293,8 @@ class Labels:
             results = [r for r in results if r.track is track]
         if instance is not None:
             results = [r for r in results if r.instance is instance]
+        if predicted is not None:
+            results = [r for r in results if r.is_predicted == predicted]
         return results
 
     def get_masks(
@@ -1270,6 +1304,7 @@ class Labels:
         category: str | None = None,
         track: "Track | None" = None,
         instance: "Instance | None" = None,
+        predicted: bool | None = None,
     ) -> list["SegmentationMask"]:
         """Query segmentation masks by video, frame, category, track, or instance.
 
@@ -1284,6 +1319,8 @@ class Labels:
                 comparison).
             instance: If specified, only return masks for this instance
                 (identity comparison).
+            predicted: If ``True``, only return predicted masks. If ``False``,
+                only return user masks. If ``None`` (default), return both.
 
         Returns:
             A list of matching segmentation masks.
@@ -1299,6 +1336,8 @@ class Labels:
             results = [r for r in results if r.track is track]
         if instance is not None:
             results = [r for r in results if r.instance is instance]
+        if predicted is not None:
+            results = [r for r in results if r.is_predicted == predicted]
         return results
 
     def get_bboxes(
@@ -1355,6 +1394,7 @@ class Labels:
         frame_idx: int | None = None,
         track: "Track | None" = None,
         category: str | None = None,
+        predicted: bool | None = None,
     ) -> list["LabelImage"]:
         """Query label images by video, frame, track, or category.
 
@@ -1373,6 +1413,9 @@ class Labels:
                 in their objects metadata (identity comparison).
             category: If specified, only return label images containing an
                 object with this category.
+            predicted: If ``True``, only return predicted label images. If
+                ``False``, only return user label images. If ``None``
+                (default), return both.
 
         Returns:
             A list of matching label images.
@@ -1394,6 +1437,8 @@ class Labels:
                 for li in results
                 if any(info.category == category for info in li.objects.values())
             ]
+        if predicted is not None:
+            results = [li for li in results if li.is_predicted == predicted]
         return results
 
     def rename_nodes(

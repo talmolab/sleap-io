@@ -3,7 +3,13 @@
 import pytest
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 
-from sleap_io.model.roi import ROI, AnnotationType, _rasterize_geometry
+from sleap_io.model.roi import (
+    ROI,
+    AnnotationType,
+    PredictedROI,
+    UserROI,
+    _rasterize_geometry,
+)
 from sleap_io.model.video import Video
 
 
@@ -16,74 +22,80 @@ def test_annotation_type_enum():
     assert AnnotationType.ANCHOR == 4
 
 
+def test_roi_abstract():
+    """ROI cannot be instantiated directly; use UserROI or PredictedROI."""
+    with pytest.raises(TypeError, match="ROI is abstract"):
+        ROI(geometry=box(0, 0, 5, 5))
+
+
 def test_roi_identity_equality():
-    roi1 = ROI(geometry=box(0, 0, 10, 10))
-    roi2 = ROI(geometry=box(0, 0, 10, 10))
+    roi1 = UserROI(geometry=box(0, 0, 10, 10))
+    roi2 = UserROI(geometry=box(0, 0, 10, 10))
     assert roi1 is not roi2
     assert roi1 != roi2  # Identity equality via eq=False
 
 
 def test_roi_from_bbox():
-    roi = ROI.from_bbox(10, 20, 30, 40)
+    roi = UserROI.from_bbox(10, 20, 30, 40)
     assert roi.bounds == (10.0, 20.0, 40.0, 60.0)
     assert roi.area == pytest.approx(30.0 * 40.0)
 
 
 def test_roi_from_xyxy():
-    roi = ROI.from_xyxy(10, 20, 40, 60)
+    roi = UserROI.from_xyxy(10, 20, 40, 60)
     assert roi.bounds == (10.0, 20.0, 40.0, 60.0)
     assert roi.area == pytest.approx(30.0 * 40.0)
 
 
 def test_roi_from_polygon():
     coords = [(0, 0), (10, 0), (10, 10), (0, 10)]
-    roi = ROI.from_polygon(coords)
+    roi = UserROI.from_polygon(coords)
     assert roi.area == pytest.approx(100.0)
 
 
 def test_roi_from_polygon_with_kwargs():
     coords = [(0, 0), (10, 0), (10, 10), (0, 10)]
-    roi = ROI.from_polygon(coords, name="test", category="cat1")
+    roi = UserROI.from_polygon(coords, name="test", category="cat1")
     assert roi.name == "test"
     assert roi.category == "cat1"
 
 
 def test_roi_is_static():
-    roi1 = ROI(geometry=box(0, 0, 10, 10))
+    roi1 = UserROI(geometry=box(0, 0, 10, 10))
     assert roi1.is_static
 
-    roi2 = ROI(geometry=box(0, 0, 10, 10), frame_idx=5)
+    roi2 = UserROI(geometry=box(0, 0, 10, 10), frame_idx=5)
     assert not roi2.is_static
 
 
 def test_roi_is_bbox():
     # Rectangle aligned to axes
-    roi = ROI.from_bbox(0, 0, 10, 20)
+    roi = UserROI.from_bbox(0, 0, 10, 20)
     assert roi.is_bbox
 
     # Non-rectangular polygon
-    roi2 = ROI.from_polygon([(0, 0), (10, 0), (5, 10)])
+    roi2 = UserROI.from_polygon([(0, 0), (10, 0), (5, 10)])
     assert not roi2.is_bbox
 
     # Non-polygon geometry
-    roi3 = ROI(geometry=Point(0, 0))
+    roi3 = UserROI(geometry=Point(0, 0))
     assert not roi3.is_bbox
 
 
 def test_roi_bounds():
-    roi = ROI.from_bbox(5, 10, 20, 30)
+    roi = UserROI.from_bbox(5, 10, 20, 30)
     assert roi.bounds == (5.0, 10.0, 25.0, 40.0)
 
 
 def test_roi_centroid():
-    roi = ROI.from_bbox(0, 0, 10, 10)
+    roi = UserROI.from_bbox(0, 0, 10, 10)
     cx, cy = roi.centroid
     assert cx == pytest.approx(5.0)
     assert cy == pytest.approx(5.0)
 
 
 def test_roi_to_mask():
-    roi = ROI.from_bbox(2, 3, 4, 5, name="test_roi", category="cat")
+    roi = UserROI.from_bbox(2, 3, 4, 5, name="test_roi", category="cat")
     mask = roi.to_mask(height=20, width=20)
 
     assert mask.height == 20
@@ -100,7 +112,7 @@ def test_roi_to_mask():
 
 def test_roi_with_video():
     video = Video(filename="test.mp4")
-    roi = ROI.from_bbox(0, 0, 10, 10, video=video, frame_idx=5)
+    roi = UserROI.from_bbox(0, 0, 10, 10, video=video, frame_idx=5)
     assert roi.video is video
     assert roi.frame_idx == 5
 
@@ -116,7 +128,7 @@ def test_roi_is_bbox_rotated_rectangle():
     """A rotated (non-axis-aligned) rectangle should not be considered a bbox."""
     # Diamond shape: 4 edges, all diagonal (both dx and dy are non-zero)
     coords = [(5, 0), (10, 5), (5, 10), (0, 5)]
-    roi = ROI.from_polygon(coords)
+    roi = UserROI.from_polygon(coords)
     # It has 5 coords (closed ring) but edges are diagonal
     assert not roi.is_bbox
 
@@ -151,22 +163,22 @@ def test_rasterize_geometry_polygon():
 def test_roi_geometry_validation():
     """Creating ROI with invalid geometry should raise TypeError."""
     with pytest.raises(TypeError, match="geometry must be a Shapely BaseGeometry"):
-        ROI(geometry="not a geometry")
+        UserROI(geometry="not a geometry")
     with pytest.raises(TypeError, match="geometry must be a Shapely BaseGeometry"):
-        ROI(geometry=42)
+        UserROI(geometry=42)
     with pytest.raises(TypeError, match="geometry must be a Shapely BaseGeometry"):
-        ROI(geometry=None)
+        UserROI(geometry=None)
 
 
 def test_roi_geometry_validation_accepts_valid():
     """Creating ROI with valid Shapely geometry types should succeed."""
-    roi_point = ROI(geometry=Point(5, 5))
+    roi_point = UserROI(geometry=Point(5, 5))
     assert roi_point.geometry is not None
 
-    roi_line = ROI(geometry=LineString([(0, 0), (10, 10)]))
+    roi_line = UserROI(geometry=LineString([(0, 0), (10, 10)]))
     assert roi_line.geometry is not None
 
-    roi_poly = ROI(geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]))
+    roi_poly = UserROI(geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]))
     assert roi_poly.geometry is not None
 
 
@@ -207,7 +219,7 @@ def test_roi_from_multi_polygon():
         [(0, 0), (10, 0), (10, 10), (0, 10)],
         [(20, 20), (30, 20), (30, 30), (20, 30)],
     ]
-    roi = ROI.from_multi_polygon(polygons)
+    roi = UserROI.from_multi_polygon(polygons)
     assert isinstance(roi.geometry, MultiPolygon)
     assert len(list(roi.geometry.geoms)) == 2
     assert roi.area == pytest.approx(200.0)
@@ -216,7 +228,7 @@ def test_roi_from_multi_polygon():
 def test_roi_from_multi_polygon_with_kwargs():
     """from_multi_polygon should pass through kwargs."""
     polygons = [[(0, 0), (5, 0), (5, 5), (0, 5)]]
-    roi = ROI.from_multi_polygon(polygons, name="multi", category="test")
+    roi = UserROI.from_multi_polygon(polygons, name="multi", category="test")
     assert roi.name == "multi"
     assert roi.category == "test"
 
@@ -227,7 +239,7 @@ def test_roi_explode_multi_polygon():
         [(0, 0), (10, 0), (10, 10), (0, 10)],
         [(20, 20), (30, 20), (30, 30), (20, 30)],
     ]
-    roi = ROI.from_multi_polygon(polygons, name="test", category="cat")
+    roi = UserROI.from_multi_polygon(polygons, name="test", category="cat")
     parts = roi.explode()
     assert len(parts) == 2
     for part in parts:
@@ -240,7 +252,7 @@ def test_roi_explode_multi_polygon():
 
 def test_roi_explode_single_polygon():
     """Exploding a single Polygon ROI should return [self]."""
-    roi = ROI.from_bbox(0, 0, 10, 10)
+    roi = UserROI.from_bbox(0, 0, 10, 10)
     parts = roi.explode()
     assert len(parts) == 1
     assert parts[0] is roi
@@ -248,7 +260,7 @@ def test_roi_explode_single_polygon():
 
 def test_roi_geo_interface():
     """__geo_interface__ returns a valid GeoJSON Feature dict."""
-    roi = ROI.from_bbox(0, 0, 10, 10)
+    roi = UserROI.from_bbox(0, 0, 10, 10)
     gi = roi.__geo_interface__
     assert gi["type"] == "Feature"
     assert gi["geometry"]["type"] == "Polygon"
@@ -258,7 +270,7 @@ def test_roi_geo_interface():
 
 def test_roi_geo_interface_metadata():
     """__geo_interface__ properties contain correct metadata values."""
-    roi = ROI.from_bbox(
+    roi = UserROI.from_bbox(
         0,
         0,
         10,
@@ -276,9 +288,46 @@ def test_roi_geo_interface_metadata():
 
 def test_roi_geo_interface_defaults():
     """__geo_interface__ with default ROI has expected default property values."""
-    roi = ROI(geometry=box(0, 0, 5, 5))
+    roi = UserROI(geometry=box(0, 0, 5, 5))
     props = roi.__geo_interface__["properties"]
     assert props["name"] == ""
     assert props["category"] == ""
     assert props["source"] == ""
     assert props["frame_idx"] is None
+
+
+def test_roi_is_predicted():
+    user_roi = UserROI(geometry=box(0, 0, 5, 5))
+    assert user_roi.is_predicted is False
+    assert isinstance(user_roi, ROI)
+
+    pred_roi = PredictedROI(geometry=box(0, 0, 5, 5), score=0.9)
+    assert pred_roi.is_predicted is True
+    assert isinstance(pred_roi, ROI)
+    assert pred_roi.score == 0.9
+
+
+def test_user_roi():
+    roi = UserROI.from_polygon([(0, 0), (10, 0), (10, 10), (0, 10)], name="arena")
+    assert roi.name == "arena"
+    assert not roi.is_predicted
+    assert roi.area > 0
+
+
+def test_predicted_roi():
+    roi = PredictedROI(geometry=box(0, 0, 5, 5), score=0.75, category="arena")
+    assert roi.score == 0.75
+    assert roi.is_predicted
+    assert roi.category == "arena"
+
+
+def test_roi_from_bbox_deprecation():
+    with pytest.warns(DeprecationWarning, match="ROI.from_bbox"):
+        roi = UserROI.from_bbox(0, 0, 10, 10)
+    assert roi.is_bbox
+
+
+def test_roi_from_xyxy_deprecation():
+    with pytest.warns(DeprecationWarning, match="ROI.from_xyxy"):
+        roi = UserROI.from_xyxy(0, 0, 10, 10)
+    assert roi.is_bbox

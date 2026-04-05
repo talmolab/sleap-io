@@ -92,6 +92,16 @@ class ROI:
     # the raw instance_idx so it can be resolved later or written back as-is.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
 
+    def __attrs_post_init__(self):
+        """Validate that this class is not instantiated directly."""
+        if type(self) is ROI:
+            raise TypeError("ROI is abstract. Use UserROI or PredictedROI.")
+
+    @property
+    def is_predicted(self) -> bool:
+        """Whether this ROI is a model prediction."""
+        return isinstance(self, PredictedROI)
+
     @classmethod
     def from_bbox(
         cls,
@@ -116,7 +126,17 @@ class ROI:
         Note:
             For detection bounding boxes, prefer ``BoundingBox.from_xywh()`` or
             ``BoundingBox.from_xyxy()`` which provide richer metadata support.
+
+        .. deprecated::
+            Use ``BoundingBox.from_xywh()`` for detection bounding boxes.
         """
+        import warnings
+
+        warnings.warn(
+            "ROI.from_bbox() is deprecated. Use BoundingBox.from_xywh() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from shapely.geometry import box
 
         geom = box(x, y, x + width, y + height)
@@ -146,7 +166,17 @@ class ROI:
         Note:
             For detection bounding boxes, prefer ``BoundingBox.from_xywh()`` or
             ``BoundingBox.from_xyxy()`` which provide richer metadata support.
+
+        .. deprecated::
+            Use ``BoundingBox.from_xyxy()`` for detection bounding boxes.
         """
+        import warnings
+
+        warnings.warn(
+            "ROI.from_xyxy() is deprecated. Use BoundingBox.from_xyxy() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from shapely.geometry import box
 
         geom = box(x1, y1, x2, y2)
@@ -268,12 +298,12 @@ class ROI:
         Returns:
             A `SegmentationMask` with the rasterized geometry.
         """
-        from sleap_io.model.mask import SegmentationMask
+        from sleap_io.model.mask import UserSegmentationMask
 
         # Rasterize geometry to binary mask
         mask = _rasterize_geometry(self.geometry, height, width)
 
-        return SegmentationMask.from_numpy(
+        return UserSegmentationMask.from_numpy(
             mask,
             name=self.name,
             category=self.category,
@@ -301,8 +331,9 @@ class ROI:
         from shapely.geometry import GeometryCollection, MultiPolygon
 
         if isinstance(self.geometry, (MultiPolygon, GeometryCollection)):
+            extra = {"score": self.score} if hasattr(self, "score") else {}
             return [
-                ROI(
+                type(self)(
                     geometry=geom,
                     name=self.name,
                     category=self.category,
@@ -311,6 +342,7 @@ class ROI:
                     frame_idx=self.frame_idx,
                     track=self.track,
                     instance=self.instance,
+                    **extra,
                 )
                 for geom in self.geometry.geoms
             ]
@@ -417,3 +449,21 @@ def _scanline_fill(
             x_start = max(0, int(np.floor(intersections[j])))
             x_end = min(width, int(np.ceil(intersections[j + 1])))
             mask[y, x_start:x_end] = fill
+
+
+@attrs.define(eq=False)
+class UserROI(ROI):
+    """Human-annotated region of interest."""
+
+    pass
+
+
+@attrs.define(eq=False)
+class PredictedROI(ROI):
+    """Model-predicted region of interest with confidence score.
+
+    Attributes:
+        score: Confidence score (0-1).
+    """
+
+    score: float = attrs.field(default=0.0)

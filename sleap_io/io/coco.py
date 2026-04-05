@@ -20,8 +20,8 @@ from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.mask import SegmentationMask
-from sleap_io.model.roi import ROI
+from sleap_io.model.mask import UserSegmentationMask
+from sleap_io.model.roi import UserROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
@@ -402,6 +402,7 @@ def read_labels(
                         category=cat_name,
                         video=video,
                         frame_idx=frame_idx,
+                        instance=instance,
                     )
 
                     segmentation = annotation.get("segmentation")
@@ -412,7 +413,9 @@ def read_labels(
                                 segmentation["counts"],
                                 segmentation["size"],
                             )
-                            seg_mask = SegmentationMask.from_numpy(mask, **roi_kwargs)
+                            seg_mask = UserSegmentationMask.from_numpy(
+                                mask, **roi_kwargs
+                            )
                             masks.append(seg_mask)
                         elif isinstance(segmentation, list) and len(segmentation) > 0:
                             # Polygon format
@@ -421,7 +424,7 @@ def read_labels(
                                     (poly_flat[i], poly_flat[i + 1])
                                     for i in range(0, len(poly_flat), 2)
                                 ]
-                                roi = ROI.from_polygon(coords, **roi_kwargs)
+                                roi = UserROI.from_polygon(coords, **roi_kwargs)
                                 rois.append(roi)
 
                     # Create BoundingBox linked to instance if bbox present
@@ -456,7 +459,9 @@ def read_labels(
                                 segmentation["counts"],
                                 segmentation["size"],
                             )
-                            seg_mask = SegmentationMask.from_numpy(mask, **roi_kwargs)
+                            seg_mask = UserSegmentationMask.from_numpy(
+                                mask, **roi_kwargs
+                            )
                             masks.append(seg_mask)
                         elif isinstance(segmentation, list) and len(segmentation) > 0:
                             # Polygon format
@@ -465,7 +470,7 @@ def read_labels(
                                     (poly_flat[i], poly_flat[i + 1])
                                     for i in range(0, len(poly_flat), 2)
                                 ]
-                                roi = ROI.from_polygon(coords, **roi_kwargs)
+                                roi = UserROI.from_polygon(coords, **roi_kwargs)
                                 rois.append(roi)
 
                     # Create BoundingBox if no segmentation was processed
@@ -998,7 +1003,7 @@ def read_coco_panoptic(
     """
     from PIL import Image
 
-    from sleap_io.model.label_image import LabelImage
+    from sleap_io.model.label_image import LabelImage, UserLabelImage
 
     json_path = Path(json_path)
     if images_dir is None:
@@ -1051,7 +1056,7 @@ def read_coco_panoptic(
                 category=cat_name,
             )
 
-        li = LabelImage(
+        li = UserLabelImage(
             data=label_data,
             objects=objects,
             frame_idx=frame_idx,

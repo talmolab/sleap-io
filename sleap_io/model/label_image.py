@@ -59,6 +59,7 @@ class LabelImage:
         category: str = ""
         name: str = ""
         instance: "Instance | None" = None
+        score: float | None = None
 
     data: np.ndarray = attrs.field()
     objects: dict[int, Info] = Factory(dict)
@@ -66,8 +67,17 @@ class LabelImage:
     frame_idx: int | None = attrs.field(default=None)
     source: str = attrs.field(default="")
 
+    @property
+    def is_predicted(self) -> bool:
+        """Whether this label image is a model prediction."""
+        return isinstance(self, PredictedLabelImage)
+
     def __attrs_post_init__(self):
         """Validate and normalize data array on construction."""
+        if type(self) is LabelImage:
+            raise TypeError(
+                "LabelImage is abstract. Use UserLabelImage or PredictedLabelImage."
+            )
         if self.data.ndim != 2:
             raise ValueError(f"LabelImage data must be 2D, got shape {self.data.shape}")
         if np.any(self.data < 0):
@@ -286,7 +296,7 @@ class LabelImage:
         Returns:
             A list of ``SegmentationMask`` objects, one per object.
         """
-        from sleap_io.model.mask import SegmentationMask
+        from sleap_io.model.mask import UserSegmentationMask
 
         result = []
         for label_id in np.sort(self.label_ids):
@@ -294,7 +304,7 @@ class LabelImage:
             info = self.objects.get(lid, LabelImage.Info())
             binary_mask = self.data == lid
             result.append(
-                SegmentationMask.from_numpy(
+                UserSegmentationMask.from_numpy(
                     binary_mask,
                     name=info.name,
                     category=info.category,
@@ -306,3 +316,25 @@ class LabelImage:
                 )
             )
         return result
+
+
+@attrs.define(eq=False)
+class UserLabelImage(LabelImage):
+    """Human-annotated label image."""
+
+    pass
+
+
+@attrs.define(eq=False)
+class PredictedLabelImage(LabelImage):
+    """Model-predicted label image with confidence score.
+
+    Attributes:
+        score: Image-level confidence score (0-1).
+        score_map: Optional dense pixel-level confidence map of shape (H, W)
+            as float32. This can be large and is stored separately in the SLP
+            format. If ``None``, only per-object scores in ``Info`` are available.
+    """
+
+    score: float = attrs.field(default=0.0)
+    score_map: np.ndarray | None = attrs.field(default=None)

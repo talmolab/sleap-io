@@ -12,6 +12,7 @@ from sleap_io.io import coco
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.instance import Track
 from sleap_io.model.labels import Labels
+from sleap_io.model.mask import UserSegmentationMask
 from sleap_io.model.matching import (
     IMAGE_DEDUP_VIDEO_MATCHER,
     SHAPE_VIDEO_MATCHER,
@@ -1587,13 +1588,13 @@ class TestCOCOROIMaskIO:
 
     def test_coco_roi_bbox_roundtrip(self, tmp_path):
         """Test roundtrip of bounding box ROIs through COCO format."""
-        from sleap_io.model.roi import ROI
+        from sleap_io.model.roi import UserROI
 
         video = sio.Video.from_filename(["img1.png"])
-        roi1 = ROI.from_bbox(
+        roi1 = UserROI.from_bbox(
             10.0, 20.0, 50.0, 30.0, category="dog", video=video, frame_idx=0
         )
-        roi2 = ROI.from_bbox(
+        roi2 = UserROI.from_bbox(
             100.0,
             200.0,
             80.0,
@@ -1624,11 +1625,11 @@ class TestCOCOROIMaskIO:
 
     def test_coco_roi_polygon_roundtrip(self, tmp_path):
         """Test roundtrip of polygon ROIs through COCO format."""
-        from sleap_io.model.roi import ROI
+        from sleap_io.model.roi import UserROI
 
         coords = [(10.0, 20.0), (50.0, 20.0), (50.0, 60.0), (10.0, 60.0)]
         video = sio.Video.from_filename(["img1.png"])
-        roi = ROI.from_polygon(coords, category="region", video=video, frame_idx=0)
+        roi = UserROI.from_polygon(coords, category="region", video=video, frame_idx=0)
 
         labels = sio.Labels(rois=[roi])
 
@@ -1649,14 +1650,14 @@ class TestCOCOROIMaskIO:
 
     def test_coco_mask_rle_roundtrip(self, tmp_path):
         """Test roundtrip of segmentation masks through COCO RLE format."""
-        from sleap_io.model.mask import SegmentationMask
+        from sleap_io.model.mask import UserSegmentationMask
 
         # Create a simple mask
         mask_arr = np.zeros((10, 10), dtype=bool)
         mask_arr[2:5, 3:7] = True
 
         video = sio.Video.from_filename(["img1.png"])
-        seg_mask = SegmentationMask.from_numpy(
+        seg_mask = UserSegmentationMask.from_numpy(
             mask_arr, category="cell", video=video, frame_idx=0
         )
 
@@ -1761,10 +1762,10 @@ class TestCOCOROIMaskIO:
 
     def test_coco_category_preservation(self, tmp_path):
         """Test that category names roundtrip correctly."""
-        from sleap_io.model.roi import ROI
+        from sleap_io.model.roi import UserROI
 
         video = sio.Video.from_filename(["img1.png"])
-        roi = ROI.from_bbox(
+        roi = UserROI.from_bbox(
             10.0,
             20.0,
             30.0,
@@ -1957,6 +1958,62 @@ def test_read_labels_keypoints_and_segmentation(tmp_path):
     assert by == pytest.approx(10.0)
     assert bw == pytest.approx(80.0)
     assert bh == pytest.approx(80.0)
+
+
+def test_read_labels_keypoints_and_rle_segmentation(tmp_path):
+    """Annotations with both keypoints and RLE segmentation should preserve both."""
+    img = np.zeros((5, 5, 3), dtype=np.uint8)
+    img_path = tmp_path / "image.png"
+    iio.imwrite(str(img_path), img)
+
+    # RLE for a 5x5 mask: 5 off, 5 on, 5 off, 5 on, 5 off  (two rows filled)
+    coco_data = {
+        "images": [{"id": 1, "file_name": "image.png", "height": 5, "width": 5}],
+        "categories": [
+            {
+                "id": 1,
+                "name": "animal",
+                "keypoints": ["nose", "tail"],
+                "skeleton": [[1, 2]],
+            }
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "keypoints": [1, 1, 2, 3, 3, 2],
+                "num_keypoints": 2,
+                "segmentation": {
+                    "counts": [5, 5, 5, 5, 5],
+                    "size": [5, 5],
+                },
+                "bbox": [0, 1, 5, 2],
+                "area": 10,
+                "iscrowd": 1,
+            }
+        ],
+    }
+
+    json_path = tmp_path / "annotations.json"
+    with open(json_path, "w") as f:
+        json.dump(coco_data, f)
+
+    labels = coco.read_labels(str(json_path), dataset_root=str(tmp_path))
+
+    # Should have instances from keypoints
+    assert len(labels.labeled_frames) == 1
+    assert len(labels.labeled_frames[0].instances) == 1
+
+    # Should have a mask from the RLE segmentation
+    assert len(labels.masks) == 1
+    mask = labels.masks[0]
+    assert isinstance(mask, UserSegmentationMask)
+    assert mask.category == "animal"
+    assert mask.height == 5
+    assert mask.width == 5
+    # Mask should be linked to the instance
+    assert mask.instance is labels.labeled_frames[0].instances[0]
 
 
 def test_coco_detection_reads_as_bbox(tmp_path):
@@ -2407,7 +2464,7 @@ class TestCOCOPanoptic:
 
     def test_write_coco_panoptic(self, tmp_path):
         """Test writing COCO panoptic from Labels with label_images."""
-        from sleap_io.model.label_image import LabelImage
+        from sleap_io.model.label_image import LabelImage, UserLabelImage
 
         track_a = Track(name="1")
         track_b = Track(name="2")
@@ -2421,7 +2478,7 @@ class TestCOCOPanoptic:
             1: LabelImage.Info(track=track_a, category="cell"),
             2: LabelImage.Info(track=track_b, category="background"),
         }
-        li = LabelImage(data=data, objects=objects)
+        li = UserLabelImage(data=data, objects=objects)
         labels = Labels(label_images=[li])
 
         # Write
@@ -2470,12 +2527,12 @@ class TestCOCOPanoptic:
 
     def test_write_coco_panoptic_custom_images_dir(self, tmp_path):
         """Test writing PNGs to a custom directory."""
-        from sleap_io.model.label_image import LabelImage
+        from sleap_io.model.label_image import LabelImage, UserLabelImage
 
         data = np.zeros((5, 5), dtype=np.int32)
         data[1:4, 1:4] = 1
         objects = {1: LabelImage.Info(category="obj")}
-        li = LabelImage(data=data, objects=objects)
+        li = UserLabelImage(data=data, objects=objects)
         labels = Labels(label_images=[li])
 
         custom_dir = tmp_path / "my_pngs"
@@ -2487,7 +2544,7 @@ class TestCOCOPanoptic:
 
     def test_coco_panoptic_roundtrip(self, tmp_path):
         """Test write then read back, verify data and metadata match."""
-        from sleap_io.model.label_image import LabelImage
+        from sleap_io.model.label_image import LabelImage, UserLabelImage
 
         track1 = Track(name="obj_1")
         track2 = Track(name="obj_2")
@@ -2500,7 +2557,7 @@ class TestCOCOPanoptic:
             1: LabelImage.Info(track=track1, category="animal"),
             2: LabelImage.Info(track=track2, category="animal"),
         }
-        li1 = LabelImage(data=data1, objects=objects1)
+        li1 = UserLabelImage(data=data1, objects=objects1)
 
         # Frame 2: one thing, one stuff
         data2 = np.zeros((20, 25), dtype=np.int32)
@@ -2510,7 +2567,7 @@ class TestCOCOPanoptic:
             3: LabelImage.Info(track=None, category="background"),
             1: LabelImage.Info(track=track1, category="animal"),
         }
-        li2 = LabelImage(data=data2, objects=objects2)
+        li2 = UserLabelImage(data=data2, objects=objects2)
 
         labels = Labels(label_images=[li1, li2])
 

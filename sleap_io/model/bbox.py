@@ -5,7 +5,7 @@ workflows. They support axis-aligned and oriented (rotated) bounding boxes with
 user/predicted distinction.
 
 The class hierarchy:
-    - `BoundingBox` — base with geometry, video/frame/track/instance metadata
+    - `BoundingBox` — abstract base with geometry, video/frame/track/instance metadata
     - `UserBoundingBox` — human-annotated bounding box
     - `PredictedBoundingBox` — model-predicted bounding box with confidence score
 """
@@ -33,10 +33,10 @@ class BoundingBox:
     metadata for associating with videos, frames, tracks, and instances.
 
     Attributes:
-        x_center: Center x-coordinate in pixels.
-        y_center: Center y-coordinate in pixels.
-        width: Box width in pixels.
-        height: Box height in pixels.
+        x1: Left edge x-coordinate (before rotation).
+        y1: Top edge y-coordinate (before rotation).
+        x2: Right edge x-coordinate (before rotation).
+        y2: Bottom edge y-coordinate (before rotation).
         angle: Rotation angle in radians (0 = axis-aligned).
         video: Video this bounding box is associated with.
         frame_idx: Frame index within the video.
@@ -49,12 +49,15 @@ class BoundingBox:
     Notes:
         Bounding boxes use identity-based equality (two BoundingBox objects are
         only equal if they are the same object in memory).
+
+        This class is abstract. Use ``UserBoundingBox`` or
+        ``PredictedBoundingBox`` instead.
     """
 
-    x_center: float = attrs.field()
-    y_center: float = attrs.field()
-    width: float = attrs.field()
-    height: float = attrs.field()
+    x1: float = attrs.field()
+    y1: float = attrs.field()
+    x2: float = attrs.field()
+    y2: float = attrs.field()
     angle: float = attrs.field(default=0.0)
     video: "Video | None" = attrs.field(default=None)
     frame_idx: int | None = attrs.field(default=None)
@@ -66,6 +69,13 @@ class BoundingBox:
 
     # Private: deferred instance index for lazy loading.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
+
+    def __attrs_post_init__(self):
+        """Validate that this class is not instantiated directly."""
+        if type(self) is BoundingBox:
+            raise TypeError(
+                "BoundingBox is abstract. Use UserBoundingBox or PredictedBoundingBox."
+            )
 
     @classmethod
     def from_xyxy(
@@ -96,15 +106,7 @@ class BoundingBox:
                 f"Expected x2 >= x1 and y2 >= y1, got "
                 f"x1={x1}, y1={y1}, x2={x2}, y2={y2}."
             )
-        w = x2 - x1
-        h = y2 - y1
-        return cls(
-            x_center=x1 + w / 2,
-            y_center=y1 + h / 2,
-            width=w,
-            height=h,
-            **kwargs,
-        )
+        return cls(x1=x1, y1=y1, x2=x2, y2=y2, **kwargs)
 
     @classmethod
     def from_xywh(
@@ -127,13 +129,7 @@ class BoundingBox:
         Returns:
             A new bounding box instance.
         """
-        return cls(
-            x_center=x + w / 2,
-            y_center=y + h / 2,
-            width=w,
-            height=h,
-            **kwargs,
-        )
+        return cls(x1=x, y1=y, x2=x + w, y2=y + h, **kwargs)
 
     @property
     def is_predicted(self) -> bool:
@@ -144,6 +140,26 @@ class BoundingBox:
     def is_rotated(self) -> bool:
         """Whether this bounding box is rotated (non-axis-aligned)."""
         return abs(self.angle) > 1e-10
+
+    @property
+    def x_center(self) -> float:
+        """Center x-coordinate."""
+        return (self.x1 + self.x2) / 2
+
+    @property
+    def y_center(self) -> float:
+        """Center y-coordinate."""
+        return (self.y1 + self.y2) / 2
+
+    @property
+    def width(self) -> float:
+        """Box width in pixels."""
+        return self.x2 - self.x1
+
+    @property
+    def height(self) -> float:
+        """Box height in pixels."""
+        return self.y2 - self.y1
 
     @property
     def xyxy(self) -> tuple[float, float, float, float]:
@@ -160,14 +176,7 @@ class BoundingBox:
                 "xyxy is only defined for axis-aligned bounding boxes. "
                 "Use `bounds` or `corners` for rotated boxes."
             )
-        half_w = self.width / 2
-        half_h = self.height / 2
-        return (
-            self.x_center - half_w,
-            self.y_center - half_h,
-            self.x_center + half_w,
-            self.y_center + half_h,
-        )
+        return (self.x1, self.y1, self.x2, self.y2)
 
     @property
     def xywh(self) -> tuple[float, float, float, float]:
@@ -184,12 +193,7 @@ class BoundingBox:
                 "xywh is only defined for axis-aligned bounding boxes. "
                 "Use `bounds` or `corners` for rotated boxes."
             )
-        return (
-            self.x_center - self.width / 2,
-            self.y_center - self.height / 2,
-            self.width,
-            self.height,
-        )
+        return (self.x1, self.y1, self.width, self.height)
 
     @property
     def corners(self) -> np.ndarray:
@@ -231,14 +235,7 @@ class BoundingBox:
             Tuple of (minx, miny, maxx, maxy).
         """
         if not self.is_rotated:
-            half_w = self.width / 2
-            half_h = self.height / 2
-            return (
-                self.x_center - half_w,
-                self.y_center - half_h,
-                self.x_center + half_w,
-                self.y_center + half_h,
-            )
+            return (self.x1, self.y1, self.x2, self.y2)
         c = self.corners
         return (
             float(c[:, 0].min()),
@@ -260,13 +257,13 @@ class BoundingBox:
         """
         from shapely.geometry import Polygon
 
-        from sleap_io.model.roi import ROI
+        from sleap_io.model.roi import UserROI
 
         corners = self.corners
         # Close the ring
         coords = list(map(tuple, corners)) + [tuple(corners[0])]
         geom = Polygon(coords)
-        return ROI(
+        return UserROI(
             geometry=geom,
             name=self.name,
             category=self.category,

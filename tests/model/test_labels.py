@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_equal
+from shapely.geometry import box
 
 import sleap_io
 from sleap_io import (
@@ -20,10 +21,16 @@ from sleap_io import (
     Track,
     Video,
     load_slp,
+    save_slp,
 )
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.label_image import (
+    LabelImage,
+    PredictedLabelImage,
+    UserLabelImage,
+)
 from sleap_io.model.labels import Labels
-from sleap_io.model.mask import SegmentationMask
+from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
 from sleap_io.model.matching import (
     InstanceMatcher,
     InstanceMatchMethod,
@@ -35,7 +42,7 @@ from sleap_io.model.matching import (
     VideoMatcher,
     VideoMatchMethod,
 )
-from sleap_io.model.roi import ROI
+from sleap_io.model.roi import PredictedROI, UserROI
 
 
 def test_labels():
@@ -5320,9 +5327,9 @@ class TestLabelsAddVideo:
 
 def test_labels_with_rois_and_masks():
     video = Video(filename="test.mp4")
-    roi1 = ROI.from_bbox(0, 0, 10, 10, video=video)
-    roi2 = ROI.from_bbox(5, 5, 20, 20, video=video, frame_idx=3)
-    mask1 = SegmentationMask.from_numpy(
+    roi1 = UserROI.from_bbox(0, 0, 10, 10, video=video)
+    roi2 = UserROI.from_bbox(5, 5, 20, 20, video=video, frame_idx=3)
+    mask1 = UserSegmentationMask.from_numpy(
         np.zeros((10, 10), dtype=bool), video=video, frame_idx=1
     )
 
@@ -5333,8 +5340,8 @@ def test_labels_with_rois_and_masks():
 
 def test_labels_static_and_temporal_rois():
     video = Video(filename="test.mp4")
-    static_roi = ROI.from_bbox(0, 0, 100, 100, video=video)
-    temporal_roi = ROI.from_bbox(10, 10, 20, 20, video=video, frame_idx=5)
+    static_roi = UserROI.from_bbox(0, 0, 100, 100, video=video)
+    temporal_roi = UserROI.from_bbox(10, 10, 20, 20, video=video, frame_idx=5)
 
     labels = Labels(videos=[video], rois=[static_roi, temporal_roi])
     assert len(labels.static_rois) == 1
@@ -5346,9 +5353,9 @@ def test_labels_static_and_temporal_rois():
 def test_labels_get_rois():
     video1 = Video(filename="v1.mp4")
     video2 = Video(filename="v2.mp4")
-    roi1 = ROI.from_bbox(0, 0, 10, 10, video=video1, frame_idx=0, category="cat")
-    roi2 = ROI.from_bbox(5, 5, 10, 10, video=video2, frame_idx=1, category="dog")
-    roi3 = ROI.from_polygon(
+    roi1 = UserROI.from_bbox(0, 0, 10, 10, video=video1, frame_idx=0, category="cat")
+    roi2 = UserROI.from_bbox(5, 5, 10, 10, video=video2, frame_idx=1, category="dog")
+    roi3 = UserROI.from_polygon(
         [(0, 0), (10, 0), (10, 10)],
         video=video1,
         frame_idx=0,
@@ -5366,10 +5373,10 @@ def test_labels_get_rois():
 
 def test_labels_get_masks():
     video = Video(filename="test.mp4")
-    mask1 = SegmentationMask.from_numpy(
+    mask1 = UserSegmentationMask.from_numpy(
         np.ones((5, 5), dtype=bool), video=video, frame_idx=0, category="cat"
     )
-    mask2 = SegmentationMask.from_numpy(
+    mask2 = UserSegmentationMask.from_numpy(
         np.ones((5, 5), dtype=bool), video=video, frame_idx=1, category="dog"
     )
 
@@ -5386,9 +5393,9 @@ def test_labels_get_rois_by_track_and_instance():
     track2 = Track(name="t2")
     inst = Instance(np.array([[0, 0]]), skeleton=skeleton)
 
-    roi1 = ROI.from_bbox(0, 0, 10, 10, video=video, track=track1)
-    roi2 = ROI.from_bbox(5, 5, 10, 10, video=video, track=track2, instance=inst)
-    roi3 = ROI.from_bbox(1, 1, 5, 5, video=video)
+    roi1 = UserROI.from_bbox(0, 0, 10, 10, video=video, track=track1)
+    roi2 = UserROI.from_bbox(5, 5, 10, 10, video=video, track=track2, instance=inst)
+    roi3 = UserROI.from_bbox(1, 1, 5, 5, video=video)
 
     labels = Labels(
         videos=[video],
@@ -5406,10 +5413,10 @@ def test_labels_get_rois_by_track_and_instance():
 def test_labels_get_masks_by_track():
     video = Video(filename="test.mp4")
     track = Track(name="t1")
-    mask1 = SegmentationMask.from_numpy(
+    mask1 = UserSegmentationMask.from_numpy(
         np.ones((5, 5), dtype=bool), video=video, track=track
     )
-    mask2 = SegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), video=video)
+    mask2 = UserSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), video=video)
 
     labels = Labels(videos=[video], tracks=[track], masks=[mask1, mask2])
     assert len(labels.get_masks(track=track)) == 1
@@ -5419,8 +5426,10 @@ def test_labels_get_masks_by_track():
 def test_labels_replace_videos_updates_rois_and_masks():
     old_video = Video(filename="old.mp4")
     new_video = Video(filename="new.mp4")
-    roi = ROI.from_bbox(0, 0, 10, 10, video=old_video)
-    mask = SegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool), video=old_video)
+    roi = UserROI.from_bbox(0, 0, 10, 10, video=old_video)
+    mask = UserSegmentationMask.from_numpy(
+        np.zeros((5, 5), dtype=bool), video=old_video
+    )
 
     labels = Labels(videos=[old_video], rois=[roi], masks=[mask])
     labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
@@ -5435,14 +5444,14 @@ def test_labels_materialize_rois_and_masks(tmp_path):
     video = Video(filename="test.mp4")
     track = Track(name="track0")
     skeleton = Skeleton(["A"])
-    roi_with_refs = ROI.from_bbox(0, 0, 10, 10, video=video)
+    roi_with_refs = UserROI.from_bbox(0, 0, 10, 10, video=video)
     roi_with_refs.track = track
-    roi_no_refs = ROI.from_bbox(5, 5, 10, 10)  # No video or track
-    mask_with_refs = SegmentationMask.from_numpy(
+    roi_no_refs = UserROI.from_bbox(5, 5, 10, 10)  # No video or track
+    mask_with_refs = UserSegmentationMask.from_numpy(
         np.ones((5, 5), dtype=bool), video=video
     )
     mask_with_refs.track = track
-    mask_no_refs = SegmentationMask.from_numpy(np.ones((3, 3), dtype=bool))
+    mask_no_refs = UserSegmentationMask.from_numpy(np.ones((3, 3), dtype=bool))
 
     labels = Labels(
         videos=[video],
@@ -5483,8 +5492,8 @@ def test_labels_copy_preserves_rois_and_masks(slp_minimal, tmp_path):
     labels = load_slp(slp_minimal)
     video = labels.videos[0]
 
-    roi = ROI.from_bbox(10, 20, 30, 40, video=video, frame_idx=0, category="test")
-    mask = SegmentationMask.from_numpy(
+    roi = UserROI.from_bbox(10, 20, 30, 40, video=video, frame_idx=0, category="test")
+    mask = UserSegmentationMask.from_numpy(
         np.ones((5, 5), dtype=bool), video=video, frame_idx=0, category="fg"
     )
     labels.rois.append(roi)
@@ -5511,33 +5520,148 @@ def test_labels_copy_preserves_rois_and_masks(slp_minimal, tmp_path):
     assert len(lazy_labels.rois) == 1
 
 
+def test_labels_copy_preserves_label_images(slp_minimal, tmp_path):
+    """Test that lazy copy preserves label_images."""
+    labels = load_slp(slp_minimal)
+    video = labels.videos[0]
+    track = Track(name="t1")
+
+    li = UserLabelImage(
+        data=np.array([[0, 1], [2, 0]], dtype=np.int32),
+        objects={
+            1: LabelImage.Info(track=track, category="neuron"),
+            2: LabelImage.Info(category="glia"),
+        },
+        video=video,
+        frame_idx=0,
+    )
+    labels.label_images.append(li)
+    labels.tracks.append(track)
+
+    # Save and reload lazily
+    out_path = tmp_path / "with_li.slp"
+    labels.save(str(out_path))
+    lazy_labels = load_slp(str(out_path), lazy=True)
+
+    assert len(lazy_labels.label_images) == 1
+
+    # Copy the lazy labels
+    labels_copy = lazy_labels.copy()
+    assert len(labels_copy.label_images) == 1
+    assert labels_copy.label_images[0].n_objects == 2
+
+    # Verify independence
+    labels_copy.label_images.clear()
+    assert len(lazy_labels.label_images) == 1
+
+
+def test_labels_materialize_label_images(tmp_path):
+    """materialize() deep copies label_images, relinking video/track refs."""
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+    skeleton = Skeleton(["A"])
+
+    li = UserLabelImage(
+        data=np.array([[0, 1], [2, 0]], dtype=np.int32),
+        objects={
+            1: LabelImage.Info(track=track, category="neuron"),
+            2: LabelImage.Info(category="glia"),
+        },
+        video=video,
+        frame_idx=0,
+    )
+
+    labels = Labels(
+        videos=[video],
+        tracks=[track],
+        skeletons=[skeleton],
+        label_images=[li],
+    )
+    path = str(tmp_path / "test.slp")
+    sleap_io.save_slp(labels, path)
+
+    lazy = sleap_io.load_slp(path, lazy=True)
+    materialized = lazy.materialize()
+
+    assert len(materialized.label_images) == 1
+    mat_li = materialized.label_images[0]
+
+    # Video reference points to new copy
+    assert mat_li.video is materialized.videos[0]
+    assert mat_li.video is not lazy.videos[0]
+
+    # Track in objects points to new copy
+    for info in mat_li.objects.values():
+        if info.track is not None:
+            assert info.track is materialized.tracks[0]
+            assert info.track is not lazy.tracks[0]
+
+
+def test_labels_get_masks_predicted():
+    """get_masks filters by predicted flag."""
+    user_mask = UserSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), category="a"
+    )
+    pred_mask = PredictedSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), category="b", score=0.9
+    )
+    labels = Labels(masks=[user_mask, pred_mask])
+
+    assert len(labels.get_masks()) == 2
+    assert labels.get_masks(predicted=True) == [pred_mask]
+    assert labels.get_masks(predicted=False) == [user_mask]
+
+
+def test_labels_get_rois_predicted():
+    """get_rois filters by predicted flag."""
+    user_roi = UserROI(geometry=box(0, 0, 5, 5), category="a")
+    pred_roi = PredictedROI(geometry=box(0, 0, 5, 5), category="b", score=0.8)
+    labels = Labels(rois=[user_roi, pred_roi])
+
+    assert len(labels.get_rois()) == 2
+    assert labels.get_rois(predicted=True) == [pred_roi]
+    assert labels.get_rois(predicted=False) == [user_roi]
+
+
+def test_labels_get_label_images_predicted():
+    """get_label_images filters by predicted flag."""
+    data = np.array([[0, 1]], dtype=np.int32)
+    user_li = UserLabelImage(data=data)
+    pred_li = PredictedLabelImage(data=data, score=0.9)
+    labels = Labels(label_images=[user_li, pred_li])
+
+    assert len(labels.get_label_images()) == 2
+    assert labels.get_label_images(predicted=True) == [pred_li]
+    assert labels.get_label_images(predicted=False) == [user_li]
+
+
 def test_labels_get_bboxes():
     """get_bboxes filters by video, frame, category, and predicted."""
     video = Video(filename="test.mp4")
     bbox1 = UserBoundingBox(
-        x_center=50,
-        y_center=50,
-        width=10,
-        height=10,
+        x1=45,
+        y1=45,
+        x2=55,
+        y2=55,
         video=video,
         frame_idx=0,
         category="mouse",
     )
     bbox2 = PredictedBoundingBox(
-        x_center=60,
-        y_center=60,
-        width=20,
-        height=20,
+        x1=50,
+        y1=50,
+        x2=70,
+        y2=70,
         video=video,
         frame_idx=0,
         category="fly",
         score=0.9,
     )
     bbox3 = UserBoundingBox(
-        x_center=70,
-        y_center=70,
-        width=15,
-        height=15,
+        x1=62.5,
+        y1=62.5,
+        x2=77.5,
+        y2=77.5,
         video=video,
         frame_idx=1,
         category="mouse",
@@ -5556,9 +5680,7 @@ def test_labels_replace_videos_updates_bboxes():
     """replace_videos should update bbox video references."""
     old_video = Video(filename="old.mp4")
     new_video = Video(filename="new.mp4")
-    bbox = UserBoundingBox(
-        x_center=50, y_center=50, width=10, height=10, video=old_video, frame_idx=0
-    )
+    bbox = UserBoundingBox(x1=45, y1=45, x2=55, y2=55, video=old_video, frame_idx=0)
     labels = Labels(videos=[old_video], bboxes=[bbox])
     labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
     assert bbox.video is new_video
@@ -5572,9 +5694,9 @@ def test_get_rois_query():
     video2 = Video.from_filename("v2.mp4")
 
     rois = [
-        ROI(geometry=box(0, 0, 10, 10), video=video1, frame_idx=0),
-        ROI(geometry=box(0, 0, 10, 10), video=video1, frame_idx=1),
-        ROI(geometry=box(0, 0, 10, 10), video=video2, frame_idx=0),
+        UserROI(geometry=box(0, 0, 10, 10), video=video1, frame_idx=0),
+        UserROI(geometry=box(0, 0, 10, 10), video=video1, frame_idx=1),
+        UserROI(geometry=box(0, 0, 10, 10), video=video2, frame_idx=0),
     ]
     labels = Labels(rois=rois)
 
@@ -5592,7 +5714,7 @@ def test_get_rois_query():
     assert len(result) == 2
 
     # In-place mutation is immediately visible
-    new_roi = ROI(geometry=box(0, 0, 5, 5), video=video1, frame_idx=0)
+    new_roi = UserROI(geometry=box(0, 0, 5, 5), video=video1, frame_idx=0)
     labels.rois.append(new_roi)
     result = labels.get_rois(video=video1, frame_idx=0)
     assert len(result) == 2
@@ -5606,8 +5728,8 @@ def test_get_masks_query():
     mask_data[2:8, 2:8] = True
 
     masks = [
-        SegmentationMask.from_numpy(mask_data, video=video, frame_idx=0),
-        SegmentationMask.from_numpy(mask_data, video=video, frame_idx=1),
+        UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=0),
+        UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=1),
     ]
     labels = Labels(masks=masks)
 
@@ -5619,8 +5741,48 @@ def test_get_masks_query():
     assert len(result) == 2
 
     # In-place mutation is immediately visible
-    new_mask = SegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+    new_mask = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
     labels.masks.append(new_mask)
     result = labels.get_masks(video=video, frame_idx=0)
     assert len(result) == 2
     assert new_mask in result
+
+
+def test_labels_copy_with_annotation_refs(labels_all_annotations, tmp_path):
+    """Test lazy copy path relinks label_image video/track/instance refs."""
+    # Save and reload to create file-backed (lazy) Labels
+    path = str(tmp_path / "all_annots.slp")
+    save_slp(labels_all_annotations, path)
+    loaded = load_slp(path, open_videos=False)
+
+    # Exercise the lazy copy path
+    labels_copy = loaded.copy()
+
+    # All 6 label_images (3 User + 3 Predicted) are present
+    assert len(labels_copy.label_images) == 6
+
+    # Label images are deep copies, not the same objects
+    assert labels_copy.label_images[0] is not loaded.label_images[0]
+
+    # UserLabelImage and PredictedLabelImage types are preserved
+    user_lis = [li for li in labels_copy.label_images if isinstance(li, UserLabelImage)]
+    pred_lis = [
+        li for li in labels_copy.label_images if isinstance(li, PredictedLabelImage)
+    ]
+    assert len(user_lis) == 3
+    assert len(pred_lis) == 3
+
+    # Video references point to the copy's video, not the original's
+    for li in labels_copy.label_images:
+        if li.video is not None:
+            assert li.video in labels_copy.videos
+
+    # Track references in objects are valid tracks from the copy
+    for li in labels_copy.label_images:
+        for info in li.objects.values():
+            if info.track is not None:
+                assert info.track in labels_copy.tracks
+
+    # Mutating the copy does not affect the original
+    labels_copy.label_images.clear()
+    assert len(loaded.label_images) == 6
