@@ -319,27 +319,25 @@ class Labels:
                 new_bbox._instance_idx = -1
             new_bboxes.append(new_bbox)
 
-        # Build instance identity set for relinking label image objects
-        instance_set = {id(inst): inst for inst in all_instances}
-
         # Deep copy label images, relinking videos, tracks, and instances
         new_label_images = []
         for li in self.label_images:
             new_li = deepcopy(li)
             if li.video is not None:
                 new_li.video = video_map.get(id(li.video), new_li.video)
-            # Use ORIGINAL li.objects for id lookup, set on deepcopy
+            # Use ORIGINAL li.objects for track id lookup, set on deepcopy
             for label_id, orig_info in li.objects.items():
                 if label_id in new_li.objects:
+                    new_info = new_li.objects[label_id]
                     if orig_info.track is not None:
-                        new_li.objects[label_id].track = track_map.get(
-                            id(orig_info.track), new_li.objects[label_id].track
+                        new_info.track = track_map.get(
+                            id(orig_info.track), new_info.track
                         )
-                    if orig_info.instance is not None:
-                        new_li.objects[label_id].instance = instance_set.get(
-                            id(orig_info.instance),
-                            new_li.objects[label_id].instance,
-                        )
+                    # Resolve deferred instance link from _instance_idx
+                    idx = new_info._instance_idx
+                    if new_info.instance is None and 0 <= idx < len(all_instances):
+                        new_info.instance = all_instances[idx]
+                        new_info._instance_idx = -1
             new_label_images.append(new_li)
 
         return Labels(

@@ -5020,6 +5020,77 @@ def test_label_image_slp_lazy(tmp_path):
     np.testing.assert_array_equal(rli.data, data)
 
 
+def test_label_image_instance_lazy_roundtrip(tmp_path):
+    """Label image instance_idx should survive a lazy load -> save round-trip."""
+    skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")], name="test")
+    video = Video.from_filename("test.mp4")
+    instance = Instance.from_numpy(
+        np.array([[10, 20], [30, 40]], dtype=np.float32),
+        skeleton=skeleton,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    li = UserLabelImage(
+        data=np.array([[0, 1], [0, 0]], dtype=np.int32),
+        objects={1: LabelImage.Info(instance=instance)},
+        video=video,
+        frame_idx=0,
+    )
+    labels = Labels(labeled_frames=[lf], label_images=[li])
+
+    path1 = str(tmp_path / "original.slp")
+    save_slp(labels, path1)
+
+    # Lazy load -> save (should preserve instance_idx via _instance_idx)
+    lazy = load_slp(path1, lazy=True)
+    assert lazy.label_images[0].objects[1].instance is None
+    assert lazy.label_images[0].objects[1]._instance_idx == 0
+
+    path2 = str(tmp_path / "roundtrip.slp")
+    save_slp(lazy, path2)
+
+    # Verify the round-tripped file still has the association
+    reloaded = load_slp(path2)
+    assert len(reloaded.label_images) == 1
+    assert reloaded.label_images[0].objects[1].instance is not None
+    assert (
+        reloaded.label_images[0].objects[1].instance
+        is reloaded.labeled_frames[0].instances[0]
+    )
+
+
+def test_label_image_instance_lazy_materialize(tmp_path):
+    """Label image instance should be resolved when lazy Labels is materialized."""
+    skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")], name="test")
+    video = Video.from_filename("test.mp4")
+    instance = Instance.from_numpy(
+        np.array([[10, 20], [30, 40]], dtype=np.float32),
+        skeleton=skeleton,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    li = UserLabelImage(
+        data=np.array([[0, 1], [0, 0]], dtype=np.int32),
+        objects={1: LabelImage.Info(instance=instance)},
+        video=video,
+        frame_idx=0,
+    )
+    labels = Labels(labeled_frames=[lf], label_images=[li])
+
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+
+    lazy = load_slp(path, lazy=True)
+    assert lazy.label_images[0].objects[1].instance is None
+    assert lazy.label_images[0].objects[1]._instance_idx == 0
+
+    materialized = lazy.materialize()
+    assert materialized.label_images[0].objects[1].instance is not None
+    assert (
+        materialized.label_images[0].objects[1].instance
+        is materialized.labeled_frames[0].instances[0]
+    )
+    assert materialized.label_images[0].objects[1]._instance_idx == -1
+
+
 # -- h5wasm compatibility tests --
 
 
