@@ -164,7 +164,7 @@ applies only to that specific frame.
 ...     video=video,
 ... )
 >>> print(roi_poly.area)
->>> print(roi_poly.centroid)
+>>> print(roi_poly.centroid_xy)
 
 ```
 
