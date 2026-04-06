@@ -39,6 +39,7 @@ from sleap_io import (
 )
 from sleap_io.io.slp import (
     ExportCancelled,
+    LabelImageWriter,
     _points_from_hdf5_data,
     camera_group_to_dict,
     camera_to_dict,
@@ -52,6 +53,7 @@ from sleap_io.io.slp import (
     make_frame_group,
     make_instance_group,
     make_session,
+    merge_label_images,
     prepare_frames_to_embed,
     process_and_embed_frames,
     read_bboxes,
@@ -6605,3 +6607,398 @@ def test_slp_backward_compat_label_image_json_attrs(tmp_path):
     assert li.objects[1].category == "cell"
     assert li.objects[1].name == "obj1"
     np.testing.assert_array_equal(li.data, data)
+
+
+def test_label_image_writer_roundtrip(tmp_path):
+    """Streaming writer produces a valid SLP that round-trips through load_slp."""
+    video = Video(filename="test.mp4")
+    t1 = Track(name="t1")
+    t2 = Track(name="t2")
+    skeleton = Skeleton(nodes=["A"])
+
+    path = str(tmp_path / "streamed.slp")
+    writer = LabelImageWriter(
+        path, video=video, tracks=[t1, t2], skeleton=skeleton, initial_capacity=2
+    )
+
+    n_frames = 5
+    frame_data_list = []
+    for i in range(n_frames):
+        data = np.zeros((10, 12), dtype=np.int32)
+        data[i : i + 2, i : i + 3] = 1
+        data[i + 2 : i + 4, i : i + 3] = 2
+        frame_data_list.append(data)
+
+        li = UserLabelImage(
+            data=data,
+            objects={
+                1: LabelImage.Info(track=t1, category="neuron", name="n1"),
+                2: LabelImage.Info(track=t2, category="glia", name="g1"),
+            },
+            video=video,
+            frame_idx=i,
+        )
+        writer.add(li)
+
+    labels = writer.finalize()
+    assert len(labels.label_images) == n_frames
+
+    # Reload from disk
+    reloaded = load_slp(path, open_videos=False)
+    assert len(reloaded.label_images) == n_frames
+
+    for i, rli in enumerate(reloaded.label_images):
+        np.testing.assert_array_equal(rli.data, frame_data_list[i])
+        assert rli.frame_idx == i
+        assert rli.objects[1].track.name == "t1"
+        assert rli.objects[2].track.name == "t2"
+        assert rli.objects[1].category == "neuron"
+        assert rli.objects[2].category == "glia"
+
+    # Check format version is 2.2 (chunked)
+    with h5py.File(path, "r") as f:
+        assert f["label_image_data"].ndim == 3
+        fmt = f["metadata"].attrs["format_id"]
+        assert fmt >= 2.2
+
+
+def test_label_image_writer_context_manager(tmp_path):
+    """Context manager auto-finalizes on exit."""
+    video = Video(filename="test.mp4")
+    path = str(tmp_path / "ctx.slp")
+
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = UserLabelImage(data=data, video=video, frame_idx=0)
+
+    with LabelImageWriter(path, video=video) as writer:
+        writer.add(li)
+        labels = writer.finalize()
+
+    assert len(labels.label_images) == 1
+
+    # Verify file is valid
+    reloaded = load_slp(path, open_videos=False)
+    assert len(reloaded.label_images) == 1
+    np.testing.assert_array_equal(reloaded.label_images[0].data, data)
+
+
+def test_label_image_writer_mixed_sizes_error(tmp_path):
+    """ValueError raised when frame sizes differ."""
+    video = Video(filename="test.mp4")
+    path = str(tmp_path / "mixed.slp")
+
+    writer = LabelImageWriter(path, video=video)
+    li1 = UserLabelImage(
+        data=np.zeros((10, 10), dtype=np.int32), video=video, frame_idx=0
+    )
+    li2 = UserLabelImage(
+        data=np.zeros((10, 15), dtype=np.int32), video=video, frame_idx=1
+    )
+
+    writer.add(li1)
+    with pytest.raises(ValueError, match="does not match expected"):
+        writer.add(li2)
+
+    # Clean up the open file
+    if writer._file is not None:
+        writer._file.close()
+
+
+def test_label_image_writer_score_map(tmp_path):
+    """PredictedLabelImage with score maps survives streaming write."""
+    video = Video(filename="test.mp4")
+    t1 = Track(name="t1")
+    path = str(tmp_path / "scores.slp")
+
+    data = np.zeros((8, 8), dtype=np.int32)
+    data[2:5, 2:5] = 1
+    score_map = np.random.rand(8, 8).astype(np.float32)
+
+    li = PredictedLabelImage(
+        data=data,
+        objects={1: LabelImage.Info(track=t1, category="cell", score=0.95)},
+        video=video,
+        frame_idx=0,
+        score=0.9,
+        score_map=score_map,
+    )
+
+    writer = LabelImageWriter(path, video=video, tracks=[t1])
+    writer.add(li)
+    writer.finalize()
+
+    reloaded = load_slp(path, open_videos=False)
+    assert len(reloaded.label_images) == 1
+    rli = reloaded.label_images[0]
+    assert isinstance(rli, PredictedLabelImage)
+    assert rli.score == pytest.approx(0.9, abs=1e-5)
+    assert rli.objects[1].score == pytest.approx(0.95, abs=1e-5)
+    np.testing.assert_array_equal(rli.data, data)
+    np.testing.assert_allclose(rli.score_map, score_map, atol=1e-6)
+
+
+def test_label_image_writer_empty(tmp_path):
+    """Empty writer (no frames) creates valid minimal SLP."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    path = str(tmp_path / "empty.slp")
+
+    writer = LabelImageWriter(path, video=video, skeleton=skeleton)
+    labels = writer.finalize()
+    assert labels.label_images == []
+
+    reloaded = load_slp(path, open_videos=False)
+    assert reloaded.label_images == []
+
+
+def test_label_image_writer_double_finalize_error(tmp_path):
+    """Calling finalize twice raises RuntimeError."""
+    path = str(tmp_path / "double.slp")
+    writer = LabelImageWriter(path)
+    writer.finalize()
+    with pytest.raises(RuntimeError, match="already been finalized"):
+        writer.finalize()
+
+
+def test_label_image_writer_add_after_finalize_error(tmp_path):
+    """Adding after finalize raises RuntimeError."""
+    video = Video(filename="test.mp4")
+    path = str(tmp_path / "after.slp")
+    writer = LabelImageWriter(path, video=video)
+    writer.finalize()
+    li = UserLabelImage(data=np.zeros((4, 4), dtype=np.int32), video=video, frame_idx=0)
+    with pytest.raises(RuntimeError, match="already been finalized"):
+        writer.add(li)
+
+
+def test_label_image_writer_add_batch(tmp_path):
+    """add_batch writes multiple frames correctly."""
+    video = Video(filename="test.mp4")
+    path = str(tmp_path / "batch.slp")
+
+    frames = []
+    for i in range(3):
+        data = np.zeros((6, 6), dtype=np.int32)
+        data[i : i + 2, i : i + 2] = i + 1
+        frames.append(UserLabelImage(data=data, video=video, frame_idx=i))
+
+    writer = LabelImageWriter(path, video=video, initial_capacity=1)
+    writer.add_batch(frames)
+    writer.finalize()
+
+    reloaded = load_slp(path, open_videos=False)
+    assert len(reloaded.label_images) == 3
+    for i, rli in enumerate(reloaded.label_images):
+        np.testing.assert_array_equal(rli.data, frames[i].data)
+
+
+def test_label_image_writer_export(tmp_path):
+    """LabelImageWriter is importable from sleap_io top-level."""
+    from sleap_io import LabelImageWriter as LIW
+
+    assert LIW is LabelImageWriter
+
+
+def test_merge_label_images_basic(tmp_path):
+    """Merge 2 files with 3 frames each -> 6 frames in output."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    t1 = Track(name="cell_1")
+
+    # Create two source SLP files with 3 frames each
+    for file_idx in range(2):
+        lis = []
+        for i in range(3):
+            data = np.zeros((8, 10), dtype=np.int32)
+            data[i : i + 2, i : i + 2] = i + 1
+            lis.append(
+                UserLabelImage(
+                    data=data,
+                    objects={i + 1: LabelImage.Info(track=t1, category="cell")},
+                    video=video,
+                    frame_idx=file_idx * 3 + i,
+                    source="test",
+                )
+            )
+        labels = Labels(
+            videos=[video],
+            skeletons=[skeleton],
+            tracks=[t1],
+            label_images=lis,
+        )
+        save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
+
+    # Merge
+    merged = merge_label_images(
+        [str(tmp_path / "src_0.slp"), str(tmp_path / "src_1.slp")],
+        str(tmp_path / "merged.slp"),
+    )
+
+    assert len(merged.label_images) == 6
+
+    # Verify pixel data integrity
+    for i in range(3):
+        expected = np.zeros((8, 10), dtype=np.int32)
+        expected[i : i + 2, i : i + 2] = i + 1
+        np.testing.assert_array_equal(merged.label_images[i].data, expected)
+        np.testing.assert_array_equal(merged.label_images[i + 3].data, expected)
+
+
+def test_merge_label_images_track_dedup(tmp_path):
+    """Same track name across files -> single track in merged output."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    # Two sources with same track name "cell_A" and different track "cell_B"
+    for file_idx in range(2):
+        tracks = [Track(name="cell_A")]
+        if file_idx == 1:
+            tracks.append(Track(name="cell_B"))
+
+        data = np.zeros((4, 4), dtype=np.int32)
+        data[0:2, 0:2] = 1
+
+        objs = {1: LabelImage.Info(track=tracks[0], category="cell")}
+        if file_idx == 1:
+            data[2:4, 2:4] = 2
+            objs[2] = LabelImage.Info(track=tracks[1], category="cell")
+
+        li = UserLabelImage(data=data, objects=objs, video=video, frame_idx=0)
+        labels = Labels(
+            videos=[video],
+            skeletons=[skeleton],
+            tracks=tracks,
+            label_images=[li],
+        )
+        save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
+
+    merged = merge_label_images(
+        [str(tmp_path / "src_0.slp"), str(tmp_path / "src_1.slp")],
+        str(tmp_path / "merged_tracks.slp"),
+    )
+
+    # "cell_A" should be deduplicated, "cell_B" added -> 2 total tracks
+    assert len(merged.tracks) == 2
+    track_names = {t.name for t in merged.tracks}
+    assert track_names == {"cell_A", "cell_B"}
+
+    # Both label images should reference the deduplicated "cell_A" track
+    assert merged.label_images[0].objects[1].track.name == "cell_A"
+    assert merged.label_images[1].objects[1].track.name == "cell_A"
+
+
+def test_merge_label_images_video_dedup(tmp_path):
+    """Same video filename across files -> single video in merged output."""
+    skeleton = Skeleton(nodes=["A"])
+
+    for file_idx in range(2):
+        video = Video(filename="shared_video.mp4")
+        data = np.zeros((4, 4), dtype=np.int32)
+        data[0:2, 0:2] = 1
+        li = UserLabelImage(data=data, video=video, frame_idx=file_idx)
+        labels = Labels(
+            videos=[video],
+            skeletons=[skeleton],
+            label_images=[li],
+        )
+        save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
+
+    merged = merge_label_images(
+        [str(tmp_path / "src_0.slp"), str(tmp_path / "src_1.slp")],
+        str(tmp_path / "merged_video.slp"),
+    )
+
+    assert len(merged.videos) == 1
+    assert merged.videos[0].filename == "shared_video.mp4"
+    assert len(merged.label_images) == 2
+
+
+def test_merge_label_images_pixel_integrity(tmp_path):
+    """Verify pixel data is exactly preserved through merge."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    rng = np.random.RandomState(42)
+    source_data = []
+
+    for file_idx in range(2):
+        lis = []
+        for i in range(3):
+            data = rng.randint(0, 10, size=(8, 10), dtype=np.int32)
+            source_data.append(data.copy())
+            lis.append(UserLabelImage(data=data, video=video, frame_idx=i))
+        labels = Labels(
+            videos=[video],
+            skeletons=[skeleton],
+            label_images=lis,
+        )
+        save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
+
+    merged = merge_label_images(
+        [str(tmp_path / "src_0.slp"), str(tmp_path / "src_1.slp")],
+        str(tmp_path / "merged_pixels.slp"),
+    )
+
+    assert len(merged.label_images) == 6
+    for i, expected_data in enumerate(source_data):
+        np.testing.assert_array_equal(merged.label_images[i].data, expected_data)
+
+
+def test_merge_label_images_dimension_mismatch(tmp_path):
+    """Merging files with different frame sizes raises ValueError."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    # Source 1: 4x4 frames
+    data1 = np.zeros((4, 4), dtype=np.int32)
+    li1 = UserLabelImage(data=data1, video=video, frame_idx=0)
+    labels1 = Labels(videos=[video], skeletons=[skeleton], label_images=[li1])
+    save_slp(labels1, str(tmp_path / "src_4x4.slp"))
+
+    # Source 2: 6x8 frames
+    data2 = np.zeros((6, 8), dtype=np.int32)
+    li2 = UserLabelImage(data=data2, video=video, frame_idx=0)
+    labels2 = Labels(videos=[video], skeletons=[skeleton], label_images=[li2])
+    save_slp(labels2, str(tmp_path / "src_6x8.slp"))
+
+    with pytest.raises(ValueError, match="different dimensions"):
+        merge_label_images(
+            [str(tmp_path / "src_4x4.slp"), str(tmp_path / "src_6x8.slp")],
+            str(tmp_path / "should_fail.slp"),
+        )
+
+
+def test_merge_label_images_empty_sources(tmp_path):
+    """Passing no source paths raises ValueError."""
+    with pytest.raises(ValueError, match="At least one source"):
+        merge_label_images([], str(tmp_path / "empty.slp"))
+
+
+def test_merge_label_images_with_explicit_video(tmp_path):
+    """Merge with an explicit video overrides source video references."""
+    skeleton = Skeleton(nodes=["A"])
+    override_video = Video(filename="override.mp4")
+
+    for file_idx in range(2):
+        video = Video(filename=f"video_{file_idx}.mp4")
+        data = np.zeros((4, 4), dtype=np.int32)
+        data[0:2, 0:2] = 1
+        li = UserLabelImage(data=data, video=video, frame_idx=0)
+        labels = Labels(videos=[video], skeletons=[skeleton], label_images=[li])
+        save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
+
+    merged = merge_label_images(
+        [str(tmp_path / "src_0.slp"), str(tmp_path / "src_1.slp")],
+        str(tmp_path / "merged_override.slp"),
+        video=override_video,
+    )
+
+    assert len(merged.videos) == 1
+    assert merged.videos[0].filename == "override.mp4"
+
+
+def test_merge_label_images_export():
+    """merge_label_images is importable from sleap_io top-level."""
+    from sleap_io import merge_label_images as mli
+
+    assert mli is not None
