@@ -369,14 +369,37 @@ The `json` attribute contains a JSON object with the following fields:
 
 The `provenance` field tracks the origin and history of the labels file:
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `sleap_version` | `string` | SLEAP version that created the file |
-| `filename` | `string` | Original filename |
-| *custom* | `any` | Additional user-defined provenance data |
+| Key | Type | Set by | Description |
+|-----|------|--------|-------------|
+| `sleap_version` | `string` | SLEAP | SLEAP version that created the file |
+| `filename` | `string` | `load_slp` | Original filename (set on load) |
+| `source_labels` | `string` | `split` / `extract` | Path to parent labels file |
+| `merge_history` | `array` | `merge` | Records of merge operations (timestamp, source, strategy) |
+| *custom* | `any` | user | Additional user-defined provenance data |
 
 !!! note "Custom Provenance"
-    The provenance dictionary can contain arbitrary key-value pairs for tracking custom metadata like model training runs, data sources, or processing history.
+    The provenance dictionary can contain arbitrary key-value pairs for
+    tracking custom metadata. Values must be JSON-serializable. Path objects
+    are auto-converted to strings on save.
+
+!!! example "Recording segmentation model parameters"
+    When using segmentation tools like Cellpose, record the model parameters
+    in provenance for reproducibility:
+
+    ```python
+    import sleap_io as sio
+
+    labels = sio.Labels(label_images=label_images)
+    labels.provenance["segmentation_model"] = "cellpose"
+    labels.provenance["cellpose_model_type"] = "cyto3"
+    labels.provenance["cellpose_diameter"] = 30
+    labels.provenance["cellpose_cellprob_threshold"] = 0.0
+    labels.save("segmentation.slp")
+
+    # Later, verify parameters:
+    loaded = sio.load_slp("segmentation.slp")
+    print(loaded.provenance["cellpose_diameter"])  # 30
+    ```
 
 ## Tracks
 
