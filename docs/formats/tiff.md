@@ -71,6 +71,46 @@ sio.save_label_images("output_dir/", label_images, stack=False)
 # Creates: output_dir/0.tif, output_dir/1.tif, ... + output_dir/.meta.json
 ```
 
+## Cellpose Workflow Example
+
+A common workflow is to run [Cellpose](https://www.cellpose.org/) on microscopy
+data, convert the output masks to `LabelImage` objects, and save them as TIFF or
+SLP:
+
+```python
+import numpy as np
+import sleap_io as sio
+from cellpose import models
+
+# Run Cellpose segmentation
+model = models.CellposeModel(model_type="nuclei")
+masks, flows, styles = model.eval(images, diameter=25)
+masks_stack = np.stack(masks)  # (T, H, W) int32
+
+# Convert to LabelImage objects with consistent tracks across frames
+video = sio.Video(filename="experiment.tif")
+label_images = sio.PredictedLabelImage.from_stack(
+    masks_stack,
+    video=video,
+    source="cellpose:nuclei",
+    create_tracks=True,
+    score=1.0,
+)
+
+# Save as TIFF stack (with sidecar metadata)
+sio.save_label_images("cellpose_masks.tif", label_images)
+
+# Or save as SLP (preserves tracks, categories, and provenance)
+labels = sio.Labels(label_images=label_images, videos=[video])
+labels.provenance["segmentation_model"] = "cellpose"
+labels.provenance["cellpose_diameter"] = 25
+labels.save("cellpose_masks.slp")
+```
+
+The `from_stack()` method ensures that the same `Track` object is shared across
+frames for a given label ID, which is essential for consistent tracking and
+downstream analysis.
+
 ## API
 
 ::: sleap_io.io.main.load_label_images

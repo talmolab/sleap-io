@@ -62,15 +62,34 @@ class Labels:
             persistent across sessions and videos.
         suggestions: A list of `SuggestionFrame`s that are associated with this dataset.
         sessions: A list of `RecordingSession`s that are associated with this dataset.
-        provenance: Dictionary of arbitrary metadata providing additional information
-            about where the dataset came from.
+        provenance: Dictionary of metadata about where the dataset came from.
+            Common keys set automatically:
+
+            - ``"filename"``: Set on load (``load_slp``, etc.).
+            - ``"sleap_version"``: Set when saved by SLEAP.
+            - ``"source_labels"``: Set by ``split()`` / ``extract()`` to
+              track the original file.
+            - ``"merge_history"``: Appended by ``merge()`` with details of
+              each merge operation.
+
+            User-defined keys are encouraged for recording provenance such
+            as segmentation model parameters::
+
+                labels.provenance["segmentation_model"] = "cellpose"
+                labels.provenance["cellpose_diameter"] = 30
+
+            All values must be JSON-serializable (str, int, float, bool,
+            list, dict, None). Path objects are auto-converted to strings
+            on save.
         rois: A list of `ROI` vector geometry annotations (polygons, etc.) associated
             with this dataset.
         masks: A list of `SegmentationMask` raster annotations associated with this
             dataset.
         bboxes: A list of `BoundingBox` annotations associated with this dataset.
         label_images: A list of `LabelImage` per-pixel segmentation annotations
-            associated with this dataset.
+            associated with this dataset. For TIFF I/O of label images, see
+            ``sleap_io.load_label_images()`` and
+            ``sleap_io.save_label_images()``.
 
     Notes:
         `Video`s in contain `LabeledFrame`s, and `Skeleton`s and `Track`s in contained

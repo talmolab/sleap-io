@@ -656,3 +656,223 @@ def test_to_masks_propagates_scale_offset():
     for m in masks:
         assert m.scale == (0.5, 0.5)
         assert m.offset == (10.0, 20.0)
+
+
+# -- from_stack tests --
+
+
+def test_from_stack_basic():
+    """from_stack should create one LabelImage per frame."""
+    stack = np.zeros((3, 4, 5), dtype=np.int32)
+    stack[0, 0, 0] = 1
+    stack[1, 1, 1] = 2
+    stack[2, 2, 2] = 3
+
+    result = UserLabelImage.from_stack(stack)
+
+    assert len(result) == 3
+    for i, li in enumerate(result):
+        assert isinstance(li, UserLabelImage)
+        assert li.height == 4
+        assert li.width == 5
+        assert li.frame_idx == i
+
+
+def test_from_stack_list_input():
+    """from_stack should accept a list of 2D arrays."""
+    frames = [
+        np.array([[1, 0], [0, 0]], dtype=np.int32),
+        np.array([[0, 2], [0, 0]], dtype=np.int32),
+    ]
+    result = UserLabelImage.from_stack(frames)
+
+    assert len(result) == 2
+    assert result[0].data[0, 0] == 1
+    assert result[1].data[0, 1] == 2
+
+
+def test_from_stack_auto_tracks():
+    """create_tracks=True should share Track objects across frames."""
+    stack = np.zeros((3, 4, 4), dtype=np.int32)
+    stack[0, 0, 0] = 1
+    stack[0, 1, 1] = 2
+    stack[1, 0, 0] = 1  # same ID as frame 0
+    stack[2, 2, 2] = 2  # same ID as frame 0
+
+    result = UserLabelImage.from_stack(stack, create_tracks=True)
+
+    # Track for ID 1 in frame 0 and frame 1 should be the same object
+    assert result[0].objects[1].track is result[1].objects[1].track
+    # Track for ID 2 in frame 0 and frame 2 should be the same object
+    assert result[0].objects[2].track is result[2].objects[2].track
+    # Track names should be string of the label ID
+    assert result[0].objects[1].track.name == "1"
+    assert result[0].objects[2].track.name == "2"
+
+
+def test_from_stack_tracks_list():
+    """Tracks provided as a list should be shared across frames."""
+    t1, t2 = Track(name="a"), Track(name="b")
+    stack = np.zeros((2, 3, 3), dtype=np.int32)
+    stack[0, 0, 0] = 1
+    stack[0, 1, 1] = 2
+    stack[1, 0, 0] = 1
+
+    result = UserLabelImage.from_stack(stack, tracks=[t1, t2])
+
+    assert result[0].objects[1].track is t1
+    assert result[0].objects[2].track is t2
+    assert result[1].objects[1].track is t1
+
+
+def test_from_stack_tracks_dict():
+    """Tracks provided as a dict should map correctly."""
+    t5 = Track(name="five")
+    stack = np.zeros((2, 3, 3), dtype=np.int32)
+    stack[0, 0, 0] = 5
+    stack[1, 1, 1] = 5
+
+    result = UserLabelImage.from_stack(stack, tracks={5: t5})
+
+    assert result[0].objects[5].track is t5
+    assert result[1].objects[5].track is t5
+
+
+def test_from_stack_categories():
+    """Categories should be applied consistently across frames."""
+    stack = np.zeros((2, 3, 3), dtype=np.int32)
+    stack[0, 0, 0] = 1
+    stack[0, 1, 1] = 2
+    stack[1, 0, 0] = 1
+
+    # List form
+    result = UserLabelImage.from_stack(stack, categories=["neuron", "glia"])
+    assert result[0].objects[1].category == "neuron"
+    assert result[0].objects[2].category == "glia"
+    assert result[1].objects[1].category == "neuron"
+
+    # Dict form
+    result = UserLabelImage.from_stack(stack, categories={1: "neuron", 2: "glia"})
+    assert result[0].objects[1].category == "neuron"
+    assert result[0].objects[2].category == "glia"
+
+
+def test_from_stack_frame_idx_custom():
+    """Custom frame_idx should be applied per frame."""
+    stack = np.zeros((3, 2, 2), dtype=np.int32)
+    result = UserLabelImage.from_stack(stack, frame_idx=[10, 20, 30])
+
+    assert result[0].frame_idx == 10
+    assert result[1].frame_idx == 20
+    assert result[2].frame_idx == 30
+
+
+def test_from_stack_predicted():
+    """PredictedLabelImage.from_stack with scalar score."""
+    stack = np.zeros((2, 3, 3), dtype=np.int32)
+    stack[0, 0, 0] = 1
+
+    result = PredictedLabelImage.from_stack(stack, score=0.9)
+
+    assert len(result) == 2
+    for li in result:
+        assert isinstance(li, PredictedLabelImage)
+        assert li.score == 0.9
+
+
+def test_from_stack_predicted_per_frame_score():
+    """PredictedLabelImage.from_stack with per-frame scores."""
+    stack = np.zeros((3, 3, 3), dtype=np.int32)
+
+    result = PredictedLabelImage.from_stack(stack, score=[0.9, 0.8, 0.7])
+
+    assert result[0].score == 0.9
+    assert result[1].score == 0.8
+    assert result[2].score == 0.7
+
+
+def test_from_stack_predicted_score_map():
+    """PredictedLabelImage.from_stack with score_map slicing."""
+    stack = np.zeros((2, 4, 4), dtype=np.int32)
+    sm = np.random.rand(2, 4, 4).astype(np.float32)
+
+    result = PredictedLabelImage.from_stack(stack, score_map=sm)
+
+    assert result[0].score_map is not None
+    np.testing.assert_array_equal(result[0].score_map, sm[0])
+    assert result[1].score_map is not None
+    np.testing.assert_array_equal(result[1].score_map, sm[1])
+
+
+def test_from_stack_track_consistency():
+    """Track for an ID appearing in non-consecutive frames is shared."""
+    stack = np.zeros((3, 3, 3), dtype=np.int32)
+    stack[0, 0, 0] = 1  # ID 1 in frame 0
+    # frame 1: no ID 1
+    stack[2, 1, 1] = 1  # ID 1 in frame 2
+
+    result = UserLabelImage.from_stack(stack, create_tracks=True)
+
+    assert 1 in result[0].objects
+    assert 1 not in result[1].objects
+    assert 1 in result[2].objects
+    assert result[0].objects[1].track is result[2].objects[1].track
+
+
+def test_from_stack_kwargs():
+    """Shared kwargs should propagate to all frames."""
+    vid = Video(filename="test.mp4")
+    stack = np.zeros((2, 3, 3), dtype=np.int32)
+
+    result = UserLabelImage.from_stack(
+        stack,
+        video=vid,
+        source="cellpose",
+        scale=(0.5, 0.5),
+        offset=(10.0, 20.0),
+    )
+
+    for li in result:
+        assert li.video is vid
+        assert li.source == "cellpose"
+        assert li.scale == (0.5, 0.5)
+        assert li.offset == (10.0, 20.0)
+
+
+def test_from_stack_non_3d_raises():
+    """from_stack with a 2D array should raise ValueError."""
+    with pytest.raises(ValueError, match="\\(T, H, W\\)"):
+        UserLabelImage.from_stack(np.zeros((3, 3), dtype=np.int32))
+
+
+def test_from_stack_frame_idx_mismatch_raises():
+    """from_stack with wrong frame_idx length should raise."""
+    stack = np.zeros((3, 3, 3), dtype=np.int32)
+    with pytest.raises(ValueError, match="frame_idx length"):
+        UserLabelImage.from_stack(stack, frame_idx=[0, 1])
+
+
+def test_from_stack_empty():
+    """from_stack with 0-frame input should return empty list."""
+    stack = np.zeros((0, 3, 3), dtype=np.int32)
+    assert UserLabelImage.from_stack(stack) == []
+
+
+def test_from_stack_score_mismatch_raises():
+    """from_stack with wrong score list length should raise."""
+    stack = np.zeros((3, 3, 3), dtype=np.int32)
+    with pytest.raises(ValueError, match="score list length"):
+        PredictedLabelImage.from_stack(stack, score=[0.9, 0.8])
+
+
+def test_from_stack_score_map_shape_raises():
+    """from_stack with wrong score_map shape should raise."""
+    stack = np.zeros((3, 3, 3), dtype=np.int32)
+    with pytest.raises(ValueError, match="score_map must be"):
+        PredictedLabelImage.from_stack(stack, score_map=np.zeros((2, 3, 3)))
+
+
+def test_from_stack_invalid_data_type_raises():
+    """from_stack with non-array data should raise."""
+    with pytest.raises(ValueError, match="numpy array or list"):
+        UserLabelImage.from_stack("not an array")

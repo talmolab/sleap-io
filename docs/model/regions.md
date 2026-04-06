@@ -561,6 +561,36 @@ fields, and per-object scores can be set via `LabelImage.Info.score`:
 
 ```
 
+### From a stack of frames
+
+The `from_stack` factory method converts a `(T, H, W)` array (e.g., direct
+Cellpose output) into a list of `LabelImage` objects with consistent `Track`
+objects shared across frames:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> masks = np.zeros((3, 64, 64), dtype=np.int32)
+>>> masks[0, 10:30, 10:30] = 1
+>>> masks[1, 10:30, 10:30] = 1
+>>> masks[2, 20:40, 20:40] = 2
+>>> label_images = sio.PredictedLabelImage.from_stack(
+...     masks, create_tracks=True, score=1.0,
+... )
+>>> print(len(label_images))
+3
+>>> print(label_images[0].objects[1].track is label_images[1].objects[1].track)
+True
+
+```
+
+### TIFF I/O
+
+Label images can be saved and loaded as TIFF files using the top-level
+functions `sio.load_label_images()` and `sio.save_label_images()`. See
+the [TIFF Format Reference](../formats/tiff.md) for details on file
+structures and sidecar metadata.
+
 ---
 
 ## Conversions
