@@ -379,12 +379,12 @@ Pass an integer array where each unique positive value is an object:
 >>> li = sio.UserLabelImage.from_numpy(data)
 >>> print(li.n_objects)
 >>> print(li.label_ids)
->>> print(li.tracks)
 
 ```
 
-By default, `from_numpy` auto-creates one `Track` per unique label ID. You
-can supply explicit tracks and categories:
+By default, `from_numpy` does not create tracks. Set `create_tracks=True` to
+auto-create one `Track` per unique label ID, or supply explicit tracks and
+categories:
 
 ```pycon
 >>> import numpy as np
