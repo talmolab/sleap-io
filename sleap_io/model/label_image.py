@@ -28,6 +28,7 @@ See Also:
 
 from __future__ import annotations
 
+import copy
 import sys
 from typing import TYPE_CHECKING, Callable, Iterator
 
@@ -177,6 +178,35 @@ class LabelImage:
         # When _data is None, validation is deferred to first .data access.
         if self.scale[0] <= 0 or self.scale[1] <= 0:
             raise ValueError(f"Scale values must be positive, got {self.scale}.")
+
+    def __deepcopy__(self, memo: dict) -> "LabelImage":
+        """Deep copy that materializes lazy data before copying.
+
+        This is necessary because lazy loaders capture h5py dataset references
+        which cannot be pickled/deepcopied.
+        """
+        # Materialize data if lazy (triggers decompression)
+        data = self.data.copy() if self._data is not None or self._lazy_loader else None
+        objects = {lid: copy.deepcopy(info, memo) for lid, info in self.objects.items()}
+
+        kwargs: dict = dict(
+            data=data,
+            objects=objects,
+            video=copy.deepcopy(self.video, memo),
+            frame_idx=self.frame_idx,
+            source=self.source,
+            scale=self.scale,
+            offset=self.offset,
+        )
+        if isinstance(self, PredictedLabelImage):
+            sm = self.score_map
+            kwargs["score"] = self.score
+            kwargs["score_map"] = sm.copy() if sm is not None else None
+            kwargs["score_map_scale"] = self.score_map_scale
+            kwargs["score_map_offset"] = self.score_map_offset
+        result = type(self)(**kwargs)
+        memo[id(self)] = result
+        return result
 
     @property
     def height(self) -> int:

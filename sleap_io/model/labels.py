@@ -114,6 +114,24 @@ class Labels:
     _lazy_store: "LazyDataStore | None" = field(
         default=None, repr=False, eq=False, alias="lazy_store"
     )
+    # HDF5 file handle for lazy label image data (keeps file alive for closures).
+    # Excluded from deepcopy/pickle since h5py objects cannot be serialized.
+    _label_image_file: "Any" = field(
+        default=None, repr=False, eq=False, init=False, hash=False
+    )
+
+    def __getstate__(self) -> dict:
+        """Return state for pickling/deepcopy, excluding h5py file handles."""
+        import attr
+
+        state = {a.name: getattr(self, a.name) for a in attr.fields(type(self))}
+        state["_label_image_file"] = None  # h5py cannot be pickled
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        """Restore state from pickling/deepcopy."""
+        for key, value in state.items():
+            object.__setattr__(self, key, value)
 
     @property
     def is_lazy(self) -> bool:
@@ -539,7 +557,11 @@ class Labels:
                 lazy_store=new_store,
             )
         else:
+            # Temporarily clear non-copyable resources (h5py file handles)
+            saved_li_file = self._label_image_file
+            self._label_image_file = None
             labels_copy = deepcopy(self)
+            self._label_image_file = saved_li_file
 
         if open_videos is not None:
             for video in labels_copy.videos:
