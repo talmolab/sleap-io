@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import copy
 import sys
-from typing import TYPE_CHECKING, Callable, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator, Literal
 
 import attrs
 import numpy as np
@@ -542,7 +542,8 @@ class LabelImage:
                 ``None`` (default), masks are numbered 1, 2, ..., N. All values
                 must be positive (0 is background) and unique.
             tracks: List of ``Track`` objects, one per mask. ``tracks[i]`` is
-                assigned to mask ``i`` (label ID ``i + 1``).
+                assigned to mask ``i`` (label ID ``label_ids[i]`` or ``i + 1``
+                by default).
             categories: List of category strings, one per mask.
             names: List of human-readable name strings, one per mask.
             scores: List of per-object confidence scores, one per mask. Stored
@@ -921,8 +922,8 @@ class PredictedLabelImage(LabelImage):
 
 def normalize_label_ids(
     label_images: list[LabelImage],
-    by: str = "track",
-) -> dict:
+    by: "Literal['track', 'category']" = "track",
+) -> "dict[Track, int] | dict[str, int]":
     """Remap label IDs so each group gets a globally consistent ID.
 
     Rewrites ``.data`` arrays and ``.objects`` dicts in place so that the same
@@ -934,7 +935,9 @@ def normalize_label_ids(
         by: Grouping key.
 
             - ``"track"``: Each unique ``Track`` object gets one ID.
-              Objects with ``track=None`` each get a unique ID.
+              Identity is by Python object reference (``is``), not by
+              name — ensure the same ``Track`` instance is shared across
+              frames. Objects with ``track=None`` each get a unique ID.
             - ``"category"``: Each unique category string gets one ID.
               Within a frame, multiple objects with the same category
               merge into one pixel value (semantic segmentation).
