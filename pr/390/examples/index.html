@@ -547,6 +547,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#segmentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Segmentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rendering" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3075,6 +3086,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#segmentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Segmentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rendering" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3849,24 +3871,172 @@
 <li><a href="formats/#sleap_io.get_default_image_plugin"><code>get_default_image_plugin</code></a>: Get current image backend</li>
 </ul>
 </div>
+<h2 id="segmentation">Segmentation<a class="headerlink" href="#segmentation" title="Permanent link">&para;</a></h2>
+<p>Work with dense per-pixel instance segmentation data (e.g., from <a href="https://www.cellpose.org/">Cellpose</a> or <a href="https://github.com/stardist/stardist">StarDist</a>).</p>
+<h3 id="import-segmentation-masks-to-slp">Import segmentation masks to SLP<a class="headerlink" href="#import-segmentation-masks-to-slp" title="Permanent link">&para;</a></h3>
+<p>Convert a <code>(T, H, W)</code> integer mask array into an SLP file with object metadata.</p>
+<div class="highlight"><span class="filename">segmentation_to_slp.py</span><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1"></a><a href="#__codelineno-28-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2"></a><a href="#__codelineno-28-2"><span class="linenos" data-linenos=" 2 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-28-3" name="__codelineno-28-3"></a><a href="#__codelineno-28-3"><span class="linenos" data-linenos=" 3 "></span></a>
+<a id="__codelineno-28-4" name="__codelineno-28-4"></a><a href="#__codelineno-28-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="c1"># Load masks from segmentation tool output — (T, H, W) int32</span>
+<a id="__codelineno-28-5" name="__codelineno-28-5"></a><a href="#__codelineno-28-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="c1"># 0 = background, 1+ = object IDs</span>
+<a id="__codelineno-28-6" name="__codelineno-28-6"></a><a href="#__codelineno-28-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="n">masks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;cellpose_masks.npy&quot;</span><span class="p">)</span>
+<a id="__codelineno-28-7" name="__codelineno-28-7"></a><a href="#__codelineno-28-7"><span class="linenos" data-linenos=" 7 "></span></a>
+<a id="__codelineno-28-8" name="__codelineno-28-8"></a><a href="#__codelineno-28-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="c1"># Create video reference</span>
+<a id="__codelineno-28-9" name="__codelineno-28-9"></a><a href="#__codelineno-28-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="s2">&quot;microscopy.tif&quot;</span><span class="p">)</span>
+<a id="__codelineno-28-10" name="__codelineno-28-10"></a><a href="#__codelineno-28-10"><span class="linenos" data-linenos="10 "></span></a>
+<a id="__codelineno-28-11" name="__codelineno-28-11"></a><a href="#__codelineno-28-11"><span class="linenos" data-linenos="11 "></span></a><span class="c1"># Convert to PredictedLabelImages with shared tracks across frames</span>
+<a id="__codelineno-28-12" name="__codelineno-28-12"></a><a href="#__codelineno-28-12"><span class="linenos" data-linenos="12 "></span></a><span class="n">label_images</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">PredictedLabelImage</span><span class="o">.</span><span class="n">from_stack</span><span class="p">(</span>
+<a id="__codelineno-28-13" name="__codelineno-28-13"></a><a href="#__codelineno-28-13"><span class="linenos" data-linenos="13 "></span></a>    <span class="n">masks</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;cellpose:nuclei&quot;</span><span class="p">,</span>
+<a id="__codelineno-28-14" name="__codelineno-28-14"></a><a href="#__codelineno-28-14"><span class="linenos" data-linenos="14 "></span></a>    <span class="n">create_tracks</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">score</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-28-15" name="__codelineno-28-15"></a><a href="#__codelineno-28-15"><span class="linenos" data-linenos="15 "></span></a><span class="p">)</span>
+<a id="__codelineno-28-16" name="__codelineno-28-16"></a><a href="#__codelineno-28-16"><span class="linenos" data-linenos="16 "></span></a>
+<a id="__codelineno-28-17" name="__codelineno-28-17"></a><a href="#__codelineno-28-17"><span class="linenos" data-linenos="17 "></span></a><span class="c1"># Collect tracks for serialization</span>
+<a id="__codelineno-28-18" name="__codelineno-28-18"></a><a href="#__codelineno-28-18"><span class="linenos" data-linenos="18 "></span></a><span class="n">tracks</span> <span class="o">=</span> <span class="nb">list</span><span class="p">({</span>
+<a id="__codelineno-28-19" name="__codelineno-28-19"></a><a href="#__codelineno-28-19"><span class="linenos" data-linenos="19 "></span></a>    <span class="n">info</span><span class="o">.</span><span class="n">track</span> <span class="k">for</span> <span class="n">li</span> <span class="ow">in</span> <span class="n">label_images</span>
+<a id="__codelineno-28-20" name="__codelineno-28-20"></a><a href="#__codelineno-28-20"><span class="linenos" data-linenos="20 "></span></a>    <span class="k">for</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">li</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">if</span> <span class="n">info</span><span class="o">.</span><span class="n">track</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+<a id="__codelineno-28-21" name="__codelineno-28-21"></a><a href="#__codelineno-28-21"><span class="linenos" data-linenos="21 "></span></a><span class="p">})</span>
+<a id="__codelineno-28-22" name="__codelineno-28-22"></a><a href="#__codelineno-28-22"><span class="linenos" data-linenos="22 "></span></a>
+<a id="__codelineno-28-23" name="__codelineno-28-23"></a><a href="#__codelineno-28-23"><span class="linenos" data-linenos="23 "></span></a><span class="c1"># Save</span>
+<a id="__codelineno-28-24" name="__codelineno-28-24"></a><a href="#__codelineno-28-24"><span class="linenos" data-linenos="24 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">label_images</span><span class="o">=</span><span class="n">label_images</span><span class="p">,</span> <span class="n">videos</span><span class="o">=</span><span class="p">[</span><span class="n">video</span><span class="p">],</span> <span class="n">tracks</span><span class="o">=</span><span class="n">tracks</span><span class="p">)</span>
+<a id="__codelineno-28-25" name="__codelineno-28-25"></a><a href="#__codelineno-28-25"><span class="linenos" data-linenos="25 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;segmentation.slp&quot;</span><span class="p">)</span>
+</code></pre></div>
+<details class="tip">
+<summary>Custom tracks and categories per frame</summary>
+<p>For more control, use <code>from_numpy()</code> per frame with explicit track/category mappings:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="n">tracks</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="n">sio</span><span class="o">.</span><span class="n">Track</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;cell_A&quot;</span><span class="p">),</span> <span class="mi">2</span><span class="p">:</span> <span class="n">sio</span><span class="o">.</span><span class="n">Track</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;cell_B&quot;</span><span class="p">)}</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">li</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">PredictedLabelImage</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>    <span class="n">masks</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="n">tracks</span><span class="o">=</span><span class="n">tracks</span><span class="p">,</span> <span class="n">categories</span><span class="o">=</span><span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;neuron&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span> <span class="s2">&quot;glia&quot;</span><span class="p">},</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="n">source</span><span class="o">=</span><span class="s2">&quot;cellpose:nuclei&quot;</span><span class="p">,</span> <span class="n">score</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="p">)</span>
+</code></pre></div></p>
+</details>
+<div class="admonition info">
+<p class="admonition-title">How track sharing works</p>
+<p><code>from_stack(create_tracks=True)</code> maps each unique integer label to a <code>Track</code> object
+shared across all frames. If cell 5 appears in frames 0, 3, and 7, it gets the same
+<code>Track</code> in all three. This is useful when IDs are consistent across frames (e.g.,
+after tracking). Without <code>create_tracks</code>, objects have no cross-frame identity.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">See also</p>
+<ul>
+<li><a href="../model/regions/#label-images">Regions: Label images</a>: Full label image data model documentation</li>
+<li><a href="../model/regions/#sleap_io.PredictedLabelImage.from_stack"><code>PredictedLabelImage.from_stack</code></a>: Stack conversion API</li>
+<li><a href="../model/regions/#sleap_io.PredictedLabelImage.from_numpy"><code>PredictedLabelImage.from_numpy</code></a>: Per-frame conversion API</li>
+</ul>
+</div>
+<h3 id="stream-large-segmentation-results-to-slp">Stream large segmentation results to SLP<a class="headerlink" href="#stream-large-segmentation-results-to-slp" title="Permanent link">&para;</a></h3>
+<p>For datasets too large to hold in memory, write frames one at a time with constant memory usage.</p>
+<div class="highlight"><span class="filename">streaming_segmentation.py</span><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1"></a><a href="#__codelineno-30-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2"></a><a href="#__codelineno-30-2"><span class="linenos" data-linenos=" 2 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3"></a><a href="#__codelineno-30-3"><span class="linenos" data-linenos=" 3 "></span></a>
+<a id="__codelineno-30-4" name="__codelineno-30-4"></a><a href="#__codelineno-30-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="s2">&quot;microscopy.tif&quot;</span><span class="p">)</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5"></a><a href="#__codelineno-30-5"><span class="linenos" data-linenos=" 5 "></span></a>
+<a id="__codelineno-30-6" name="__codelineno-30-6"></a><a href="#__codelineno-30-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="c1"># Stream frames to SLP — file is created lazily on first add()</span>
+<a id="__codelineno-30-7" name="__codelineno-30-7"></a><a href="#__codelineno-30-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="k">with</span> <span class="n">sio</span><span class="o">.</span><span class="n">LabelImageWriter</span><span class="p">(</span><span class="s2">&quot;output.slp&quot;</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">)</span> <span class="k">as</span> <span class="n">writer</span><span class="p">:</span>
+<a id="__codelineno-30-8" name="__codelineno-30-8"></a><a href="#__codelineno-30-8"><span class="linenos" data-linenos=" 8 "></span></a>    <span class="k">for</span> <span class="n">frame_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_frames</span><span class="p">):</span>
+<a id="__codelineno-30-9" name="__codelineno-30-9"></a><a href="#__codelineno-30-9"><span class="linenos" data-linenos=" 9 "></span></a>        <span class="n">mask</span> <span class="o">=</span> <span class="n">run_segmentation</span><span class="p">(</span><span class="n">frame_idx</span><span class="p">)</span>  <span class="c1"># your segmentation function</span>
+<a id="__codelineno-30-10" name="__codelineno-30-10"></a><a href="#__codelineno-30-10"><span class="linenos" data-linenos="10 "></span></a>        <span class="n">li</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">PredictedLabelImage</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span>
+<a id="__codelineno-30-11" name="__codelineno-30-11"></a><a href="#__codelineno-30-11"><span class="linenos" data-linenos="11 "></span></a>            <span class="n">mask</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="n">frame_idx</span><span class="p">,</span>
+<a id="__codelineno-30-12" name="__codelineno-30-12"></a><a href="#__codelineno-30-12"><span class="linenos" data-linenos="12 "></span></a>            <span class="n">source</span><span class="o">=</span><span class="s2">&quot;cellpose:nuclei&quot;</span><span class="p">,</span> <span class="n">create_tracks</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">score</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-30-13" name="__codelineno-30-13"></a><a href="#__codelineno-30-13"><span class="linenos" data-linenos="13 "></span></a>        <span class="p">)</span>
+<a id="__codelineno-30-14" name="__codelineno-30-14"></a><a href="#__codelineno-30-14"><span class="linenos" data-linenos="14 "></span></a>        <span class="n">writer</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">li</span><span class="p">)</span>
+<a id="__codelineno-30-15" name="__codelineno-30-15"></a><a href="#__codelineno-30-15"><span class="linenos" data-linenos="15 "></span></a><span class="c1"># File finalized and closed on context exit</span>
+</code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Memory and performance</p>
+<p>The writer uses the chunked HDF5 format with gzip compression. Only one frame's
+compressed data is in memory at a time. A 42-frame (592x608) dataset compresses from
+~60 MB raw to ~0.6 MB in the SLP file.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">See also</p>
+<ul>
+<li><a href="../model/regions/#streaming-writes">Regions: Streaming writes</a>: Full <code>LabelImageWriter</code> documentation</li>
+<li><a href="../model/regions/#sleap_io.LabelImageWriter"><code>LabelImageWriter</code></a>: API reference</li>
+</ul>
+</div>
+<h3 id="extract-segmentation-data-from-slp">Extract segmentation data from SLP<a class="headerlink" href="#extract-segmentation-data-from-slp" title="Permanent link">&para;</a></h3>
+<p>Load segmentation data and convert back to numpy arrays, TIFF files, or individual masks.</p>
+<div class="highlight"><span class="filename">extract_segmentation.py</span><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1"></a><a href="#__codelineno-31-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2"></a><a href="#__codelineno-31-2"><span class="linenos" data-linenos=" 2 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3"></a><a href="#__codelineno-31-3"><span class="linenos" data-linenos=" 3 "></span></a>
+<a id="__codelineno-31-4" name="__codelineno-31-4"></a><a href="#__codelineno-31-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="c1"># Load — pixel data is lazy (metadata queries don&#39;t decompress)</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5"></a><a href="#__codelineno-31-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;segmentation.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-31-6" name="__codelineno-31-6"></a><a href="#__codelineno-31-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="n">li</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">label_images</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-31-7" name="__codelineno-31-7"></a><a href="#__codelineno-31-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="nb">print</span><span class="p">(</span><span class="n">li</span><span class="o">.</span><span class="n">frame_idx</span><span class="p">,</span> <span class="n">li</span><span class="o">.</span><span class="n">n_objects</span><span class="p">)</span>  <span class="c1"># no decompression yet</span>
+<a id="__codelineno-31-8" name="__codelineno-31-8"></a><a href="#__codelineno-31-8"><span class="linenos" data-linenos=" 8 "></span></a>
+<a id="__codelineno-31-9" name="__codelineno-31-9"></a><a href="#__codelineno-31-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="c1"># Extract all frames as (T, H, W) numpy array</span>
+<a id="__codelineno-31-10" name="__codelineno-31-10"></a><a href="#__codelineno-31-10"><span class="linenos" data-linenos="10 "></span></a><span class="n">all_masks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">li</span><span class="o">.</span><span class="n">data</span> <span class="k">for</span> <span class="n">li</span> <span class="ow">in</span> <span class="n">labels</span><span class="o">.</span><span class="n">label_images</span><span class="p">])</span>
+<a id="__codelineno-31-11" name="__codelineno-31-11"></a><a href="#__codelineno-31-11"><span class="linenos" data-linenos="11 "></span></a>
+<a id="__codelineno-31-12" name="__codelineno-31-12"></a><a href="#__codelineno-31-12"><span class="linenos" data-linenos="12 "></span></a><span class="c1"># Export as TIFF stack (with sidecar metadata JSON)</span>
+<a id="__codelineno-31-13" name="__codelineno-31-13"></a><a href="#__codelineno-31-13"><span class="linenos" data-linenos="13 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">save_label_images</span><span class="p">(</span><span class="s2">&quot;masks.tif&quot;</span><span class="p">,</span> <span class="n">labels</span><span class="o">.</span><span class="n">label_images</span><span class="p">,</span> <span class="n">stack</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-31-14" name="__codelineno-31-14"></a><a href="#__codelineno-31-14"><span class="linenos" data-linenos="14 "></span></a>
+<a id="__codelineno-31-15" name="__codelineno-31-15"></a><a href="#__codelineno-31-15"><span class="linenos" data-linenos="15 "></span></a><span class="c1"># Decompose one frame into per-object binary masks</span>
+<a id="__codelineno-31-16" name="__codelineno-31-16"></a><a href="#__codelineno-31-16"><span class="linenos" data-linenos="16 "></span></a><span class="n">individual_masks</span> <span class="o">=</span> <span class="n">li</span><span class="o">.</span><span class="n">to_masks</span><span class="p">()</span>
+<a id="__codelineno-31-17" name="__codelineno-31-17"></a><a href="#__codelineno-31-17"><span class="linenos" data-linenos="17 "></span></a><span class="k">for</span> <span class="n">mask</span> <span class="ow">in</span> <span class="n">individual_masks</span><span class="p">:</span>
+<a id="__codelineno-31-18" name="__codelineno-31-18"></a><a href="#__codelineno-31-18"><span class="linenos" data-linenos="18 "></span></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">mask</span><span class="o">.</span><span class="n">track</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">mask</span><span class="o">.</span><span class="n">area</span><span class="si">}</span><span class="s2"> pixels&quot;</span><span class="p">)</span>
+</code></pre></div>
+<details class="example">
+<summary>Expected output shapes</summary>
+<p>For a dataset with 42 frames at 592x608 with 21 objects:</p>
+<ul>
+<li><code>all_masks.shape</code>: <code>(42, 592, 608)</code>, dtype <code>int32</code></li>
+<li><code>individual_masks</code>: list of 21 <code>SegmentationMask</code> objects</li>
+<li>Each mask: boolean array <code>(592, 608)</code> for one object</li>
+</ul>
+</details>
+<div class="admonition note">
+<p class="admonition-title">See also</p>
+<ul>
+<li><a href="../model/regions/#lazy-loading">Regions: Lazy loading</a>: How lazy pixel data access works</li>
+<li><a href="../formats/tiff/">TIFF Format</a>: TIFF label image I/O details</li>
+<li><a href="../model/regions/#sleap_io.LabelImage.to_masks"><code>LabelImage.to_masks</code></a>: Decomposition API</li>
+</ul>
+</div>
+<h3 id="merge-segmentation-results">Merge segmentation results<a class="headerlink" href="#merge-segmentation-results" title="Permanent link">&para;</a></h3>
+<p>Combine label images from multiple SLP files into one (e.g., after parallel batch processing).</p>
+<div class="highlight"><span class="filename">merge_segmentation.py</span><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1"></a><a href="#__codelineno-32-1"><span class="linenos" data-linenos="1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2"></a><a href="#__codelineno-32-2"><span class="linenos" data-linenos="2 "></span></a>
+<a id="__codelineno-32-3" name="__codelineno-32-3"></a><a href="#__codelineno-32-3"><span class="linenos" data-linenos="3 "></span></a><span class="c1"># Merge multiple batch results — copies compressed chunks directly</span>
+<a id="__codelineno-32-4" name="__codelineno-32-4"></a><a href="#__codelineno-32-4"><span class="linenos" data-linenos="4 "></span></a><span class="n">merged</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">merge_label_images</span><span class="p">(</span>
+<a id="__codelineno-32-5" name="__codelineno-32-5"></a><a href="#__codelineno-32-5"><span class="linenos" data-linenos="5 "></span></a>    <span class="p">[</span><span class="s2">&quot;batch_0.slp&quot;</span><span class="p">,</span> <span class="s2">&quot;batch_1.slp&quot;</span><span class="p">,</span> <span class="s2">&quot;batch_2.slp&quot;</span><span class="p">],</span>
+<a id="__codelineno-32-6" name="__codelineno-32-6"></a><a href="#__codelineno-32-6"><span class="linenos" data-linenos="6 "></span></a>    <span class="s2">&quot;all_frames.slp&quot;</span><span class="p">,</span>
+<a id="__codelineno-32-7" name="__codelineno-32-7"></a><a href="#__codelineno-32-7"><span class="linenos" data-linenos="7 "></span></a><span class="p">)</span>
+<a id="__codelineno-32-8" name="__codelineno-32-8"></a><a href="#__codelineno-32-8"><span class="linenos" data-linenos="8 "></span></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Merged: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">merged</span><span class="o">.</span><span class="n">label_images</span><span class="p">)</span><span class="si">}</span><span class="s2"> total frames&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>For chunked-format sources (v2.2), merge copies raw compressed data without
+decompression — it's I/O-bound, not CPU-bound.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">See also</p>
+<ul>
+<li><a href="../merging/#merging-label-images">Merging: Label images</a>: Full merge documentation</li>
+<li><a href="../model/regions/#sleap_io.merge_label_images"><code>merge_label_images</code></a>: API reference</li>
+</ul>
+</div>
 <h2 id="rendering">Rendering<a class="headerlink" href="#rendering" title="Permanent link">&para;</a></h2>
 <p>Create videos and images with pose overlays for visualization and publication.</p>
-<div class="highlight"><span class="filename">render_poses.py</span><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1"></a><a href="#__codelineno-28-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-28-2" name="__codelineno-28-2"></a><a href="#__codelineno-28-2"><span class="linenos" data-linenos=" 2 "></span></a>
-<a id="__codelineno-28-3" name="__codelineno-28-3"></a><a href="#__codelineno-28-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-28-4" name="__codelineno-28-4"></a><a href="#__codelineno-28-4"><span class="linenos" data-linenos=" 4 "></span></a>
-<a id="__codelineno-28-5" name="__codelineno-28-5"></a><a href="#__codelineno-28-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="c1"># Render full video</span>
-<a id="__codelineno-28-6" name="__codelineno-28-6"></a><a href="#__codelineno-28-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>
-<a id="__codelineno-28-7" name="__codelineno-28-7"></a><a href="#__codelineno-28-7"><span class="linenos" data-linenos=" 7 "></span></a>
-<a id="__codelineno-28-8" name="__codelineno-28-8"></a><a href="#__codelineno-28-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="c1"># Fast preview (0.25x resolution)</span>
-<a id="__codelineno-28-9" name="__codelineno-28-9"></a><a href="#__codelineno-28-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="s2">&quot;preview.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;preview&quot;</span><span class="p">)</span>
-<a id="__codelineno-28-10" name="__codelineno-28-10"></a><a href="#__codelineno-28-10"><span class="linenos" data-linenos="10 "></span></a>
-<a id="__codelineno-28-11" name="__codelineno-28-11"></a><a href="#__codelineno-28-11"><span class="linenos" data-linenos="11 "></span></a><span class="c1"># Single frame to image</span>
-<a id="__codelineno-28-12" name="__codelineno-28-12"></a><a href="#__codelineno-28-12"><span class="linenos" data-linenos="12 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;frame.png&quot;</span><span class="p">)</span>
+<div class="highlight"><span class="filename">render_poses.py</span><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1"></a><a href="#__codelineno-33-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2"></a><a href="#__codelineno-33-2"><span class="linenos" data-linenos=" 2 "></span></a>
+<a id="__codelineno-33-3" name="__codelineno-33-3"></a><a href="#__codelineno-33-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4"></a><a href="#__codelineno-33-4"><span class="linenos" data-linenos=" 4 "></span></a>
+<a id="__codelineno-33-5" name="__codelineno-33-5"></a><a href="#__codelineno-33-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="c1"># Render full video</span>
+<a id="__codelineno-33-6" name="__codelineno-33-6"></a><a href="#__codelineno-33-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>
+<a id="__codelineno-33-7" name="__codelineno-33-7"></a><a href="#__codelineno-33-7"><span class="linenos" data-linenos=" 7 "></span></a>
+<a id="__codelineno-33-8" name="__codelineno-33-8"></a><a href="#__codelineno-33-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="c1"># Fast preview (0.25x resolution)</span>
+<a id="__codelineno-33-9" name="__codelineno-33-9"></a><a href="#__codelineno-33-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="s2">&quot;preview.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;preview&quot;</span><span class="p">)</span>
+<a id="__codelineno-33-10" name="__codelineno-33-10"></a><a href="#__codelineno-33-10"><span class="linenos" data-linenos="10 "></span></a>
+<a id="__codelineno-33-11" name="__codelineno-33-11"></a><a href="#__codelineno-33-11"><span class="linenos" data-linenos="11 "></span></a><span class="c1"># Single frame to image</span>
+<a id="__codelineno-33-12" name="__codelineno-33-12"></a><a href="#__codelineno-33-12"><span class="linenos" data-linenos="12 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;frame.png&quot;</span><span class="p">)</span>
 </code></pre></div>
-<div class="highlight"><span class="filename">CLI</span><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--preset<span class="w"> </span>preview
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w">  </span><span class="c1"># Single frame</span>
+<div class="highlight"><span class="filename">CLI</span><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--preset<span class="w"> </span>preview
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w">  </span><span class="c1"># Single frame</span>
 </code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
