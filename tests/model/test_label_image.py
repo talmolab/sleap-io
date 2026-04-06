@@ -994,3 +994,14 @@ def test_from_numpy_dict_tracks_without_create():
     assert li.objects[2].track is None
     # Dict not mutated
     assert 2 not in tracks
+
+
+def test_height_width_fallback_to_data_shape():
+    """height/width fall back to data.shape when _height/_width are 0."""
+    data = np.zeros((5, 7), dtype=np.int32)
+    li = UserLabelImage(data=data)
+    # Reset cached dims to 0 to trigger fallback
+    li._height = 0
+    li._width = 0
+    assert li.height == 5
+    assert li.width == 7
