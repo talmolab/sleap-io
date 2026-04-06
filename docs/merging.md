@@ -539,6 +539,48 @@ base.merge(other, instance=InstanceMatcher(method="spatial", threshold=2.0))
 
 ---
 
+## Merging label images
+
+For segmentation workflows, [`merge_label_images()`][sleap_io.merge_label_images]
+merges label images from multiple SLP files into a single file. This is separate
+from [`Labels.merge()`](#sleap_io.model.labels.Labels.merge), which merges
+keypoint annotations.
+
+```python
+import sleap_io as sio
+
+merged = sio.merge_label_images(
+    ["batch_0.slp", "batch_1.slp", "batch_2.slp"],
+    "all_frames.slp",
+)
+```
+
+This is designed for parallelized segmentation pipelines where each batch of
+frames is processed independently (e.g., with Cellpose or StarDist) and the
+results need to be combined.
+
+Key behavior:
+
+- **Zero-decompression copy**: For chunked-format (v2.2) sources, compressed
+  chunks are copied directly via `read_direct_chunk` / `write_direct_chunk`
+  with no decompression/recompression overhead.
+- **Legacy format support**: Blob-format sources (v1.8-v2.1) are transparently
+  converted to chunked format during the merge.
+- **Video deduplication**: Videos are deduplicated by filename across sources.
+  Pass an explicit `video=` argument to override and assign all frames to a
+  single video.
+- **Track deduplication**: Tracks with the same name across sources are merged
+  into a single track.
+- **Dimension validation**: All source files must have the same frame dimensions
+  `(H, W)`. A `ValueError` is raised if dimensions differ.
+
+!!! tip "See also"
+    [`LabelImageWriter`][sleap_io.LabelImageWriter] for streaming writes of
+    individual frames — useful for producing the per-batch SLP files that
+    `merge_label_images()` can then combine.
+
+---
+
 ## Reference
 
 ### Labels.merge

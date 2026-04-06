@@ -591,6 +591,84 @@ functions `sio.load_label_images()` and `sio.save_label_images()`. See
 the [TIFF Format Reference](../formats/tiff.md) for details on file
 structures and sidecar metadata.
 
+### Streaming writes
+
+For large datasets where holding all frames in memory is impractical,
+[`LabelImageWriter`][sleap_io.LabelImageWriter] writes label images one at a
+time to an SLP file with constant memory usage:
+
+```python
+import sleap_io as sio
+
+video = sio.Video("microscopy.tif")
+with sio.LabelImageWriter("output.slp", video=video) as writer:
+    for frame_idx, mask in enumerate(segmentation_results):
+        li = sio.PredictedLabelImage.from_numpy(
+            mask, video=video, frame_idx=frame_idx,
+            source="cellpose:nuclei", create_tracks=True, score=1.0,
+        )
+        writer.add(li)
+# File is finalized on context exit
+```
+
+The writer uses the chunked `(T, H, W)` format (v2.2) with
+`write_direct_chunk` for maximum throughput. The HDF5 file and pixel dataset
+are created lazily on the first `add()` call. All frames must have the same
+`(H, W)` dimensions.
+
+Key features:
+
+- **Constant memory**: Only one frame's compressed data is in memory at a time.
+- **Exponential growth**: The dataset starts at `initial_capacity` frames and
+  doubles when full, then is trimmed to the actual count on finalize.
+- **Score maps**: `PredictedLabelImage` score maps are supported.
+- **Batch convenience**: `writer.add_batch(list_of_label_images)` writes
+  multiple frames in one call.
+
+### Merging label images
+
+[`merge_label_images()`][sleap_io.merge_label_images] combines label images
+from multiple SLP files into one, copying compressed chunks directly without
+decompression when possible:
+
+```python
+import sleap_io as sio
+
+merged = sio.merge_label_images(
+    ["chunk_0.slp", "chunk_1.slp", "chunk_2.slp"],
+    "merged.slp",
+)
+print(len(merged.label_images))  # Total across all sources
+```
+
+This is useful for parallelized segmentation workflows where each chunk of
+frames is processed independently and the results need to be combined. Videos
+are deduplicated by filename and tracks by name. All source files must have the
+same frame dimensions `(H, W)`.
+
+### Lazy loading
+
+When loading SLP files, label image pixel data is loaded lazily — metadata
+(tracks, frame indices, categories) is available immediately, and the actual
+pixel array is decompressed only on first `.data` access:
+
+```python
+labels = sio.load_slp("large_dataset.slp")
+
+# Metadata queries — no decompression
+li = labels.get_label_images(frame_idx=42)[0]
+print(li.tracks)      # free
+print(li.frame_idx)   # free
+print(li.height)      # free (cached from metadata)
+
+# Pixel data decompressed on first access, then cached
+mask = li.data  # decompresses this frame only
+```
+
+This keeps memory usage proportional to the number of frames actually accessed
+rather than the total dataset size. The underlying HDF5 file handle is managed
+by the `Labels` object and can be explicitly closed with `labels.close()`.
+
 ---
 
 ## Conversions
@@ -728,6 +806,8 @@ classDiagram
     - **[Labels & Frames](labels.md)**: Accessing bounding boxes, ROIs, masks, and label images from a `Labels` dataset via `labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`, including filtered queries with `get_bboxes()`, `get_rois()`, `get_masks()`, and `get_label_images()`.
     - **[Rendering](../rendering.md)**: Visualizing segmentation overlays and bounding boxes on video frames.
     - **[TIFF Format](../formats/tiff.md)**: Reading and writing label images as TIFF files with sidecar metadata.
+    - **[SLP Format](../formats/slp.md#label-images)**: HDF5 storage layout for label images (blob and chunked formats).
+    - **[Merging](../merging.md#merging-label-images)**: Combining label images from multiple SLP files.
 
 ---
 
@@ -756,3 +836,7 @@ classDiagram
 ::: sleap_io.UserLabelImage
 
 ::: sleap_io.PredictedLabelImage
+
+::: sleap_io.LabelImageWriter
+
+::: sleap_io.merge_label_images
