@@ -442,6 +442,42 @@ inherited from each mask's metadata:
 
 ```
 
+### From binary masks
+
+When you have per-object binary masks — e.g., from SAM, Mask R-CNN, or similar
+instance segmentation tools — use `from_binary_masks` to composite them into a
+single `LabelImage` without constructing `SegmentationMask` objects first:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> mask_a = np.zeros((64, 64), dtype=bool)
+>>> mask_b = np.zeros((64, 64), dtype=bool)
+>>> mask_a[10:30, 10:30] = True
+>>> mask_b[40:60, 40:60] = True
+>>> li = sio.PredictedLabelImage.from_binary_masks(
+...     [mask_a, mask_b],
+...     tracks=[sio.Track(name="cell_A"), sio.Track(name="cell_B")],
+...     categories=["neuron", "glia"],
+...     scores=[0.95, 0.87],
+...     score=0.9,
+... )
+>>> print(li.n_objects)
+>>> print(li.objects[1].track.name, li.objects[1].score)
+
+```
+
+Accepts a list of `(H, W)` arrays, a stacked `(N, H, W)` array, or a single
+`(H, W)` array. Values are cast to bool (nonzero = True). Overlapping pixels
+are assigned to the last mask. Use `create_tracks=True` to auto-create tracks
+instead of providing them explicitly.
+
+!!! tip "When to use which factory method"
+    - **`from_binary_masks`**: Per-object binary masks from SAM, Mask R-CNN, etc.
+    - **`from_numpy`**: Pre-composited integer array from Cellpose, StarDist, etc.
+    - **`from_masks`**: Existing `SegmentationMask` objects with rich metadata.
+    - **`from_stack`**: `(T, H, W)` integer array for multiple frames at once.
+
 ### Direct construction
 
 For full control, construct directly with the `data` array and `objects` dict:
