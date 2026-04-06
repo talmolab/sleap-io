@@ -1179,13 +1179,21 @@ def render_video(
 
         # Get labeled frames for this video
         labeled_frames = labels.find(target_video)
-        if not labeled_frames:
-            raise ValueError(f"No labeled frames found for video {target_video}")
 
         # Sort by frame index
         labeled_frames = sorted(labeled_frames, key=lambda lf: lf.frame_idx)
 
-        # Get skeleton info
+        # Check for spatial annotations (label_images, masks, bboxes, rois)
+        # that can be rendered even without labeled frames (poses).
+        has_spatial = bool(
+            labels.label_images or labels.masks or labels.bboxes or labels.rois
+        )
+
+        if not labeled_frames and not has_spatial:
+            raise ValueError(f"No labeled frames found for video {target_video}")
+
+        # Get skeleton info (not required when rendering only spatial
+        # annotations)
         skeleton = labels.skeletons[0] if labels.skeletons else None
         if skeleton is None and labeled_frames:
             for lf in labeled_frames:
@@ -1195,13 +1203,25 @@ def render_video(
                 if skeleton:
                     break
 
-        if skeleton is None:
-            raise ValueError("No skeleton found in labels")
+        if skeleton is not None:
+            edge_inds = skeleton.edge_inds
+            node_names = [n.name for n in skeleton.nodes]
+        else:
+            if labeled_frames:
+                raise ValueError("No skeleton found in labels")
+            edge_inds = []
+            node_names = []
 
-        edge_inds = skeleton.edge_inds
-        node_names = [n.name for n in skeleton.nodes]
         n_tracks = len(labels.tracks)
         has_tracks = n_tracks > 0
+
+        # Auto-use label_images as overlay when no explicit overlay is
+        # provided and the file has label images for this video.
+        if overlay is None and labels.label_images:
+            video_label_images = labels.get_label_images(video=target_video)
+            if video_label_images:
+                overlay = video_label_images
+                include_unlabeled = True
 
     elif isinstance(source, list) and all(isinstance(x, LabeledFrame) for x in source):
         labeled_frames = source
@@ -1451,6 +1471,12 @@ def render_video(
                             f"Video unavailable at frame {fidx}. "
                             "Specify a background color to render without video."
                         )
+
+                # Ensure RGB for overlay compositing
+                if image.ndim == 2:
+                    image = np.stack([image] * 3, axis=-1)
+                elif image.ndim == 3 and image.shape[2] == 1:
+                    image = np.concatenate([image] * 3, axis=-1)
 
                 # Apply cropping if specified
                 render_image_data = image
