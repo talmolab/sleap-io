@@ -372,6 +372,9 @@ class Video:
 
         file_is_accessible = is_file_accessible(self.filename)
         if not file_is_accessible:
+            # Check if it's a directory (ImageVideo source)
+            if Path(self.filename).is_dir():
+                return True
             return False
 
         if dataset is None or dataset == "":
@@ -395,7 +398,9 @@ class Video:
     @property
     def is_open(self) -> bool:
         """Check if the video backend is open."""
-        return self.exists() and self.backend is not None
+        if self.backend is not None:
+            return True
+        return False
 
     def open(
         self,
