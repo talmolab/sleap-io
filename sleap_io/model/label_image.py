@@ -72,6 +72,12 @@ class LabelImage:
         instance: "Instance | None" = None
         score: float | None = None
 
+        # Private: deferred instance index for lazy loading. When label images
+        # are read from a file without materialized instances (e.g., lazy mode),
+        # this stores the raw instance_idx so it can be resolved later or
+        # written back as-is.
+        _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
+
     data: np.ndarray = attrs.field()
     objects: dict[int, Info] = Factory(dict)
     video: "Video | None" = attrs.field(default=None)

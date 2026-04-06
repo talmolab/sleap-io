@@ -5556,15 +5556,19 @@ def test_labels_copy_preserves_label_images(slp_minimal, tmp_path):
 
 
 def test_labels_materialize_label_images(tmp_path):
-    """materialize() deep copies label_images, relinking video/track refs."""
+    """materialize() deep copies label_images, relinking video/track/instance refs."""
     video = Video(filename="test.mp4")
     track = Track(name="t1")
     skeleton = Skeleton(["A"])
+    instance = Instance.from_numpy(
+        np.array([[10, 20]], dtype=np.float32), skeleton=skeleton
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
 
     li = UserLabelImage(
         data=np.array([[0, 1], [2, 0]], dtype=np.int32),
         objects={
-            1: LabelImage.Info(track=track, category="neuron"),
+            1: LabelImage.Info(track=track, category="neuron", instance=instance),
             2: LabelImage.Info(category="glia"),
         },
         video=video,
@@ -5572,6 +5576,7 @@ def test_labels_materialize_label_images(tmp_path):
     )
 
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         tracks=[track],
         skeletons=[skeleton],
@@ -5595,6 +5600,11 @@ def test_labels_materialize_label_images(tmp_path):
         if info.track is not None:
             assert info.track is materialized.tracks[0]
             assert info.track is not lazy.tracks[0]
+
+    # Instance in objects resolved via _instance_idx
+    assert mat_li.objects[1].instance is materialized.labeled_frames[0].instances[0]
+    assert mat_li.objects[1]._instance_idx == -1
+    assert mat_li.objects[2].instance is None
 
 
 def test_labels_get_masks_predicted():

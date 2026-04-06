@@ -3542,6 +3542,8 @@ def read_label_images(
                     instance=instance,
                     score=obj_score,
                 )
+                # Store raw index for deferred resolution (lazy loading)
+                objects[label_id]._instance_idx = instance_idx
 
         source = sources[i] if i < len(sources) else ""
 
@@ -3670,12 +3672,12 @@ def write_label_images(
 
             track_idx = tracks.index(info.track) if info.track in tracks else -1
 
-            instance_idx = -1
+            instance_idx = info._instance_idx  # Use stored index as default
             if instances is not None and info.instance is not None:
                 try:
                     instance_idx = instances.index(info.instance)
                 except ValueError:
-                    pass
+                    pass  # Keep stored _instance_idx
 
             obj_score = info.score if info.score is not None else float("nan")
             obj_rows.append((label_id, track_idx, instance_idx, obj_score))
