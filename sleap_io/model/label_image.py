@@ -892,24 +892,43 @@ class LabelImage:
         from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 
         data = self.data
-        bboxes = []
         cls = PredictedBoundingBox if self.is_predicted else UserBoundingBox
         sx, sy = self.scale
         ox, oy = self.offset
 
+        # Single-pass: find all foreground pixels at once.
+        fg_rows, fg_cols = np.where(data > 0)
+        if len(fg_rows) == 0:
+            return []
+
+        # Map sparse label IDs to dense indices and compute per-label bounds.
+        fg_labels = data[fg_rows, fg_cols]
+        unique_labels, inverse = np.unique(fg_labels, return_inverse=True)
+        n = len(unique_labels)
+
+        row_min = np.full(n, np.iinfo(np.intp).max, dtype=np.intp)
+        row_max = np.full(n, np.iinfo(np.intp).min, dtype=np.intp)
+        col_min = np.full(n, np.iinfo(np.intp).max, dtype=np.intp)
+        col_max = np.full(n, np.iinfo(np.intp).min, dtype=np.intp)
+
+        np.minimum.at(row_min, inverse, fg_rows)
+        np.maximum.at(row_max, inverse, fg_rows)
+        np.minimum.at(col_min, inverse, fg_cols)
+        np.maximum.at(col_max, inverse, fg_cols)
+
+        label_to_idx = {int(lid): i for i, lid in enumerate(unique_labels)}
+
+        # Build BoundingBox objects using precomputed bounds.
+        bboxes = []
         for lid, info in self.objects.items():
-            rows, cols = np.where(data == lid)
-            if len(rows) == 0:
+            idx = label_to_idx.get(lid)
+            if idx is None:
                 continue
 
-            r_min, r_max = rows.min(), rows.max()
-            c_min, c_max = cols.min(), cols.max()
-
-            # Convert to image coordinates via scale/offset
-            x1 = float(c_min / sx + ox)
-            y1 = float(r_min / sy + oy)
-            x2 = float((c_max + 1) / sx + ox)
-            y2 = float((r_max + 1) / sy + oy)
+            x1 = float(col_min[idx] / sx + ox)
+            y1 = float(row_min[idx] / sy + oy)
+            x2 = float((col_max[idx] + 1) / sx + ox)
+            y2 = float((row_max[idx] + 1) / sy + oy)
 
             kwargs: dict = dict(
                 video=self.video,
