@@ -398,9 +398,7 @@ class Video:
     @property
     def is_open(self) -> bool:
         """Check if the video backend is open."""
-        if self.backend is not None:
-            return True
-        return False
+        return self.exists() and self.backend is not None
 
     def open(
         self,
