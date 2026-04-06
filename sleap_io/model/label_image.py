@@ -29,7 +29,7 @@ See Also:
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 
 import attrs
 import numpy as np
@@ -100,7 +100,7 @@ class LabelImage:
         # written back as-is.
         _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
 
-    data: np.ndarray = attrs.field()
+    _data: "np.ndarray | None" = attrs.field(default=None, alias="data")
     objects: dict[int, Info] = Factory(dict)
     video: "Video | None" = attrs.field(default=None)
     frame_idx: int | None = attrs.field(default=None)
@@ -108,10 +108,63 @@ class LabelImage:
     scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
     offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))
 
+    # Private: lazy loading support. When set, data is decompressed on first
+    # access via the .data property and cached. The loader is cleared after use.
+    _lazy_loader: "Callable[[], np.ndarray] | None" = attrs.field(
+        default=None, init=False, repr=False, eq=False
+    )
+    # Private: cached dimensions from metadata (avoids triggering lazy load for
+    # height/width queries). Set by the I/O layer after construction.
+    _height: int = attrs.field(default=0, init=False, repr=False, eq=False)
+    _width: int = attrs.field(default=0, init=False, repr=False, eq=False)
+
+    @property
+    def data(self) -> np.ndarray:
+        """Integer array of shape ``(H, W)`` with dtype int32.
+
+        ``0`` is background, positive values are object IDs. When the label
+        image was loaded lazily, the pixel data is decompressed on first access
+        and cached for subsequent reads.
+        """
+        if self._data is None:
+            if self._lazy_loader is not None:
+                self._data = self._lazy_loader()
+                self._lazy_loader = None
+                self._validate_data()
+            else:
+                raise ValueError("LabelImage has no data and no lazy loader.")
+        return self._data
+
+    @data.setter
+    def data(self, value: np.ndarray) -> None:
+        self._data = value
+        self._lazy_loader = None
+        if value is not None:
+            self._height = value.shape[0]
+            self._width = value.shape[1]
+
     @property
     def is_predicted(self) -> bool:
         """Whether this label image is a model prediction."""
         return isinstance(self, PredictedLabelImage)
+
+    def _validate_data(self) -> None:
+        """Validate and normalize the data array.
+
+        Called eagerly from ``__attrs_post_init__`` when data is provided at
+        construction time, or lazily on first ``.data`` access when a
+        ``_lazy_loader`` is used.
+        """
+        if self._data.ndim != 2:
+            raise ValueError(
+                f"LabelImage data must be 2D, got shape {self._data.shape}"
+            )
+        if np.any(self._data < 0):
+            raise ValueError("LabelImage data must not contain negative values.")
+        if self._data.dtype != np.int32:
+            self._data = self._data.astype(np.int32)
+        self._height = self._data.shape[0]
+        self._width = self._data.shape[1]
 
     def __attrs_post_init__(self):
         """Validate and normalize data array on construction."""
@@ -119,23 +172,24 @@ class LabelImage:
             raise TypeError(
                 "LabelImage is abstract. Use UserLabelImage or PredictedLabelImage."
             )
-        if self.data.ndim != 2:
-            raise ValueError(f"LabelImage data must be 2D, got shape {self.data.shape}")
-        if np.any(self.data < 0):
-            raise ValueError("LabelImage data must not contain negative values.")
-        if self.data.dtype != np.int32:
-            self.data = self.data.astype(np.int32)
+        if self._data is not None:
+            self._validate_data()
+        # When _data is None, validation is deferred to first .data access.
         if self.scale[0] <= 0 or self.scale[1] <= 0:
             raise ValueError(f"Scale values must be positive, got {self.scale}.")
 
     @property
     def height(self) -> int:
         """Height of the label image in pixels."""
+        if self._height > 0:
+            return self._height
         return self.data.shape[0]
 
     @property
     def width(self) -> int:
         """Width of the label image in pixels."""
+        if self._width > 0:
+            return self._width
         return self.data.shape[1]
 
     @property
@@ -636,6 +690,7 @@ class PredictedLabelImage(LabelImage):
         score_map: Optional dense pixel-level confidence map of shape (H, W)
             as float32. This can be large and is stored separately in the SLP
             format. If ``None``, only per-object scores in ``Info`` are available.
+            When loaded lazily, decompressed on first access and cached.
         score_map_scale: Resolution ratio ``(sx, sy)`` for the score map,
             independent of the label image's own ``scale``.
         score_map_offset: Origin ``(x, y)`` of the score map in image pixel
@@ -643,6 +698,24 @@ class PredictedLabelImage(LabelImage):
     """
 
     score: float = attrs.field(default=0.0)
-    score_map: np.ndarray | None = attrs.field(default=None)
+    _score_map: "np.ndarray | None" = attrs.field(default=None, alias="score_map")
     score_map_scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
     score_map_offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))
+
+    # Private: lazy loading support for score maps.
+    _score_map_lazy_loader: "Callable[[], np.ndarray] | None" = attrs.field(
+        default=None, init=False, repr=False, eq=False
+    )
+
+    @property
+    def score_map(self) -> np.ndarray | None:
+        """Optional dense pixel-level confidence map of shape ``(H, W)``."""
+        if self._score_map is None and self._score_map_lazy_loader is not None:
+            self._score_map = self._score_map_lazy_loader()
+            self._score_map_lazy_loader = None
+        return self._score_map
+
+    @score_map.setter
+    def score_map(self, value: np.ndarray | None) -> None:
+        self._score_map = value
+        self._score_map_lazy_loader = None
