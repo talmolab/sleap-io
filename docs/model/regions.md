@@ -472,6 +472,20 @@ Accepts a list of `(H, W)` arrays, a stacked `(N, H, W)` array, or a single
 are assigned to the last mask. Use `create_tracks=True` to auto-create tracks
 instead of providing them explicitly.
 
+Use `label_ids` to control pixel values explicitly — useful when objects
+appear/disappear across frames and you need consistent values per track:
+
+```pycon
+>>> li = sio.PredictedLabelImage.from_binary_masks(
+...     [mask_a, mask_b],
+...     label_ids=[5, 10],
+...     scores=[0.95, 0.87],
+... )
+>>> print(li.label_ids)
+array([ 5, 10])
+
+```
+
 !!! tip "When to use which factory method"
     - **`from_binary_masks`**: Per-object binary masks from SAM, Mask R-CNN, etc.
     - **`from_numpy`**: Pre-composited integer array from Cellpose, StarDist, etc.
@@ -682,6 +696,34 @@ frames is processed independently and the results need to be combined. Videos
 are deduplicated by filename and tracks by name. All source files must have the
 same frame dimensions `(H, W)`.
 
+### Normalizing label IDs
+
+When label images come from different sources or segmentation runs, the same
+Track may have different pixel values in different frames.
+[`normalize_label_ids()`][sleap_io.normalize_label_ids] rewrites pixel values
+so each Track gets a globally consistent label ID (1, 2, 3, ...) assigned in
+order of first appearance:
+
+```python
+import sleap_io as sio
+
+labels = sio.load_slp("segmented.slp")
+track_map = sio.normalize_label_ids(labels.label_images, by="track")
+# Now the same Track always has the same pixel value in every frame.
+
+# Safe to stack into a (T, H, W) array:
+import numpy as np
+
+stack = np.stack([li.data for li in labels.label_images])
+```
+
+For semantic segmentation, group by category instead — all objects with the same
+category string merge into one pixel value per frame:
+
+```python
+sio.normalize_label_ids(labels.label_images, by="category")
+```
+
 ### Lazy loading
 
 When loading SLP files, label image pixel data is loaded lazily — metadata
@@ -876,3 +918,5 @@ classDiagram
 ::: sleap_io.LabelImageWriter
 
 ::: sleap_io.merge_label_images
+
+::: sleap_io.normalize_label_ids

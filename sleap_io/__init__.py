@@ -95,6 +95,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "LabelImage",
             "UserLabelImage",
             "PredictedLabelImage",
+            "normalize_label_ids",
         ],
         "model.labels": ["Labels"],
         "model.mask": [

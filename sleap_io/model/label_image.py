@@ -515,6 +515,7 @@ class LabelImage:
     def from_binary_masks(
         cls,
         masks: "np.ndarray | list[np.ndarray]",
+        label_ids: list[int] | None = None,
         tracks: "list[Track] | None" = None,
         categories: list[str] | None = None,
         names: list[str] | None = None,
@@ -527,8 +528,8 @@ class LabelImage:
         This is a convenience constructor for workflows that produce per-object
         binary masks, such as SAM, Mask R-CNN, or other instance segmentation
         tools. Each binary mask becomes one object in the composited label image
-        with a unique label ID (1, 2, ..., N). Overlapping pixels are assigned
-        to the last mask in the list.
+        with a unique label ID (1, 2, ..., N, unless ``label_ids`` is provided).
+        Overlapping pixels are assigned to the last mask in the list.
 
         Unlike ``from_masks()``, this takes raw numpy arrays instead of
         ``SegmentationMask`` objects, avoiding RLE encoding overhead.
@@ -536,6 +537,10 @@ class LabelImage:
         Args:
             masks: Per-object binary masks as an ``(N, H, W)`` array or a list
                 of ``(H, W)`` arrays. Values are cast to bool (nonzero = True).
+            label_ids: Optional list of positive integer label IDs, one per
+                mask. ``label_ids[i]`` sets the pixel value for mask ``i``. If
+                ``None`` (default), masks are numbered 1, 2, ..., N. All values
+                must be positive (0 is background) and unique.
             tracks: List of ``Track`` objects, one per mask. ``tracks[i]`` is
                 assigned to mask ``i`` (label ID ``i + 1``).
             categories: List of category strings, one per mask.
@@ -604,6 +609,7 @@ class LabelImage:
 
         # Validate parallel array lengths.
         for param_name, param in [
+            ("label_ids", label_ids),
             ("tracks", tracks),
             ("categories", categories),
             ("names", names),
@@ -615,11 +621,23 @@ class LabelImage:
                     f"masks ({n})."
                 )
 
+        # Validate label_ids semantics.
+        if label_ids is not None:
+            if any(lid <= 0 for lid in label_ids):
+                raise ValueError(
+                    "All label_ids must be positive (0 is reserved for background)."
+                )
+            if len(set(label_ids)) != len(label_ids):
+                raise ValueError("label_ids must contain unique values.")
+
         # Build track list.
         if tracks is not None:
             track_list = tracks
         elif create_tracks:
-            track_list = [Track(name=str(i + 1)) for i in range(n)]
+            track_list = [
+                Track(name=str(label_ids[i] if label_ids is not None else i + 1))
+                for i in range(n)
+            ]
         else:
             track_list = [None] * n
 
@@ -628,7 +646,7 @@ class LabelImage:
         objects: dict[int, LabelImage.Info] = {}
 
         for i, mask in enumerate(mask_list):
-            label_id = i + 1
+            label_id = label_ids[i] if label_ids is not None else i + 1
             data[np.asarray(mask, dtype=bool)] = label_id
             objects[label_id] = LabelImage.Info(
                 track=track_list[i],
@@ -899,3 +917,124 @@ class PredictedLabelImage(LabelImage):
     def score_map(self, value: np.ndarray | None) -> None:
         self._score_map = value
         self._score_map_lazy_loader = None
+
+
+def normalize_label_ids(
+    label_images: list[LabelImage],
+    by: str = "track",
+) -> dict:
+    """Remap label IDs so each group gets a globally consistent ID.
+
+    Rewrites ``.data`` arrays and ``.objects`` dicts in place so that the same
+    Track (or category) always maps to the same pixel value across all frames.
+    IDs are assigned 1, 2, 3, ... in order of first appearance.
+
+    Args:
+        label_images: Label images to normalize. Modified in place.
+        by: Grouping key.
+
+            - ``"track"``: Each unique ``Track`` object gets one ID.
+              Objects with ``track=None`` each get a unique ID.
+            - ``"category"``: Each unique category string gets one ID.
+              Within a frame, multiple objects with the same category
+              merge into one pixel value (semantic segmentation).
+
+    Returns:
+        Mapping of group key to assigned label ID. Keys are ``Track`` objects
+        when ``by="track"`` or category strings when ``by="category"``.
+        Objects with ``track=None`` or empty category are not included.
+
+    Raises:
+        ValueError: If ``by`` is not ``"track"`` or ``"category"``.
+    """
+    if by not in ("track", "category"):
+        raise ValueError(f"by must be 'track' or 'category', got {by!r}.")
+
+    if not label_images:
+        return {}
+
+    if by == "track":
+        return _normalize_by_track(label_images)
+    else:
+        return _normalize_by_category(label_images)
+
+
+def _normalize_by_track(label_images: list[LabelImage]) -> dict:
+    """Normalize label IDs so each Track gets a consistent ID."""
+    # Phase 1: Assign IDs to tracked objects (first-appearance order).
+    track_to_id: dict[int, int] = {}  # id(track) -> new_label_id
+    track_by_identity: dict[int, Track] = {}  # id(track) -> Track
+    next_id = 1
+    for li in label_images:
+        for lid in sorted(li.objects):
+            info = li.objects[lid]
+            if info.track is not None and id(info.track) not in track_to_id:
+                track_to_id[id(info.track)] = next_id
+                track_by_identity[id(info.track)] = info.track
+                next_id += 1
+
+    # Phase 2: Remap each label image.
+    none_id = next_id  # Counter for untracked objects
+    for li in label_images:
+        if not li.objects:
+            continue
+        old_ids = sorted(li.objects.keys())
+        max_old = max(old_ids)
+        lut = np.zeros(max_old + 1, dtype=np.int32)
+        new_objects: dict[int, LabelImage.Info] = {}
+
+        for old_id in old_ids:
+            info = li.objects[old_id]
+            if info.track is not None:
+                new_id = track_to_id[id(info.track)]
+            else:
+                new_id = none_id
+                none_id += 1
+            lut[old_id] = new_id
+            new_objects[new_id] = info
+
+        li.data = lut[li.data]
+        li.objects = new_objects
+
+    # Build return mapping: Track -> label_id
+    return {track_by_identity[tid]: lid for tid, lid in track_to_id.items()}
+
+
+def _normalize_by_category(label_images: list[LabelImage]) -> dict:
+    """Normalize label IDs so each category string gets a consistent ID."""
+    # Phase 1: Assign IDs to categories (first-appearance order).
+    cat_to_id: dict[str, int] = {}
+    next_id = 1
+    for li in label_images:
+        for lid in sorted(li.objects):
+            cat = li.objects[lid].category
+            if cat and cat not in cat_to_id:
+                cat_to_id[cat] = next_id
+                next_id += 1
+
+    # Phase 2: Remap each label image.
+    empty_id = next_id  # Counter for empty-category objects
+    for li in label_images:
+        if not li.objects:
+            continue
+        old_ids = sorted(li.objects.keys())
+        max_old = max(old_ids)
+        lut = np.zeros(max_old + 1, dtype=np.int32)
+        new_objects: dict[int, LabelImage.Info] = {}
+
+        for old_id in old_ids:
+            info = li.objects[old_id]
+            if info.category and info.category in cat_to_id:
+                new_id = cat_to_id[info.category]
+            else:
+                new_id = empty_id
+                empty_id += 1
+            lut[old_id] = new_id
+            # Multiple old objects may map to same new_id (semantic merge).
+            if new_id not in new_objects:
+                new_objects[new_id] = info
+
+        li.data = lut[li.data]
+        li.objects = new_objects
+
+    return dict(cat_to_id)
