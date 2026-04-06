@@ -1026,7 +1026,7 @@ def render_video(
     frame_inds: list[int] | None = None,
     start: int | None = None,
     end: int | None = None,
-    include_unlabeled: bool = False,
+    include_unlabeled: bool | None = None,
     # Annotation overlay
     overlay: (
         "np.ndarray"
@@ -1077,7 +1077,9 @@ def render_video(
         start: Start frame index (inclusive).
         end: End frame index (exclusive).
         include_unlabeled: If True, render all frames in range even if they have
-            no LabeledFrame (just shows video frame without poses). Default False.
+            no LabeledFrame (just shows video frame without poses). Default None,
+            which resolves to False unless auto-overlay detection enables it (when
+            label_images exist for the target video and no explicit overlay is given).
         overlay: Per-frame annotation overlay. Accepts:
 
             - ``np.ndarray``: 3-D array ``(T, H, W)`` of integer label images
@@ -1186,7 +1188,10 @@ def render_video(
         # Check for spatial annotations (label_images, masks, bboxes, rois)
         # that can be rendered even without labeled frames (poses).
         has_spatial = bool(
-            labels.label_images or labels.masks or labels.bboxes or labels.rois
+            labels.get_label_images(video=target_video)
+            or labels.get_masks(video=target_video)
+            or labels.get_bboxes(video=target_video)
+            or labels.get_rois(video=target_video)
         )
 
         if not labeled_frames and not has_spatial:
@@ -1221,7 +1226,12 @@ def render_video(
             video_label_images = labels.get_label_images(video=target_video)
             if video_label_images:
                 overlay = video_label_images
-                include_unlabeled = True
+                if include_unlabeled is None:
+                    include_unlabeled = True
+
+        # Resolve None to default after auto-overlay logic
+        if include_unlabeled is None:
+            include_unlabeled = False
 
     elif isinstance(source, list) and all(isinstance(x, LabeledFrame) for x in source):
         labeled_frames = source
@@ -1282,6 +1292,16 @@ def render_video(
         else:
             # Only render labeled frames
             render_indices = sorted(frame_idx_to_lf.keys())
+
+    if not render_indices and isinstance(overlay, list) and overlay:
+        # Derive frame indices from overlay objects (spatial-only rendering)
+        render_indices = sorted(
+            {
+                obj.frame_idx
+                for obj in overlay
+                if getattr(obj, "frame_idx", None) is not None
+            }
+        )
 
     if not render_indices:
         raise ValueError("No frames to render")

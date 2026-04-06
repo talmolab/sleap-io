@@ -3148,6 +3148,44 @@ def test_render_video_overlay_label_images():
     assert not np.all(frames[1][30:45, 30:45] == 0)
 
 
+def test_render_video_spatial_only_no_poses():
+    """render_video with only label_images (no labeled frames or skeleton) should work."""
+    video = sio.Video(filename="dummy.mp4")
+    li0 = UserLabelImage(
+        data=np.array(
+            np.pad(np.ones((20, 20), dtype=np.int32), ((10, 34), (10, 34)))
+        ),
+        video=video,
+        frame_idx=0,
+    )
+    li1 = UserLabelImage(
+        data=np.array(
+            np.pad(np.full((15, 15), 2, dtype=np.int32), ((40, 9), (40, 9)))
+        ),
+        video=video,
+        frame_idx=1,
+    )
+    labels = sio.Labels(videos=[video], label_images=[li0, li1])
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background="black",
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 2
+    assert frames[0].shape == (64, 64, 3)
+    # Frame 0: overlay region should be colored
+    assert not np.all(frames[0][10:30, 10:30] == 0)
+    # Frame 0: outside overlay should remain black
+    assert np.all(frames[0][0:5, 0:5, :] == 0)
+    # Frame 1: overlay region should be colored
+    assert not np.all(frames[1][40:55, 40:55] == 0)
+
+
 def test_render_video_crop_with_user_label_image_overlay():
     """render_video with crop + UserLabelImage overlay should crop the label image."""
     labels_obj = _make_synthetic_labels(n_frames=1, h=50, w=50)
