@@ -24,6 +24,7 @@ from sleap_io import (
     save_slp,
 )
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.label_image import (
     LabelImage,
     PredictedLabelImage,
@@ -5851,3 +5852,70 @@ def test_labels_del_calls_close():
     labels._label_image_file = fake
     labels.__del__()
     assert fake.closed
+
+
+def test_labels_get_centroids():
+    """get_centroids filters by video, frame, category, track, and predicted."""
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+    c1 = UserCentroid(
+        x=10.0, y=20.0, video=video, frame_idx=0, category="cell", track=track
+    )
+    c2 = PredictedCentroid(
+        x=30.0, y=40.0, video=video, frame_idx=0, category="lysosome", score=0.9
+    )
+    c3 = UserCentroid(x=50.0, y=60.0, video=video, frame_idx=1, category="cell")
+    labels = Labels(videos=[video], tracks=[track], centroids=[c1, c2, c3])
+
+    assert len(labels.get_centroids(video=video)) == 3
+    assert len(labels.get_centroids(frame_idx=0)) == 2
+    assert len(labels.get_centroids(category="cell")) == 2
+    assert len(labels.get_centroids(track=track)) == 1
+    assert labels.get_centroids(track=track)[0] is c1
+    assert len(labels.get_centroids(predicted=True)) == 1
+    assert labels.get_centroids(predicted=True)[0] is c2
+    assert len(labels.get_centroids(predicted=False)) == 2
+
+
+def test_labels_materialize_centroids(tmp_path):
+    """materialize() deep copies centroids, relinking video/track refs."""
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+    skeleton = Skeleton(["A"])
+    c_with_refs = UserCentroid(x=1.0, y=2.0, video=video, track=track, frame_idx=0)
+    c_no_refs = PredictedCentroid(x=3.0, y=4.0, score=0.8)
+
+    labels = Labels(
+        videos=[video],
+        tracks=[track],
+        skeletons=[skeleton],
+        centroids=[c_with_refs, c_no_refs],
+    )
+    path = str(tmp_path / "test.slp")
+    sleap_io.save_slp(labels, path)
+
+    lazy = sleap_io.load_slp(path, lazy=True)
+    materialized = lazy.materialize()
+
+    assert len(materialized.centroids) == 2
+    assert materialized.centroids[0] is not lazy.centroids[0]
+
+    # Video/track references point to the NEW copies
+    assert materialized.centroids[0].video is materialized.videos[0]
+    assert materialized.centroids[0].video is not lazy.videos[0]
+    assert materialized.centroids[0].track is materialized.tracks[0]
+    assert materialized.centroids[0].track is not lazy.tracks[0]
+
+    # Centroid without refs stays None
+    assert materialized.centroids[1].video is None
+    assert materialized.centroids[1].track is None
+
+
+def test_labels_replace_videos_updates_centroids():
+    """replace_videos should update centroid video references."""
+    old_video = Video(filename="old.mp4")
+    new_video = Video(filename="new.mp4")
+    c = UserCentroid(x=1.0, y=2.0, video=old_video, frame_idx=0)
+    labels = Labels(videos=[old_video], centroids=[c])
+    labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
+    assert c.video is new_video
