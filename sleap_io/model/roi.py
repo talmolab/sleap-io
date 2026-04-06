@@ -260,8 +260,8 @@ class ROI:
         return self.geometry.area
 
     @property
-    def centroid(self) -> tuple[float, float]:
-        """Centroid of the geometry as (x, y)."""
+    def centroid_xy(self) -> tuple[float, float]:
+        """Centroid of the geometry as ``(x, y)``."""
         c = self.geometry.centroid
         return (c.x, c.y)
 
