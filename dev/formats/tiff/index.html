@@ -1081,6 +1081,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cellpose-workflow-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cellpose Workflow Example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#api" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3055,6 +3066,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cellpose-workflow-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cellpose Workflow Example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#api" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3162,6 +3184,41 @@
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_label_images</span><span class="p">(</span><span class="s2">&quot;output_dir/&quot;</span><span class="p">,</span> <span class="n">label_images</span><span class="p">,</span> <span class="n">stack</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># Creates: output_dir/0.tif, output_dir/1.tif, ... + output_dir/.meta.json</span>
 </code></pre></div>
+<h2 id="cellpose-workflow-example">Cellpose Workflow Example<a class="headerlink" href="#cellpose-workflow-example" title="Permanent link">&para;</a></h2>
+<p>A common workflow is to run <a href="https://www.cellpose.org/">Cellpose</a> on microscopy
+data, convert the output masks to <code>LabelImage</code> objects, and save them as TIFF or
+SLP:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cellpose</span><span class="w"> </span><span class="kn">import</span> <span class="n">models</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Run Cellpose segmentation</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CellposeModel</span><span class="p">(</span><span class="n">model_type</span><span class="o">=</span><span class="s2">&quot;nuclei&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">masks</span><span class="p">,</span> <span class="n">flows</span><span class="p">,</span> <span class="n">styles</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">diameter</span><span class="o">=</span><span class="mi">25</span><span class="p">)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">masks_stack</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">masks</span><span class="p">)</span>  <span class="c1"># (T, H, W) int32</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Convert to LabelImage objects with consistent tracks across frames</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="s2">&quot;experiment.tif&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">label_images</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">PredictedLabelImage</span><span class="o">.</span><span class="n">from_stack</span><span class="p">(</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">masks_stack</span><span class="p">,</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">source</span><span class="o">=</span><span class="s2">&quot;cellpose:nuclei&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="n">create_tracks</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="n">score</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="p">)</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="c1"># Save as TIFF stack (with sidecar metadata)</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_label_images</span><span class="p">(</span><span class="s2">&quot;cellpose_masks.tif&quot;</span><span class="p">,</span> <span class="n">label_images</span><span class="p">)</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="c1"># Or save as SLP (preserves tracks, categories, and provenance)</span>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">label_images</span><span class="o">=</span><span class="n">label_images</span><span class="p">,</span> <span class="n">videos</span><span class="o">=</span><span class="p">[</span><span class="n">video</span><span class="p">])</span>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="n">labels</span><span class="o">.</span><span class="n">provenance</span><span class="p">[</span><span class="s2">&quot;segmentation_model&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;cellpose&quot;</span>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="n">labels</span><span class="o">.</span><span class="n">provenance</span><span class="p">[</span><span class="s2">&quot;cellpose_diameter&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">25</span>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;cellpose_masks.slp&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>The <code>from_stack()</code> method ensures that the same <code>Track</code> object is shared across
+frames for a given label ID, which is essential for consistent tracking and
+downstream analysis.</p>
 <h2 id="api">API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h2>
 
 
