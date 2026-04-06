@@ -773,6 +773,166 @@ print(sio.get_default_image_plugin())  # "opencv"
     - [`get_default_video_plugin`](formats/#sleap_io.get_default_video_plugin): Get current video backend
     - [`get_default_image_plugin`](formats/#sleap_io.get_default_image_plugin): Get current image backend
 
+## Segmentation
+
+Work with dense per-pixel instance segmentation data (e.g., from [Cellpose](https://www.cellpose.org/) or [StarDist](https://github.com/stardist/stardist)).
+
+### Import segmentation masks to SLP
+
+Convert a `(T, H, W)` integer mask array into an SLP file with object metadata.
+
+```python title="segmentation_to_slp.py" linenums="1"
+import numpy as np
+import sleap_io as sio
+
+# Load masks from segmentation tool output — (T, H, W) int32
+# 0 = background, 1+ = object IDs
+masks = np.load("cellpose_masks.npy")
+
+# Create video reference
+video = sio.Video("microscopy.tif")
+
+# Convert to PredictedLabelImages with shared tracks across frames
+label_images = sio.PredictedLabelImage.from_stack(
+    masks, video=video, source="cellpose:nuclei",
+    create_tracks=True, score=1.0,
+)
+
+# Collect tracks for serialization
+tracks = list({
+    info.track for li in label_images
+    for info in li.objects.values() if info.track is not None
+})
+
+# Save
+labels = sio.Labels(label_images=label_images, videos=[video], tracks=tracks)
+labels.save("segmentation.slp")
+```
+
+??? tip "Custom tracks and categories per frame"
+    For more control, use `from_numpy()` per frame with explicit track/category mappings:
+    ```python
+    tracks = {1: sio.Track(name="cell_A"), 2: sio.Track(name="cell_B")}
+    li = sio.PredictedLabelImage.from_numpy(
+        masks[0], video=video, frame_idx=0,
+        tracks=tracks, categories={1: "neuron", 2: "glia"},
+        source="cellpose:nuclei", score=1.0,
+    )
+    ```
+
+!!! info "How track sharing works"
+    `from_stack(create_tracks=True)` maps each unique integer label to a `Track` object
+    shared across all frames. If cell 5 appears in frames 0, 3, and 7, it gets the same
+    `Track` in all three. This is useful when IDs are consistent across frames (e.g.,
+    after tracking). Without `create_tracks`, objects have no cross-frame identity.
+
+!!! note "See also"
+    - [Regions: Label images](model/regions.md#label-images): Full label image data model documentation
+    - [`PredictedLabelImage.from_stack`](model/regions.md#sleap_io.PredictedLabelImage.from_stack): Stack conversion API
+    - [`PredictedLabelImage.from_numpy`](model/regions.md#sleap_io.PredictedLabelImage.from_numpy): Per-frame conversion API
+
+### Stream large segmentation results to SLP
+
+For datasets too large to hold in memory, write frames one at a time with constant memory usage.
+
+```python title="streaming_segmentation.py" linenums="1"
+import numpy as np
+import sleap_io as sio
+
+video = sio.Video("microscopy.tif")
+
+# Shared dict accumulates track mappings across frames
+shared_tracks = {}
+
+# Stream frames to SLP — file is created lazily on first add()
+with sio.LabelImageWriter("output.slp", video=video) as writer:
+    for frame_idx in range(n_frames):
+        mask = run_segmentation(frame_idx)  # your segmentation function
+        li = sio.PredictedLabelImage.from_numpy(
+            mask, video=video, frame_idx=frame_idx,
+            tracks=shared_tracks, create_tracks=True,
+            source="cellpose:nuclei", score=1.0,
+        )
+        writer.add(li)
+# File finalized and closed on context exit
+```
+
+!!! info "Accumulating tracks"
+    Passing a dict as ``tracks`` with ``create_tracks=True`` turns it into a shared
+    accumulator — existing entries are reused and new label IDs get fresh ``Track``
+    objects added to the dict in place. This gives cross-frame identity without
+    requiring all data in memory. The writer auto-collects new tracks from each
+    ``add()`` call.
+
+!!! tip "Memory and performance"
+    The writer uses the chunked HDF5 format with gzip compression. Only one frame's
+    compressed data is in memory at a time. A 42-frame (592x608) dataset compresses from
+    ~60 MB raw to ~0.6 MB in the SLP file.
+
+!!! note "See also"
+    - [Regions: Streaming writes](model/regions.md#streaming-writes): Full `LabelImageWriter` documentation
+    - [`LabelImageWriter`](model/regions.md#sleap_io.LabelImageWriter): API reference
+
+### Extract segmentation data from SLP
+
+Load segmentation data and convert back to numpy arrays, TIFF files, or individual masks.
+
+```python title="extract_segmentation.py" linenums="1"
+import numpy as np
+import sleap_io as sio
+
+# Load — pixel data is lazy (metadata queries don't decompress)
+labels = sio.load_slp("segmentation.slp")
+li = labels.label_images[0]
+print(li.frame_idx, li.n_objects)  # no decompression yet
+
+# Extract all frames as (T, H, W) numpy array
+all_masks = np.stack([li.data for li in labels.label_images])
+
+# Export as TIFF stack (with sidecar metadata JSON)
+sio.save_label_images("masks.tif", labels.label_images, stack=True)
+
+# Decompose one frame into per-object binary masks
+individual_masks = li.to_masks()
+for mask in individual_masks:
+    print(f"{mask.track}: {mask.area} pixels")
+```
+
+??? example "Expected output shapes"
+    For a dataset with 42 frames at 592x608 with 21 objects:
+
+    - `all_masks.shape`: `(42, 592, 608)`, dtype `int32`
+    - `individual_masks`: list of 21 `SegmentationMask` objects
+    - Each mask: boolean array `(592, 608)` for one object
+
+!!! note "See also"
+    - [Regions: Lazy loading](model/regions.md#lazy-loading): How lazy pixel data access works
+    - [TIFF Format](formats/tiff.md): TIFF label image I/O details
+    - [`LabelImage.to_masks`](model/regions.md#sleap_io.LabelImage.to_masks): Decomposition API
+
+### Merge segmentation results
+
+Combine label images from multiple SLP files into one (e.g., after parallel batch processing).
+
+```python title="merge_segmentation.py" linenums="1"
+import sleap_io as sio
+
+# Merge multiple batch results — copies compressed chunks directly
+merged = sio.merge_label_images(
+    ["batch_0.slp", "batch_1.slp", "batch_2.slp"],
+    "all_frames.slp",
+)
+print(f"Merged: {len(merged.label_images)} total frames")
+```
+
+!!! tip
+    For chunked-format sources (v2.2), merge copies raw compressed data without
+    decompression — it's I/O-bound, not CPU-bound.
+
+!!! note "See also"
+    - [Merging: Label images](merging.md#merging-label-images): Full merge documentation
+    - [`merge_label_images`](model/regions.md#sleap_io.merge_label_images): API reference
+
 ## Rendering
 
 Create videos and images with pose overlays for visualization and publication.
