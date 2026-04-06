@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     else:
         from typing_extensions import Self
 
+    from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.video import Video
@@ -871,6 +872,60 @@ class LabelImage:
                 )
             )
         return result
+
+    def to_bboxes(self) -> list["BoundingBox"]:
+        """Extract tight bounding boxes for each object in the label image.
+
+        Returns a list of ``BoundingBox`` objects (``UserBoundingBox`` or
+        ``PredictedBoundingBox`` depending on whether this label image is
+        predicted), one per non-zero label. Each bounding box inherits track,
+        category, name, instance, and score from the corresponding
+        ``self.objects`` entry.
+
+        Bounding boxes are in image coordinates (respecting scale/offset).
+        Label IDs present in ``objects`` but with no pixels in the data are
+        skipped.
+
+        Returns:
+            A list of ``BoundingBox`` objects, one per object.
+        """
+        from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+
+        data = self.data
+        bboxes = []
+        cls = PredictedBoundingBox if self.is_predicted else UserBoundingBox
+        sx, sy = self.scale
+        ox, oy = self.offset
+
+        for lid, info in self.objects.items():
+            rows, cols = np.where(data == lid)
+            if len(rows) == 0:
+                continue
+
+            r_min, r_max = rows.min(), rows.max()
+            c_min, c_max = cols.min(), cols.max()
+
+            # Convert to image coordinates via scale/offset
+            x1 = float(c_min / sx + ox)
+            y1 = float(r_min / sy + oy)
+            x2 = float((c_max + 1) / sx + ox)
+            y2 = float((r_max + 1) / sy + oy)
+
+            kwargs: dict = dict(
+                video=self.video,
+                frame_idx=self.frame_idx,
+                track=info.track,
+                instance=info.instance,
+                category=info.category,
+                name=info.name,
+                source=self.source,
+            )
+            if self.is_predicted:
+                kwargs["score"] = info.score if info.score is not None else self.score
+
+            bboxes.append(cls.from_xyxy(x1, y1, x2, y2, **kwargs))
+
+        return bboxes
 
 
 @attrs.define(eq=False)

@@ -271,6 +271,16 @@ def test_bbox_to_mask():
     assert not data[0, 0]  # Corner should be empty
 
 
+def test_bbox_centroid():
+    bbox = UserBoundingBox(x1=0, y1=10, x2=100, y2=90)
+    assert bbox.centroid == (50.0, 50.0)
+
+
+def test_bbox_centroid_nonsquare():
+    bbox = UserBoundingBox(x1=10, y1=20, x2=50, y2=30)
+    assert bbox.centroid == (30.0, 25.0)
+
+
 def test_bbox_roundtrip_xyxy():
     bbox = UserBoundingBox.from_xyxy(10, 20, 50, 60)
     assert bbox.xyxy == pytest.approx((10, 20, 50, 60))

@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     else:
         from typing_extensions import Self
 
+    from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.roi import ROI
     from sleap_io.model.video import Video
@@ -294,6 +295,33 @@ class SegmentationMask:
             float((cmax - cmin + 1) / sx),
             float((rmax - rmin + 1) / sy),
         )
+
+    def to_bbox(self) -> "BoundingBox":
+        """Convert to a BoundingBox object.
+
+        Returns a ``UserBoundingBox`` or ``PredictedBoundingBox`` with metadata
+        (track, category, name, instance) inherited from this mask. Coordinates
+        are in image space (respecting scale/offset).
+
+        Returns:
+            A ``BoundingBox`` matching this mask's tight bounding box.
+        """
+        from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+
+        x, y, w, h = self.bbox
+        cls = PredictedBoundingBox if self.is_predicted else UserBoundingBox
+        kwargs: dict = dict(
+            video=self.video,
+            frame_idx=self.frame_idx,
+            track=self.track,
+            instance=self.instance,
+            category=self.category,
+            name=self.name,
+            source=self.source,
+        )
+        if self.is_predicted:
+            kwargs["score"] = self.score
+        return cls.from_xywh(x, y, w, h, **kwargs)
 
     def to_polygon(self) -> "ROI":
         """Convert the mask to a polygon ROI via row-rectangle union.

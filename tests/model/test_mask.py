@@ -3,6 +3,8 @@
 import numpy as np
 import pytest
 
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.instance import Track
 from sleap_io.model.mask import (
     PredictedSegmentationMask,
     SegmentationMask,
@@ -11,6 +13,7 @@ from sleap_io.model.mask import (
     _encode_rle,
     _resize_nearest,
 )
+from sleap_io.model.video import Video
 
 
 def test_encode_rle_all_zeros():
@@ -364,3 +367,69 @@ def test_segmentation_mask_to_polygon_with_offset():
     assert bounds[1] == pytest.approx(22.0)  # 2 + 20
     assert bounds[2] == pytest.approx(16.0)  # 6 + 10
     assert bounds[3] == pytest.approx(24.0)  # 4 + 20
+
+
+def test_to_bbox_basic():
+    data = np.zeros((10, 10), dtype=bool)
+    data[5:10, 3:8] = True
+    mask = UserSegmentationMask.from_numpy(data)
+    bb = mask.to_bbox()
+    assert isinstance(bb, UserBoundingBox)
+    x, y, w, h = mask.bbox
+    assert bb.xywh == pytest.approx((x, y, w, h))
+
+
+def test_to_bbox_metadata():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 1:4] = True
+    track = Track(name="t1")
+    video = Video(filename="test.mp4")
+    mask = UserSegmentationMask.from_numpy(
+        data,
+        track=track,
+        video=video,
+        frame_idx=3,
+        category="cell",
+        name="obj1",
+        source="manual",
+    )
+    bb = mask.to_bbox()
+    assert bb.track is track
+    assert bb.video is video
+    assert bb.frame_idx == 3
+    assert bb.category == "cell"
+    assert bb.name == "obj1"
+    assert bb.source == "manual"
+
+
+def test_to_bbox_predicted():
+    data = np.zeros((10, 10), dtype=bool)
+    data[0:3, 0:3] = True
+    mask = PredictedSegmentationMask.from_numpy(data, score=0.95)
+    bb = mask.to_bbox()
+    assert isinstance(bb, PredictedBoundingBox)
+    assert bb.score == pytest.approx(0.95)
+
+
+def test_to_bbox_with_scale():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:4, 3:6] = True
+    mask = UserSegmentationMask.from_numpy(data, scale=(0.5, 0.5))
+    bb = mask.to_bbox()
+    # mask coords: x=3, y=2, w=3, h=2 -> image: x=6, y=4, w=6, h=4
+    assert bb.xywh == pytest.approx((6.0, 4.0, 6.0, 4.0))
+
+
+def test_to_bbox_with_offset():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:4, 3:6] = True
+    mask = UserSegmentationMask.from_numpy(data, offset=(10.0, 20.0))
+    bb = mask.to_bbox()
+    assert bb.xywh == pytest.approx((13.0, 22.0, 3.0, 2.0))
+
+
+def test_to_bbox_empty_mask():
+    data = np.zeros((10, 10), dtype=bool)
+    mask = UserSegmentationMask.from_numpy(data)
+    bb = mask.to_bbox()
+    assert bb.xywh == pytest.approx((0.0, 0.0, 0.0, 0.0))

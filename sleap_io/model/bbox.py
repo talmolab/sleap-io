@@ -152,6 +152,11 @@ class BoundingBox:
         return (self.y1 + self.y2) / 2
 
     @property
+    def centroid(self) -> tuple[float, float]:
+        """Center point as ``(x, y)``."""
+        return (self.x_center, self.y_center)
+
+    @property
     def width(self) -> float:
         """Box width in pixels."""
         return self.x2 - self.x1
