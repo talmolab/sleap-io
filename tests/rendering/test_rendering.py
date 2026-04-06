@@ -3149,19 +3149,15 @@ def test_render_video_overlay_label_images():
 
 
 def test_render_video_spatial_only_no_poses():
-    """render_video with only label_images (no labeled frames or skeleton) should work."""
+    """render_video with only label_images should work."""
     video = sio.Video(filename="dummy.mp4")
     li0 = UserLabelImage(
-        data=np.array(
-            np.pad(np.ones((20, 20), dtype=np.int32), ((10, 34), (10, 34)))
-        ),
+        data=np.array(np.pad(np.ones((20, 20), dtype=np.int32), ((10, 34), (10, 34)))),
         video=video,
         frame_idx=0,
     )
     li1 = UserLabelImage(
-        data=np.array(
-            np.pad(np.full((15, 15), 2, dtype=np.int32), ((40, 9), (40, 9)))
-        ),
+        data=np.array(np.pad(np.full((15, 15), 2, dtype=np.int32), ((40, 9), (40, 9)))),
         video=video,
         frame_idx=1,
     )
