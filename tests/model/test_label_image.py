@@ -223,15 +223,26 @@ def test_items_no_metadata():
 
 
 def test_from_numpy_auto_tracks():
-    """from_numpy with tracks=None should auto-create tracks."""
+    """from_numpy with create_tracks=True should auto-create tracks."""
     data = np.array([[0, 1, 0], [2, 0, 3]], dtype=np.int32)
-    li = UserLabelImage.from_numpy(data)
+    li = UserLabelImage.from_numpy(data, create_tracks=True)
 
     assert li.n_objects == 3
     assert len(li.objects) == 3
     assert li.objects[1].track.name == "1"
     assert li.objects[2].track.name == "2"
     assert li.objects[3].track.name == "3"
+
+
+def test_from_numpy_no_tracks_by_default():
+    """from_numpy with default tracks=None should not create tracks."""
+    data = np.array([[0, 1, 0], [2, 0, 3]], dtype=np.int32)
+    li = UserLabelImage.from_numpy(data)
+
+    assert li.n_objects == 3
+    assert li.objects[1].track is None
+    assert li.objects[2].track is None
+    assert li.objects[3].track is None
 
 
 def test_from_numpy_tracks_list():
