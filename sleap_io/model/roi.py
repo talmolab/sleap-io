@@ -58,6 +58,8 @@ class ROI:
         frame_idx: Optional frame index. If `None`, the ROI is static (applies to
             all frames of the video).
         track: Optional `Track` this ROI is associated with.
+        tracking_score: Confidence of the track identity assignment. ``None``
+            if unassigned or manually assigned.
         instance: Optional `Instance` this ROI is associated with. Persisted in
             SLP format (v1.6+) via instance index.
 
@@ -85,6 +87,7 @@ class ROI:
     video: "Video | None" = attrs.field(default=None)
     frame_idx: int | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
+    tracking_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
 
     # Private: deferred instance index for lazy loading. When ROIs are read

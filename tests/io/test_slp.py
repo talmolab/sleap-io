@@ -60,6 +60,7 @@ from sleap_io.io.slp import (
     prepare_frames_to_embed,
     process_and_embed_frames,
     read_bboxes,
+    read_centroids,
     read_identities,
     read_instances,
     read_label_images,
@@ -79,6 +80,7 @@ from sleap_io.io.slp import (
     session_to_dict,
     video_to_dict,
     write_bboxes,
+    write_centroids,
     write_identities,
     write_labels,
     write_lfs,
@@ -91,6 +93,7 @@ from sleap_io.io.slp import (
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance3D, PredictedInstance3D
 from sleap_io.model.label_image import LabelImage, PredictedLabelImage, UserLabelImage
@@ -7049,7 +7052,7 @@ def test_merge_label_images_blob_source(tmp_path):
         )
         f.create_dataset("label_images", data=li_row)
 
-        obj_row = np.array([(1, 0, -1, float("nan"))], dtype=OBJ_DTYPE)
+        obj_row = np.array([(1, 0, -1, float("nan"), float("nan"))], dtype=OBJ_DTYPE)
         f.create_dataset("label_image_objects", data=obj_row)
 
         str_dt = h5py.special_dtype(vlen=str)
@@ -7322,7 +7325,7 @@ def test_read_label_images_legacy_json_attrs(tmp_path):
         )
         f.create_dataset("label_images", data=li_row)
         # Write objects with JSON attrs (legacy format, no string datasets)
-        obj_row = np.array([(1, -1, -1, float("nan"))], dtype=OBJ_DTYPE)
+        obj_row = np.array([(1, -1, -1, float("nan"), float("nan"))], dtype=OBJ_DTYPE)
         obj_ds = f.create_dataset("label_image_objects", data=obj_row)
         obj_ds.attrs["categories"] = '["cell"]'
         obj_ds.attrs["names"] = '["obj1"]'
@@ -7411,3 +7414,137 @@ def test_merge_label_images_no_objects_table(tmp_path):
     merged = merge_label_images([path], str(tmp_path / "merged.slp"), video=video)
     assert len(merged.label_images) == 1
     np.testing.assert_array_equal(merged.label_images[0].data, data)
+
+
+def test_slp_centroid_roundtrip(tmp_path):
+    """Test SLP round-trip with UserCentroid and PredictedCentroid."""
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+    c1 = UserCentroid(
+        x=10.5,
+        y=20.3,
+        z=1.5,
+        video=video,
+        frame_idx=0,
+        track=track,
+        tracking_score=0.8,
+        name="c1",
+        category="cell",
+        source="center_of_mass",
+    )
+    c2 = PredictedCentroid(
+        x=50.0,
+        y=60.0,
+        video=video,
+        frame_idx=3,
+        score=0.95,
+        name="c2",
+        category="lysosome",
+        source="trackmate",
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
+        centroids=[c1, c2],
+    )
+
+    path = str(tmp_path / "test_centroids.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path)
+    assert len(loaded.centroids) == 2
+
+    lc1 = loaded.centroids[0]
+    assert isinstance(lc1, UserCentroid)
+    assert lc1.x == pytest.approx(10.5)
+    assert lc1.y == pytest.approx(20.3)
+    assert lc1.z == pytest.approx(1.5)
+    assert lc1.frame_idx == 0
+    assert lc1.track is loaded.tracks[0]
+    assert lc1.tracking_score == pytest.approx(0.8)
+    assert lc1.name == "c1"
+    assert lc1.category == "cell"
+    assert lc1.source == "center_of_mass"
+
+    lc2 = loaded.centroids[1]
+    assert isinstance(lc2, PredictedCentroid)
+    assert lc2.x == pytest.approx(50.0)
+    assert lc2.y == pytest.approx(60.0)
+    assert lc2.z is None
+    assert lc2.score == pytest.approx(0.95)
+    assert lc2.tracking_score is None
+    assert lc2.name == "c2"
+    assert lc2.category == "lysosome"
+    assert lc2.source == "trackmate"
+
+
+def test_slp_centroid_backward_compat(tmp_path):
+    """Old SLP files without centroids load with empty list."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(videos=[video], skeletons=[skeleton])
+    path = str(tmp_path / "no_centroids.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path)
+    assert loaded.centroids == []
+
+
+def test_slp_bbox_tracking_score_roundtrip(tmp_path):
+    """Test tracking_score round-trip for bounding boxes."""
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+    bbox = UserBoundingBox(
+        x1=0.0,
+        y1=0.0,
+        x2=10.0,
+        y2=10.0,
+        video=video,
+        track=track,
+        tracking_score=0.75,
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track], bboxes=[bbox])
+
+    path = str(tmp_path / "bbox_ts.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path)
+    assert loaded.bboxes[0].tracking_score == pytest.approx(0.75)
+
+
+def test_slp_bbox_tracking_score_none_roundtrip(tmp_path):
+    """Test that tracking_score=None round-trips correctly."""
+    video = Video(filename="test.mp4")
+    bbox = UserBoundingBox(x1=0.0, y1=0.0, x2=10.0, y2=10.0, video=video)
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(videos=[video], skeletons=[skeleton], bboxes=[bbox])
+
+    path = str(tmp_path / "bbox_ts_none.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path)
+    assert loaded.bboxes[0].tracking_score is None
+
+
+def test_slp_centroid_low_level(tmp_path):
+    """Test low-level read_centroids/write_centroids."""
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=5, track=track)
+
+    skeleton = Skeleton(nodes=["A"])
+    path = str(tmp_path / "centroids_ll.slp")
+    save_slp(Labels(videos=[video], skeletons=[skeleton], tracks=[track]), path)
+    write_centroids(path, [c], [video], [track])
+
+    loaded = read_centroids(path, [video], [track])
+    assert len(loaded) == 1
+    assert loaded[0].x == pytest.approx(1.0)
+    assert loaded[0].y == pytest.approx(2.0)
+    assert loaded[0].frame_idx == 5

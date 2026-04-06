@@ -32,6 +32,7 @@ from sleap_io.model.video import Video
 if TYPE_CHECKING:
     from sleap_io.io.slp_lazy import LazyDataStore
     from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.centroid import Centroid
     from sleap_io.model.label_image import LabelImage
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.mask import SegmentationMask
@@ -108,6 +109,7 @@ class Labels:
     rois: "list[ROI]" = field(factory=list)
     masks: "list[SegmentationMask]" = field(factory=list)
     bboxes: "list[BoundingBox]" = field(factory=list)
+    centroids: "list[Centroid]" = field(factory=list)
     label_images: "list[LabelImage]" = field(factory=list)
 
     # Internal lazy state (private, not part of public API)
@@ -371,6 +373,25 @@ class Labels:
                 new_bbox._instance_idx = -1
             new_bboxes.append(new_bbox)
 
+        # Deep copy centroids, relinking videos, tracks, and instances
+        new_centroids = []
+        for centroid in self.centroids:
+            new_centroid = deepcopy(centroid)
+            if centroid.video is not None:
+                new_centroid.video = video_map.get(
+                    id(centroid.video), new_centroid.video
+                )
+            if centroid.track is not None:
+                new_centroid.track = track_map.get(
+                    id(centroid.track), new_centroid.track
+                )
+            # Resolve deferred instance link from _instance_idx
+            idx = new_centroid._instance_idx
+            if new_centroid.instance is None and 0 <= idx < len(all_instances):
+                new_centroid.instance = all_instances[idx]
+                new_centroid._instance_idx = -1
+            new_centroids.append(new_centroid)
+
         # Deep copy label images, relinking videos, tracks, and instances
         new_label_images = []
         for li in self.label_images:
@@ -402,6 +423,7 @@ class Labels:
             rois=new_rois,
             masks=new_masks,
             bboxes=new_bboxes,
+            centroids=new_centroids,
             label_images=new_label_images,
         )
 
@@ -1439,6 +1461,50 @@ class Labels:
             results = [b for b in results if b.is_predicted == predicted]
         return results
 
+    def get_centroids(
+        self,
+        video: "Video | None" = None,
+        frame_idx: int | None = None,
+        category: str | None = None,
+        track: "Track | None" = None,
+        instance: "Instance | None" = None,
+        predicted: bool | None = None,
+    ) -> list["Centroid"]:
+        """Query centroids by video, frame, category, track, or instance.
+
+        Filters the ``centroids`` list via linear scan.
+
+        Args:
+            video: If specified, only return centroids for this video (identity
+                comparison).
+            frame_idx: If specified, only return centroids for this frame index.
+            category: If specified, only return centroids with this category.
+            track: If specified, only return centroids for this track (identity
+                comparison).
+            instance: If specified, only return centroids for this instance
+                (identity comparison).
+            predicted: If ``True``, only return predicted centroids. If
+                ``False``, only return user centroids. If ``None`` (default),
+                return both.
+
+        Returns:
+            A list of matching centroids.
+        """
+        results = list(self.centroids)
+        if video is not None:
+            results = [c for c in results if c.video is video]
+        if frame_idx is not None:
+            results = [c for c in results if c.frame_idx == frame_idx]
+        if category is not None:
+            results = [c for c in results if c.category == category]
+        if track is not None:
+            results = [c for c in results if c.track is track]
+        if instance is not None:
+            results = [c for c in results if c.instance is instance]
+        if predicted is not None:
+            results = [c for c in results if c.is_predicted == predicted]
+        return results
+
     def get_label_images(
         self,
         video: "Video | None" = None,
@@ -1754,6 +1820,11 @@ class Labels:
         for bbox in self.bboxes:
             if bbox.video in video_map:
                 bbox.video = video_map[bbox.video]
+
+        # Update centroids with the new videos.
+        for centroid in self.centroids:
+            if centroid.video in video_map:
+                centroid.video = video_map[centroid.video]
 
         # Update the list of videos.
         self.videos = [video_map.get(video, video) for video in self.videos]

@@ -75,6 +75,7 @@ from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
+    from sleap_io.model.centroid import Centroid
     from sleap_io.model.instance import PointsArray, PredictedPointsArray
     from sleap_io.model.labels_set import LabelsSet
 
@@ -111,6 +112,7 @@ OBJ_DTYPE = np.dtype(
         ("track", "i4"),
         ("instance", "i4"),
         ("score", "f4"),
+        ("tracking_score", "f4"),
     ]
 )
 
@@ -2591,6 +2593,7 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     rois = read_rois(labels_path, videos, tracks)
     masks = read_masks(labels_path, videos, tracks)
     bboxes = read_bboxes(labels_path, videos, tracks)
+    centroids = read_centroids(labels_path, videos, tracks)
     label_images, li_file = read_label_images(labels_path, videos, tracks)
 
     # Create Labels with lazy state
@@ -2605,6 +2608,7 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
         rois=rois,
         masks=masks,
         bboxes=bboxes,
+        centroids=centroids,
         label_images=label_images,
         lazy_store=lazy_store,
     )
@@ -2703,6 +2707,12 @@ def read_rois(
             bool(row["is_predicted"]) if "is_predicted" in row.dtype.names else False
         )
 
+        tracking_score = None
+        if "tracking_score" in row.dtype.names:
+            ts = float(row["tracking_score"])
+            if not np.isnan(ts):
+                tracking_score = ts
+
         kwargs = dict(
             geometry=geometry,
             name=names[i] if i < len(names) else "",
@@ -2711,6 +2721,7 @@ def read_rois(
             video=video,
             frame_idx=frame_idx,
             track=track,
+            tracking_score=tracking_score,
             instance=instance,
         )
 
@@ -2759,6 +2770,7 @@ def write_rois(
             ("track", "i4"),
             ("is_predicted", "u1"),
             ("score", "f4"),
+            ("tracking_score", "f4"),
             ("wkb_start", "u8"),
             ("wkb_end", "u8"),
             ("instance", "i4"),
@@ -2792,6 +2804,9 @@ def write_rois(
 
         is_predicted = isinstance(roi, PredictedROI)
         score = roi.score if is_predicted else float("nan")
+        tracking_score = (
+            roi.tracking_score if roi.tracking_score is not None else float("nan")
+        )
 
         roi_rows.append(
             (
@@ -2801,6 +2816,7 @@ def write_rois(
                 track_idx,
                 int(is_predicted),
                 score,
+                tracking_score,
                 wkb_start,
                 wkb_end,
                 instance_idx,
@@ -2889,6 +2905,7 @@ def _read_bboxes_columnar(
     category_arr = grp["category"][:]
     name_arr = grp["name"][:]
     source_arr = grp["source"][:]
+    tracking_score_arr = grp["tracking_score"][:] if "tracking_score" in grp else None
 
     bboxes: list[BoundingBox] = []
     for i in range(len(x1_arr)):
@@ -2915,6 +2932,12 @@ def _read_bboxes_columnar(
         src = source_arr[i]
         source = src.decode() if isinstance(src, bytes) else str(src)
 
+        tracking_score = None
+        if tracking_score_arr is not None:
+            ts = float(tracking_score_arr[i])
+            if not np.isnan(ts):
+                tracking_score = ts
+
         kwargs = dict(
             x1=float(x1_arr[i]),
             y1=float(y1_arr[i]),
@@ -2924,6 +2947,7 @@ def _read_bboxes_columnar(
             video=video,
             frame_idx=frame_idx,
             track=track,
+            tracking_score=tracking_score,
             instance=instance,
             category=category,
             name=name,
@@ -3038,6 +3062,7 @@ def write_bboxes(
     instance_arr = np.empty(n, dtype=np.int32)
     is_predicted_arr = np.empty(n, dtype=np.uint8)
     score_arr = np.empty(n, dtype=np.float32)
+    tracking_score_arr = np.empty(n, dtype=np.float32)
     categories = []
     names = []
     sources = []
@@ -3064,6 +3089,9 @@ def write_bboxes(
         is_predicted = isinstance(bbox, PredictedBoundingBox)
         is_predicted_arr[i] = int(is_predicted)
         score_arr[i] = bbox.score if is_predicted else float("nan")
+        tracking_score_arr[i] = (
+            bbox.tracking_score if bbox.tracking_score is not None else float("nan")
+        )
 
         categories.append(bbox.category)
         names.append(bbox.name)
@@ -3083,6 +3111,196 @@ def write_bboxes(
         grp.create_dataset("instance", data=instance_arr)
         grp.create_dataset("is_predicted", data=is_predicted_arr)
         grp.create_dataset("score", data=score_arr)
+        grp.create_dataset("tracking_score", data=tracking_score_arr)
+        grp.create_dataset("category", data=categories, dtype=str_dt)
+        grp.create_dataset("name", data=names, dtype=str_dt)
+        grp.create_dataset("source", data=sources, dtype=str_dt)
+
+
+def read_centroids(
+    labels_path: str,
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
+) -> "list[Centroid]":
+    """Read centroid annotations from a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        videos: List of Video objects for relinking.
+        tracks: List of Track objects for relinking.
+        instances: Optional list of Instance/PredictedInstance objects for
+            relinking centroid instance associations.
+
+    Returns:
+        A list of Centroid objects. Returns an empty list if no centroids are
+        stored.
+    """
+    from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+    with h5py.File(labels_path, "r") as f:
+        if "centroids" not in f:
+            return []
+
+        grp = f["centroids"]
+        x_arr = grp["x"][:]
+        y_arr = grp["y"][:]
+        z_arr = grp["z"][:] if "z" in grp else None
+        video_arr = grp["video"][:]
+        frame_idx_arr = grp["frame_idx"][:]
+        track_arr = grp["track"][:]
+        instance_arr = grp["instance"][:]
+        is_predicted_arr = grp["is_predicted"][:]
+        score_arr = grp["score"][:]
+        tracking_score_arr = (
+            grp["tracking_score"][:] if "tracking_score" in grp else None
+        )
+        category_arr = grp["category"][:]
+        name_arr = grp["name"][:]
+        source_arr = grp["source"][:]
+
+    centroids: list[Centroid] = []
+    for i in range(len(x_arr)):
+        video_idx = int(video_arr[i])
+        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
+
+        frame_idx_val = int(frame_idx_arr[i])
+        frame_idx = None if frame_idx_val == -1 else frame_idx_val
+
+        track_idx = int(track_arr[i])
+        track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
+
+        instance_idx = int(instance_arr[i])
+        instance = (
+            instances[instance_idx]
+            if instances is not None and 0 <= instance_idx < len(instances)
+            else None
+        )
+
+        z = None
+        if z_arr is not None:
+            z_val = float(z_arr[i])
+            if not np.isnan(z_val):
+                z = z_val
+
+        tracking_score = None
+        if tracking_score_arr is not None:
+            ts = float(tracking_score_arr[i])
+            if not np.isnan(ts):
+                tracking_score = ts
+
+        cat = category_arr[i]
+        category = cat.decode() if isinstance(cat, bytes) else str(cat)
+        nm = name_arr[i]
+        name = nm.decode() if isinstance(nm, bytes) else str(nm)
+        src = source_arr[i]
+        source = src.decode() if isinstance(src, bytes) else str(src)
+
+        kwargs = dict(
+            x=float(x_arr[i]),
+            y=float(y_arr[i]),
+            z=z,
+            video=video,
+            frame_idx=frame_idx,
+            track=track,
+            tracking_score=tracking_score,
+            instance=instance,
+            category=category,
+            name=name,
+            source=source,
+        )
+
+        if bool(is_predicted_arr[i]):
+            centroid = PredictedCentroid(score=float(score_arr[i]), **kwargs)
+        else:
+            centroid = UserCentroid(**kwargs)
+
+        centroid._instance_idx = instance_idx
+        centroids.append(centroid)
+
+    return centroids
+
+
+def write_centroids(
+    labels_path: str,
+    centroids: "list[Centroid]",
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
+) -> None:
+    """Write centroid annotations to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        centroids: A list of Centroid objects to write.
+        videos: List of Video objects for index mapping.
+        tracks: List of Track objects for index mapping.
+        instances: Optional list of Instance/PredictedInstance objects for index
+            mapping.
+    """
+    from sleap_io.model.centroid import PredictedCentroid
+
+    if not centroids:
+        return
+
+    n = len(centroids)
+    x_arr = np.empty(n, dtype=np.float64)
+    y_arr = np.empty(n, dtype=np.float64)
+    z_arr = np.empty(n, dtype=np.float64)
+    video_arr = np.empty(n, dtype=np.int32)
+    frame_idx_arr = np.empty(n, dtype=np.int64)
+    track_arr = np.empty(n, dtype=np.int32)
+    instance_arr = np.empty(n, dtype=np.int32)
+    is_predicted_arr = np.empty(n, dtype=np.uint8)
+    score_arr = np.empty(n, dtype=np.float32)
+    tracking_score_arr = np.empty(n, dtype=np.float32)
+    categories = []
+    names = []
+    sources = []
+
+    for i, centroid in enumerate(centroids):
+        x_arr[i] = centroid.x
+        y_arr[i] = centroid.y
+        z_arr[i] = centroid.z if centroid.z is not None else float("nan")
+
+        video_arr[i] = videos.index(centroid.video) if centroid.video in videos else -1
+        frame_idx_arr[i] = centroid.frame_idx if centroid.frame_idx is not None else -1
+        track_arr[i] = tracks.index(centroid.track) if centroid.track in tracks else -1
+
+        instance_idx = centroid._instance_idx
+        if instances is not None and centroid.instance is not None:
+            try:
+                instance_idx = instances.index(centroid.instance)
+            except ValueError:
+                pass
+        instance_arr[i] = instance_idx
+
+        is_predicted = isinstance(centroid, PredictedCentroid)
+        is_predicted_arr[i] = int(is_predicted)
+        score_arr[i] = centroid.score if is_predicted else float("nan")
+        tracking_score_arr[i] = (
+            centroid.tracking_score
+            if centroid.tracking_score is not None
+            else float("nan")
+        )
+
+        categories.append(centroid.category)
+        names.append(centroid.name)
+        sources.append(centroid.source)
+
+    str_dt = h5py.special_dtype(vlen=str)
+    with h5py.File(labels_path, "a") as f:
+        grp = f.create_group("centroids")
+        grp.create_dataset("x", data=x_arr)
+        grp.create_dataset("y", data=y_arr)
+        grp.create_dataset("z", data=z_arr)
+        grp.create_dataset("video", data=video_arr)
+        grp.create_dataset("frame_idx", data=frame_idx_arr)
+        grp.create_dataset("track", data=track_arr)
+        grp.create_dataset("instance", data=instance_arr)
+        grp.create_dataset("is_predicted", data=is_predicted_arr)
+        grp.create_dataset("score", data=score_arr)
+        grp.create_dataset("tracking_score", data=tracking_score_arr)
         grp.create_dataset("category", data=categories, dtype=str_dt)
         grp.create_dataset("name", data=names, dtype=str_dt)
         grp.create_dataset("source", data=sources, dtype=str_dt)
@@ -3213,6 +3431,12 @@ def read_masks(
         )
         score_val = float(row["score"]) if "score" in row.dtype.names else float("nan")
 
+        tracking_score = None
+        if "tracking_score" in row.dtype.names:
+            ts = float(row["tracking_score"])
+            if not np.isnan(ts):
+                tracking_score = ts
+
         # Read spatial metadata (v2.1+)
         scale = (
             float(row["scale_x"]) if "scale_x" in row.dtype.names else 1.0,
@@ -3233,6 +3457,7 @@ def read_masks(
             video=video,
             frame_idx=frame_idx,
             track=track,
+            tracking_score=tracking_score,
             instance=instance,
             scale=scale,
             offset=offset,
@@ -3291,6 +3516,7 @@ def write_masks(
             ("instance", "i4"),
             ("is_predicted", "u1"),
             ("score", "f4"),
+            ("tracking_score", "f4"),
             ("rle_start", "u8"),
             ("rle_end", "u8"),
             ("scale_x", "f4"),
@@ -3329,6 +3555,9 @@ def write_masks(
 
         is_predicted = isinstance(mask, PredictedSegmentationMask)
         score = mask.score if is_predicted else float("nan")
+        tracking_score = (
+            mask.tracking_score if mask.tracking_score is not None else float("nan")
+        )
 
         mask_rows.append(
             (
@@ -3341,6 +3570,7 @@ def write_masks(
                 instance_idx,
                 int(is_predicted),
                 score,
+                tracking_score,
                 rle_start,
                 rle_end,
                 mask.scale[0],
@@ -3599,8 +3829,15 @@ def read_label_images(
                     if not np.isnan(sv):
                         obj_score = sv
 
+                obj_tracking_score = None
+                if "tracking_score" in obj_row.dtype.names:
+                    ts = float(obj_row["tracking_score"])
+                    if not np.isnan(ts):
+                        obj_tracking_score = ts
+
                 objects[label_id] = LabelImage.Info(
                     track=track,
+                    tracking_score=obj_tracking_score,
                     category=category,
                     name=name,
                     instance=instance,
@@ -3764,7 +4001,14 @@ def write_label_images(
                         pass  # Keep stored _instance_idx
 
                 obj_score = info.score if info.score is not None else float("nan")
-                obj_rows.append((label_id, track_idx, instance_idx, obj_score))
+                obj_tracking_score = (
+                    info.tracking_score
+                    if info.tracking_score is not None
+                    else float("nan")
+                )
+                obj_rows.append(
+                    (label_id, track_idx, instance_idx, obj_score, obj_tracking_score)
+                )
                 categories.append(info.category)
                 obj_names.append(info.name)
 
@@ -4107,7 +4351,12 @@ class LabelImageWriter:
             )
             instance_idx = info._instance_idx
             obj_score = info.score if info.score is not None else float("nan")
-            self._obj_rows.append((label_id, track_idx, instance_idx, obj_score))
+            obj_tracking_score = (
+                info.tracking_score if info.tracking_score is not None else float("nan")
+            )
+            self._obj_rows.append(
+                (label_id, track_idx, instance_idx, obj_score, obj_tracking_score)
+            )
             self._categories.append(info.category)
             self._obj_names.append(info.name)
 
@@ -4517,9 +4766,20 @@ def merge_label_images(
                                 if "score" in obj_row.dtype.names
                                 else float("nan")
                             )
+                            obj_tracking_score = (
+                                float(obj_row["tracking_score"])
+                                if "tracking_score" in obj_row.dtype.names
+                                else float("nan")
+                            )
 
                             dest_obj_rows.append(
-                                (label_id, new_track_idx, instance_idx, obj_score)
+                                (
+                                    label_id,
+                                    new_track_idx,
+                                    instance_idx,
+                                    obj_score,
+                                    obj_tracking_score,
+                                )
                             )
 
                             # Copy string metadata
@@ -4786,6 +5046,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     rois = read_rois(labels_path, videos, tracks, instances)
     masks = read_masks(labels_path, videos, tracks, instances)
     bboxes = read_bboxes(labels_path, videos, tracks, instances)
+    centroids = read_centroids(labels_path, videos, tracks, instances)
     label_images, _li_file = read_label_images(labels_path, videos, tracks, instances)
 
     # Migrate old-style bbox ROIs to BoundingBox objects (skip predicted ROIs)
@@ -4828,6 +5089,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         rois=rois,
         masks=masks,
         bboxes=bboxes,
+        centroids=centroids,
         label_images=label_images,
     )
     labels.provenance["filename"] = labels_path
@@ -5002,6 +5264,7 @@ def _write_labels_lazy(
     write_rois(labels_path, labels.rois, labels.videos, labels.tracks)
     write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
     write_bboxes(labels_path, labels.bboxes, labels.videos, labels.tracks)
+    write_centroids(labels_path, labels.centroids, labels.videos, labels.tracks)
     # Note: instance associations are not persisted in lazy mode (no all_instances).
     write_label_images(labels_path, labels.label_images, labels.videos, labels.tracks)
 
@@ -5158,6 +5421,9 @@ def write_labels(
     write_masks(labels_path, labels.masks, labels.videos, labels.tracks, all_instances)
     write_bboxes(
         labels_path, labels.bboxes, labels.videos, labels.tracks, all_instances
+    )
+    write_centroids(
+        labels_path, labels.centroids, labels.videos, labels.tracks, all_instances
     )
     write_label_images(
         labels_path,

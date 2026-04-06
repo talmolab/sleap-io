@@ -128,6 +128,8 @@ class SegmentationMask:
         video: Optional `Video` this mask is associated with.
         frame_idx: Optional frame index. If `None`, the mask is static.
         track: Optional `Track` this mask is associated with.
+        tracking_score: Confidence of the track identity assignment. ``None``
+            if unassigned or manually assigned.
         instance: Optional `Instance` this mask is associated with.
         scale: Resolution ratio ``(sx, sy)`` where ``sx = mask_width / image_width``
             and ``sy = mask_height / image_height``. ``(1.0, 1.0)`` means full
@@ -153,6 +155,7 @@ class SegmentationMask:
     video: "Video | None" = attrs.field(default=None)
     frame_idx: int | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
+    tracking_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
     scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))

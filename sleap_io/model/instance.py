@@ -551,6 +551,40 @@ class Instance:
         else:
             return self.points["xy"].copy()
 
+    @property
+    def centroid_xy(self) -> tuple[float, float] | None:
+        """Mean of visible point coordinates as ``(x, y)``, or ``None``.
+
+        Returns:
+            A tuple ``(x, y)`` representing the center of mass of all visible
+            points, or ``None`` if no points are visible.
+        """
+        pts = self.numpy(invisible_as_nan=True)
+        visible = ~np.isnan(pts[:, 0])
+        if not visible.any():
+            return None
+        return float(pts[visible, 0].mean()), float(pts[visible, 1].mean())
+
+    def to_centroid(self, method: str = "center_of_mass", node=None, **kwargs):
+        """Create a ``Centroid`` from this instance.
+
+        Delegates to ``Centroid.from_instance()``.
+
+        Args:
+            method: Computation method (``"center_of_mass"``,
+                ``"bbox_center"``, or ``"anchor"``).
+            node: Node specification for the ``"anchor"`` method.
+            **kwargs: Additional keyword arguments passed to the centroid
+                constructor.
+
+        Returns:
+            A ``UserCentroid`` or ``PredictedCentroid`` depending on the
+            instance type.
+        """
+        from sleap_io.model.centroid import Centroid
+
+        return Centroid.from_instance(self, method=method, node=node, **kwargs)
+
     def __getitem__(self, node: int | str | Node) -> np.ndarray:
         """Return the point associated with a node."""
         if type(node) is not int:
