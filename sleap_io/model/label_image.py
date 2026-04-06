@@ -250,6 +250,7 @@ class LabelImage:
         data: np.ndarray,
         tracks: "dict[int, Track] | list[Track] | None" = None,
         categories: dict[int, str] | list[str] | None = None,
+        create_tracks: bool = False,
         **kwargs,
     ) -> "LabelImage":
         """Create from an integer array.
@@ -258,8 +259,7 @@ class LabelImage:
             data: (H, W) integer array. Cast to int32.
             tracks: Maps label IDs to Tracks.
 
-                - ``None``: auto-creates one Track per unique non-zero label.
-                  Track.name is set to the string of the label ID.
+                - ``None``: no tracks unless ``create_tracks=True``.
                 - ``list``: positional — ``tracks[i]`` maps to label ``i + 1``.
                 - ``dict``: explicit ``{label_id: Track}`` mapping.
             categories: Same pattern as tracks, for category strings.
@@ -267,6 +267,9 @@ class LabelImage:
                 - ``None``: no categories set.
                 - ``list``: positional — ``categories[i]`` maps to label ``i + 1``.
                 - ``dict``: explicit ``{label_id: category}`` mapping.
+            create_tracks: If ``True`` and ``tracks`` is ``None``, auto-create
+                one Track per unique non-zero label with Track.name set to the
+                string of the label ID. Default is ``False``.
             **kwargs: Passed to the LabelImage constructor (video, frame_idx,
                 source).
 
@@ -282,8 +285,9 @@ class LabelImage:
         # Build track mapping
         track_map: dict[int, Track] = {}
         if tracks is None:
-            for lid in unique_ids:
-                track_map[int(lid)] = Track(name=str(int(lid)))
+            if create_tracks:
+                for lid in unique_ids:
+                    track_map[int(lid)] = Track(name=str(int(lid)))
         elif isinstance(tracks, list):
             for i, t in enumerate(tracks):
                 track_map[i + 1] = t
