@@ -339,6 +339,32 @@ def load_dlc(
     return dlc.load_dlc(filename, video_search_paths=video_search_paths, **kwargs)
 
 
+def load_trackmate(
+    filename: str,
+    video: "Video | str | None" = None,
+    **kwargs,
+) -> Labels:
+    """Read TrackMate CSV exports and return a ``Labels`` object.
+
+    Loads a TrackMate ``*_spots.csv`` file and optionally the corresponding
+    ``*_edges.csv`` (auto-detected if present). Spot detections are imported
+    as ``PredictedCentroid`` objects.
+
+    Args:
+        filename: Path to the TrackMate spots CSV file.
+        video: Video to associate with centroids. Can be a ``Video`` object,
+            a string path to a video file, or ``None`` (auto-detects a
+            sibling ``.tif`` file).
+        **kwargs: Additional arguments passed to ``read_trackmate_csv``.
+
+    Returns:
+        Parsed labels as a ``Labels`` instance with centroids.
+    """
+    from sleap_io.io import trackmate
+
+    return trackmate.read_trackmate_csv(filename, video=video, **kwargs)
+
+
 def load_ultralytics(
     dataset_path: str,
     split: str = "train",
@@ -809,7 +835,7 @@ def load_file(
         format: Optional format to load as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "geojson",
             "alphatracker", "labelstudio", "coco", "jabs", "analysis_h5", "dlc",
-            "ultralytics", "leap", and "video".
+            "trackmate", "ultralytics", "leap", and "video".
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.
             - For "nwb" format: No additional arguments.
@@ -867,9 +893,11 @@ def load_file(
         ):
             format = "ultralytics"
         elif filename.lower().endswith(".csv"):
-            from sleap_io.io import dlc
+            from sleap_io.io import dlc, trackmate
 
-            if dlc.is_dlc_file(filename):
+            if trackmate.is_trackmate_file(filename):
+                format = "trackmate"
+            elif dlc.is_dlc_file(filename):
                 format = "dlc"
             else:
                 format = "csv"
@@ -903,6 +931,8 @@ def load_file(
         return load_dlc(filename, **kwargs)
     elif format == "csv":
         return load_csv(filename, **kwargs)
+    elif format == "trackmate":
+        return load_trackmate(filename, **kwargs)
     elif format == "ultralytics":
         return load_ultralytics(filename, **kwargs)
     elif format == "geojson":
