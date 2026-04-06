@@ -831,6 +831,42 @@ labels.save("segmentation.slp")
     - [`PredictedLabelImage.from_stack`](model/regions.md#sleap_io.PredictedLabelImage.from_stack): Stack conversion API
     - [`PredictedLabelImage.from_numpy`](model/regions.md#sleap_io.PredictedLabelImage.from_numpy): Per-frame conversion API
 
+### Import per-object binary masks to SLP
+
+Convert per-object binary masks from tools like [SAM](https://github.com/facebookresearch/sam2) or Mask R-CNN into an SLP file. Unlike `from_stack` (which takes a pre-composited integer array), `from_binary_masks` takes individual boolean masks per object.
+
+```python title="binary_masks_to_slp.py" linenums="1"
+import numpy as np
+import sleap_io as sio
+
+# Per-object binary masks from SAM — (N, H, W) bool
+sam_masks = np.load("sam_masks.npy")  # e.g., shape (5, 512, 512)
+object_scores = [0.95, 0.92, 0.88, 0.85, 0.80]
+
+video = sio.Video("microscopy.tif")
+
+# Create a PredictedLabelImage with tracks and per-object scores
+li = sio.PredictedLabelImage.from_binary_masks(
+    sam_masks,
+    create_tracks=True,          # auto-create one Track per mask
+    scores=object_scores,        # per-object confidence → Info.score
+    score=0.9,                   # image-level confidence
+    video=video, frame_idx=0, source="sam",
+)
+
+labels = sio.Labels(label_images=[li], videos=[video])
+labels.save("sam_output.slp")
+```
+
+!!! tip "When to use which import method"
+    - **`from_binary_masks`**: You have N separate boolean masks per object (SAM, Mask R-CNN).
+    - **`from_stack`**: You have a `(T, H, W)` integer array where each pixel value is an object ID (Cellpose, StarDist).
+    - **`from_numpy`**: You have a single `(H, W)` integer array for one frame.
+
+!!! note "See also"
+    - [Regions: From binary masks](model/regions.md#from-binary-masks): Full `from_binary_masks` documentation
+    - [`PredictedLabelImage.from_binary_masks`](model/regions.md#sleap_io.PredictedLabelImage.from_binary_masks): API reference
+
 ### Stream large segmentation results to SLP
 
 For datasets too large to hold in memory, write frames one at a time with constant memory usage.

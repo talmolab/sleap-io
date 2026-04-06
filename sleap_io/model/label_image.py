@@ -16,6 +16,8 @@ array.
 - Use ``SegmentationMask`` when you have individual binary masks per object
   (e.g., from Mask R-CNN, manual annotation, or ROI-based workflows). Each
   mask is stored separately with RLE compression.
+- Use ``LabelImage.from_binary_masks()`` to create a label image directly from
+  per-object binary numpy arrays (e.g., from SAM or Mask R-CNN output).
 - To convert between them, use ``LabelImage.to_masks()`` and
   ``LabelImage.from_masks()``.
 
@@ -505,6 +507,134 @@ class LabelImage:
                 category=mask.category,
                 name=mask.name,
                 instance=mask.instance,
+            )
+
+        return cls(data=data, objects=objects, **kwargs)
+
+    @classmethod
+    def from_binary_masks(
+        cls,
+        masks: "np.ndarray | list[np.ndarray]",
+        tracks: "list[Track] | None" = None,
+        categories: list[str] | None = None,
+        names: list[str] | None = None,
+        scores: list[float] | None = None,
+        create_tracks: bool = False,
+        **kwargs,
+    ) -> "LabelImage":
+        """Create a LabelImage from per-object binary mask arrays.
+
+        This is a convenience constructor for workflows that produce per-object
+        binary masks, such as SAM, Mask R-CNN, or other instance segmentation
+        tools. Each binary mask becomes one object in the composited label image
+        with a unique label ID (1, 2, ..., N). Overlapping pixels are assigned
+        to the last mask in the list.
+
+        Unlike ``from_masks()``, this takes raw numpy arrays instead of
+        ``SegmentationMask`` objects, avoiding RLE encoding overhead.
+
+        Args:
+            masks: Per-object binary masks as an ``(N, H, W)`` array or a list
+                of ``(H, W)`` arrays. Values are cast to bool (nonzero = True).
+            tracks: List of ``Track`` objects, one per mask. ``tracks[i]`` is
+                assigned to mask ``i`` (label ID ``i + 1``).
+            categories: List of category strings, one per mask.
+            names: List of human-readable name strings, one per mask.
+            scores: List of per-object confidence scores, one per mask. Stored
+                in ``Info.score`` for each object.
+            create_tracks: If ``True`` and ``tracks`` is ``None``, auto-create
+                a ``Track`` per mask with ``name=str(label_id)``.
+            **kwargs: Passed to the ``LabelImage`` constructor (e.g., ``video``,
+                ``frame_idx``, ``source``, ``scale``, ``offset``). For
+                ``PredictedLabelImage``, also accepts ``score``, ``score_map``.
+
+        Returns:
+            A ``LabelImage`` compositing all masks.
+
+        Raises:
+            ValueError: If ``masks`` is empty, shapes are inconsistent, or any
+                parallel array has the wrong length.
+
+        Example:
+            Create a label image from SAM output::
+
+                li = PredictedLabelImage.from_binary_masks(
+                    sam_masks,          # (N, H, W) bool
+                    tracks=[t1, t2],    # per-object tracks
+                    scores=[0.95, 0.87],# per-object confidence
+                    score=0.9,          # image-level confidence
+                    video=video,
+                    frame_idx=0,
+                )
+
+        See Also:
+            :meth:`from_masks`: Create from ``SegmentationMask`` objects.
+            :meth:`from_numpy`: Create from a pre-composited integer array.
+        """
+        from sleap_io.model.instance import Track
+
+        # Normalize input to list of 2D arrays.
+        if isinstance(masks, np.ndarray):
+            if masks.ndim == 3:
+                mask_list = [masks[i] for i in range(masks.shape[0])]
+            elif masks.ndim == 2:
+                mask_list = [masks]
+            else:
+                raise ValueError(
+                    f"Expected 2D or 3D array, got {masks.ndim}D with shape "
+                    f"{masks.shape}."
+                )
+        else:
+            mask_list = list(masks)
+
+        if not mask_list:
+            raise ValueError("Cannot create LabelImage from empty mask list.")
+
+        # Validate consistent shapes.
+        height, width = mask_list[0].shape[0], mask_list[0].shape[1]
+        for i, m in enumerate(mask_list[1:], 1):
+            if m.shape[0] != height or m.shape[1] != width:
+                raise ValueError(
+                    f"All masks must have the same shape. "
+                    f"Expected ({height}, {width}), got ({m.shape[0]}, {m.shape[1]}) "
+                    f"at index {i}."
+                )
+
+        n = len(mask_list)
+
+        # Validate parallel array lengths.
+        for param_name, param in [
+            ("tracks", tracks),
+            ("categories", categories),
+            ("names", names),
+            ("scores", scores),
+        ]:
+            if param is not None and len(param) != n:
+                raise ValueError(
+                    f"{param_name} length ({len(param)}) must match number of "
+                    f"masks ({n})."
+                )
+
+        # Build track list.
+        if tracks is not None:
+            track_list = tracks
+        elif create_tracks:
+            track_list = [Track(name=str(i + 1)) for i in range(n)]
+        else:
+            track_list = [None] * n
+
+        # Composite masks and build objects dict.
+        data = np.zeros((height, width), dtype=np.int32)
+        objects: dict[int, LabelImage.Info] = {}
+
+        for i, mask in enumerate(mask_list):
+            label_id = i + 1
+            data[np.asarray(mask, dtype=bool)] = label_id
+            objects[label_id] = LabelImage.Info(
+                track=track_list[i],
+                category=categories[i] if categories is not None else "",
+                name=names[i] if names is not None else "",
+                score=scores[i] if scores is not None else None,
             )
 
         return cls(data=data, objects=objects, **kwargs)
