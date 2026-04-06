@@ -3,6 +3,23 @@
 Segmentation masks represent raster (per-pixel) annotations stored in
 run-length encoded (RLE) format for compact storage. They can be converted
 to and from numpy arrays and polygon representations.
+
+Each ``SegmentationMask`` stores a single binary mask for one object. For
+dense per-pixel segmentation where all objects are stored in one integer
+array, see ``LabelImage`` in ``sleap_io.model.label_image``.
+
+**When to use SegmentationMask vs LabelImage:**
+
+- Use ``SegmentationMask`` when you have individual binary masks per object
+  (e.g., from Mask R-CNN, manual annotation, or ROI-based workflows).
+- Use ``LabelImage`` when you have a dense integer array from an instance
+  segmentation tool (Cellpose, StarDist) where each pixel value identifies
+  an object.
+- To convert: ``LabelImage.to_masks()`` decomposes into per-object masks,
+  and ``LabelImage.from_masks(masks)`` composes masks into a label image.
+
+See Also:
+    ``sleap_io.model.label_image``: Dense integer label images.
 """
 
 from __future__ import annotations
@@ -121,6 +138,9 @@ class SegmentationMask:
     Notes:
         Masks use identity-based equality (two mask objects are only equal if they
         are the same object in memory).
+
+    See Also:
+        ``LabelImage``: Dense integer label images (all objects in one array).
     """
 
     rle_counts: np.ndarray = attrs.field()

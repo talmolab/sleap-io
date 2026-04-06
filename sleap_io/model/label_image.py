@@ -7,6 +7,23 @@ standard output format of instance segmentation tools like Cellpose and StarDist
 Unlike binary ``SegmentationMask`` objects (one mask per object), a single
 ``LabelImage`` efficiently stores all objects for a frame in one dense integer
 array.
+
+**When to use LabelImage vs SegmentationMask:**
+
+- Use ``LabelImage`` when you have a dense integer array from a segmentation
+  tool (Cellpose, StarDist, COCO panoptic) where each pixel value identifies
+  an object. One ``LabelImage`` per frame stores all objects at once.
+- Use ``SegmentationMask`` when you have individual binary masks per object
+  (e.g., from Mask R-CNN, manual annotation, or ROI-based workflows). Each
+  mask is stored separately with RLE compression.
+- To convert between them, use ``LabelImage.to_masks()`` and
+  ``LabelImage.from_masks()``.
+
+For TIFF I/O of label images, see ``sleap_io.load_label_images()`` and
+``sleap_io.save_label_images()``.
+
+See Also:
+    ``sleap_io.model.mask``: Binary segmentation masks (one per object).
 """
 
 from __future__ import annotations
@@ -52,6 +69,11 @@ class LabelImage:
             resolution. ``(0.5, 0.5)`` means half resolution. Coordinate mapping:
             ``image_coord = label_coord / scale + offset``.
         offset: Origin ``(x, y)`` of the label image in image pixel coordinates.
+
+    See Also:
+        ``SegmentationMask``: Per-object binary masks (one mask per object).
+        ``sleap_io.load_label_images``: Load label images from TIFF files.
+        ``sleap_io.save_label_images``: Save label images to TIFF files.
     """
 
     @attrs.define
@@ -382,6 +404,186 @@ class LabelImage:
             )
 
         return cls(data=data, objects=objects, **kwargs)
+
+    @classmethod
+    def from_stack(
+        cls,
+        data: "np.ndarray | list[np.ndarray]",
+        tracks: "dict[int, Track] | list[Track] | None" = None,
+        categories: dict[int, str] | list[str] | None = None,
+        create_tracks: bool = False,
+        frame_idx: list[int] | None = None,
+        score: "float | list[float] | None" = None,
+        score_map: np.ndarray | None = None,
+        **kwargs,
+    ) -> "list[LabelImage]":
+        """Create label images from a stack of frames.
+
+        This is the batch equivalent of ``from_numpy()``. It accepts a
+        ``(T, H, W)`` array (or list of 2D arrays) and returns one
+        ``LabelImage`` per frame with consistent ``Track`` objects shared
+        across frames.
+
+        Args:
+            data: Integer label data as a 3D ``(T, H, W)`` array or a list
+                of 2D ``(H, W)`` arrays. Cast to int32.
+            tracks: Maps label IDs to Tracks (shared across all frames).
+
+                - ``None``: no tracks unless ``create_tracks=True``.
+                - ``list``: positional — ``tracks[i]`` maps to label
+                  ``i + 1``.
+                - ``dict``: explicit ``{label_id: Track}`` mapping.
+            categories: Same pattern as tracks, for category strings.
+            create_tracks: If ``True`` and ``tracks`` is ``None``,
+                auto-create one ``Track`` per unique non-zero label ID
+                found across all frames. The same ``Track`` object is
+                shared across frames. Default is ``False``.
+            frame_idx: Frame indices for each frame. If ``None``,
+                defaults to ``[0, 1, ..., T-1]``. Must have length ``T``
+                if provided.
+            score: Confidence score(s) for ``PredictedLabelImage``. A
+                single float is broadcast to all frames; a list must have
+                length ``T``. Ignored for ``UserLabelImage``.
+            score_map: Optional ``(T, H, W)`` float32 array of per-pixel
+                confidence maps. Sliced per frame. Ignored for
+                ``UserLabelImage``.
+            **kwargs: Passed to every frame's constructor (``video``,
+                ``source``, ``scale``, ``offset``).
+
+        Returns:
+            A list of ``LabelImage`` objects, one per frame.
+
+        Raises:
+            ValueError: If ``data`` is not 3D (or a list), or if
+                ``frame_idx`` / ``score`` lengths don't match.
+
+        Note:
+            For loading label images from TIFF files (single, multi-page,
+            or directory), use ``sleap_io.load_label_images()`` which
+            handles file I/O and sidecar metadata. ``from_stack()`` is
+            for converting in-memory numpy arrays (e.g., direct Cellpose
+            output).
+
+        Example::
+
+            masks = np.stack(cellpose_masks)  # (T, H, W) int32
+            label_images = sio.PredictedLabelImage.from_stack(
+                masks,
+                video=video,
+                source="cellpose:nuclei",
+                create_tracks=True,
+                score=1.0,
+            )
+        """
+        from sleap_io.model.instance import Track
+
+        # Normalize input to list of 2D arrays
+        if isinstance(data, np.ndarray):
+            if data.ndim != 3:
+                raise ValueError(
+                    f"from_stack expects a (T, H, W) array, got shape "
+                    f"{data.shape}. Use from_numpy() for a single frame."
+                )
+            frames = [data[t] for t in range(data.shape[0])]
+        elif isinstance(data, list):
+            frames = data
+        else:
+            raise ValueError(
+                f"data must be a (T, H, W) numpy array or list of 2D "
+                f"arrays, got {type(data).__name__}."
+            )
+
+        n_frames = len(frames)
+        if n_frames == 0:
+            return []
+
+        # Validate frame_idx
+        if frame_idx is None:
+            frame_idx = list(range(n_frames))
+        elif len(frame_idx) != n_frames:
+            raise ValueError(
+                f"frame_idx length ({len(frame_idx)}) must match "
+                f"number of frames ({n_frames})."
+            )
+
+        # Collect unique non-zero IDs across all frames
+        all_ids: set[int] = set()
+        for frame in frames:
+            ids = np.unique(frame)
+            all_ids.update(int(i) for i in ids if i > 0)
+
+        # Build global track map (shared across frames)
+        track_map: dict[int, Track] = {}
+        if tracks is None:
+            if create_tracks:
+                for lid in sorted(all_ids):
+                    track_map[lid] = Track(name=str(lid))
+        elif isinstance(tracks, list):
+            for i, t in enumerate(tracks):
+                track_map[i + 1] = t
+        else:
+            track_map = dict(tracks)
+
+        # Build global category map
+        cat_map: dict[int, str] = {}
+        if categories is None:
+            pass
+        elif isinstance(categories, list):
+            for i, c in enumerate(categories):
+                cat_map[i + 1] = c
+        else:
+            cat_map = dict(categories)
+
+        # Handle PredictedLabelImage-specific parameters
+        is_predicted = issubclass(cls, PredictedLabelImage)
+        scores: list[float] = []
+        if is_predicted:
+            if score is None:
+                scores = [0.0] * n_frames
+            elif isinstance(score, (int, float)):
+                scores = [float(score)] * n_frames
+            else:
+                if len(score) != n_frames:
+                    raise ValueError(
+                        f"score list length ({len(score)}) must match "
+                        f"number of frames ({n_frames})."
+                    )
+                scores = [float(s) for s in score]
+
+        score_maps: list[np.ndarray | None] = [None] * n_frames
+        if is_predicted and score_map is not None:
+            if score_map.ndim == 3 and score_map.shape[0] == n_frames:
+                score_maps = [score_map[t] for t in range(n_frames)]
+            else:
+                raise ValueError(
+                    f"score_map must be (T, H, W) with T={n_frames}, "
+                    f"got shape {score_map.shape}."
+                )
+
+        # Build per-frame LabelImages with shared Track objects
+        result: list[LabelImage] = []
+        for t, frame in enumerate(frames):
+            frame_data = np.asarray(frame, dtype=np.int32)
+            frame_ids = np.unique(frame_data)
+            frame_ids = frame_ids[frame_ids > 0]
+
+            objects: dict[int, LabelImage.Info] = {}
+            for lid in frame_ids:
+                lid_int = int(lid)
+                objects[lid_int] = LabelImage.Info(
+                    track=track_map.get(lid_int),
+                    category=cat_map.get(lid_int, ""),
+                )
+
+            frame_kwargs = dict(kwargs)
+            frame_kwargs["frame_idx"] = frame_idx[t]
+            if is_predicted:
+                frame_kwargs["score"] = scores[t]
+                frame_kwargs["score_map"] = score_maps[t]
+
+            result.append(cls(data=frame_data, objects=objects, **frame_kwargs))
+
+        return result
 
     def to_masks(self) -> list["SegmentationMask"]:
         """Decompose into per-object binary SegmentationMasks.
