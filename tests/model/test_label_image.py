@@ -1,5 +1,7 @@
 """Tests for LabelImage data model."""
 
+import copy
+
 import numpy as np
 import pytest
 
@@ -876,3 +878,130 @@ def test_from_stack_invalid_data_type_raises():
     """from_stack with non-array data should raise."""
     with pytest.raises(ValueError, match="numpy array or list"):
         UserLabelImage.from_stack("not an array")
+
+
+def test_label_image_no_data_no_loader_raises():
+    """Accessing .data with no data and no lazy loader raises ValueError."""
+    li = UserLabelImage(data=np.zeros((2, 2), dtype=np.int32))
+    li._data = None
+    li._lazy_loader = None
+    with pytest.raises(ValueError, match="no data and no lazy loader"):
+        _ = li.data
+
+
+def test_label_image_data_setter():
+    """Setting .data updates cached dimensions and clears lazy loader."""
+    li = UserLabelImage(data=np.zeros((4, 6), dtype=np.int32))
+    assert li.height == 4
+    assert li.width == 6
+
+    # Set new data
+    li.data = np.zeros((8, 10), dtype=np.int32)
+    assert li.height == 8
+    assert li.width == 10
+    assert li._lazy_loader is None
+
+    # Set to None
+    li.data = None
+    assert li._data is None
+
+
+def test_label_image_deepcopy_materialized():
+    """Deepcopy with already-materialized data copies without lazy load."""
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = UserLabelImage(data=data)
+    li_copy = copy.deepcopy(li)
+    np.testing.assert_array_equal(li_copy.data, data)
+    assert li_copy.data is not li.data
+
+
+def test_label_image_deepcopy_lazy():
+    """Deepcopy with lazy loader materializes data before copying."""
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = UserLabelImage(data=data)
+    # Simulate lazy state
+    li._data = None
+    li._lazy_loader = lambda: data.copy()
+    li_copy = copy.deepcopy(li)
+    np.testing.assert_array_equal(li_copy.data, data)
+
+
+def test_label_image_deepcopy_no_data():
+    """Deepcopy with no data and no loader produces data=None."""
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = UserLabelImage(data=data)
+    li._data = None
+    li._lazy_loader = None
+    li_copy = copy.deepcopy(li)
+    assert li_copy._data is None
+
+
+def test_predicted_label_image_deepcopy_with_score_map():
+    """Deepcopy preserves score_map on PredictedLabelImage."""
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    sm = np.random.rand(2, 2).astype(np.float32)
+    li = PredictedLabelImage(data=data, score=0.9, score_map=sm)
+    li_copy = copy.deepcopy(li)
+    np.testing.assert_array_equal(li_copy.score_map, sm)
+    assert li_copy.score_map is not sm
+    assert li_copy.score == pytest.approx(0.9)
+
+
+def test_predicted_label_image_score_map_setter():
+    """Setting score_map clears lazy loader."""
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = PredictedLabelImage(data=data, score=0.5)
+    sm = np.random.rand(2, 2).astype(np.float32)
+    li.score_map = sm
+    np.testing.assert_array_equal(li.score_map, sm)
+    assert li._score_map_lazy_loader is None
+
+
+def test_predicted_label_image_score_map_lazy():
+    """Lazy score_map loader is triggered on first access."""
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    sm = np.random.rand(2, 2).astype(np.float32)
+    li = PredictedLabelImage(data=data, score=0.5)
+    li._score_map = None
+    li._score_map_lazy_loader = lambda: sm.copy()
+    result = li.score_map
+    np.testing.assert_array_equal(result, sm)
+    assert li._score_map_lazy_loader is None
+
+
+def test_from_numpy_accumulate_tracks():
+    """from_numpy with dict tracks + create_tracks accumulates new IDs."""
+    shared = {}
+    data0 = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li0 = UserLabelImage.from_numpy(data0, tracks=shared, create_tracks=True)
+    assert set(shared.keys()) == {1, 2}
+    assert li0.objects[1].track is shared[1]
+
+    # Frame with overlapping + new ID
+    data1 = np.array([[1, 0], [0, 3]], dtype=np.int32)
+    li1 = UserLabelImage.from_numpy(data1, tracks=shared, create_tracks=True)
+    assert set(shared.keys()) == {1, 2, 3}
+    # Track 1 is the same object across both frames
+    assert li0.objects[1].track is li1.objects[1].track
+
+
+def test_from_numpy_dict_tracks_without_create():
+    """from_numpy with dict tracks but create_tracks=False uses only provided."""
+    tracks = {1: Track(name="a")}
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    li = UserLabelImage.from_numpy(data, tracks=tracks)
+    assert li.objects[1].track is tracks[1]
+    assert li.objects[2].track is None
+    # Dict not mutated
+    assert 2 not in tracks
+
+
+def test_height_width_fallback_to_data_shape():
+    """height/width fall back to data.shape when _height/_width are 0."""
+    data = np.zeros((5, 7), dtype=np.int32)
+    li = UserLabelImage(data=data)
+    # Reset cached dims to 0 to trigger fallback
+    li._height = 0
+    li._width = 0
+    assert li.height == 5
+    assert li.width == 7

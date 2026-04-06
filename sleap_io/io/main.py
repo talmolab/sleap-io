@@ -1214,6 +1214,39 @@ def save_label_images(
     tiff.write_label_images(path, label_images, stack=stack)
 
 
+def merge_label_images(
+    source_paths: list[str | Path],
+    dest_path: str | Path,
+    video: Video | None = None,
+) -> Labels:
+    """Merge label images from multiple SLP files into one.
+
+    Copies compressed chunks directly (no decompression) via
+    ``read_direct_chunk`` -> ``write_direct_chunk`` when possible, falling
+    back to decompress + recompress for legacy blob-format sources.
+
+    Args:
+        source_paths: List of paths to source SLP files containing label
+            images to merge.
+        dest_path: Path to the destination SLP file to create.
+        video: Optional ``Video`` to associate with all merged label images.
+            If ``None``, videos are deduplicated by filename across sources.
+
+    Returns:
+        A ``Labels`` object pointing at the merged file.
+
+    Raises:
+        ValueError: If source files have label images with different
+            ``(height, width)`` dimensions, or if no source files are
+            provided, or if a source contains no label images.
+
+    See also: :func:`sleap_io.io.slp.merge_label_images`
+    """
+    from sleap_io.io.slp import merge_label_images as _merge_label_images
+
+    return _merge_label_images(source_paths, dest_path, video=video)
+
+
 def save_skeleton(skeleton: Skeleton | list[Skeleton], filename: str | Path):
     """Save skeleton(s) to a JSON or YAML file.
 

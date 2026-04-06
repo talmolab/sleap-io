@@ -5796,3 +5796,58 @@ def test_labels_copy_with_annotation_refs(labels_all_annotations, tmp_path):
     # Mutating the copy does not affect the original
     labels_copy.label_images.clear()
     assert len(loaded.label_images) == 6
+
+
+def test_labels_close():
+    """Labels.close() closes the h5py file handle and is idempotent."""
+    labels = Labels()
+
+    # No file handle — should not raise
+    labels.close()
+
+    # With a mock file handle
+    class FakeFile:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    fake = FakeFile()
+    labels._label_image_file = fake
+    labels.close()
+    assert fake.closed
+    assert labels._label_image_file is None
+
+    # Idempotent — calling again should not raise
+    labels.close()
+
+
+def test_labels_close_handles_exception():
+    """Labels.close() suppresses exceptions from the file handle."""
+
+    class BadFile:
+        def close(self):
+            raise OSError("simulated close failure")
+
+    labels = Labels()
+    labels._label_image_file = BadFile()
+    labels.close()  # should not raise
+    assert labels._label_image_file is None
+
+
+def test_labels_del_calls_close():
+    """Labels.__del__() calls close()."""
+    labels = Labels()
+
+    class FakeFile:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    fake = FakeFile()
+    labels._label_image_file = fake
+    labels.__del__()
+    assert fake.closed

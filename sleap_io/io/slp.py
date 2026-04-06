@@ -84,6 +84,51 @@ except ImportError:
     pass
 
 
+# -- Label image HDF5 dtype constants (shared by write/merge/streaming writer) --------
+
+LI_DTYPE = np.dtype(
+    [
+        ("video", "i4"),
+        ("frame_idx", "i8"),
+        ("height", "u4"),
+        ("width", "u4"),
+        ("n_objects", "u4"),
+        ("objects_start", "u4"),
+        ("data_start", "u8"),
+        ("data_end", "u8"),
+        ("is_predicted", "u1"),
+        ("score", "f4"),
+        ("scale_x", "f4"),
+        ("scale_y", "f4"),
+        ("offset_x", "f4"),
+        ("offset_y", "f4"),
+    ]
+)
+
+OBJ_DTYPE = np.dtype(
+    [
+        ("label_id", "i4"),
+        ("track", "i4"),
+        ("instance", "i4"),
+        ("score", "f4"),
+    ]
+)
+
+LI_SM_INDEX_DTYPE = np.dtype(
+    [
+        ("li_idx", "u4"),
+        ("data_start", "u8"),
+        ("data_end", "u8"),
+        ("height", "u4"),
+        ("width", "u4"),
+        ("scale_x", "f4"),
+        ("scale_y", "f4"),
+        ("offset_x", "f4"),
+        ("offset_y", "f4"),
+    ]
+)
+
+
 class VideoReferenceMode(Enum):
     """How to handle video references when saving."""
 
@@ -1469,6 +1514,10 @@ def write_metadata(labels_path: str, labels: Labels):
         format_id = max(format_id, 2.1)
 
     with h5py.File(labels_path, "a") as f:
+        # Bump for chunked label image format (new in 2.2)
+        if "label_image_data" in f and f["label_image_data"].ndim == 3:
+            format_id = max(format_id, 2.2)
+
         grp = f.require_group("metadata")
         grp.attrs["format_id"] = format_id
         grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
@@ -2542,7 +2591,7 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     rois = read_rois(labels_path, videos, tracks)
     masks = read_masks(labels_path, videos, tracks)
     bboxes = read_bboxes(labels_path, videos, tracks)
-    label_images = read_label_images(labels_path, videos, tracks)
+    label_images, li_file = read_label_images(labels_path, videos, tracks)
 
     # Create Labels with lazy state
     labels = Labels(
@@ -2560,6 +2609,10 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
         lazy_store=lazy_store,
     )
     labels.provenance["filename"] = labels_path
+
+    # Keep the HDF5 file handle alive for lazy label image data
+    if li_file is not None:
+        labels._label_image_file = li_file
 
     return labels
 
@@ -3376,8 +3429,13 @@ def read_label_images(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
-) -> list[LabelImage]:
+) -> tuple[list[LabelImage], "h5py.File | None"]:
     """Read label image annotations from a SLEAP labels file.
+
+    Supports both the legacy blob format (v1.8-v2.1) and the chunked format
+    (v2.2+). Pixel data is loaded lazily when possible: the HDF5 file handle
+    is kept open and each frame's data is decompressed on first ``.data``
+    access.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -3388,23 +3446,31 @@ def read_label_images(
             associations will not be restored.
 
     Returns:
-        A list of LabelImage objects. Returns an empty list if none stored.
+        A tuple of ``(label_images, h5py_file)`` where ``label_images`` is a
+        list of LabelImage objects and ``h5py_file`` is the open HDF5 file
+        handle that must be kept alive for lazy data access (or ``None`` if no
+        label images were found). The caller is responsible for storing and
+        eventually closing the file handle.
     """
     try:
         li_data = read_hdf5_dataset(labels_path, "label_images")
     except KeyError:
-        return []
+        return [], None
 
     if len(li_data) == 0:
-        return []
+        return [], None
 
-    # Read compressed pixel data
-    try:
-        li_pixel_flat = read_hdf5_dataset(labels_path, "label_image_data")
-    except KeyError:
-        return []
+    # Open file for lazy pixel data reading
+    f = h5py.File(labels_path, "r")
 
-    # Read objects table and its attrs
+    if "label_image_data" not in f:
+        f.close()
+        return [], None
+
+    pixel_ds = f["label_image_data"]
+    is_chunked_format = pixel_ds.ndim == 3  # (T, H, W) = v2.2+ chunked
+
+    # Read objects table
     try:
         obj_data = read_hdf5_dataset(labels_path, "label_image_objects")
     except KeyError:
@@ -3415,77 +3481,82 @@ def read_label_images(
         ]
         obj_data = np.array([], dtype=obj_dtype)
 
-    # Read string metadata and score maps in a single file open
+    # Read string metadata and score maps
+    if "label_image_obj_categories" in f:
+        categories = [
+            s.decode() if isinstance(s, bytes) else s
+            for s in f["label_image_obj_categories"][:]
+        ]
+    elif "label_image_objects" in f:
+        obj_grp = f["label_image_objects"]
+        categories = json.loads(obj_grp.attrs.get("categories", "[]"))
+    else:
+        categories = []
+
+    if "label_image_obj_names" in f:
+        names = [
+            s.decode() if isinstance(s, bytes) else s
+            for s in f["label_image_obj_names"][:]
+        ]
+    elif "label_image_objects" in f:
+        obj_grp = f["label_image_objects"]
+        names = json.loads(obj_grp.attrs.get("names", "[]"))
+    else:
+        names = []
+
+    if "label_image_sources" in f:
+        sources = [
+            s.decode() if isinstance(s, bytes) else s
+            for s in f["label_image_sources"][:]
+        ]
+    elif "label_images" in f:
+        li_grp = f["label_images"]
+        sources = json.loads(li_grp.attrs.get("sources", "[]"))
+    else:
+        sources = []
+
+    # Read and index score maps if available
     li_score_map_by_idx: dict[int, np.ndarray] = {}
-    with h5py.File(labels_path, "r") as f:
-        if "label_image_obj_categories" in f:
-            categories = [
-                s.decode() if isinstance(s, bytes) else s
-                for s in f["label_image_obj_categories"][:]
-            ]
-        elif "label_image_objects" in f:
-            obj_grp = f["label_image_objects"]
-            categories = json.loads(obj_grp.attrs.get("categories", "[]"))
-        else:
-            categories = []
+    li_score_map_spatial_by_idx: dict[
+        int, tuple[tuple[float, float], tuple[float, float]]
+    ] = {}
+    if "label_image_score_map_index" in f:
+        sm_index = f["label_image_score_map_index"][:]
+        sm_data_ds = f["label_image_score_maps"]
+        for sm_row in sm_index:
+            sm_start = int(sm_row["data_start"])
+            sm_end = int(sm_row["data_end"])
+            sm_h = int(sm_row["height"])
+            sm_w = int(sm_row["width"])
+            sm_compressed = sm_data_ds[sm_start:sm_end]
+            lidx = int(sm_row["li_idx"])
+            li_score_map_by_idx[lidx] = np.frombuffer(
+                zlib.decompress(sm_compressed.tobytes()), dtype=np.float32
+            ).reshape(sm_h, sm_w)
+            # Read score map spatial metadata (v2.1+)
+            sm_scale = (
+                float(sm_row["scale_x"]) if "scale_x" in sm_row.dtype.names else 1.0,
+                float(sm_row["scale_y"]) if "scale_y" in sm_row.dtype.names else 1.0,
+            )
+            sm_offset = (
+                float(sm_row["offset_x"]) if "offset_x" in sm_row.dtype.names else 0.0,
+                float(sm_row["offset_y"]) if "offset_y" in sm_row.dtype.names else 0.0,
+            )
+            li_score_map_spatial_by_idx[lidx] = (sm_scale, sm_offset)
 
-        if "label_image_obj_names" in f:
-            names = [
-                s.decode() if isinstance(s, bytes) else s
-                for s in f["label_image_obj_names"][:]
-            ]
-        elif "label_image_objects" in f:
-            obj_grp = f["label_image_objects"]
-            names = json.loads(obj_grp.attrs.get("names", "[]"))
-        else:
-            names = []
+    # Factory functions for lazy loaders (avoid closure-over-loop-variable)
+    def _make_chunked_loader(ds, idx):
+        def loader():
+            return ds[idx].copy()
 
-        if "label_image_sources" in f:
-            sources = [
-                s.decode() if isinstance(s, bytes) else s
-                for s in f["label_image_sources"][:]
-            ]
-        elif "label_images" in f:
-            li_grp = f["label_images"]
-            sources = json.loads(li_grp.attrs.get("sources", "[]"))
-        else:
-            sources = []
+        return loader
 
-        # Read and index score maps if available
-        li_score_map_spatial_by_idx: dict[
-            int, tuple[tuple[float, float], tuple[float, float]]
-        ] = {}
-        if "label_image_score_map_index" in f:
-            sm_index = f["label_image_score_map_index"][:]
-            sm_data = f["label_image_score_maps"][:]
-            for sm_row in sm_index:
-                sm_start = int(sm_row["data_start"])
-                sm_end = int(sm_row["data_end"])
-                sm_h = int(sm_row["height"])
-                sm_w = int(sm_row["width"])
-                sm_compressed = sm_data[sm_start:sm_end]
-                lidx = int(sm_row["li_idx"])
-                li_score_map_by_idx[lidx] = np.frombuffer(
-                    zlib.decompress(sm_compressed.tobytes()), dtype=np.float32
-                ).reshape(sm_h, sm_w)
-                # Read score map spatial metadata (v2.1+)
-                sm_scale = (
-                    float(sm_row["scale_x"])
-                    if "scale_x" in sm_row.dtype.names
-                    else 1.0,
-                    float(sm_row["scale_y"])
-                    if "scale_y" in sm_row.dtype.names
-                    else 1.0,
-                )
-                sm_offset = (
-                    float(sm_row["offset_x"])
-                    if "offset_x" in sm_row.dtype.names
-                    else 0.0,
-                    float(sm_row["offset_y"])
-                    if "offset_y" in sm_row.dtype.names
-                    else 0.0,
-                )
-                li_score_map_spatial_by_idx[lidx] = (sm_scale, sm_offset)
+    def _make_blob_loader(ds, start, end, h, w):
+        def loader():
+            raw = zlib.decompress(ds[start:end].tobytes())
+            return np.frombuffer(raw, dtype=np.int32).reshape(h, w).copy()
+
+        return loader
 
     label_images: list[LabelImage] = []
     for i, row in enumerate(li_data):
@@ -3499,13 +3570,6 @@ def read_label_images(
         width = int(row["width"])
         n_objects = int(row["n_objects"])
         objects_start = int(row["objects_start"])
-        data_start = int(row["data_start"])
-        data_end = int(row["data_end"])
-
-        # Decompress pixel data
-        compressed = li_pixel_flat[data_start:data_end].tobytes()
-        raw_bytes = zlib.decompress(compressed)
-        data = np.frombuffer(raw_bytes, dtype=np.int32).reshape(height, width).copy()
 
         # Build objects dict from objects table
         objects: dict[int, LabelImage.Info] = {}
@@ -3563,8 +3627,9 @@ def read_label_images(
             float(row["offset_y"]) if "offset_y" in row.dtype.names else 0.0,
         )
 
+        # Construct with data=None for lazy loading
         kwargs = dict(
-            data=data,
+            data=None,
             objects=objects,
             video=video,
             frame_idx=frame_idx,
@@ -3579,19 +3644,31 @@ def read_label_images(
             sm_spatial = li_score_map_spatial_by_idx.get(i)
             sm_scale = sm_spatial[0] if sm_spatial else (1.0, 1.0)
             sm_offset = sm_spatial[1] if sm_spatial else (0.0, 0.0)
-            label_images.append(
-                PredictedLabelImage(
-                    score=score_val if not np.isnan(score_val) else 0.0,
-                    score_map=sm,
-                    score_map_scale=sm_scale,
-                    score_map_offset=sm_offset,
-                    **kwargs,
-                )
+            li = PredictedLabelImage(
+                score=score_val if not np.isnan(score_val) else 0.0,
+                score_map=sm,
+                score_map_scale=sm_scale,
+                score_map_offset=sm_offset,
+                **kwargs,
             )
         else:
-            label_images.append(UserLabelImage(**kwargs))
+            li = UserLabelImage(**kwargs)
 
-    return label_images
+        # Set lazy loader for pixel data (decompresses on first .data access)
+        if is_chunked_format:
+            li._lazy_loader = _make_chunked_loader(pixel_ds, i)
+        else:
+            data_start = int(row["data_start"])
+            data_end = int(row["data_end"])
+            li._lazy_loader = _make_blob_loader(
+                pixel_ds, data_start, data_end, height, width
+            )
+        li._height = height
+        li._width = width
+
+        label_images.append(li)
+
+    return label_images, f
 
 
 def write_label_images(
@@ -3602,6 +3679,14 @@ def write_label_images(
     instances: list[Instance | PredictedInstance] | None = None,
 ) -> None:
     """Write label image annotations to a SLEAP labels file.
+
+    When all label images share the same ``(height, width)``, pixel data is
+    written as a chunked ``(T, H, W)`` int32 dataset with gzip compression
+    and ``write_direct_chunk`` for maximum throughput (format v2.2). This
+    avoids accumulating all compressed data in memory.
+
+    When frame sizes differ, falls back to the legacy blob format (flat uint8
+    array with per-frame byte-range offsets) for backward compatibility.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -3615,118 +3700,119 @@ def write_label_images(
     if not label_images:
         return
 
-    li_dtype = np.dtype(
-        [
-            ("video", "i4"),
-            ("frame_idx", "i8"),
-            ("height", "u4"),
-            ("width", "u4"),
-            ("n_objects", "u4"),
-            ("objects_start", "u4"),
-            ("data_start", "u8"),
-            ("data_end", "u8"),
-            ("is_predicted", "u1"),
-            ("score", "f4"),
-            ("scale_x", "f4"),
-            ("scale_y", "f4"),
-            ("offset_x", "f4"),
-            ("offset_y", "f4"),
-        ]
-    )
-
-    obj_dtype = np.dtype(
-        [
-            ("label_id", "i4"),
-            ("track", "i4"),
-            ("instance", "i4"),
-            ("score", "f4"),
-        ]
-    )
+    # Determine if we can use chunked format (requires uniform frame sizes)
+    shapes = {(li.height, li.width) for li in label_images}
+    use_chunked = len(shapes) == 1
 
     li_rows = []
     obj_rows = []
-    data_chunks: list[bytes] = []
-    data_offset = 0
     obj_offset = 0
     sources = []
     categories = []
     obj_names = []
 
-    for li in label_images:
-        video_idx = videos.index(li.video) if li.video in videos else -1
-        frame_idx = li.frame_idx if li.frame_idx is not None else -1
-
-        # Compress pixel data
-        compressed = zlib.compress(li.data.astype(np.int32).tobytes())
-        data_start = data_offset
-        data_end = data_offset + len(compressed)
-        data_chunks.append(compressed)
-        data_offset = data_end
-
-        # Build object rows for this frame
-        n_objects = len(li.objects)
-        objects_start = obj_offset
-
-        for label_id in sorted(li.objects):
-            info = li.objects[label_id]
-
-            track_idx = tracks.index(info.track) if info.track in tracks else -1
-
-            instance_idx = info._instance_idx  # Use stored index as default
-            if instances is not None and info.instance is not None:
-                try:
-                    instance_idx = instances.index(info.instance)
-                except ValueError:
-                    pass  # Keep stored _instance_idx
-
-            obj_score = info.score if info.score is not None else float("nan")
-            obj_rows.append((label_id, track_idx, instance_idx, obj_score))
-            categories.append(info.category)
-            obj_names.append(info.name)
-
-        obj_offset += n_objects
-
-        is_predicted = isinstance(li, PredictedLabelImage)
-        score = li.score if is_predicted else float("nan")
-
-        li_rows.append(
-            (
-                video_idx,
-                frame_idx,
-                li.height,
-                li.width,
-                n_objects,
-                objects_start,
-                data_start,
-                data_end,
-                int(is_predicted),
-                score,
-                li.scale[0],
-                li.scale[1],
-                li.offset[0],
-                li.offset[1],
-            )
-        )
-
-        sources.append(li.source)
-
-    li_array = np.array(li_rows, dtype=li_dtype)
-    obj_array = (
-        np.array(obj_rows, dtype=obj_dtype)
-        if obj_rows
-        else np.array([], dtype=obj_dtype)
-    )
-    data_flat = np.frombuffer(b"".join(data_chunks), dtype=np.uint8)
+    # For blob format fallback
+    data_chunks: list[bytes] = []
+    data_offset = 0
 
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("label_images", data=li_array, dtype=li_dtype)
-        f.create_dataset("label_image_objects", data=obj_array, dtype=obj_dtype)
-        f.create_dataset(
-            "label_image_data",
-            data=data_flat,
-            dtype=np.uint8,
-            **({"chunks": True} if len(data_flat) > 0 else {}),
+        # Create pixel data dataset
+        if use_chunked:
+            frame_h, frame_w = shapes.pop()
+            n_frames = len(label_images)
+            pixel_dset = f.create_dataset(
+                "label_image_data",
+                shape=(n_frames, frame_h, frame_w),
+                chunks=(1, frame_h, frame_w),
+                dtype=np.int32,
+                compression="gzip",
+                compression_opts=1,
+            )
+
+        for i, li in enumerate(label_images):
+            video_idx = videos.index(li.video) if li.video in videos else -1
+            frame_idx = li.frame_idx if li.frame_idx is not None else -1
+
+            if use_chunked:
+                # Write pixel data directly via write_direct_chunk (43x faster)
+                compressed = zlib.compress(li.data.astype(np.int32).tobytes(), level=1)
+                pixel_dset.id.write_direct_chunk((i, 0, 0), compressed)
+                data_start = 0
+                data_end = 0
+            else:
+                # Blob format: accumulate compressed chunks
+                compressed = zlib.compress(li.data.astype(np.int32).tobytes())
+                data_start = data_offset
+                data_end = data_offset + len(compressed)
+                data_chunks.append(compressed)
+                data_offset = data_end
+
+            # Build object rows for this frame
+            n_objects = len(li.objects)
+            objects_start = obj_offset
+
+            for label_id in sorted(li.objects):
+                info = li.objects[label_id]
+
+                track_idx = tracks.index(info.track) if info.track in tracks else -1
+
+                instance_idx = info._instance_idx  # Use stored index as default
+                if instances is not None and info.instance is not None:
+                    try:
+                        instance_idx = instances.index(info.instance)
+                    except ValueError:
+                        pass  # Keep stored _instance_idx
+
+                obj_score = info.score if info.score is not None else float("nan")
+                obj_rows.append((label_id, track_idx, instance_idx, obj_score))
+                categories.append(info.category)
+                obj_names.append(info.name)
+
+            obj_offset += n_objects
+
+            is_predicted = isinstance(li, PredictedLabelImage)
+            score = li.score if is_predicted else float("nan")
+
+            li_rows.append(
+                (
+                    video_idx,
+                    frame_idx,
+                    li.height,
+                    li.width,
+                    n_objects,
+                    objects_start,
+                    data_start,
+                    data_end,
+                    int(is_predicted),
+                    score,
+                    li.scale[0],
+                    li.scale[1],
+                    li.offset[0],
+                    li.offset[1],
+                )
+            )
+
+            sources.append(li.source)
+
+        # Write blob data if using legacy format
+        if not use_chunked:
+            data_flat = np.frombuffer(b"".join(data_chunks), dtype=np.uint8)
+            f.create_dataset(
+                "label_image_data",
+                data=data_flat,
+                dtype=np.uint8,
+                **({"chunks": True} if len(data_flat) > 0 else {}),
+            )
+
+        # Write metadata datasets
+        li_array = np.array(li_rows, dtype=LI_DTYPE)
+        obj_array = (
+            np.array(obj_rows, dtype=OBJ_DTYPE)
+            if obj_rows
+            else np.array([], dtype=OBJ_DTYPE)
         )
+        f.create_dataset("label_images", data=li_array, dtype=LI_DTYPE)
+        f.create_dataset("label_image_objects", data=obj_array, dtype=OBJ_DTYPE)
         str_dt = h5py.special_dtype(vlen=str)
         f.create_dataset("label_image_sources", data=sources, dtype=str_dt)
         f.create_dataset("label_image_obj_categories", data=categories, dtype=str_dt)
@@ -3758,20 +3844,7 @@ def write_label_images(
             li_sm_offset += len(sm_bytes)
 
     if li_sm_indices:
-        sm_index_dtype = np.dtype(
-            [
-                ("li_idx", "u4"),
-                ("data_start", "u8"),
-                ("data_end", "u8"),
-                ("height", "u4"),
-                ("width", "u4"),
-                ("scale_x", "f4"),
-                ("scale_y", "f4"),
-                ("offset_x", "f4"),
-                ("offset_y", "f4"),
-            ]
-        )
-        sm_index_array = np.array(li_sm_indices, dtype=sm_index_dtype)
+        sm_index_array = np.array(li_sm_indices, dtype=LI_SM_INDEX_DTYPE)
         sm_flat = np.concatenate(li_sm_chunks)
         with h5py.File(labels_path, "a") as f:
             f.create_dataset("label_image_score_map_index", data=sm_index_array)
@@ -3781,6 +3854,844 @@ def write_label_images(
                 dtype=np.uint8,
                 **({"chunks": True} if len(sm_flat) > 0 else {}),
             )
+
+
+def _write_metadata_standalone(
+    labels_path: str,
+    format_id: float = 2.2,
+    skeletons: list[Skeleton] | None = None,
+    provenance: dict | None = None,
+) -> None:
+    """Write minimal metadata group to an SLP file.
+
+    This is used by ``LabelImageWriter`` to write format info without requiring
+    a full ``Labels`` object.
+
+    Args:
+        labels_path: Path to the SLP file.
+        format_id: Format version identifier.
+        skeletons: Optional list of skeletons to serialize.
+        provenance: Optional provenance dict.
+    """
+    skeletons = skeletons or []
+    provenance = dict(provenance or {})
+
+    # Custom encoding for provenance values
+    for k in provenance:
+        if isinstance(provenance[k], Path):
+            provenance[k] = provenance[k].as_posix()
+
+    skeletons_dicts, nodes_dicts = serialize_skeletons(skeletons)
+
+    md = {
+        "version": "2.0.0",
+        "skeletons": skeletons_dicts,
+        "nodes": nodes_dicts,
+        "videos": [],
+        "tracks": [],
+        "suggestions": [],
+        "negative_anchors": {},
+        "provenance": provenance,
+    }
+
+    # Dtypes for empty placeholder datasets required by read_labels
+    point_dtype = np.dtype(
+        [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?")]
+    )
+    pred_point_dtype = np.dtype(
+        [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?"), ("score", "f8")]
+    )
+    instance_dtype = np.dtype(
+        [
+            ("instance_id", "i8"),
+            ("instance_type", "u1"),
+            ("frame_id", "u8"),
+            ("skeleton", "u4"),
+            ("track", "i4"),
+            ("from_predicted", "i8"),
+            ("score", "f4"),
+            ("point_id_start", "u8"),
+            ("point_id_end", "u8"),
+            ("tracking_score", "f4"),
+        ]
+    )
+    frame_dtype = np.dtype(
+        [
+            ("frame_id", "u8"),
+            ("video", "u4"),
+            ("frame_idx", "u8"),
+            ("instance_id_start", "u8"),
+            ("instance_id_end", "u8"),
+        ]
+    )
+
+    with h5py.File(labels_path, "a") as f:
+        # Bump for chunked label image format
+        if "label_image_data" in f and f["label_image_data"].ndim == 3:
+            format_id = max(format_id, 2.2)
+
+        grp = f.require_group("metadata")
+        grp.attrs["format_id"] = format_id
+        grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
+
+        # Write empty placeholder datasets so read_labels can parse the file
+        if "points" not in f:
+            f.create_dataset("points", data=np.array([], dtype=point_dtype))
+        if "pred_points" not in f:
+            f.create_dataset("pred_points", data=np.array([], dtype=pred_point_dtype))
+        if "instances" not in f:
+            f.create_dataset("instances", data=np.array([], dtype=instance_dtype))
+        if "frames" not in f:
+            f.create_dataset("frames", data=np.array([], dtype=frame_dtype))
+
+
+class LabelImageWriter:
+    """Streaming writer for label image annotations to SLP files.
+
+    Writes label images one at a time (or in batches) to an HDF5/SLP file
+    without holding all pixel data in memory simultaneously. Uses the chunked
+    ``(T, H, W)`` int32 format with ``write_direct_chunk`` for maximum
+    throughput.
+
+    The HDF5 file and pixel dataset are created lazily on the first ``add()``
+    call, since the frame dimensions ``(H, W)`` are needed to define the
+    dataset shape. All subsequent frames must have the same dimensions.
+
+    Attributes:
+        path: Path to the output SLP file.
+        video: Optional ``Video`` to associate with all label images.
+        tracks: Optional list of ``Track`` objects.
+        skeleton: Optional ``Skeleton`` for metadata.
+        initial_capacity: Initial number of frames to allocate in the dataset.
+
+    Example::
+
+        with LabelImageWriter("output.slp", video=video) as writer:
+            for frame_data in segmentation_results:
+                li = UserLabelImage(data=frame_data, video=video, frame_idx=i)
+                writer.add(li)
+            labels = writer.finalize()
+    """
+
+    def __init__(
+        self,
+        path: str,
+        video: Video | None = None,
+        tracks: list[Track] | None = None,
+        skeleton: Skeleton | None = None,
+        initial_capacity: int = 100,
+    ):
+        """Initialize the streaming label image writer.
+
+        Args:
+            path: Path to the output SLP file.
+            video: Optional video to associate with all label images.
+            tracks: Optional initial list of tracks for object associations.
+                New tracks encountered in ``add()`` calls are appended
+                automatically.
+            skeleton: Optional skeleton for metadata.
+            initial_capacity: Initial number of frames to allocate. The dataset
+                grows exponentially (doubles) when capacity is exceeded.
+        """
+        self.path = str(path)
+        self.video = video
+        self.tracks = tracks or []
+        self.skeleton = skeleton
+        self.initial_capacity = initial_capacity
+
+        # State
+        self._file: h5py.File | None = None
+        self._pixel_dset: h5py.Dataset | None = None
+        self._frame_h: int = 0
+        self._frame_w: int = 0
+        self._capacity: int = initial_capacity
+        self._count: int = 0
+
+        # Accumulated metadata (kept in memory, ~80 bytes/frame + 16 bytes/obj)
+        self._li_rows: list[tuple] = []
+        self._obj_rows: list[tuple] = []
+        self._obj_offset: int = 0
+        self._sources: list[str] = []
+        self._categories: list[str] = []
+        self._obj_names: list[str] = []
+
+        # Score map data (blob format, accumulated in memory)
+        self._sm_indices: list[tuple] = []
+        self._sm_chunks: list[np.ndarray] = []
+        self._sm_offset: int = 0
+
+        self._finalized: bool = False
+
+    def _ensure_file(self, height: int, width: int) -> None:
+        """Create the HDF5 file and pixel dataset on first use.
+
+        Args:
+            height: Frame height in pixels.
+            width: Frame width in pixels.
+        """
+        if self._file is not None:
+            return
+
+        self._frame_h = height
+        self._frame_w = width
+
+        self._file = h5py.File(self.path, "w")
+        self._pixel_dset = self._file.create_dataset(
+            "label_image_data",
+            shape=(self._capacity, height, width),
+            maxshape=(None, height, width),
+            chunks=(1, height, width),
+            dtype=np.int32,
+            compression="gzip",
+            compression_opts=1,
+        )
+
+    def _grow_if_needed(self) -> None:
+        """Double the pixel dataset capacity if it's full."""
+        if self._count >= self._capacity:
+            self._capacity *= 2
+            self._pixel_dset.resize(self._capacity, axis=0)
+
+    def add(self, label_image: LabelImage) -> None:
+        """Add a single label image to the file.
+
+        The first call creates the HDF5 file and locks the frame dimensions.
+        Subsequent calls must provide frames with the same ``(H, W)``.
+
+        Args:
+            label_image: The label image to write.
+
+        Raises:
+            ValueError: If the frame dimensions don't match the first frame.
+            RuntimeError: If the writer has already been finalized.
+        """
+        if self._finalized:
+            raise RuntimeError("Writer has already been finalized.")
+
+        h, w = label_image.height, label_image.width
+        self._ensure_file(h, w)
+
+        if h != self._frame_h or w != self._frame_w:
+            raise ValueError(
+                f"Frame size ({h}, {w}) does not match expected "
+                f"({self._frame_h}, {self._frame_w}). All frames must have "
+                f"the same dimensions."
+            )
+
+        idx = self._count
+        self._grow_if_needed()
+
+        # Write pixel data via write_direct_chunk
+        compressed = zlib.compress(label_image.data.astype(np.int32).tobytes(), level=1)
+        self._pixel_dset.id.write_direct_chunk((idx, 0, 0), compressed)
+
+        # Collect video index
+        videos = [self.video] if self.video is not None else []
+        video_idx = (
+            videos.index(label_image.video) if label_image.video in videos else -1
+        )
+        frame_idx = label_image.frame_idx if label_image.frame_idx is not None else -1
+
+        # Build object rows (auto-collect new tracks)
+        n_objects = len(label_image.objects)
+        objects_start = self._obj_offset
+        _track_set = set(self.tracks)
+
+        for label_id in sorted(label_image.objects):
+            info = label_image.objects[label_id]
+            if info.track is not None and info.track not in _track_set:
+                self.tracks.append(info.track)
+                _track_set.add(info.track)
+            track_idx = (
+                self.tracks.index(info.track) if info.track in self.tracks else -1
+            )
+            instance_idx = info._instance_idx
+            obj_score = info.score if info.score is not None else float("nan")
+            self._obj_rows.append((label_id, track_idx, instance_idx, obj_score))
+            self._categories.append(info.category)
+            self._obj_names.append(info.name)
+
+        self._obj_offset += n_objects
+
+        is_predicted = isinstance(label_image, PredictedLabelImage)
+        score = label_image.score if is_predicted else float("nan")
+
+        self._li_rows.append(
+            (
+                video_idx,
+                frame_idx,
+                h,
+                w,
+                n_objects,
+                objects_start,
+                0,  # data_start (unused for chunked)
+                0,  # data_end (unused for chunked)
+                int(is_predicted),
+                score,
+                label_image.scale[0],
+                label_image.scale[1],
+                label_image.offset[0],
+                label_image.offset[1],
+            )
+        )
+
+        self._sources.append(label_image.source)
+
+        # Score map handling for PredictedLabelImage
+        if is_predicted and label_image.score_map is not None:
+            sm = label_image.score_map
+            compressed_sm = zlib.compress(sm.astype(np.float32).tobytes())
+            sm_bytes = np.frombuffer(compressed_sm, dtype=np.uint8)
+            sm_h, sm_w = sm.shape[:2]
+            self._sm_indices.append(
+                (
+                    idx,
+                    self._sm_offset,
+                    self._sm_offset + len(sm_bytes),
+                    sm_h,
+                    sm_w,
+                    label_image.score_map_scale[0],
+                    label_image.score_map_scale[1],
+                    label_image.score_map_offset[0],
+                    label_image.score_map_offset[1],
+                )
+            )
+            self._sm_chunks.append(sm_bytes)
+            self._sm_offset += len(sm_bytes)
+
+        self._count += 1
+
+    def add_batch(self, label_images: list[LabelImage]) -> None:
+        """Add multiple label images at once.
+
+        Convenience wrapper that calls ``add()`` for each label image.
+
+        Args:
+            label_images: List of label images to write.
+        """
+        for li in label_images:
+            self.add(li)
+
+    def finalize(self) -> Labels:
+        """Finish writing, close the file, and return a ``Labels`` object.
+
+        Trims the pixel dataset to the actual number of frames written, writes
+        all metadata datasets, and closes the HDF5 file. The returned
+        ``Labels`` object can be used directly or the file can be re-loaded
+        with ``load_slp()``.
+
+        Returns:
+            A ``Labels`` object pointing at the written file.
+
+        Raises:
+            RuntimeError: If the writer has already been finalized.
+        """
+        if self._finalized:
+            raise RuntimeError("Writer has already been finalized.")
+        self._finalized = True
+
+        # Handle empty writer (no frames added)
+        if self._file is None:
+            # Create minimal empty SLP file
+            with h5py.File(self.path, "w"):
+                pass
+            videos = [self.video] if self.video is not None else []
+            skeletons = [self.skeleton] if self.skeleton is not None else []
+            write_videos(self.path, videos)
+            write_tracks(self.path, self.tracks)
+            _write_metadata_standalone(self.path, skeletons=skeletons)
+            return Labels(
+                videos=videos,
+                skeletons=skeletons,
+                tracks=self.tracks,
+            )
+
+        # Trim pixel dataset to actual count
+        self._pixel_dset.resize(self._count, axis=0)
+
+        # Write metadata datasets
+        li_array = np.array(self._li_rows, dtype=LI_DTYPE)
+        obj_array = (
+            np.array(self._obj_rows, dtype=OBJ_DTYPE)
+            if self._obj_rows
+            else np.array([], dtype=OBJ_DTYPE)
+        )
+
+        str_dt = h5py.special_dtype(vlen=str)
+        f = self._file
+        f.create_dataset("label_images", data=li_array, dtype=LI_DTYPE)
+        f.create_dataset("label_image_objects", data=obj_array, dtype=OBJ_DTYPE)
+        f.create_dataset("label_image_sources", data=self._sources, dtype=str_dt)
+        f.create_dataset(
+            "label_image_obj_categories", data=self._categories, dtype=str_dt
+        )
+        f.create_dataset("label_image_obj_names", data=self._obj_names, dtype=str_dt)
+
+        # Write score maps if any
+        if self._sm_indices:
+            sm_index_array = np.array(self._sm_indices, dtype=LI_SM_INDEX_DTYPE)
+            sm_flat = np.concatenate(self._sm_chunks)
+            f.create_dataset("label_image_score_map_index", data=sm_index_array)
+            f.create_dataset(
+                "label_image_score_maps",
+                data=sm_flat,
+                dtype=np.uint8,
+                **({"chunks": True} if len(sm_flat) > 0 else {}),
+            )
+
+        # Close HDF5 file before writing video/track/metadata
+        f.close()
+        self._file = None
+
+        # Write video, track, and metadata info
+        videos = [self.video] if self.video is not None else []
+        skeletons = [self.skeleton] if self.skeleton is not None else []
+        write_videos(self.path, videos)
+        write_tracks(self.path, self.tracks)
+        _write_metadata_standalone(self.path, skeletons=skeletons)
+
+        li_images, li_file = read_label_images(self.path, videos, self.tracks, [])
+        labels = Labels(
+            videos=videos,
+            skeletons=skeletons,
+            tracks=self.tracks,
+            label_images=li_images,
+        )
+        if li_file is not None:
+            labels._label_image_file = li_file
+        return labels
+
+    def __enter__(self) -> "LabelImageWriter":
+        """Enter context manager."""
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        """Exit context manager, finalizing if not already done."""
+        if not self._finalized:
+            self.finalize()
+        elif self._file is not None:
+            self._file.close()
+            self._file = None
+
+
+def merge_label_images(
+    source_paths: list[str | Path],
+    dest_path: str | Path,
+    video: Video | None = None,
+) -> Labels:
+    """Merge label images from multiple SLP files into one.
+
+    Copies compressed chunks directly (no decompression) via
+    ``read_direct_chunk`` -> ``write_direct_chunk`` when possible, falling
+    back to decompress + recompress for legacy blob-format sources.
+
+    Args:
+        source_paths: List of paths to source SLP files containing label
+            images to merge.
+        dest_path: Path to the destination SLP file to create.
+        video: Optional ``Video`` to associate with all merged label images.
+            If ``None``, videos are deduplicated by filename across sources.
+
+    Returns:
+        A ``Labels`` object pointing at the merged file.
+
+    Raises:
+        ValueError: If source files have label images with different
+            ``(height, width)`` dimensions, or if no source files are
+            provided, or if a source contains no label images.
+    """
+    if not source_paths:
+        raise ValueError("At least one source path is required.")
+
+    source_paths = [str(p) for p in source_paths]
+    dest_path = str(dest_path)
+
+    # --- Phase 1: Open all sources, read index tables, validate dimensions ---
+    source_files: list[h5py.File] = []
+    source_index_tables: list[np.ndarray] = []
+    source_pixel_datasets: list[h5py.Dataset] = []
+    source_obj_tables: list[np.ndarray] = []
+    source_categories: list[list[str]] = []
+    source_names: list[list[str]] = []
+    source_sources: list[list[str]] = []
+    source_videos: list[list[Video]] = []
+    source_tracks: list[list[Track]] = []
+    source_sm_indices: list[np.ndarray | None] = []
+    source_sm_data: list[h5py.Dataset | None] = []
+
+    all_shapes: set[tuple[int, int]] = set()
+
+    try:
+        for src_path in source_paths:
+            f = h5py.File(src_path, "r")
+            source_files.append(f)
+
+            # Read index table
+            if "label_images" not in f or "label_image_data" not in f:
+                raise ValueError(f"Source file has no label images: {src_path}")
+
+            li_data = f["label_images"][:]
+            if len(li_data) == 0:
+                raise ValueError(f"Source file has no label images: {src_path}")
+            source_index_tables.append(li_data)
+            source_pixel_datasets.append(f["label_image_data"])
+
+            # Collect frame dimensions
+            for row in li_data:
+                all_shapes.add((int(row["height"]), int(row["width"])))
+
+            # Read objects table
+            if "label_image_objects" in f:
+                source_obj_tables.append(f["label_image_objects"][:])
+            else:
+                obj_dtype = np.dtype(
+                    [("label_id", "i4"), ("track", "i4"), ("instance", "i4")]
+                )
+                source_obj_tables.append(np.array([], dtype=obj_dtype))
+
+            # Read string metadata
+            if "label_image_obj_categories" in f:
+                cats = [
+                    s.decode() if isinstance(s, bytes) else s
+                    for s in f["label_image_obj_categories"][:]
+                ]
+            else:
+                cats = []
+            source_categories.append(cats)
+
+            if "label_image_obj_names" in f:
+                nms = [
+                    s.decode() if isinstance(s, bytes) else s
+                    for s in f["label_image_obj_names"][:]
+                ]
+            else:
+                nms = []
+            source_names.append(nms)
+
+            if "label_image_sources" in f:
+                srcs = [
+                    s.decode() if isinstance(s, bytes) else s
+                    for s in f["label_image_sources"][:]
+                ]
+            else:
+                srcs = []
+            source_sources.append(srcs)
+
+            # Read videos and tracks from source
+            source_videos.append(read_videos(src_path, open_backend=False))
+            source_tracks.append(read_tracks(src_path))
+
+            # Score map data
+            if "label_image_score_map_index" in f:
+                source_sm_indices.append(f["label_image_score_map_index"][:])
+                source_sm_data.append(f["label_image_score_maps"])
+            else:
+                source_sm_indices.append(None)
+                source_sm_data.append(None)
+
+        # Validate uniform dimensions
+        if len(all_shapes) > 1:
+            raise ValueError(
+                f"Cannot merge label images with different dimensions: "
+                f"{all_shapes}. All sources must have the same (H, W)."
+            )
+
+        frame_h, frame_w = all_shapes.pop()
+
+        # --- Phase 2: Deduplicate videos and tracks ---
+        if video is not None:
+            merged_videos = [video]
+        else:
+            # Deduplicate by filename
+            merged_videos: list[Video] = []
+            seen_filenames: dict[str, int] = {}
+            for vlist in source_videos:
+                for v in vlist:
+                    fn = v.filename
+                    if fn not in seen_filenames:
+                        seen_filenames[fn] = len(merged_videos)
+                        merged_videos.append(v)
+
+        # Deduplicate tracks by name
+        merged_tracks: list[Track] = []
+        seen_track_names: dict[str, int] = {}
+        for tlist in source_tracks:
+            for t in tlist:
+                if t.name not in seen_track_names:
+                    seen_track_names[t.name] = len(merged_tracks)
+                    merged_tracks.append(t)
+
+        # --- Phase 3: Create destination and copy data ---
+        total_frames = sum(len(t) for t in source_index_tables)
+
+        dest_li_rows: list[tuple] = []
+        dest_obj_rows: list[tuple] = []
+        dest_obj_offset = 0
+        dest_sources: list[str] = []
+        dest_categories: list[str] = []
+        dest_obj_names: list[str] = []
+        dest_sm_indices: list[tuple] = []
+        dest_sm_chunks: list[np.ndarray] = []
+        dest_sm_offset = 0
+
+        with h5py.File(dest_path, "w") as dest_f:
+            dest_pixel_dset = dest_f.create_dataset(
+                "label_image_data",
+                shape=(total_frames, frame_h, frame_w),
+                chunks=(1, frame_h, frame_w),
+                dtype=np.int32,
+                compression="gzip",
+                compression_opts=1,
+            )
+
+            dest_frame_idx = 0
+
+            for src_idx, (li_table, pixel_ds, obj_table) in enumerate(
+                zip(
+                    source_index_tables,
+                    source_pixel_datasets,
+                    source_obj_tables,
+                )
+            ):
+                is_chunked = pixel_ds.ndim == 3
+                src_videos = source_videos[src_idx]
+                src_tracks = source_tracks[src_idx]
+
+                # Build video index remap for this source
+                if video is not None:
+                    video_remap = {i: 0 for i in range(len(src_videos))}
+                else:
+                    video_remap = {}
+                    for i, v in enumerate(src_videos):
+                        fn = v.filename
+                        video_remap[i] = seen_filenames[fn]
+
+                # Build track index remap for this source
+                track_remap: dict[int, int] = {}
+                for i, t in enumerate(src_tracks):
+                    track_remap[i] = seen_track_names[t.name]
+
+                for local_i, row in enumerate(li_table):
+                    # Copy pixel data
+                    if is_chunked:
+                        # Raw chunk copy: read_direct_chunk -> write_direct_chunk
+                        filter_mask, raw_data = pixel_ds.id.read_direct_chunk(
+                            (local_i, 0, 0)
+                        )
+                        dest_pixel_dset.id.write_direct_chunk(
+                            (dest_frame_idx, 0, 0), raw_data
+                        )
+                    else:
+                        # Blob format: decompress then recompress for chunked
+                        data_start = int(row["data_start"])
+                        data_end = int(row["data_end"])
+                        h = int(row["height"])
+                        w = int(row["width"])
+                        raw = zlib.decompress(pixel_ds[data_start:data_end].tobytes())
+                        arr = np.frombuffer(raw, dtype=np.int32).reshape(h, w)
+                        compressed = zlib.compress(arr.tobytes(), level=1)
+                        dest_pixel_dset.id.write_direct_chunk(
+                            (dest_frame_idx, 0, 0), compressed
+                        )
+
+                    # Remap video index
+                    orig_video_idx = int(row["video"])
+                    new_video_idx = video_remap.get(orig_video_idx, -1)
+
+                    # Remap object rows
+                    n_objects = int(row["n_objects"])
+                    objects_start = int(row["objects_start"])
+
+                    for j in range(n_objects):
+                        obj_idx = objects_start + j
+                        if obj_idx < len(obj_table):
+                            obj_row = obj_table[obj_idx]
+                            label_id = int(obj_row["label_id"])
+
+                            orig_track_idx = int(obj_row["track"])
+                            new_track_idx = track_remap.get(orig_track_idx, -1)
+
+                            instance_idx = int(obj_row["instance"])
+                            obj_score = (
+                                float(obj_row["score"])
+                                if "score" in obj_row.dtype.names
+                                else float("nan")
+                            )
+
+                            dest_obj_rows.append(
+                                (label_id, new_track_idx, instance_idx, obj_score)
+                            )
+
+                            # Copy string metadata
+                            src_cats = source_categories[src_idx]
+                            dest_categories.append(
+                                src_cats[obj_idx] if obj_idx < len(src_cats) else ""
+                            )
+                            src_nms = source_names[src_idx]
+                            dest_obj_names.append(
+                                src_nms[obj_idx] if obj_idx < len(src_nms) else ""
+                            )
+
+                    # Read spatial metadata with defaults
+                    scale_x = (
+                        float(row["scale_x"]) if "scale_x" in row.dtype.names else 1.0
+                    )
+                    scale_y = (
+                        float(row["scale_y"]) if "scale_y" in row.dtype.names else 1.0
+                    )
+                    offset_x = (
+                        float(row["offset_x"]) if "offset_x" in row.dtype.names else 0.0
+                    )
+                    offset_y = (
+                        float(row["offset_y"]) if "offset_y" in row.dtype.names else 0.0
+                    )
+
+                    is_predicted = (
+                        bool(row["is_predicted"])
+                        if "is_predicted" in row.dtype.names
+                        else False
+                    )
+                    score = (
+                        float(row["score"])
+                        if "score" in row.dtype.names
+                        else float("nan")
+                    )
+
+                    dest_li_rows.append(
+                        (
+                            new_video_idx,
+                            int(row["frame_idx"]),
+                            int(row["height"]),
+                            int(row["width"]),
+                            n_objects,
+                            dest_obj_offset,
+                            0,  # data_start (unused for chunked)
+                            0,  # data_end (unused for chunked)
+                            int(is_predicted),
+                            score,
+                            scale_x,
+                            scale_y,
+                            offset_x,
+                            offset_y,
+                        )
+                    )
+
+                    dest_obj_offset += n_objects
+
+                    # Copy source string
+                    src_srcs = source_sources[src_idx]
+                    dest_sources.append(
+                        src_srcs[local_i] if local_i < len(src_srcs) else ""
+                    )
+
+                    # Copy score maps if present
+                    sm_index = source_sm_indices[src_idx]
+                    sm_data = source_sm_data[src_idx]
+                    if sm_index is not None and sm_data is not None:
+                        for sm_row in sm_index:
+                            if int(sm_row["li_idx"]) == local_i:
+                                sm_start = int(sm_row["data_start"])
+                                sm_end = int(sm_row["data_end"])
+                                sm_bytes = sm_data[sm_start:sm_end]
+                                sm_h = int(sm_row["height"])
+                                sm_w = int(sm_row["width"])
+                                sm_scale_x = (
+                                    float(sm_row["scale_x"])
+                                    if "scale_x" in sm_row.dtype.names
+                                    else 1.0
+                                )
+                                sm_scale_y = (
+                                    float(sm_row["scale_y"])
+                                    if "scale_y" in sm_row.dtype.names
+                                    else 1.0
+                                )
+                                sm_offset_x = (
+                                    float(sm_row["offset_x"])
+                                    if "offset_x" in sm_row.dtype.names
+                                    else 0.0
+                                )
+                                sm_offset_y = (
+                                    float(sm_row["offset_y"])
+                                    if "offset_y" in sm_row.dtype.names
+                                    else 0.0
+                                )
+                                dest_sm_indices.append(
+                                    (
+                                        dest_frame_idx,
+                                        dest_sm_offset,
+                                        dest_sm_offset + len(sm_bytes),
+                                        sm_h,
+                                        sm_w,
+                                        sm_scale_x,
+                                        sm_scale_y,
+                                        sm_offset_x,
+                                        sm_offset_y,
+                                    )
+                                )
+                                sm_np = np.array(sm_bytes, dtype=np.uint8)
+                                dest_sm_chunks.append(sm_np)
+                                dest_sm_offset += len(sm_bytes)
+                                break
+
+                    dest_frame_idx += 1
+
+            # Write metadata datasets
+            li_array = np.array(dest_li_rows, dtype=LI_DTYPE)
+            obj_array = (
+                np.array(dest_obj_rows, dtype=OBJ_DTYPE)
+                if dest_obj_rows
+                else np.array([], dtype=OBJ_DTYPE)
+            )
+            str_dt = h5py.special_dtype(vlen=str)
+            dest_f.create_dataset("label_images", data=li_array, dtype=LI_DTYPE)
+            dest_f.create_dataset(
+                "label_image_objects", data=obj_array, dtype=OBJ_DTYPE
+            )
+            dest_f.create_dataset(
+                "label_image_sources", data=dest_sources, dtype=str_dt
+            )
+            dest_f.create_dataset(
+                "label_image_obj_categories", data=dest_categories, dtype=str_dt
+            )
+            dest_f.create_dataset(
+                "label_image_obj_names", data=dest_obj_names, dtype=str_dt
+            )
+
+            # Write score maps if any
+            if dest_sm_indices:
+                sm_index_array = np.array(dest_sm_indices, dtype=LI_SM_INDEX_DTYPE)
+                sm_flat = np.concatenate(dest_sm_chunks)
+                dest_f.create_dataset(
+                    "label_image_score_map_index", data=sm_index_array
+                )
+                dest_f.create_dataset(
+                    "label_image_score_maps",
+                    data=sm_flat,
+                    dtype=np.uint8,
+                    **({"chunks": True} if len(sm_flat) > 0 else {}),
+                )
+
+        # Write video, track, and metadata info
+        write_videos(dest_path, merged_videos)
+        write_tracks(dest_path, merged_tracks)
+        _write_metadata_standalone(dest_path)
+
+        # Return Labels pointing at the merged file
+        li_images, li_file = read_label_images(
+            dest_path, merged_videos, merged_tracks, []
+        )
+        labels = Labels(
+            videos=merged_videos,
+            tracks=merged_tracks,
+            label_images=li_images,
+        )
+        if li_file is not None:
+            labels._label_image_file = li_file
+        return labels
+
+    finally:
+        for f in source_files:
+            f.close()
 
 
 def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
@@ -3875,7 +4786,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     rois = read_rois(labels_path, videos, tracks, instances)
     masks = read_masks(labels_path, videos, tracks, instances)
     bboxes = read_bboxes(labels_path, videos, tracks, instances)
-    label_images = read_label_images(labels_path, videos, tracks, instances)
+    label_images, _li_file = read_label_images(labels_path, videos, tracks, instances)
 
     # Migrate old-style bbox ROIs to BoundingBox objects (skip predicted ROIs)
     if not bboxes:
@@ -3920,6 +4831,10 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         label_images=label_images,
     )
     labels.provenance["filename"] = labels_path
+
+    # Store the HDF5 file handle for lazy label image data (keeps it alive)
+    if _li_file is not None:
+        labels._label_image_file = _li_file
 
     return labels
 

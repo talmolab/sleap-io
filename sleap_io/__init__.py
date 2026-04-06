@@ -45,6 +45,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "save_video",
             "load_label_images",
             "save_label_images",
+            "merge_label_images",
         ],
         # Video reading functions from sleap_io.io.video_reading
         "io.seq": ["SeqVideo"],
@@ -60,6 +61,8 @@ __getattr__, __dir__, __all__ = lazy.attach(
         ],
         # Video writing from sleap_io.io.video_writing
         "io.video_writing": ["VideoWriter"],
+        # Streaming label image writer from sleap_io.io.slp
+        "io.slp": ["LabelImageWriter"],
         # Rendering from sleap_io.rendering
         "rendering.core": ["render_video", "render_image"],
         "rendering.colors": ["get_palette"],
