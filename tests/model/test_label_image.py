@@ -10,6 +10,7 @@ from sleap_io.model.label_image import (
     LabelImage,
     PredictedLabelImage,
     UserLabelImage,
+    normalize_label_ids,
 )
 from sleap_io.model.mask import UserSegmentationMask
 from sleap_io.model.video import Video
@@ -834,6 +835,264 @@ def test_from_binary_masks_scores_length_mismatch_raises():
     m2 = np.zeros((2, 2), dtype=bool)
     with pytest.raises(ValueError, match="scores length"):
         UserLabelImage.from_binary_masks([m1, m2], scores=[0.5])
+
+
+# -- from_binary_masks label_ids tests --
+
+
+def test_from_binary_masks_with_label_ids():
+    """Custom label_ids should set pixel values and objects dict keys."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    li = UserLabelImage.from_binary_masks([m1, m2], label_ids=[5, 10])
+    assert li.data[0, 0] == 5
+    assert li.data[0, 1] == 10
+    assert li.data[1, 0] == 0  # background
+    assert 5 in li.objects
+    assert 10 in li.objects
+    assert li.n_objects == 2
+
+
+def test_from_binary_masks_label_ids_with_tracks():
+    """Tracks should map correctly with custom label_ids."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    t1 = Track(name="a")
+    t2 = Track(name="b")
+    li = UserLabelImage.from_binary_masks([m1, m2], label_ids=[3, 7], tracks=[t1, t2])
+    assert li.objects[3].track is t1
+    assert li.objects[7].track is t2
+
+
+def test_from_binary_masks_label_ids_noncontiguous():
+    """Non-contiguous label_ids (gaps) should work."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    m3 = np.array([[False, False], [True, False]])
+    li = UserLabelImage.from_binary_masks([m1, m2, m3], label_ids=[1, 3, 5])
+    assert set(li.objects.keys()) == {1, 3, 5}
+    np.testing.assert_array_equal(li.label_ids, [1, 3, 5])
+
+
+def test_from_binary_masks_label_ids_create_tracks():
+    """Auto-created track names should use label_ids values."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    li = UserLabelImage.from_binary_masks(
+        [m1, m2], label_ids=[5, 10], create_tracks=True
+    )
+    assert li.objects[5].track.name == "5"
+    assert li.objects[10].track.name == "10"
+
+
+def test_from_binary_masks_label_ids_overlap():
+    """Last-writer-wins with custom label_ids."""
+    m1 = np.array([[True, True], [False, False]])
+    m2 = np.array([[True, False], [True, False]])
+    li = UserLabelImage.from_binary_masks([m1, m2], label_ids=[10, 20])
+    assert li.data[0, 0] == 20  # overlap: m2 wins
+    assert li.data[0, 1] == 10  # m1 only
+    assert li.data[1, 0] == 20  # m2 only
+
+
+def test_from_binary_masks_label_ids_zero_raises():
+    """label_ids containing 0 should raise ValueError."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    with pytest.raises(ValueError, match="positive"):
+        UserLabelImage.from_binary_masks([m1, m2], label_ids=[0, 1])
+
+
+def test_from_binary_masks_label_ids_negative_raises():
+    """Negative label_ids should raise ValueError."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    with pytest.raises(ValueError, match="positive"):
+        UserLabelImage.from_binary_masks([m1, m2], label_ids=[-1, 2])
+
+
+def test_from_binary_masks_label_ids_duplicate_raises():
+    """Duplicate label_ids should raise ValueError."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    with pytest.raises(ValueError, match="unique"):
+        UserLabelImage.from_binary_masks([m1, m2], label_ids=[3, 3])
+
+
+def test_from_binary_masks_label_ids_length_mismatch_raises():
+    """Wrong label_ids length should raise ValueError."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    with pytest.raises(ValueError, match="label_ids length"):
+        UserLabelImage.from_binary_masks([m1, m2], label_ids=[1])
+
+
+# -- normalize_label_ids tests --
+
+
+def test_normalize_label_ids_by_track():
+    """Same Track should get the same pixel value across frames."""
+    t1 = Track(name="a")
+    t2 = Track(name="b")
+    # Frame 0: t1=label 1, t2=label 2
+    li0 = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]]), np.array([[False, True]])],
+        tracks=[t1, t2],
+    )
+    # Frame 1: t2=label 1, t1=label 2 (reversed order)
+    li1 = UserLabelImage.from_binary_masks(
+        [np.array([[False, True]]), np.array([[True, False]])],
+        tracks=[t2, t1],
+    )
+    mapping = normalize_label_ids([li0, li1], by="track")
+    # After normalization, same track -> same ID in both frames.
+    assert li0.objects[mapping[t1]].track is t1
+    assert li1.objects[mapping[t1]].track is t1
+    assert li0.data[0, 0] == li1.data[0, 0]  # t1 pixel value matches
+    assert li0.data[0, 1] == li1.data[0, 1]  # t2 pixel value matches
+
+
+def test_normalize_label_ids_first_appearance_order():
+    """IDs should be assigned by first-appearance order."""
+    t1 = Track(name="a")
+    t2 = Track(name="b")
+    li = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]]), np.array([[False, True]])],
+        tracks=[t1, t2],
+    )
+    mapping = normalize_label_ids([li], by="track")
+    assert mapping[t1] == 1
+    assert mapping[t2] == 2
+
+
+def test_normalize_label_ids_none_tracks():
+    """Objects with track=None should each get unique IDs, not grouped."""
+    li0 = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]]), np.array([[False, True]])],
+    )
+    li1 = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]])],
+    )
+    normalize_label_ids([li0, li1], by="track")
+    # All three None-track objects should have distinct IDs.
+    ids = list(li0.objects.keys()) + list(li1.objects.keys())
+    assert len(ids) == len(set(ids))
+
+
+def test_normalize_label_ids_subset_frames():
+    """Objects missing in some frames should be handled correctly."""
+    t1 = Track(name="a")
+    t2 = Track(name="b")
+    # Frame 0: both tracks
+    li0 = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]]), np.array([[False, True]])],
+        tracks=[t1, t2],
+    )
+    # Frame 1: only t1
+    li1 = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]])],
+        tracks=[t1],
+    )
+    mapping = normalize_label_ids([li0, li1], by="track")
+    assert mapping[t1] == 1
+    assert mapping[t2] == 2
+    assert li1.objects[1].track is t1
+    assert li1.data[0, 0] == 1
+
+
+def test_normalize_label_ids_returns_mapping():
+    """Returned dict should map Track -> label_id correctly."""
+    t1 = Track(name="x")
+    t2 = Track(name="y")
+    li = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]]), np.array([[False, True]])],
+        tracks=[t1, t2],
+    )
+    mapping = normalize_label_ids([li], by="track")
+    assert isinstance(mapping, dict)
+    assert t1 in mapping
+    assert t2 in mapping
+    assert mapping[t1] != mapping[t2]
+
+
+def test_normalize_label_ids_by_category():
+    """Category-based grouping should give same ID to same category."""
+    li0 = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]]), np.array([[False, True]])],
+        categories=["neuron", "glia"],
+    )
+    li1 = UserLabelImage.from_binary_masks(
+        [np.array([[False, True]]), np.array([[True, False]])],
+        categories=["glia", "neuron"],
+    )
+    mapping = normalize_label_ids([li0, li1], by="category")
+    assert mapping["neuron"] == 1
+    assert mapping["glia"] == 2
+    # Same category -> same pixel value across frames.
+    neuron_id = mapping["neuron"]
+    assert li0.objects[neuron_id].category == "neuron"
+    assert li1.objects[neuron_id].category == "neuron"
+
+
+def test_normalize_label_ids_category_merges():
+    """Same-category objects in one frame should merge (semantic seg)."""
+    # Two objects, both "neuron", in the same frame.
+    li = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]]), np.array([[False, True]])],
+        categories=["neuron", "neuron"],
+    )
+    mapping = normalize_label_ids([li], by="category")
+    assert mapping["neuron"] == 1
+    # Both pixels should have the same value now.
+    assert li.data[0, 0] == 1
+    assert li.data[0, 1] == 1
+    assert len(li.objects) == 1
+
+
+def test_normalize_label_ids_preserves_background():
+    """Background pixels (0) should remain 0 after normalization."""
+    t1 = Track(name="a")
+    li = UserLabelImage.from_binary_masks(
+        [np.array([[True, False]])],
+        tracks=[t1],
+    )
+    normalize_label_ids([li], by="track")
+    assert li.data[0, 1] == 0
+
+
+def test_normalize_label_ids_empty_list():
+    """Empty input should return empty dict without error."""
+    result = normalize_label_ids([], by="track")
+    assert result == {}
+
+
+def test_normalize_label_ids_invalid_by_raises():
+    """Invalid by parameter should raise ValueError."""
+    with pytest.raises(ValueError, match="by must be"):
+        normalize_label_ids([], by="invalid")
+
+
+def test_normalize_label_ids_predicted():
+    """Should work with PredictedLabelImage and preserve scores."""
+    t1 = Track(name="a")
+    li = PredictedLabelImage.from_binary_masks(
+        [np.array([[True, False]]), np.array([[False, True]])],
+        tracks=[t1, Track(name="b")],
+        scores=[0.95, 0.87],
+        score=0.9,
+    )
+    normalize_label_ids([li], by="track")
+    assert li.score == 0.9
+    assert li.objects[1].score == 0.95
+    assert li.objects[2].score == 0.87
+
+
+def test_normalize_label_ids_top_level_export():
+    """normalize_label_ids should be accessible from top-level package."""
+    import sleap_io as sio
+
+    assert hasattr(sio, "normalize_label_ids")
+    assert callable(sio.normalize_label_ids)
 
 
 # -- from_stack tests --
