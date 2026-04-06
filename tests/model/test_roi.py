@@ -87,9 +87,9 @@ def test_roi_bounds():
     assert roi.bounds == (5.0, 10.0, 25.0, 40.0)
 
 
-def test_roi_centroid():
+def test_roi_centroid_xy():
     roi = UserROI.from_bbox(0, 0, 10, 10)
-    cx, cy = roi.centroid
+    cx, cy = roi.centroid_xy
     assert cx == pytest.approx(5.0)
     assert cy == pytest.approx(5.0)
 

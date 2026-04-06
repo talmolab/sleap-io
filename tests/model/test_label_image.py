@@ -5,6 +5,7 @@ import copy
 import numpy as np
 import pytest
 
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.instance import Track
 from sleap_io.model.label_image import (
     LabelImage,
@@ -1440,3 +1441,130 @@ def test_height_width_fallback_to_data_shape():
     li._width = 0
     assert li.height == 5
     assert li.width == 7
+
+
+def test_to_bboxes_single_object():
+    """Single object produces one bbox with correct coordinates."""
+    data = np.zeros((10, 10), dtype=np.int32)
+    data[2:5, 3:8] = 1  # rows 2-4, cols 3-7
+    li = UserLabelImage(data=data, objects={1: LabelImage.Info()})
+    bboxes = li.to_bboxes()
+    assert len(bboxes) == 1
+    bb = bboxes[0]
+    assert isinstance(bb, UserBoundingBox)
+    assert bb.xyxy == pytest.approx((3.0, 2.0, 8.0, 5.0))
+
+
+def test_to_bboxes_multiple_objects():
+    """Multiple objects produce one bbox per object."""
+    data = np.zeros((10, 20), dtype=np.int32)
+    data[0:3, 0:5] = 1
+    data[7:10, 15:20] = 2
+    li = UserLabelImage(
+        data=data,
+        objects={
+            1: LabelImage.Info(name="a"),
+            2: LabelImage.Info(name="b"),
+        },
+    )
+    bboxes = li.to_bboxes()
+    assert len(bboxes) == 2
+    names = {bb.name: bb for bb in bboxes}
+    assert names["a"].xyxy == pytest.approx((0.0, 0.0, 5.0, 3.0))
+    assert names["b"].xyxy == pytest.approx((15.0, 7.0, 20.0, 10.0))
+
+
+def test_to_bboxes_metadata():
+    """Bboxes inherit metadata from objects and label image."""
+    data = np.zeros((10, 10), dtype=np.int32)
+    data[1:3, 1:3] = 1
+    track = Track(name="t1")
+    video = Video(filename="test.mp4")
+    li = UserLabelImage(
+        data=data,
+        objects={1: LabelImage.Info(track=track, category="cell", name="obj1")},
+        video=video,
+        frame_idx=5,
+        source="cellpose",
+    )
+    bboxes = li.to_bboxes()
+    bb = bboxes[0]
+    assert bb.track is track
+    assert bb.video is video
+    assert bb.frame_idx == 5
+    assert bb.category == "cell"
+    assert bb.name == "obj1"
+    assert bb.source == "cellpose"
+
+
+def test_to_bboxes_predicted():
+    """PredictedLabelImage produces PredictedBoundingBox with scores."""
+    data = np.zeros((10, 10), dtype=np.int32)
+    data[0:2, 0:2] = 1
+    data[5:7, 5:7] = 2
+    li = PredictedLabelImage(
+        data=data,
+        objects={
+            1: LabelImage.Info(score=0.9),
+            2: LabelImage.Info(score=0.8),
+        },
+        score=0.5,
+    )
+    bboxes = li.to_bboxes()
+    assert len(bboxes) == 2
+    assert all(isinstance(bb, PredictedBoundingBox) for bb in bboxes)
+    scores = {bb.score for bb in bboxes}
+    assert scores == {0.9, 0.8}
+
+
+def test_to_bboxes_predicted_fallback_score():
+    """PredictedBoundingBox falls back to image-level score when per-object is None."""
+    data = np.zeros((10, 10), dtype=np.int32)
+    data[0:2, 0:2] = 1
+    li = PredictedLabelImage(
+        data=data,
+        objects={1: LabelImage.Info(score=None)},
+        score=0.75,
+    )
+    bboxes = li.to_bboxes()
+    assert bboxes[0].score == pytest.approx(0.75)
+
+
+def test_to_bboxes_scale_offset():
+    """Bboxes are in image coordinates respecting scale and offset."""
+    data = np.zeros((10, 10), dtype=np.int32)
+    data[2:4, 3:6] = 1  # rows 2-3, cols 3-5
+    li = UserLabelImage(
+        data=data,
+        objects={1: LabelImage.Info()},
+        scale=(0.5, 0.5),
+        offset=(10.0, 20.0),
+    )
+    bboxes = li.to_bboxes()
+    bb = bboxes[0]
+    # x1 = 3/0.5 + 10 = 16, y1 = 2/0.5 + 20 = 24
+    # x2 = 6/0.5 + 10 = 22, y2 = 4/0.5 + 20 = 28
+    assert bb.xyxy == pytest.approx((16.0, 24.0, 22.0, 28.0))
+
+
+def test_to_bboxes_empty():
+    """Empty label image (all zeros) returns empty list."""
+    data = np.zeros((10, 10), dtype=np.int32)
+    li = UserLabelImage(data=data)
+    assert li.to_bboxes() == []
+
+
+def test_to_bboxes_object_no_pixels():
+    """Object in dict but with no pixels in data is skipped."""
+    data = np.zeros((10, 10), dtype=np.int32)
+    data[0:2, 0:2] = 1
+    li = UserLabelImage(
+        data=data,
+        objects={
+            1: LabelImage.Info(name="present"),
+            2: LabelImage.Info(name="absent"),
+        },
+    )
+    bboxes = li.to_bboxes()
+    assert len(bboxes) == 1
+    assert bboxes[0].name == "present"

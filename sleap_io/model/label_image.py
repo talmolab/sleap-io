@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     else:
         from typing_extensions import Self
 
+    from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.video import Video
@@ -871,6 +872,79 @@ class LabelImage:
                 )
             )
         return result
+
+    def to_bboxes(self) -> list["BoundingBox"]:
+        """Extract tight bounding boxes for each object in the label image.
+
+        Returns a list of ``BoundingBox`` objects (``UserBoundingBox`` or
+        ``PredictedBoundingBox`` depending on whether this label image is
+        predicted), one per non-zero label. Each bounding box inherits track,
+        category, name, instance, and score from the corresponding
+        ``self.objects`` entry.
+
+        Bounding boxes are in image coordinates (respecting scale/offset).
+        Label IDs present in ``objects`` but with no pixels in the data are
+        skipped.
+
+        Returns:
+            A list of ``BoundingBox`` objects, one per object.
+        """
+        from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+
+        data = self.data
+        cls = PredictedBoundingBox if self.is_predicted else UserBoundingBox
+        sx, sy = self.scale
+        ox, oy = self.offset
+
+        # Single-pass: find all foreground pixels at once.
+        fg_rows, fg_cols = np.where(data > 0)
+        if len(fg_rows) == 0:
+            return []
+
+        # Map sparse label IDs to dense indices and compute per-label bounds.
+        fg_labels = data[fg_rows, fg_cols]
+        unique_labels, inverse = np.unique(fg_labels, return_inverse=True)
+        n = len(unique_labels)
+
+        row_min = np.full(n, np.iinfo(np.intp).max, dtype=np.intp)
+        row_max = np.full(n, np.iinfo(np.intp).min, dtype=np.intp)
+        col_min = np.full(n, np.iinfo(np.intp).max, dtype=np.intp)
+        col_max = np.full(n, np.iinfo(np.intp).min, dtype=np.intp)
+
+        np.minimum.at(row_min, inverse, fg_rows)
+        np.maximum.at(row_max, inverse, fg_rows)
+        np.minimum.at(col_min, inverse, fg_cols)
+        np.maximum.at(col_max, inverse, fg_cols)
+
+        label_to_idx = {int(lid): i for i, lid in enumerate(unique_labels)}
+
+        # Build BoundingBox objects using precomputed bounds.
+        bboxes = []
+        for lid, info in self.objects.items():
+            idx = label_to_idx.get(lid)
+            if idx is None:
+                continue
+
+            x1 = float(col_min[idx] / sx + ox)
+            y1 = float(row_min[idx] / sy + oy)
+            x2 = float((col_max[idx] + 1) / sx + ox)
+            y2 = float((row_max[idx] + 1) / sy + oy)
+
+            kwargs: dict = dict(
+                video=self.video,
+                frame_idx=self.frame_idx,
+                track=info.track,
+                instance=info.instance,
+                category=info.category,
+                name=info.name,
+                source=self.source,
+            )
+            if self.is_predicted:
+                kwargs["score"] = info.score if info.score is not None else self.score
+
+            bboxes.append(cls.from_xyxy(x1, y1, x2, y2, **kwargs))
+
+        return bboxes
 
 
 @attrs.define(eq=False)
