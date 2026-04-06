@@ -27,7 +27,8 @@ All four base classes are **abstract** — use the `User*` or `Predicted*`
 subclass to create instances. All four can be associated with a video, frame,
 track, and instance. They are stored on [`Labels`](labels.md) via
 `labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`, and
-can be converted between each other (bbox -> ROI -> mask, label image <-> masks).
+can be converted between each other (bbox -> ROI -> mask, mask -> bbox, label
+image <-> masks, label image -> bboxes).
 
 ---
 
@@ -54,8 +55,8 @@ boxes are the primary annotation type for object detection workflows.
 
 ```
 
-The `x_center`, `y_center`, `width`, and `height` fields are available as
-read-only computed properties.
+The `x_center`, `y_center`, `centroid_xy`, `width`, and `height` fields are
+available as read-only computed properties.
 
 ### From corner coordinates
 
@@ -328,6 +329,28 @@ all foreground pixels as `(x, y, width, height)`:
 
 ```
 
+To get a full `BoundingBox` object (with metadata) instead of a raw tuple, use
+`.to_bbox()`:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> mask_data = np.zeros((100, 100), dtype=bool)
+>>> mask_data[20:40, 30:60] = True
+>>> mask = sio.UserSegmentationMask.from_numpy(
+...     mask_data, track=sio.Track(name="cell_A"), category="neuron",
+... )
+>>> bb = mask.to_bbox()
+>>> print(bb.xyxy)
+>>> print(bb.track.name)
+>>> print(bb.centroid_xy)
+
+```
+
+The returned `BoundingBox` inherits track, category, name, instance, and source
+from the mask. `PredictedSegmentationMask` produces a `PredictedBoundingBox`
+with the mask's score.
+
 ### User vs. predicted segmentation masks
 
 `UserSegmentationMask` and `PredictedSegmentationMask` distinguish human
@@ -585,6 +608,36 @@ objects and reconstructed from them:
 
 ```
 
+### Extracting bounding boxes
+
+Extract per-object bounding boxes directly from a `LabelImage` with
+`.to_bboxes()`. This is more efficient than decomposing to masks first, since it
+only needs the pixel extents (no full mask decode):
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> data = np.zeros((64, 64), dtype=np.int32)
+>>> data[10:30, 10:30] = 1
+>>> data[40:60, 40:60] = 2
+>>> li = sio.UserLabelImage.from_numpy(
+...     data,
+...     tracks=[sio.Track(name="cell_A"), sio.Track(name="cell_B")],
+...     categories=["neuron", "glia"],
+... )
+>>> bboxes = li.to_bboxes()
+>>> print(len(bboxes))
+>>> for bb in bboxes:
+...     print(bb.track.name, bb.category, bb.xyxy, bb.centroid_xy)
+
+```
+
+Each `BoundingBox` inherits track, category, name, instance, and source from the
+corresponding object. `PredictedLabelImage` produces `PredictedBoundingBox`
+objects with per-object scores (falling back to the image-level score when a
+per-object score is `None`). Bounding boxes are in image coordinates, respecting
+the label image's scale and offset.
+
 ### User vs. predicted label images
 
 `UserLabelImage` and `PredictedLabelImage` distinguish human annotations from
@@ -760,12 +813,15 @@ geometrically meaningful:
 | `BoundingBox`       | `SegmentationMask`    | `bbox.to_mask(height, width)`     |
 | `ROI`               | `SegmentationMask`    | `roi.to_mask(height, width)`      |
 | `SegmentationMask`  | `ROI` (polygon)       | `mask.to_polygon()`               |
+| `SegmentationMask`  | `BoundingBox`         | `mask.to_bbox()`                  |
 | `LabelImage`        | `list[SegmentationMask]` | `li.to_masks()`                |
+| `LabelImage`        | `list[BoundingBox]`   | `li.to_bboxes()`                  |
 | `list[SegmentationMask]` | `LabelImage`     | `UserLabelImage.from_masks(masks)` |
 
 All conversions preserve metadata (video, frame_idx, track, instance, name,
-category, source) when applicable. Conversions always return `User*` types —
-geometric conversion does not preserve prediction semantics.
+category, source) when applicable. `to_bbox()` and `to_bboxes()` preserve
+prediction semantics (`Predicted*` inputs produce `Predicted*` outputs with
+scores). Other conversions return `User*` types.
 
 ```pycon
 >>> import sleap_io as sio
@@ -797,6 +853,7 @@ classDiagram
         +float x2
         +float y2
         +float angle
+        +centroid_xy
         +to_roi()
         +to_mask()
     }
@@ -826,6 +883,7 @@ classDiagram
         +int height
         +int width
         +to_polygon()
+        +to_bbox()
     }
 
     class UserSegmentationMask:::regions
@@ -839,6 +897,7 @@ classDiagram
         +ndarray data
         +dict objects
         +to_masks()
+        +to_bboxes()
         +from_masks()
         +from_numpy()
     }
@@ -868,7 +927,9 @@ classDiagram
     BoundingBox --> SegmentationMask : to_mask()
     ROI --> SegmentationMask : to_mask()
     SegmentationMask --> ROI : to_polygon()
+    SegmentationMask --> BoundingBox : to_bbox()
     LabelImage --> SegmentationMask : to_masks()
+    LabelImage --> BoundingBox : to_bboxes()
     SegmentationMask --> LabelImage : from_masks()
     Labels "1" *-- "0..*" BoundingBox
     Labels "1" *-- "0..*" ROI
