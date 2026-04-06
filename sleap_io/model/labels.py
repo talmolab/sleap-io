@@ -130,8 +130,23 @@ class Labels:
 
     def __setstate__(self, state: dict) -> None:
         """Restore state from pickling/deepcopy."""
+        # attrs slotted classes need object.__setattr__ to set slots directly.
+        # Validators are skipped, which is safe since state came from a valid object.
         for key, value in state.items():
             object.__setattr__(self, key, value)
+
+    def close(self) -> None:
+        """Close open file handles held for lazy label image data."""
+        if self._label_image_file is not None:
+            try:
+                self._label_image_file.close()
+            except Exception:
+                pass
+            self._label_image_file = None
+
+    def __del__(self) -> None:
+        """Release resources on garbage collection."""
+        self.close()
 
     @property
     def is_lazy(self) -> bool:
@@ -557,11 +572,8 @@ class Labels:
                 lazy_store=new_store,
             )
         else:
-            # Temporarily clear non-copyable resources (h5py file handles)
-            saved_li_file = self._label_image_file
-            self._label_image_file = None
+            # __getstate__ excludes _label_image_file (h5py can't be deepcopied)
             labels_copy = deepcopy(self)
-            self._label_image_file = saved_li_file
 
         if open_videos is not None:
             for video in labels_copy.videos:

@@ -185,8 +185,13 @@ class LabelImage:
         This is necessary because lazy loaders capture h5py dataset references
         which cannot be pickled/deepcopied.
         """
-        # Materialize data if lazy (triggers decompression)
-        data = self.data.copy() if self._data is not None or self._lazy_loader else None
+        # Materialize lazy data before copying (h5py refs can't survive deepcopy).
+        if self._data is not None:
+            data = self._data.copy()
+        elif self._lazy_loader is not None:
+            data = self.data.copy()  # Triggers lazy load, then copy
+        else:
+            data = None
         objects = {lid: copy.deepcopy(info, memo) for lid, info in self.objects.items()}
 
         kwargs: dict = dict(

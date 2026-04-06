@@ -84,6 +84,51 @@ except ImportError:
     pass
 
 
+# -- Label image HDF5 dtype constants (shared by write/merge/streaming writer) --------
+
+LI_DTYPE = np.dtype(
+    [
+        ("video", "i4"),
+        ("frame_idx", "i8"),
+        ("height", "u4"),
+        ("width", "u4"),
+        ("n_objects", "u4"),
+        ("objects_start", "u4"),
+        ("data_start", "u8"),
+        ("data_end", "u8"),
+        ("is_predicted", "u1"),
+        ("score", "f4"),
+        ("scale_x", "f4"),
+        ("scale_y", "f4"),
+        ("offset_x", "f4"),
+        ("offset_y", "f4"),
+    ]
+)
+
+OBJ_DTYPE = np.dtype(
+    [
+        ("label_id", "i4"),
+        ("track", "i4"),
+        ("instance", "i4"),
+        ("score", "f4"),
+    ]
+)
+
+LI_SM_INDEX_DTYPE = np.dtype(
+    [
+        ("li_idx", "u4"),
+        ("data_start", "u8"),
+        ("data_end", "u8"),
+        ("height", "u4"),
+        ("width", "u4"),
+        ("scale_x", "f4"),
+        ("scale_y", "f4"),
+        ("offset_x", "f4"),
+        ("offset_y", "f4"),
+    ]
+)
+
+
 class VideoReferenceMode(Enum):
     """How to handle video references when saving."""
 
@@ -2546,7 +2591,7 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     rois = read_rois(labels_path, videos, tracks)
     masks = read_masks(labels_path, videos, tracks)
     bboxes = read_bboxes(labels_path, videos, tracks)
-    label_images = read_label_images(labels_path, videos, tracks)
+    label_images, li_file = read_label_images(labels_path, videos, tracks)
 
     # Create Labels with lazy state
     labels = Labels(
@@ -2565,11 +2610,9 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     )
     labels.provenance["filename"] = labels_path
 
-    # Store the HDF5 file handle for lazy label image data (keeps it alive)
-    li_file = getattr(read_label_images, "_open_file", None)
+    # Keep the HDF5 file handle alive for lazy label image data
     if li_file is not None:
         labels._label_image_file = li_file
-        read_label_images._open_file = None  # type: ignore[attr-defined]
 
     return labels
 
@@ -3386,15 +3429,13 @@ def read_label_images(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
-) -> list[LabelImage]:
+) -> tuple[list[LabelImage], "h5py.File | None"]:
     """Read label image annotations from a SLEAP labels file.
 
     Supports both the legacy blob format (v1.8-v2.1) and the chunked format
     (v2.2+). Pixel data is loaded lazily when possible: the HDF5 file handle
     is kept open and each frame's data is decompressed on first ``.data``
-    access. The file handle is stored in a ``_label_image_file`` attribute on
-    this function (caller is responsible for closing it or letting GC handle
-    it via the ``Labels`` container).
+    access.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -3405,22 +3446,26 @@ def read_label_images(
             associations will not be restored.
 
     Returns:
-        A list of LabelImage objects. Returns an empty list if none stored.
+        A tuple of ``(label_images, h5py_file)`` where ``label_images`` is a
+        list of LabelImage objects and ``h5py_file`` is the open HDF5 file
+        handle that must be kept alive for lazy data access (or ``None`` if no
+        label images were found). The caller is responsible for storing and
+        eventually closing the file handle.
     """
     try:
         li_data = read_hdf5_dataset(labels_path, "label_images")
     except KeyError:
-        return []
+        return [], None
 
     if len(li_data) == 0:
-        return []
+        return [], None
 
     # Open file for lazy pixel data reading
     f = h5py.File(labels_path, "r")
 
     if "label_image_data" not in f:
         f.close()
-        return []
+        return [], None
 
     pixel_ds = f["label_image_data"]
     is_chunked_format = pixel_ds.ndim == 3  # (T, H, W) = v2.2+ chunked
@@ -3623,11 +3668,7 @@ def read_label_images(
 
         label_images.append(li)
 
-    # Store the open file handle so it stays alive for lazy loaders.
-    # The caller (read_labels / Labels) should store this reference.
-    read_label_images._open_file = f  # type: ignore[attr-defined]
-
-    return label_images
+    return label_images, f
 
 
 def write_label_images(
@@ -3658,34 +3699,6 @@ def write_label_images(
     """
     if not label_images:
         return
-
-    li_dtype = np.dtype(
-        [
-            ("video", "i4"),
-            ("frame_idx", "i8"),
-            ("height", "u4"),
-            ("width", "u4"),
-            ("n_objects", "u4"),
-            ("objects_start", "u4"),
-            ("data_start", "u8"),
-            ("data_end", "u8"),
-            ("is_predicted", "u1"),
-            ("score", "f4"),
-            ("scale_x", "f4"),
-            ("scale_y", "f4"),
-            ("offset_x", "f4"),
-            ("offset_y", "f4"),
-        ]
-    )
-
-    obj_dtype = np.dtype(
-        [
-            ("label_id", "i4"),
-            ("track", "i4"),
-            ("instance", "i4"),
-            ("score", "f4"),
-        ]
-    )
 
     # Determine if we can use chunked format (requires uniform frame sizes)
     shapes = {(li.height, li.width) for li in label_images}
@@ -3792,14 +3805,14 @@ def write_label_images(
             )
 
         # Write metadata datasets
-        li_array = np.array(li_rows, dtype=li_dtype)
+        li_array = np.array(li_rows, dtype=LI_DTYPE)
         obj_array = (
-            np.array(obj_rows, dtype=obj_dtype)
+            np.array(obj_rows, dtype=OBJ_DTYPE)
             if obj_rows
-            else np.array([], dtype=obj_dtype)
+            else np.array([], dtype=OBJ_DTYPE)
         )
-        f.create_dataset("label_images", data=li_array, dtype=li_dtype)
-        f.create_dataset("label_image_objects", data=obj_array, dtype=obj_dtype)
+        f.create_dataset("label_images", data=li_array, dtype=LI_DTYPE)
+        f.create_dataset("label_image_objects", data=obj_array, dtype=OBJ_DTYPE)
         str_dt = h5py.special_dtype(vlen=str)
         f.create_dataset("label_image_sources", data=sources, dtype=str_dt)
         f.create_dataset("label_image_obj_categories", data=categories, dtype=str_dt)
@@ -3831,20 +3844,7 @@ def write_label_images(
             li_sm_offset += len(sm_bytes)
 
     if li_sm_indices:
-        sm_index_dtype = np.dtype(
-            [
-                ("li_idx", "u4"),
-                ("data_start", "u8"),
-                ("data_end", "u8"),
-                ("height", "u4"),
-                ("width", "u4"),
-                ("scale_x", "f4"),
-                ("scale_y", "f4"),
-                ("offset_x", "f4"),
-                ("offset_y", "f4"),
-            ]
-        )
-        sm_index_array = np.array(li_sm_indices, dtype=sm_index_dtype)
+        sm_index_array = np.array(li_sm_indices, dtype=LI_SM_INDEX_DTYPE)
         sm_flat = np.concatenate(li_sm_chunks)
         with h5py.File(labels_path, "a") as f:
             f.create_dataset("label_image_score_map_index", data=sm_index_array)
@@ -4204,45 +4204,17 @@ class LabelImageWriter:
         self._pixel_dset.resize(self._count, axis=0)
 
         # Write metadata datasets
-        li_dtype = np.dtype(
-            [
-                ("video", "i4"),
-                ("frame_idx", "i8"),
-                ("height", "u4"),
-                ("width", "u4"),
-                ("n_objects", "u4"),
-                ("objects_start", "u4"),
-                ("data_start", "u8"),
-                ("data_end", "u8"),
-                ("is_predicted", "u1"),
-                ("score", "f4"),
-                ("scale_x", "f4"),
-                ("scale_y", "f4"),
-                ("offset_x", "f4"),
-                ("offset_y", "f4"),
-            ]
-        )
-
-        obj_dtype = np.dtype(
-            [
-                ("label_id", "i4"),
-                ("track", "i4"),
-                ("instance", "i4"),
-                ("score", "f4"),
-            ]
-        )
-
-        li_array = np.array(self._li_rows, dtype=li_dtype)
+        li_array = np.array(self._li_rows, dtype=LI_DTYPE)
         obj_array = (
-            np.array(self._obj_rows, dtype=obj_dtype)
+            np.array(self._obj_rows, dtype=OBJ_DTYPE)
             if self._obj_rows
-            else np.array([], dtype=obj_dtype)
+            else np.array([], dtype=OBJ_DTYPE)
         )
 
         str_dt = h5py.special_dtype(vlen=str)
         f = self._file
-        f.create_dataset("label_images", data=li_array, dtype=li_dtype)
-        f.create_dataset("label_image_objects", data=obj_array, dtype=obj_dtype)
+        f.create_dataset("label_images", data=li_array, dtype=LI_DTYPE)
+        f.create_dataset("label_image_objects", data=obj_array, dtype=OBJ_DTYPE)
         f.create_dataset("label_image_sources", data=self._sources, dtype=str_dt)
         f.create_dataset(
             "label_image_obj_categories", data=self._categories, dtype=str_dt
@@ -4251,20 +4223,7 @@ class LabelImageWriter:
 
         # Write score maps if any
         if self._sm_indices:
-            sm_index_dtype = np.dtype(
-                [
-                    ("li_idx", "u4"),
-                    ("data_start", "u8"),
-                    ("data_end", "u8"),
-                    ("height", "u4"),
-                    ("width", "u4"),
-                    ("scale_x", "f4"),
-                    ("scale_y", "f4"),
-                    ("offset_x", "f4"),
-                    ("offset_y", "f4"),
-                ]
-            )
-            sm_index_array = np.array(self._sm_indices, dtype=sm_index_dtype)
+            sm_index_array = np.array(self._sm_indices, dtype=LI_SM_INDEX_DTYPE)
             sm_flat = np.concatenate(self._sm_chunks)
             f.create_dataset("label_image_score_map_index", data=sm_index_array)
             f.create_dataset(
@@ -4285,12 +4244,16 @@ class LabelImageWriter:
         write_tracks(self.path, self.tracks)
         _write_metadata_standalone(self.path, skeletons=skeletons)
 
-        return Labels(
+        li_images, li_file = read_label_images(self.path, videos, self.tracks, [])
+        labels = Labels(
             videos=videos,
             skeletons=skeletons,
             tracks=self.tracks,
-            label_images=read_label_images(self.path, videos, self.tracks, []),
+            label_images=li_images,
         )
+        if li_file is not None:
+            labels._label_image_file = li_file
+        return labels
 
     def __enter__(self) -> "LabelImageWriter":
         """Enter context manager."""
@@ -4454,34 +4417,6 @@ def merge_label_images(
 
         # --- Phase 3: Create destination and copy data ---
         total_frames = sum(len(t) for t in source_index_tables)
-
-        li_dtype = np.dtype(
-            [
-                ("video", "i4"),
-                ("frame_idx", "i8"),
-                ("height", "u4"),
-                ("width", "u4"),
-                ("n_objects", "u4"),
-                ("objects_start", "u4"),
-                ("data_start", "u8"),
-                ("data_end", "u8"),
-                ("is_predicted", "u1"),
-                ("score", "f4"),
-                ("scale_x", "f4"),
-                ("scale_y", "f4"),
-                ("offset_x", "f4"),
-                ("offset_y", "f4"),
-            ]
-        )
-
-        obj_dtype = np.dtype(
-            [
-                ("label_id", "i4"),
-                ("track", "i4"),
-                ("instance", "i4"),
-                ("score", "f4"),
-            ]
-        )
 
         dest_li_rows: list[tuple] = []
         dest_obj_rows: list[tuple] = []
@@ -4695,16 +4630,16 @@ def merge_label_images(
                     dest_frame_idx += 1
 
             # Write metadata datasets
-            li_array = np.array(dest_li_rows, dtype=li_dtype)
+            li_array = np.array(dest_li_rows, dtype=LI_DTYPE)
             obj_array = (
-                np.array(dest_obj_rows, dtype=obj_dtype)
+                np.array(dest_obj_rows, dtype=OBJ_DTYPE)
                 if dest_obj_rows
-                else np.array([], dtype=obj_dtype)
+                else np.array([], dtype=OBJ_DTYPE)
             )
             str_dt = h5py.special_dtype(vlen=str)
-            dest_f.create_dataset("label_images", data=li_array, dtype=li_dtype)
+            dest_f.create_dataset("label_images", data=li_array, dtype=LI_DTYPE)
             dest_f.create_dataset(
-                "label_image_objects", data=obj_array, dtype=obj_dtype
+                "label_image_objects", data=obj_array, dtype=OBJ_DTYPE
             )
             dest_f.create_dataset(
                 "label_image_sources", data=dest_sources, dtype=str_dt
@@ -4718,20 +4653,7 @@ def merge_label_images(
 
             # Write score maps if any
             if dest_sm_indices:
-                sm_index_dtype = np.dtype(
-                    [
-                        ("li_idx", "u4"),
-                        ("data_start", "u8"),
-                        ("data_end", "u8"),
-                        ("height", "u4"),
-                        ("width", "u4"),
-                        ("scale_x", "f4"),
-                        ("scale_y", "f4"),
-                        ("offset_x", "f4"),
-                        ("offset_y", "f4"),
-                    ]
-                )
-                sm_index_array = np.array(dest_sm_indices, dtype=sm_index_dtype)
+                sm_index_array = np.array(dest_sm_indices, dtype=LI_SM_INDEX_DTYPE)
                 sm_flat = np.concatenate(dest_sm_chunks)
                 dest_f.create_dataset(
                     "label_image_score_map_index", data=sm_index_array
@@ -4749,11 +4671,17 @@ def merge_label_images(
         _write_metadata_standalone(dest_path)
 
         # Return Labels pointing at the merged file
-        return Labels(
+        li_images, li_file = read_label_images(
+            dest_path, merged_videos, merged_tracks, []
+        )
+        labels = Labels(
             videos=merged_videos,
             tracks=merged_tracks,
-            label_images=read_label_images(dest_path, merged_videos, merged_tracks, []),
+            label_images=li_images,
         )
+        if li_file is not None:
+            labels._label_image_file = li_file
+        return labels
 
     finally:
         for f in source_files:
@@ -4852,12 +4780,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     rois = read_rois(labels_path, videos, tracks, instances)
     masks = read_masks(labels_path, videos, tracks, instances)
     bboxes = read_bboxes(labels_path, videos, tracks, instances)
-    label_images = read_label_images(labels_path, videos, tracks, instances)
-
-    # Capture HDF5 file handle for lazy label image data
-    _li_file = getattr(read_label_images, "_open_file", None)
-    if _li_file is not None:
-        read_label_images._open_file = None  # type: ignore[attr-defined]
+    label_images, _li_file = read_label_images(labels_path, videos, tracks, instances)
 
     # Migrate old-style bbox ROIs to BoundingBox objects (skip predicted ROIs)
     if not bboxes:
