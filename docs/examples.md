@@ -841,17 +841,28 @@ import sleap_io as sio
 
 video = sio.Video("microscopy.tif")
 
+# Shared dict accumulates track mappings across frames
+shared_tracks = {}
+
 # Stream frames to SLP — file is created lazily on first add()
 with sio.LabelImageWriter("output.slp", video=video) as writer:
     for frame_idx in range(n_frames):
         mask = run_segmentation(frame_idx)  # your segmentation function
         li = sio.PredictedLabelImage.from_numpy(
             mask, video=video, frame_idx=frame_idx,
-            source="cellpose:nuclei", create_tracks=True, score=1.0,
+            tracks=shared_tracks, create_tracks=True,
+            source="cellpose:nuclei", score=1.0,
         )
         writer.add(li)
 # File finalized and closed on context exit
 ```
+
+!!! info "Accumulating tracks"
+    Passing a dict as ``tracks`` with ``create_tracks=True`` turns it into a shared
+    accumulator — existing entries are reused and new label IDs get fresh ``Track``
+    objects added to the dict in place. This gives cross-frame identity without
+    requiring all data in memory. The writer auto-collects new tracks from each
+    ``add()`` call.
 
 !!! tip "Memory and performance"
     The writer uses the chunked HDF5 format with gzip compression. Only one frame's

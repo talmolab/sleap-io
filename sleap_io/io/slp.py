@@ -3986,7 +3986,9 @@ class LabelImageWriter:
         Args:
             path: Path to the output SLP file.
             video: Optional video to associate with all label images.
-            tracks: Optional list of tracks for object associations.
+            tracks: Optional initial list of tracks for object associations.
+                New tracks encountered in ``add()`` calls are appended
+                automatically.
             skeleton: Optional skeleton for metadata.
             initial_capacity: Initial number of frames to allocate. The dataset
                 grows exponentially (doubles) when capacity is exceeded.
@@ -4090,12 +4092,16 @@ class LabelImageWriter:
         )
         frame_idx = label_image.frame_idx if label_image.frame_idx is not None else -1
 
-        # Build object rows
+        # Build object rows (auto-collect new tracks)
         n_objects = len(label_image.objects)
         objects_start = self._obj_offset
+        _track_set = set(self.tracks)
 
         for label_id in sorted(label_image.objects):
             info = label_image.objects[label_id]
+            if info.track is not None and info.track not in _track_set:
+                self.tracks.append(info.track)
+                _track_set.add(info.track)
             track_idx = (
                 self.tracks.index(info.track) if info.track in self.tracks else -1
             )

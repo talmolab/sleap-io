@@ -372,7 +372,10 @@ class LabelImage:
 
                 - ``None``: no tracks unless ``create_tracks=True``.
                 - ``list``: positional — ``tracks[i]`` maps to label ``i + 1``.
-                - ``dict``: explicit ``{label_id: Track}`` mapping.
+                - ``dict``: explicit ``{label_id: Track}`` mapping. When
+                  combined with ``create_tracks=True``, the dict is used as
+                  a shared accumulator — existing entries are reused and new
+                  entries are added for unseen label IDs (mutated in place).
             categories: Same pattern as tracks, for category strings.
 
                 - ``None``: no categories set.
@@ -380,7 +383,10 @@ class LabelImage:
                 - ``dict``: explicit ``{label_id: category}`` mapping.
             create_tracks: If ``True`` and ``tracks`` is ``None``, auto-create
                 one Track per unique non-zero label with Track.name set to the
-                string of the label ID. Default is ``False``.
+                string of the label ID. If ``True`` and ``tracks`` is a dict,
+                create new Tracks for any label IDs not already in the dict
+                (the dict is mutated in place to accumulate mappings across
+                calls). Default is ``False``.
             **kwargs: Passed to the LabelImage constructor (video, frame_idx,
                 source).
 
@@ -399,11 +405,20 @@ class LabelImage:
             if create_tracks:
                 for lid in unique_ids:
                     track_map[int(lid)] = Track(name=str(int(lid)))
+        elif isinstance(tracks, dict):
+            track_map = dict(tracks)
+            if create_tracks:
+                # Accumulate: create new tracks for unseen IDs, mutate
+                # the caller's dict in place so it stays in sync.
+                for lid in unique_ids:
+                    lid_int = int(lid)
+                    if lid_int not in track_map:
+                        new_track = Track(name=str(lid_int))
+                        track_map[lid_int] = new_track
+                        tracks[lid_int] = new_track
         elif isinstance(tracks, list):
             for i, t in enumerate(tracks):
                 track_map[i + 1] = t
-        else:
-            track_map = dict(tracks)
 
         # Build category mapping
         cat_map: dict[int, str] = {}
