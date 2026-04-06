@@ -443,7 +443,8 @@ class LabelImage:
                 if provided.
             score: Confidence score(s) for ``PredictedLabelImage``. A
                 single float is broadcast to all frames; a list must have
-                length ``T``. Ignored for ``UserLabelImage``.
+                length ``T``. Defaults to ``0.0`` for all frames if
+                ``None``. Ignored for ``UserLabelImage``.
             score_map: Optional ``(T, H, W)`` float32 array of per-pixel
                 confidence maps. Sliced per frame. Ignored for
                 ``UserLabelImage``.

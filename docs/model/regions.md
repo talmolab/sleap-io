@@ -578,7 +578,9 @@ objects shared across frames:
 ...     masks, create_tracks=True, score=1.0,
 ... )
 >>> print(len(label_images))
+3
 >>> print(label_images[0].objects[1].track is label_images[1].objects[1].track)
+True
 
 ```
 

@@ -856,3 +856,23 @@ def test_from_stack_empty():
     """from_stack with 0-frame input should return empty list."""
     stack = np.zeros((0, 3, 3), dtype=np.int32)
     assert UserLabelImage.from_stack(stack) == []
+
+
+def test_from_stack_score_mismatch_raises():
+    """from_stack with wrong score list length should raise."""
+    stack = np.zeros((3, 3, 3), dtype=np.int32)
+    with pytest.raises(ValueError, match="score list length"):
+        PredictedLabelImage.from_stack(stack, score=[0.9, 0.8])
+
+
+def test_from_stack_score_map_shape_raises():
+    """from_stack with wrong score_map shape should raise."""
+    stack = np.zeros((3, 3, 3), dtype=np.int32)
+    with pytest.raises(ValueError, match="score_map must be"):
+        PredictedLabelImage.from_stack(stack, score_map=np.zeros((2, 3, 3)))
+
+
+def test_from_stack_invalid_data_type_raises():
+    """from_stack with non-array data should raise."""
+    with pytest.raises(ValueError, match="numpy array or list"):
+        UserLabelImage.from_stack("not an array")
