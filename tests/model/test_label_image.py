@@ -660,6 +660,182 @@ def test_to_masks_propagates_scale_offset():
         assert m.offset == (10.0, 20.0)
 
 
+# -- from_binary_masks tests --
+
+
+def test_from_binary_masks_list_input():
+    """from_binary_masks should composite a list of 2D bool arrays."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    li = UserLabelImage.from_binary_masks([m1, m2])
+    assert li.height == 2
+    assert li.width == 2
+    assert li.n_objects == 2
+    assert li.data[0, 0] == 1
+    assert li.data[0, 1] == 2
+    assert li.data[1, 0] == 0
+    assert 1 in li.objects
+    assert 2 in li.objects
+
+
+def test_from_binary_masks_ndarray_input():
+    """from_binary_masks should accept a stacked (N, H, W) array."""
+    masks = np.zeros((2, 3, 3), dtype=bool)
+    masks[0, 0, 0] = True
+    masks[1, 2, 2] = True
+    li = UserLabelImage.from_binary_masks(masks)
+    assert li.n_objects == 2
+    assert li.data[0, 0] == 1
+    assert li.data[2, 2] == 2
+
+
+def test_from_binary_masks_single_mask():
+    """from_binary_masks should accept a single 2D array."""
+    mask = np.array([[True, False], [False, True]])
+    li = UserLabelImage.from_binary_masks(mask)
+    assert li.n_objects == 1
+    assert li.data[0, 0] == 1
+    assert li.data[1, 1] == 1
+
+
+def test_from_binary_masks_overlap():
+    """Overlapping pixels should be assigned to the last mask."""
+    m1 = np.array([[True, True], [False, False]])
+    m2 = np.array([[True, False], [True, False]])
+    li = UserLabelImage.from_binary_masks([m1, m2])
+    # Pixel (0, 0) overlaps: last mask (m2, label 2) wins.
+    assert li.data[0, 0] == 2
+    # Pixel (0, 1) only in m1.
+    assert li.data[0, 1] == 1
+    # Pixel (1, 0) only in m2.
+    assert li.data[1, 0] == 2
+
+
+def test_from_binary_masks_with_tracks():
+    """Tracks list should map positionally to objects."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    t1 = Track(name="cell_a")
+    t2 = Track(name="cell_b")
+    li = UserLabelImage.from_binary_masks([m1, m2], tracks=[t1, t2])
+    assert li.objects[1].track is t1
+    assert li.objects[2].track is t2
+
+
+def test_from_binary_masks_create_tracks():
+    """create_tracks=True should auto-create one Track per mask."""
+    masks = np.zeros((3, 2, 2), dtype=bool)
+    masks[0, 0, 0] = True
+    masks[1, 0, 1] = True
+    masks[2, 1, 0] = True
+    li = UserLabelImage.from_binary_masks(masks, create_tracks=True)
+    assert li.objects[1].track is not None
+    assert li.objects[1].track.name == "1"
+    assert li.objects[2].track.name == "2"
+    assert li.objects[3].track.name == "3"
+
+
+def test_from_binary_masks_no_tracks_default():
+    """Default should have no tracks."""
+    m1 = np.array([[True, False], [False, False]])
+    li = UserLabelImage.from_binary_masks([m1])
+    assert li.objects[1].track is None
+
+
+def test_from_binary_masks_with_categories():
+    """Categories list should map positionally to objects."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    li = UserLabelImage.from_binary_masks([m1, m2], categories=["neuron", "glia"])
+    assert li.objects[1].category == "neuron"
+    assert li.objects[2].category == "glia"
+
+
+def test_from_binary_masks_with_names():
+    """Names list should map positionally to objects."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    li = UserLabelImage.from_binary_masks([m1, m2], names=["obj_1", "obj_2"])
+    assert li.objects[1].name == "obj_1"
+    assert li.objects[2].name == "obj_2"
+
+
+def test_from_binary_masks_with_scores():
+    """Scores list should map to Info.score."""
+    m1 = np.array([[True, False], [False, False]])
+    m2 = np.array([[False, True], [False, False]])
+    li = UserLabelImage.from_binary_masks([m1, m2], scores=[0.95, 0.87])
+    assert li.objects[1].score == 0.95
+    assert li.objects[2].score == 0.87
+
+
+def test_from_binary_masks_predicted():
+    """PredictedLabelImage.from_binary_masks should set image-level score."""
+    m1 = np.array([[True, False], [False, False]])
+    li = PredictedLabelImage.from_binary_masks(
+        [m1], scores=[0.95], score=0.9, source="sam"
+    )
+    assert isinstance(li, PredictedLabelImage)
+    assert li.score == 0.9
+    assert li.source == "sam"
+    assert li.objects[1].score == 0.95
+
+
+def test_from_binary_masks_kwargs():
+    """Extra kwargs should pass through to the constructor."""
+    m1 = np.array([[True, False], [False, False]])
+    video = Video(filename="test.mp4")
+    li = UserLabelImage.from_binary_masks(
+        [m1], video=video, frame_idx=5, source="cellpose"
+    )
+    assert li.video is video
+    assert li.frame_idx == 5
+    assert li.source == "cellpose"
+
+
+def test_from_binary_masks_uint8_input():
+    """uint8 arrays with 0/1 values should be cast to bool correctly."""
+    m1 = np.array([[1, 0], [0, 0]], dtype=np.uint8)
+    m2 = np.array([[0, 1], [0, 0]], dtype=np.uint8)
+    li = UserLabelImage.from_binary_masks([m1, m2])
+    assert li.data[0, 0] == 1
+    assert li.data[0, 1] == 2
+
+
+def test_from_binary_masks_empty_raises():
+    """Empty mask list should raise ValueError."""
+    with pytest.raises(ValueError, match="empty"):
+        UserLabelImage.from_binary_masks([])
+
+    with pytest.raises(ValueError, match="empty"):
+        UserLabelImage.from_binary_masks(np.zeros((0, 3, 3), dtype=bool))
+
+
+def test_from_binary_masks_inconsistent_shape_raises():
+    """Mismatched shapes should raise ValueError."""
+    m1 = np.zeros((2, 2), dtype=bool)
+    m2 = np.zeros((3, 3), dtype=bool)
+    with pytest.raises(ValueError, match="same shape"):
+        UserLabelImage.from_binary_masks([m1, m2])
+
+
+def test_from_binary_masks_tracks_length_mismatch_raises():
+    """Wrong tracks length should raise ValueError."""
+    m1 = np.zeros((2, 2), dtype=bool)
+    with pytest.raises(ValueError, match="tracks length"):
+        UserLabelImage.from_binary_masks(
+            [m1], tracks=[Track(name="a"), Track(name="b")]
+        )
+
+
+def test_from_binary_masks_scores_length_mismatch_raises():
+    """Wrong scores length should raise ValueError."""
+    m1 = np.zeros((2, 2), dtype=bool)
+    m2 = np.zeros((2, 2), dtype=bool)
+    with pytest.raises(ValueError, match="scores length"):
+        UserLabelImage.from_binary_masks([m1, m2], scores=[0.5])
+
+
 # -- from_stack tests --
 
 
