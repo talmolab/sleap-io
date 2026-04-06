@@ -355,6 +355,9 @@ def load_trackmate(
         video: Video to associate with centroids. Can be a ``Video`` object,
             a string path to a video file, or ``None`` (auto-detects a
             sibling ``.tif`` file).
+        edges_path: Path to the ``*_edges.csv`` file. If ``None``, attempts
+            to auto-detect a sibling ``_edges.csv`` alongside the spots file.
+            Passed through via ``**kwargs``.
         **kwargs: Additional arguments passed to ``read_trackmate_csv``.
 
     Returns:

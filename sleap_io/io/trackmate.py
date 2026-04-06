@@ -43,8 +43,8 @@ def is_trackmate_file(path: str | Path) -> bool:
     """
     try:
         with open(path, newline="") as f:
-            first_line = f.readline().strip()
-        cols = first_line.split(",")
+            reader = csv.reader(f)
+            cols = next(reader)
         return tuple(cols[: len(_SPOTS_SIGNATURE)]) == _SPOTS_SIGNATURE
     except Exception:
         return False
@@ -69,7 +69,8 @@ def _find_sibling(spots_path: Path, suffix: str) -> Path | None:
     if "_spots" not in stem:
         return None
 
-    base = stem.replace("_spots", "")
+    parts = stem.rsplit("_spots", 1)
+    base = parts[0] + parts[1] if len(parts) == 2 else stem
 
     if suffix.startswith("."):
         # Looking for a non-CSV sibling (e.g., .tif video).
@@ -170,7 +171,7 @@ def read_trackmate_csv(
     video_obj: VideoClass | None = None
     if video is not None:
         if isinstance(video, (str, Path)):
-            video_obj = VideoClass(filename=str(video))
+            video_obj = VideoClass(filename=str(video), open_backend=False)
         else:
             video_obj = video
     else:
@@ -238,7 +239,7 @@ def read_trackmate_csv(
 
         tracking_score = target_to_cost.get(spot_id)
 
-        label = row[col["LABEL"]] if "LABEL" in col else f"ID{spot_id}"
+        label = row[col["LABEL"]]
 
         centroid = PredictedCentroid(
             x=x,

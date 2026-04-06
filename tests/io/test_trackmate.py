@@ -1,6 +1,5 @@
 """Tests for TrackMate CSV reader."""
 
-
 import pytest
 
 from sleap_io import Labels, Skeleton, load_file, load_trackmate, save_slp
@@ -252,6 +251,31 @@ def test_load_trackmate_roundtrip(tmp_path):
 
     c2 = loaded.centroids[2]
     assert c2.track is loaded.tracks[1]
+
+
+def test_read_trackmate_auto_detect_tif(tmp_path):
+    """Auto-detects sibling .tif file as video."""
+    spots = [("ID1", 1, 0, 5.0, 1.0, 2.0, 0.0, 0.0, 0, 11.5, 1)]
+    _write_spots(tmp_path / "sample_spots.csv", spots)
+    (tmp_path / "sample.tif").write_bytes(b"")
+
+    labels = read_trackmate_csv(tmp_path / "sample_spots.csv")
+
+    assert len(labels.videos) == 1
+    assert labels.videos[0].filename.endswith("sample.tif")
+    assert labels.centroids[0].video is labels.videos[0]
+
+
+def test_load_file_trackmate_explicit_format(tmp_path):
+    """Explicit format='trackmate' dispatch via load_file()."""
+    spots = [("ID1", 1, 0, 5.0, 1.0, 2.0, 0.0, 0.0, 0, 11.5, 1)]
+    spots_path = tmp_path / "test_spots.csv"
+    _write_spots(spots_path, spots)
+
+    labels = load_file(str(spots_path), format="trackmate")
+
+    assert isinstance(labels, Labels)
+    assert len(labels.centroids) == 1
 
 
 def test_read_trackmate_not_found(tmp_path):
