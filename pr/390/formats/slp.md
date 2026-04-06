@@ -79,7 +79,7 @@ file.slp
 │
 ├── /label_images                # Dataset: Label image metadata (Format 1.8+)
 ├── /label_image_objects         # Dataset: Per-object metadata (Format 1.8+)
-├── /label_image_data            # Dataset: Packed pixel data, zlib-compressed (Format 1.8+)
+├── /label_image_data            # Dataset: Pixel data (Format 1.8+, see below)
 ├── /label_image_sources         # Dataset: vlen string, one per label image (Format 1.9+)
 ├── /label_image_obj_categories  # Dataset: vlen string, one per object (Format 1.9+)
 ├── /label_image_obj_names       # Dataset: vlen string, one per object (Format 1.9+)
@@ -1036,7 +1036,9 @@ Label image data is stored across three datasets:
 
 - `/label_images`: Structured array containing label image metadata
 - `/label_image_objects`: Structured array containing per-object metadata
-- `/label_image_data`: Packed `uint8` array of zlib-compressed pixel data
+- `/label_image_data`: Pixel data in one of two formats:
+    - **Blob format** (v1.8-v2.1): Flat `uint8` array of zlib-compressed bytes, indexed by `(data_start, data_end)` byte offsets
+    - **Chunked format** (v2.2+): `(T, H, W)` int32 dataset with per-frame gzip chunks, written via `write_direct_chunk` for maximum throughput
 
 ### Label Image Dtype
 
@@ -1070,7 +1072,13 @@ label_image_object_dtype = np.dtype([
 
 ### Pixel Data
 
-The pixel data for each label image is stored as an `int32` array, compressed with zlib, and packed into `/label_image_data` as `uint8` bytes. Each label image's compressed bytes are at the byte range `[data_start, data_end)`.
+Label image pixel data is stored as `int32` arrays (0 = background, positive values = object IDs) in one of two formats:
+
+**Blob format (v1.8-v2.1):** Each frame is individually zlib-compressed and packed into `/label_image_data` as a flat `uint8` byte array. The `data_start` and `data_end` fields in the index table give the byte range `[data_start, data_end)` for each frame.
+
+**Chunked format (v2.2+):** When all frames share the same `(H, W)` dimensions, pixel data is stored as a 3D `(T, H, W)` int32 dataset with chunk shape `(1, H, W)` and gzip-1 compression. Data is written via `write_direct_chunk` (pre-compressed with `zlib.compress(level=1)`) for ~43x throughput improvement over standard h5py writes. The `data_start` and `data_end` fields are unused (set to 0). The reader auto-detects the format by checking `label_image_data.ndim` (3 = chunked, 1 = blob).
+
+When frame sizes are mixed, the writer falls back to blob format automatically.
 
 ### String Metadata
 
@@ -1168,7 +1176,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Added score map datasets (`/mask_score_map_index`, `/mask_score_maps`, `/label_image_score_map_index`, `/label_image_score_maps`)
 - Backward compatible: new fields are optional, old readers skip unknown keys via metadata pass-through
 
-### Format 2.0 (Current)
+### Format 2.0
 
 **Columnar bounding box storage.**
 
@@ -1176,6 +1184,19 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Bounding box coordinates use `x1`/`y1`/`x2`/`y2` (top-left/bottom-right) representation instead of `x_center`/`y_center`/`width`/`height`
 - String metadata (`category`, `name`, `source`) stored as vlen string datasets within the group
 - The reader auto-detects whether `/bboxes` is a group (format 2.0+) or a dataset (legacy 1.7--1.9) and handles both transparently
+
+### Format 2.2 (Current)
+
+**Chunked label image storage and lazy loading.**
+
+- `/label_image_data` can now be a 3D `(T, H, W)` int32 dataset with per-frame gzip chunks instead of the legacy flat byte blob
+- Written via `write_direct_chunk` with `zlib.compress(level=1)` for ~43x faster writes than standard h5py
+- Pixel data is loaded lazily: the HDF5 file stays open and each frame is decompressed on first `.data` access
+- Format auto-detected on read by `label_image_data.ndim` (3 = chunked, 1 = blob)
+- Falls back to blob format when frame sizes are not uniform
+- New [`LabelImageWriter`][sleap_io.LabelImageWriter] enables streaming writes with constant memory
+- New [`merge_label_images()`][sleap_io.merge_label_images] copies raw compressed chunks between files (zero decompression for chunked sources)
+- Backward compatible: old files (v1.8-v2.1) remain fully readable; `data_start`/`data_end` fields are unused (set to 0) in chunked format
 
 ## API
 
