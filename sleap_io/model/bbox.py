@@ -152,7 +152,7 @@ class BoundingBox:
         return (self.y1 + self.y2) / 2
 
     @property
-    def centroid(self) -> tuple[float, float]:
+    def centroid_xy(self) -> tuple[float, float]:
         """Center point as ``(x, y)``."""
         return (self.x_center, self.y_center)
 

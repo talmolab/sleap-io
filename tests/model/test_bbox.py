@@ -273,12 +273,12 @@ def test_bbox_to_mask():
 
 def test_bbox_centroid():
     bbox = UserBoundingBox(x1=0, y1=10, x2=100, y2=90)
-    assert bbox.centroid == (50.0, 50.0)
+    assert bbox.centroid_xy == (50.0, 50.0)
 
 
 def test_bbox_centroid_nonsquare():
     bbox = UserBoundingBox(x1=10, y1=20, x2=50, y2=30)
-    assert bbox.centroid == (30.0, 25.0)
+    assert bbox.centroid_xy == (30.0, 25.0)
 
 
 def test_bbox_roundtrip_xyxy():
