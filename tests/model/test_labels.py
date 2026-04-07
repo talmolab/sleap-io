@@ -6742,7 +6742,11 @@ def test_clean_preserves_frames_with_any_annotations():
     )
 
     labels = Labels(
-        centroids=[c], bboxes=[b], masks=[m], rois=[roi], label_images=[li],
+        centroids=[c],
+        bboxes=[b],
+        masks=[m],
+        rois=[roi],
+        label_images=[li],
         videos=[video],
     )
 
@@ -6755,9 +6759,7 @@ def test_clean_preserves_frames_with_any_annotations():
 
     # Verify each frame's annotations survived
     for lf in labels.labeled_frames:
-        has_any = (
-            lf.centroids or lf.bboxes or lf.masks or lf.label_images or lf.rois
-        )
+        has_any = lf.centroids or lf.bboxes or lf.masks or lf.label_images or lf.rois
         assert has_any, f"Frame {lf.frame_idx} lost its annotations"
 
 
