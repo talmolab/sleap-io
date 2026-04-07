@@ -625,7 +625,13 @@ class Labels:
 
         Returns:
             The matching LabeledFrame, or None if not found.
+
+        Note:
+            The index is rebuilt lazily. If you mutate frames directly (e.g.,
+            ``lf.frame_idx = new_idx``) without calling ``reindex()``, the
+            lookup may return stale results.
         """
+        self._check_not_lazy("get_frame")
         return self._ensure_frame_index().get((id(video), frame_idx))
 
     def get_track_annotations(self, video: Video, track: "Track") -> list:
@@ -638,7 +644,13 @@ class Labels:
         Returns:
             List of annotations for this track, sorted by frame_idx.
             Empty list if no annotations found.
+
+        Note:
+            The index is rebuilt lazily. If you mutate frames directly (e.g.,
+            ``lf.frame_idx = new_idx``) without calling ``reindex()``, the
+            lookup may return stale results.
         """
+        self._check_not_lazy("get_track_annotations")
         return self._ensure_track_index().get((id(video), id(track)), [])
 
     def reindex(self):
@@ -697,6 +709,7 @@ class Labels:
             )
         lf = self._find_or_create_frame(annotation.video, annotation.frame_idx)
         getattr(lf, attr).append(annotation)
+        self._invalidate_indices()
         # Auto-populate metadata lists
         if annotation.video not in self.videos:
             self.videos.append(annotation.video)
@@ -1633,6 +1646,8 @@ class Labels:
         for lf in self.labeled_frames:
             lf.remove_predictions()
 
+        self._invalidate_indices()
+
         if clean:
             self.clean(
                 frames=True,
@@ -1752,8 +1767,6 @@ class Labels:
     ) -> list["SegmentationMask"]:
         """Query segmentation masks by video, frame, category, track, or instance.
 
-        Filters the `masks` list via linear scan.
-
         Args:
             video: If specified, only return masks for this video (identity
                 comparison).
@@ -1801,8 +1814,6 @@ class Labels:
         predicted: bool | None = None,
     ) -> list["BoundingBox"]:
         """Query bounding boxes by video, frame, category, track, or instance.
-
-        Filters the `bboxes` list via linear scan.
 
         Args:
             video: If specified, only return bboxes for this video (identity
@@ -1857,8 +1868,6 @@ class Labels:
     ) -> list["Centroid"]:
         """Query centroids by video, frame, category, track, or instance.
 
-        Filters the ``centroids`` list via linear scan.
-
         Args:
             video: If specified, only return centroids for this video (identity
                 comparison).
@@ -1910,7 +1919,7 @@ class Labels:
     ) -> list["LabelImage"]:
         """Query label images by video, frame, track, or category.
 
-        Filters the ``label_images`` list via linear scan. When ``track`` is
+        When ``track`` is
         specified, returns LabelImages whose ``objects`` dict contains an Info
         with that track. When ``category`` is specified, returns LabelImages
         containing an Info with that category. These filters check the

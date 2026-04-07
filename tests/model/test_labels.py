@@ -7230,3 +7230,103 @@ def test_clean_orphaned_annotations_without_frame_removal():
 
     assert len(lf.centroids) == 1
     assert lf.centroids[0].track is track_keep
+
+
+def test_get_frame_lazy_raises(centered_pair):
+    """get_frame raises RuntimeError on lazy Labels."""
+    lazy = load_slp(centered_pair, lazy=True)
+    video = lazy.videos[0]
+    with pytest.raises(RuntimeError, match="get_frame"):
+        lazy.get_frame(video, 0)
+
+
+def test_get_track_annotations_lazy_raises(centered_pair):
+    """get_track_annotations raises RuntimeError on lazy Labels."""
+    lazy = load_slp(centered_pair, lazy=True)
+    video = lazy.videos[0]
+    track = lazy.tracks[0]
+    with pytest.raises(RuntimeError, match="get_track_annotations"):
+        lazy.get_track_annotations(video, track)
+
+
+def test_add_annotation_invalidates_track_index():
+    """After add_centroid to existing frame, get_track_annotations sees it."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track = Track(name="t1")
+    c1 = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=track)
+    labels = Labels(videos=[video], tracks=[track])
+    labels.add_centroid(c1)
+
+    # Force index build
+    result = labels.get_track_annotations(video, track)
+    assert len(result) == 1
+
+    # Add a second centroid to the same frame and track
+    c2 = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0, track=track)
+    labels.add_centroid(c2)
+
+    # Index should have been invalidated; new centroid visible
+    result = labels.get_track_annotations(video, track)
+    assert len(result) == 2
+
+
+def test_remove_predictions_no_clean_invalidates_indices():
+    """After remove_predictions(clean=False), track index reflects removal."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4", open_backend=False)
+    track = Track(name="t1")
+
+    pred = PredictedInstance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skel, track=track
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[pred])
+    c = UserCentroid(x=5.0, y=6.0, video=video, frame_idx=0, track=track)
+    lf.centroids.append(c)
+
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skel],
+        tracks=[track],
+    )
+
+    # Force index build — track index should include centroid + predicted instance
+    result = labels.get_track_annotations(video, track)
+    assert len(result) == 2
+
+    # Remove predictions without cleaning
+    labels.remove_predictions(clean=False)
+
+    # Track index should be invalidated — only centroid remains
+    result = labels.get_track_annotations(video, track)
+    assert len(result) == 1
+    assert lf.centroids[0] is c
+
+
+def test_merge_does_not_corrupt_source_annotations():
+    """After merging, source labels' centroids keep original video/track."""
+    skel = Skeleton(nodes=["head", "tail"])
+
+    video_a = Video(filename="a.mp4")
+    video_b = Video(filename="b.mp4")
+    track_b = Track(name="track_b")
+
+    # labels_a: empty frame at idx 0
+    labels_a = Labels(skeletons=[skel], videos=[video_a])
+    lf_a = LabeledFrame(video=video_a, frame_idx=0, instances=[])
+    labels_a.append(lf_a)
+
+    # labels_b: frame at idx 0 with a centroid
+    labels_b = Labels(skeletons=[skel], videos=[video_b], tracks=[track_b])
+    c = UserCentroid(x=1.0, y=2.0, video=video_b, frame_idx=0, track=track_b)
+    lf_b = LabeledFrame(video=video_b, frame_idx=0, instances=[])
+    lf_b.centroids.append(c)
+    labels_b.append(lf_b)
+
+    # Merge b into a (videos differ, so b's frame is added as new)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    labels_a.merge(labels_b, video=video_matcher)
+
+    # Source centroid in labels_b must still reference the original video/track
+    assert lf_b.centroids[0].video is video_b
+    assert lf_b.centroids[0].track is track_b
