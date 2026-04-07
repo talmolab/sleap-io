@@ -590,6 +590,7 @@ class Labels:
                 rois=[deepcopy(r) for r in self.rois],
                 masks=[deepcopy(m) for m in self.masks],
                 bboxes=[deepcopy(b) for b in self.bboxes],
+                centroids=[deepcopy(c) for c in self.centroids],
                 label_images=[deepcopy(li) for li in self.label_images],
                 lazy_store=new_store,
             )
@@ -1825,6 +1826,11 @@ class Labels:
         for centroid in self.centroids:
             if centroid.video in video_map:
                 centroid.video = video_map[centroid.video]
+
+        # Update label images with the new videos.
+        for label_image in self.label_images:
+            if label_image.video in video_map:
+                label_image.video = video_map[label_image.video]
 
         # Update the list of videos.
         self.videos = [video_map.get(video, video) for video in self.videos]
