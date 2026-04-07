@@ -5919,3 +5919,44 @@ def test_labels_replace_videos_updates_centroids():
     labels = Labels(videos=[old_video], centroids=[c])
     labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
     assert c.video is new_video
+
+
+def test_labels_replace_videos_updates_label_images():
+    """replace_videos should update label_image video references."""
+    old_video = Video(filename="old.mp4")
+    new_video = Video(filename="new.mp4")
+    other_video = Video(filename="other.mp4")
+    li_old = UserLabelImage(
+        data=np.zeros((4, 4), dtype=np.int32),
+        video=old_video,
+        frame_idx=0,
+    )
+    li_other = UserLabelImage(
+        data=np.zeros((4, 4), dtype=np.int32),
+        video=other_video,
+        frame_idx=0,
+    )
+    labels = Labels(videos=[old_video, other_video], label_images=[li_old, li_other])
+    labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
+    assert li_old.video is new_video
+    assert li_other.video is other_video  # Unchanged — not in video_map
+
+
+def test_labels_copy_lazy_preserves_centroids(tmp_path):
+    """Lazy copy should preserve centroids (regression test for missing kwarg)."""
+    old_video = Video(filename="test.mp4")
+    c = UserCentroid(x=1.0, y=2.0, video=old_video, frame_idx=0)
+    labels = Labels(videos=[old_video], centroids=[c])
+
+    # Save and reload as lazy to get a lazy Labels
+    path = str(tmp_path / "centroids.slp")
+    save_slp(labels, path)
+    lazy_labels = load_slp(path, open_videos=False)
+
+    assert len(lazy_labels.centroids) == 1
+
+    # Exercise the lazy copy path
+    labels_copy = lazy_labels.copy()
+    assert len(labels_copy.centroids) == 1
+    assert labels_copy.centroids[0].x == 1.0
+    assert labels_copy.centroids[0].y == 2.0
