@@ -4653,12 +4653,14 @@ def merge_label_images(
         else:
             # Deduplicate by filename
             merged_videos: list[Video] = []
-            seen_filenames: dict[str, int] = {}
+            seen_filenames: dict[str | tuple[str, ...], int] = {}
             for vlist in source_videos:
                 for v in vlist:
                     fn = v.filename
-                    if fn not in seen_filenames:
-                        seen_filenames[fn] = len(merged_videos)
+                    # ImageVideo filenames are lists, convert to tuple for hashing
+                    fn_key = tuple(fn) if isinstance(fn, list) else fn
+                    if fn_key not in seen_filenames:
+                        seen_filenames[fn_key] = len(merged_videos)
                         merged_videos.append(v)
 
         # Deduplicate tracks by name
@@ -4713,7 +4715,8 @@ def merge_label_images(
                     video_remap = {}
                     for i, v in enumerate(src_videos):
                         fn = v.filename
-                        video_remap[i] = seen_filenames[fn]
+                        fn_key = tuple(fn) if isinstance(fn, list) else fn
+                        video_remap[i] = seen_filenames[fn_key]
 
                 # Build track index remap for this source
                 track_remap: dict[int, int] = {}

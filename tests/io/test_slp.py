@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 import shapely
 import simplejson as json
+from PIL import Image
 
 from sleap_io import (
     Camera,
@@ -7414,6 +7415,39 @@ def test_merge_label_images_no_objects_table(tmp_path):
     merged = merge_label_images([path], str(tmp_path / "merged.slp"), video=video)
     assert len(merged.label_images) == 1
     np.testing.assert_array_equal(merged.label_images[0].data, data)
+
+
+def test_merge_label_images_image_video(tmp_path):
+    """Merge handles ImageVideo backends where Video.filename is a list."""
+    # Create image files to form an ImageVideo
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+    for i in range(3):
+        img = np.zeros((4, 4), dtype=np.uint8)
+        Image.fromarray(img).save(str(img_dir / f"frame_{i:03d}.png"))
+
+    img_paths = sorted(str(p) for p in img_dir.glob("*.png"))
+    video = Video(filename=img_paths)
+
+    data = np.zeros((4, 4), dtype=np.int32)
+    data[0:2, 0:2] = 1
+
+    for file_idx in range(2):
+        li = UserLabelImage(data=data, video=video, frame_idx=file_idx)
+        labels = Labels(videos=[video], label_images=[li])
+        save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
+
+    # This previously crashed with TypeError: unhashable type: 'list'
+    merged = merge_label_images(
+        [str(tmp_path / "src_0.slp"), str(tmp_path / "src_1.slp")],
+        str(tmp_path / "merged.slp"),
+    )
+
+    assert len(merged.label_images) == 2
+    assert len(merged.videos) == 1
+    assert isinstance(merged.videos[0].filename, list)
+    np.testing.assert_array_equal(merged.label_images[0].data, data)
+    np.testing.assert_array_equal(merged.label_images[1].data, data)
 
 
 def test_slp_centroid_roundtrip(tmp_path):
