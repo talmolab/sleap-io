@@ -6808,3 +6808,241 @@ def test_get_rois_fast_path():
     # No match
     result = labels.get_rois(video=video, frame_idx=99)
     assert len(result) == 0
+
+
+def test_merge_copies_annotations_new_frame():
+    """merge() copies annotations when creating new frames."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    track = Track(name="t1")
+
+    # Self labels: frame 0 with instance
+    inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skeleton)
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    self_labels = Labels(
+        labeled_frames=[lf0], videos=[video], skeletons=[skeleton], tracks=[track]
+    )
+
+    # Other labels: frame 1 with centroid + bbox (not in self)
+    c = UserCentroid(x=5.0, y=10.0, video=video, frame_idx=1, track=track)
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=1)
+    lf1 = LabeledFrame(video=video, frame_idx=1, centroids=[c], bboxes=[b])
+    other_labels = Labels(
+        labeled_frames=[lf1], videos=[video], skeletons=[skeleton], tracks=[track]
+    )
+
+    result = self_labels.merge(other_labels)
+    assert result.frames_merged == 1
+
+    # New frame should have been created with annotations
+    merged_lf = self_labels.find(video, 1)
+    assert len(merged_lf) == 1
+    assert len(merged_lf[0].centroids) == 1
+    assert len(merged_lf[0].bboxes) == 1
+
+
+def test_merge_remaps_annotation_tracks():
+    """merge() remaps track references on annotations."""
+    video = Video(filename="v.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+
+    # Two separate track objects with the same name (will be matched)
+    track_self = Track(name="animal")
+    track_other = Track(name="animal")
+
+    # Self labels: empty
+    self_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_self])
+
+    # Other labels: centroid referencing track_other
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=track_other)
+    lf = LabeledFrame(video=video, frame_idx=0, centroids=[c])
+    other_labels = Labels(
+        labeled_frames=[lf], videos=[video], skeletons=[skeleton], tracks=[track_other]
+    )
+
+    self_labels.merge(other_labels)
+
+    # The centroid's track should now reference track_self (the matched track)
+    merged_lf = self_labels.find(video, 0)[0]
+    assert len(merged_lf.centroids) == 1
+    assert merged_lf.centroids[0].track is track_self
+
+
+def test_merge_remaps_annotations_existing_frame():
+    """merge() remaps annotation tracks when merging into existing frame."""
+    video = Video(filename="v.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    track_self = Track(name="animal")
+    track_other = Track(name="animal")
+
+    # Self labels: frame 0 with instance
+    inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skeleton)
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    self_labels = Labels(
+        labeled_frames=[lf0], videos=[video], skeletons=[skeleton], tracks=[track_self]
+    )
+
+    # Other labels: same frame with centroid
+    c = UserCentroid(x=5.0, y=10.0, video=video, frame_idx=0, track=track_other)
+    other_lf = LabeledFrame(video=video, frame_idx=0, centroids=[c])
+    other_labels = Labels(
+        labeled_frames=[other_lf],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_other],
+    )
+
+    self_labels.merge(other_labels)
+
+    # Centroid should have been merged into existing frame with remapped track
+    assert len(lf0.centroids) == 1
+    assert lf0.centroids[0].track is track_self
+
+
+def test_merge_remaps_label_image_tracks():
+    """merge() remaps track references in label_image objects."""
+    video = Video(filename="v.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    track_self = Track(name="cell")
+    track_other = Track(name="cell")
+
+    self_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_self])
+
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(track=track_other, category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, label_images=[li])
+    other_labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_other],
+    )
+
+    self_labels.merge(other_labels)
+
+    merged_lf = self_labels.find(video, 0)[0]
+    assert len(merged_lf.label_images) == 1
+    assert merged_lf.label_images[0].objects[1].track is track_self
+
+
+def test_clean_removes_orphaned_annotation_tracks():
+    """clean() removes annotations whose tracks are no longer in self.tracks."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track_keep = Track(name="keep")
+    track_remove = Track(name="remove")
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skeleton, track=track_keep
+    )
+
+    c_keep = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=track_keep)
+    c_remove = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0, track=track_remove)
+    lf = LabeledFrame(
+        video=video, frame_idx=0, instances=[inst], centroids=[c_keep, c_remove]
+    )
+
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_keep, track_remove],
+    )
+
+    # Remove track_remove externally, then clean
+    labels.tracks.remove(track_remove)
+    labels.clean()
+
+    # Only the centroid with track_keep should remain
+    assert len(lf.centroids) == 1
+    assert lf.centroids[0].track is track_keep
+
+
+def test_clean_preserves_trackless_annotations():
+    """clean() preserves annotations without tracks even during track cleanup."""
+    video = Video(filename="test.mp4", open_backend=False)
+    c_no_track = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    lf = LabeledFrame(video=video, frame_idx=0, centroids=[c_no_track])
+    labels = Labels(labeled_frames=[lf], videos=[video])
+
+    labels.clean()
+    assert len(lf.centroids) == 1
+    assert lf.centroids[0] is c_no_track
+
+
+def test_extract_preserves_annotations():
+    """extract() includes annotations nested in extracted frames."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skeleton)
+    c = UserCentroid(x=5.0, y=10.0, video=video, frame_idx=0)
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0)
+
+    lf = LabeledFrame(
+        video=video, frame_idx=0, instances=[inst], centroids=[c], bboxes=[b]
+    )
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    extracted = labels.extract([0])
+    assert len(extracted.labeled_frames) == 1
+    ex_lf = extracted.labeled_frames[0]
+    assert len(ex_lf.centroids) == 1
+    assert len(ex_lf.bboxes) == 1
+
+
+def test_split_preserves_annotations():
+    """split() includes annotations in both splits."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+
+    lfs = []
+    for i in range(4):
+        inst = Instance.from_numpy(np.array([[float(i), 0.0]]), skeleton=skeleton)
+        c = UserCentroid(x=float(i), y=0.0, video=video, frame_idx=i)
+        lf = LabeledFrame(video=video, frame_idx=i, instances=[inst], centroids=[c])
+        lfs.append(lf)
+
+    labels = Labels(labeled_frames=lfs, videos=[video], skeletons=[skeleton])
+
+    splits = labels.split(0.5)
+    for split_labels in splits.values():
+        for lf in split_labels.labeled_frames:
+            assert len(lf.centroids) == 1
+
+
+def test_remove_predictions_clears_predicted_annotations():
+    """remove_predictions() removes predicted annotations from frames."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skeleton)
+    pred_inst = PredictedInstance.from_numpy(
+        np.array([[3.0, 4.0]]), skeleton=skeleton, score=0.9
+    )
+
+    user_c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    pred_c = PredictedCentroid(x=3.0, y=4.0, video=video, frame_idx=0, score=0.8)
+    user_b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0)
+    pred_b = PredictedBoundingBox(
+        x1=5, y1=5, x2=15, y2=15, video=video, frame_idx=0, score=0.7
+    )
+
+    lf = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[inst, pred_inst],
+        centroids=[user_c, pred_c],
+        bboxes=[user_b, pred_b],
+    )
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    labels.remove_predictions(clean=False)
+
+    assert len(lf.instances) == 1
+    assert type(lf.instances[0]) is Instance
+    assert len(lf.centroids) == 1
+    assert type(lf.centroids[0]) is UserCentroid
+    assert len(lf.bboxes) == 1
+    assert type(lf.bboxes[0]) is UserBoundingBox
