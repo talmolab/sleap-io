@@ -5936,9 +5936,7 @@ def test_labels_replace_videos_updates_label_images():
         video=other_video,
         frame_idx=0,
     )
-    labels = Labels(
-        videos=[old_video, other_video], label_images=[li_old, li_other]
-    )
+    labels = Labels(videos=[old_video, other_video], label_images=[li_old, li_other])
     labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
     assert li_old.video is new_video
     assert li_other.video is other_video  # Unchanged — not in video_map
