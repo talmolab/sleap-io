@@ -1212,14 +1212,15 @@ def test_labeled_frame_merge_annotations():
 
     lf1.merge(lf2, frame="keep_both")
 
-    # Annotations from lf2 should be merged into lf1
+    # Annotations from lf2 should be copied into lf1
     assert len(lf1.centroids) == 2
-    assert c1 in lf1.centroids
-    assert c2 in lf1.centroids
+    assert lf1.centroids[0] is c1  # Original stays
+    assert lf1.centroids[1] is not c2  # Copy, not original
+    assert lf1.centroids[1].x == c2.x and lf1.centroids[1].y == c2.y
 
 
 def test_labeled_frame_merge_annotations_dedup():
-    """_merge_annotations skips duplicates by identity."""
+    """_merge_annotations skips duplicates by identity and copies new items."""
     from sleap_io.model.centroid import UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
@@ -1231,7 +1232,9 @@ def test_labeled_frame_merge_annotations_dedup():
 
     lf1._merge_annotations(lf2)
 
-    # shared should not be duplicated (same identity)
+    # shared should not be duplicated (same identity already in lf1)
     assert len(lf1.centroids) == 2
-    assert lf1.centroids.count(shared) == 1
-    assert unique in lf1.centroids
+    assert lf1.centroids[0] is shared
+    # unique is copied, not the same object
+    assert lf1.centroids[1] is not unique
+    assert lf1.centroids[1].x == unique.x and lf1.centroids[1].y == unique.y

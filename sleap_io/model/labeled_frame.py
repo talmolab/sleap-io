@@ -6,6 +6,7 @@ The `LabeledFrame` class is a data structure that contains `Instance`s and
 
 from __future__ import annotations
 
+from copy import copy
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -428,11 +429,13 @@ class LabeledFrame:
     def _merge_annotations(self, other: "LabeledFrame"):
         """Merge annotation lists from another frame into this frame.
 
-        Extends centroids, bboxes, masks, label_images, and rois from the other
-        frame, skipping any that are already present (by identity).
+        Shallow-copies annotations from the other frame to avoid mutating the
+        source when references are later remapped. Video and track references
+        are preserved so that ``_remap_frame_annotations`` can find them in
+        the mapping dicts.
         """
         for attr in ("centroids", "bboxes", "masks", "label_images", "rois"):
             existing_ids = set(id(x) for x in getattr(self, attr))
             for item in getattr(other, attr):
                 if id(item) not in existing_ids:
-                    getattr(self, attr).append(item)
+                    getattr(self, attr).append(copy(item))
