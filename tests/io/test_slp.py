@@ -10,10 +10,10 @@ from unittest import mock
 
 import h5py
 import numpy as np
-from PIL import Image
 import pytest
 import shapely
 import simplejson as json
+from PIL import Image
 
 from sleap_io import (
     Camera,
