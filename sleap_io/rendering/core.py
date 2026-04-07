@@ -1279,7 +1279,9 @@ def render_video(
             edge_inds = skeleton.edge_inds
             node_names = [n.name for n in skeleton.nodes]
         else:
-            if labeled_frames:
+            # Only raise if frames have instances (which need a skeleton)
+            has_instances = any(len(lf.instances) > 0 for lf in labeled_frames)
+            if has_instances:
                 raise ValueError("No skeleton found in labels")
             edge_inds = []
             node_names = []
