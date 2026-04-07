@@ -10,6 +10,7 @@ from unittest import mock
 
 import h5py
 import numpy as np
+from PIL import Image
 import pytest
 import shapely
 import simplejson as json
@@ -7423,8 +7424,6 @@ def test_merge_label_images_image_video(tmp_path):
     img_dir.mkdir()
     for i in range(3):
         img = np.zeros((4, 4), dtype=np.uint8)
-        from PIL import Image
-
         Image.fromarray(img).save(str(img_dir / f"frame_{i:03d}.png"))
 
     img_paths = sorted(str(p) for p in img_dir.glob("*.png"))
@@ -7447,6 +7446,8 @@ def test_merge_label_images_image_video(tmp_path):
     assert len(merged.label_images) == 2
     assert len(merged.videos) == 1
     assert isinstance(merged.videos[0].filename, list)
+    np.testing.assert_array_equal(merged.label_images[0].data, data)
+    np.testing.assert_array_equal(merged.label_images[1].data, data)
 
 
 def test_slp_centroid_roundtrip(tmp_path):
