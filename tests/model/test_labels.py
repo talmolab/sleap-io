@@ -5925,14 +5925,23 @@ def test_labels_replace_videos_updates_label_images():
     """replace_videos should update label_image video references."""
     old_video = Video(filename="old.mp4")
     new_video = Video(filename="new.mp4")
-    li = UserLabelImage(
+    other_video = Video(filename="other.mp4")
+    li_old = UserLabelImage(
         data=np.zeros((4, 4), dtype=np.int32),
         video=old_video,
         frame_idx=0,
     )
-    labels = Labels(videos=[old_video], label_images=[li])
+    li_other = UserLabelImage(
+        data=np.zeros((4, 4), dtype=np.int32),
+        video=other_video,
+        frame_idx=0,
+    )
+    labels = Labels(
+        videos=[old_video, other_video], label_images=[li_old, li_other]
+    )
     labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
-    assert li.video is new_video
+    assert li_old.video is new_video
+    assert li_other.video is other_video  # Unchanged — not in video_map
 
 
 def test_labels_copy_lazy_preserves_centroids(tmp_path):
