@@ -6906,7 +6906,7 @@ def test_merge_remaps_annotations_existing_frame():
         tracks=[track_other],
     )
 
-    self_labels.merge(other_labels)
+    self_labels.merge(other_labels, frame="keep_both")
 
     # Both centroids should be on the frame
     assert len(lf0.centroids) == 2
@@ -7114,7 +7114,7 @@ def test_merge_remaps_annotations_with_different_videos():
         tracks=[track_other],
     )
 
-    self_labels.merge(other_labels)
+    self_labels.merge(other_labels, frame="keep_both")
 
     # Both label_images should be on the frame
     assert len(lf0.label_images) == 2
