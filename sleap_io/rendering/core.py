@@ -656,6 +656,8 @@ def render_image(
     alpha: float = 1.0,
     show_nodes: bool = True,
     show_edges: bool = True,
+    show_centroids: bool = True,
+    centroid_marker_size: float = 5.0,
     scale: float = 1.0,
     # Background control
     background: Literal["video"] | ColorSpec = "video",
@@ -708,6 +710,9 @@ def render_image(
         alpha: Global transparency (0.0-1.0).
         show_nodes: Whether to draw node markers.
         show_edges: Whether to draw skeleton edges.
+        show_centroids: Whether to draw centroid markers from
+            ``Labels.centroids``. Centroids are colored by track.
+        centroid_marker_size: Radius of centroid markers in pixels.
         scale: Output scale factor. Applied after cropping.
         background: Background control. Can be:
             - ``"video"``: Load video frame (default). Raises error if unavailable.
@@ -775,28 +780,40 @@ def render_image(
 
     # Resolve source to LabeledFrame or instances
     if isinstance(source, Labels):
+        lf = None
+        has_centroids = show_centroids and bool(source.centroids)
         if video is not None and frame_idx is not None:
             # Render by video + frame_idx
             target_video = source.videos[video] if isinstance(video, int) else video
             lf_list = source.find(target_video, frame_idx)
-            if not lf_list:
+            if lf_list:
+                lf = lf_list[0]
+            elif not has_centroids:
                 raise ValueError(
                     f"No labeled frame found for video {target_video} "
                     f"at frame {frame_idx}"
                 )
-            lf = lf_list[0]
         elif lf_ind is not None:
             # Render by labeled frame index
             lf = source.labeled_frames[lf_ind]
-        else:
+        elif source.labeled_frames:
             # Default to first labeled frame
             lf = source.labeled_frames[0]
+        elif not has_centroids:
+            raise ValueError("No labeled frames to render")
 
-        instances = list(lf.instances)
-        skeleton = instances[0].skeleton if instances else source.skeletons[0]
-        edge_inds = skeleton.edge_inds
-        node_names = [n.name for n in skeleton.nodes]
-        fidx_for_callback = lf.frame_idx
+        if lf is not None:
+            instances = list(lf.instances)
+            skeleton = instances[0].skeleton if instances else source.skeletons[0]
+            edge_inds = skeleton.edge_inds
+            node_names = [n.name for n in skeleton.nodes]
+            fidx_for_callback = lf.frame_idx
+        else:
+            # Centroid-only / spatial-only mode: no labeled frames.
+            instances = []
+            edge_inds = []
+            node_names = []
+            fidx_for_callback = frame_idx if frame_idx is not None else 0
 
         # Get track info
         track_indices = []
@@ -814,19 +831,35 @@ def render_image(
 
         # Get image if not provided
         if image is None:
+            video_obj = (
+                lf.video
+                if lf is not None
+                else (source.videos[0] if source.videos else None)
+            )
             if background_color is not None:
                 # Solid color background - skip video loading entirely
-                video_obj = lf.video
-                if hasattr(video_obj, "shape") and video_obj.shape is not None:
+                if (
+                    video_obj is not None
+                    and hasattr(video_obj, "shape")
+                    and video_obj.shape is not None
+                ):
                     h, w = video_obj.shape[1:3]
                 else:
-                    # Estimate from points
-                    h, w = _estimate_frame_size(instances_points)
+                    # Estimate from points or default
+                    if instances_points:
+                        h, w = _estimate_frame_size(instances_points)
+                    else:
+                        h, w = 512, 512
                 image = _create_blank_frame(h, w, background_color)[:, :, :3]
             else:
                 # Load video frame
                 try:
-                    image = lf.image
+                    if lf is not None:
+                        image = lf.image
+                    elif video_obj is not None and frame_idx is not None:
+                        image = video_obj[frame_idx]
+                    else:
+                        image = None
                     if image is None:
                         raise ValueError("No image available")
                 except Exception:
@@ -954,6 +987,31 @@ def render_image(
             outline_color=overlay_outline_color,
         )
 
+    # Draw centroids on the image.
+    if show_centroids and isinstance(source, Labels) and source.centroids:
+        from sleap_io.rendering.overlays import draw_centroids as _draw_centroids
+
+        render_fidx = fidx_for_callback
+        frame_centroids = [c for c in source.centroids if c.frame_idx == render_fidx]
+        if frame_centroids:
+            if render_image_data.ndim == 2:
+                render_image_data = np.stack([render_image_data] * 3, axis=-1)
+            centroid_pal = get_palette(palette, max(len(source.tracks), 1))
+            c_colors = []
+            for c in frame_centroids:
+                if c.track is not None and c.track in source.tracks:
+                    tidx = source.tracks.index(c.track)
+                    c_colors.append(centroid_pal[tidx % len(centroid_pal)])
+                else:
+                    c_colors.append(centroid_pal[0] if centroid_pal else (0, 255, 0))
+            render_image_data = _draw_centroids(
+                render_image_data,
+                frame_centroids,
+                colors=c_colors,
+                marker_size=centroid_marker_size * scale,
+                offset=crop_offset,
+            )
+
     # Short-circuit: overlay-only mode (no poses to render)
     if source is None:
         # Scale if needed
@@ -1052,6 +1110,8 @@ def render_video(
     alpha: float = 1.0,
     show_nodes: bool = True,
     show_edges: bool = True,
+    show_centroids: bool = True,
+    centroid_marker_size: float = 5.0,
     # Video encoding
     fps: float | None = None,
     codec: str = "libx264",
@@ -1111,6 +1171,9 @@ def render_video(
         alpha: Global transparency (0.0-1.0).
         show_nodes: Whether to draw node markers.
         show_edges: Whether to draw skeleton edges.
+        show_centroids: Whether to draw centroid markers from
+            ``Labels.centroids``. Centroids are colored by track.
+        centroid_marker_size: Radius of centroid markers in pixels.
         fps: Output frame rate (default: source video fps).
         codec: Video codec for encoding.
         crf: Constant rate factor for quality (2-32, lower=better). Default 25.
@@ -1165,6 +1228,9 @@ def render_video(
     if preset is not None and preset in PRESETS:
         scale = PRESETS[preset]["scale"]
 
+    # Centroid list for this video (populated below if source is Labels).
+    _video_centroids: list = []
+
     # Resolve source
     if isinstance(source, Labels):
         labels = source
@@ -1185,13 +1251,14 @@ def render_video(
         # Sort by frame index
         labeled_frames = sorted(labeled_frames, key=lambda lf: lf.frame_idx)
 
-        # Check for spatial annotations (label_images, masks, bboxes, rois)
-        # that can be rendered even without labeled frames (poses).
+        # Check for spatial annotations (label_images, masks, bboxes, rois,
+        # centroids) that can be rendered even without labeled frames (poses).
         has_spatial = bool(
             labels.get_label_images(video=target_video)
             or labels.get_masks(video=target_video)
             or labels.get_bboxes(video=target_video)
             or labels.get_rois(video=target_video)
+            or labels.get_centroids(video=target_video)
         )
 
         if not labeled_frames and not has_spatial:
@@ -1228,6 +1295,16 @@ def render_video(
                 overlay = video_label_images
                 if include_unlabeled is None:
                     include_unlabeled = True
+
+        # Collect centroids for this video (for per-frame rendering).
+        if show_centroids and labels.centroids:
+            _video_centroids = [
+                c
+                for c in labels.centroids
+                if c.video is None or c.video is target_video
+            ]
+            if _video_centroids and include_unlabeled is None:
+                include_unlabeled = True
 
         # Resolve None to default after auto-overlay logic
         if include_unlabeled is None:
@@ -1303,6 +1380,12 @@ def render_video(
             }
         )
 
+    if not render_indices and _video_centroids:
+        # Derive frame indices from centroids (centroid-only rendering)
+        render_indices = sorted(
+            {c.frame_idx for c in _video_centroids if c.frame_idx is not None}
+        )
+
     if not render_indices:
         raise ValueError("No frames to render")
 
@@ -1363,6 +1446,11 @@ def render_video(
             crf=crf,
             preset=x264_preset,
         )
+
+    # Build centroid color palette (by track).
+    _centroid_palette: list[tuple[int, int, int]] = []
+    if _video_centroids and labels is not None:
+        _centroid_palette = get_palette(palette, max(len(labels.tracks), 1))
 
     # Pre-process overlay: determine type for per-frame dispatch
     _overlay_is_3d = (
@@ -1452,6 +1540,42 @@ def render_video(
         )
         return image
 
+    def _draw_frame_centroids(
+        image: np.ndarray, fidx: int, crop_off: tuple[float, float] = (0.0, 0.0)
+    ) -> np.ndarray:
+        """Draw centroids for a single frame onto the image."""
+        if not _video_centroids:
+            return image
+        frame_centroids = [c for c in _video_centroids if c.frame_idx == fidx]
+        if not frame_centroids:
+            return image
+
+        from sleap_io.rendering.overlays import draw_centroids
+
+        # Ensure RGB.
+        if image.ndim == 2:
+            image = np.stack([image] * 3, axis=-1)
+
+        # Assign colors by track.
+        centroid_colors = []
+        for c in frame_centroids:
+            if c.track is not None and labels is not None and c.track in labels.tracks:
+                tidx = labels.tracks.index(c.track)
+                centroid_colors.append(_centroid_palette[tidx % len(_centroid_palette)])
+            else:
+                centroid_colors.append(
+                    _centroid_palette[0] if _centroid_palette else (0, 255, 0)
+                )
+
+        draw_centroids(
+            image,
+            frame_centroids,
+            colors=centroid_colors,
+            marker_size=centroid_marker_size * scale,
+            offset=crop_off,
+        )
+        return image
+
     # Only accumulate frames if returning as list (no save_path)
     rendered_frames: list[np.ndarray] = []
     total_frames = len(render_indices)
@@ -1505,6 +1629,16 @@ def render_video(
 
                 # Apply overlay
                 render_image_data = _apply_frame_overlay(render_image_data, fidx)
+
+                # Draw centroids
+                crop_off = (
+                    (float(crop_bounds[0]), float(crop_bounds[1]))
+                    if crop_bounds is not None
+                    else (0.0, 0.0)
+                )
+                render_image_data = _draw_frame_centroids(
+                    render_image_data, fidx, crop_off
+                )
 
                 # Render frame without poses
                 rendered = render_frame(
@@ -1591,6 +1725,14 @@ def render_video(
 
             # Apply overlay
             render_image_data = _apply_frame_overlay(render_image_data, fidx)
+
+            # Draw centroids
+            crop_off = (
+                (float(crop_bounds[0]), float(crop_bounds[1]))
+                if crop_bounds is not None
+                else (0.0, 0.0)
+            )
+            render_image_data = _draw_frame_centroids(render_image_data, fidx, crop_off)
 
             # Render frame
             rendered = render_frame(

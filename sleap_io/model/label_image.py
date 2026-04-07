@@ -87,12 +87,15 @@ class LabelImage:
         Attributes:
             track: Track identity for cross-frame association. ``None`` if
                 untracked.
+            tracking_score: Confidence of the track identity assignment.
+                ``None`` if unassigned or manually assigned.
             category: Semantic class label (e.g., ``"neuron"``, ``"glia"``).
             name: Human-readable name (e.g., ``"cell_042"``).
             instance: Linked pose ``Instance``, if any.
         """
 
         track: "Track | None" = None
+        tracking_score: float | None = None
         category: str = ""
         name: str = ""
         instance: "Instance | None" = None

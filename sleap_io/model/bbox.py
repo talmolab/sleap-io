@@ -41,6 +41,8 @@ class BoundingBox:
         video: Video this bounding box is associated with.
         frame_idx: Frame index within the video.
         track: Optional tracking identity.
+        tracking_score: Confidence of the track identity assignment. ``None``
+            if unassigned or manually assigned.
         instance: Optional linked pose instance.
         category: Class label (e.g., "mouse", "fly").
         name: Human-readable name.
@@ -62,6 +64,7 @@ class BoundingBox:
     video: "Video | None" = attrs.field(default=None)
     frame_idx: int | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
+    tracking_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
     category: str = attrs.field(default="")
     name: str = attrs.field(default="")

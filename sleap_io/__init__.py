@@ -91,6 +91,13 @@ __getattr__, __dir__, __all__ = lazy.attach(
         ],
         "model.labeled_frame": ["LabeledFrame"],
         "model.bbox": ["BoundingBox", "UserBoundingBox", "PredictedBoundingBox"],
+        "model.centroid": [
+            "Centroid",
+            "UserCentroid",
+            "PredictedCentroid",
+            "CENTROID_SKELETON",
+            "get_centroid_skeleton",
+        ],
         "model.label_image": [
             "LabelImage",
             "UserLabelImage",
