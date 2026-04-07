@@ -6569,3 +6569,100 @@ def test_replace_videos_reindexes():
 
     # New video found via rebuilt index
     assert labels.get_frame(new_video, 0) is lf
+
+
+def test_track_index_includes_label_images():
+    """Track index includes label images via their objects' tracks."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track = Track(name="t1")
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(track=track, category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+    labels = Labels(label_images=[li], videos=[video], tracks=[track])
+
+    anns = labels.get_track_annotations(video, track)
+    assert len(anns) == 1
+    assert anns[0] is li
+
+
+def test_get_bboxes_fast_path():
+    """get_bboxes uses O(1) frame lookup and filters by track/instance."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track = Track(name="t1")
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton)
+    b1 = UserBoundingBox(
+        x1=0,
+        y1=0,
+        x2=10,
+        y2=10,
+        video=video,
+        frame_idx=0,
+        track=track,
+        instance=inst,
+    )
+    b2 = UserBoundingBox(
+        x1=5,
+        y1=5,
+        x2=15,
+        y2=15,
+        video=video,
+        frame_idx=0,
+    )
+    labels = Labels(bboxes=[b1, b2], videos=[video])
+
+    # Fast path with video+frame_idx
+    result = labels.get_bboxes(video=video, frame_idx=0)
+    assert len(result) == 2
+
+    # Filter by track
+    result = labels.get_bboxes(video=video, frame_idx=0, track=track)
+    assert len(result) == 1
+    assert result[0] is b1
+
+    # Filter by instance
+    result = labels.get_bboxes(video=video, frame_idx=0, instance=inst)
+    assert len(result) == 1
+    assert result[0] is b1
+
+    # No match
+    result = labels.get_bboxes(video=video, frame_idx=99)
+    assert len(result) == 0
+
+
+def test_get_masks_fast_path():
+    """get_masks uses O(1) frame lookup when video+frame_idx provided."""
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.zeros((10, 10), dtype=bool)
+    mask_data[2:8, 2:8] = True
+    m = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+    labels = Labels(masks=[m], videos=[video])
+
+    result = labels.get_masks(video=video, frame_idx=0)
+    assert len(result) == 1
+    assert result[0] is m
+
+    result = labels.get_masks(video=video, frame_idx=99)
+    assert len(result) == 0
+
+
+def test_get_label_images_fast_path():
+    """get_label_images uses O(1) frame lookup when video+frame_idx given."""
+    video = Video(filename="test.mp4", open_backend=False)
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+    labels = Labels(label_images=[li], videos=[video])
+
+    result = labels.get_label_images(video=video, frame_idx=0)
+    assert len(result) == 1
+    assert result[0] is li
+
+    result = labels.get_label_images(video=video, frame_idx=99)
+    assert len(result) == 0
