@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     import skia
 
     from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.centroid import Centroid
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.roi import ROI
 
@@ -637,3 +638,69 @@ def _linestring_to_path(linestring) -> "skia.Path":
         for x, y in coords[1:]:
             path.lineTo(float(x), float(y))
     return path
+
+
+def draw_centroids(
+    image: np.ndarray,
+    centroids: list["Centroid"],
+    color: tuple[int, int, int] = (0, 255, 0),
+    colors: list[tuple[int, int, int]] | None = None,
+    marker_size: float = 5.0,
+    alpha: float = 1.0,
+    offset: tuple[float, float] = (0.0, 0.0),
+) -> np.ndarray:
+    """Draw centroid markers on an image.
+
+    Draws filled circles at each centroid position using skia-python.
+
+    Args:
+        image: Image array of shape ``(H, W, 3)`` uint8. Modified in-place
+            and returned.
+        centroids: List of ``Centroid`` objects to draw.
+        color: RGB color tuple used when ``colors`` is ``None``.
+        colors: Per-centroid RGB color tuples. If provided, must have the
+            same length as ``centroids``. Overrides ``color``.
+        marker_size: Radius of the marker circle in pixels.
+        alpha: Opacity for the markers (0.0 to 1.0).
+        offset: ``(ox, oy)`` offset to subtract from centroid coordinates
+            (used for cropped images).
+
+    Returns:
+        The modified image array.
+    """
+    if not centroids:
+        return image
+
+    import skia
+
+    alpha_int = max(0, min(255, int(alpha * 255)))
+    ox, oy = offset
+
+    # Ensure RGB before padding to RGBA.
+    if image.ndim == 2:
+        image = np.stack([image] * 3, axis=-1)
+    elif image.ndim == 3 and image.shape[2] == 1:
+        image = np.concatenate([image] * 3, axis=-1)
+
+    # Pad to RGBA for skia surface.
+    frame_rgba = np.dstack([image, np.full(image.shape[:2], 255, dtype=np.uint8)])
+    surface = skia.Surface(frame_rgba, colorType=skia.kRGBA_8888_ColorType)
+    canvas = surface.getCanvas()
+
+    for i, centroid in enumerate(centroids):
+        c = colors[i] if colors is not None else color
+        paint = skia.Paint(
+            Color=skia.Color(c[0], c[1], c[2], alpha_int),
+            AntiAlias=True,
+            Style=skia.Paint.kFill_Style,
+        )
+        cx = float(centroid.x) - ox
+        cy = float(centroid.y) - oy
+        canvas.drawCircle(cx, cy, float(marker_size), paint)
+
+    surface.flushAndSubmit()
+    result = frame_rgba[:, :, :3]
+    if image.shape == result.shape:
+        image[:] = result
+        return image
+    return result.copy()

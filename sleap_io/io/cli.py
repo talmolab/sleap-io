@@ -3270,6 +3270,12 @@ def filenames(
     default=False,
     help="Hide skeleton edges. Default: show edges.",
 )
+@click.option(
+    "--no-centroids",
+    is_flag=True,
+    default=False,
+    help="Hide centroid markers. Default: show centroids.",
+)
 # Crop options
 @click.option(
     "--crop",
@@ -3387,6 +3393,7 @@ def render(
     alpha: float,
     no_nodes: bool,
     no_edges: bool,
+    no_centroids: bool,
     crop_str: str | None,
     background: str,
     images_path: Path | None,
@@ -3640,6 +3647,7 @@ def render(
                     alpha=alpha,
                     show_nodes=not no_nodes,
                     show_edges=not no_edges,
+                    show_centroids=not no_centroids,
                     background=background,
                     **overlay_kwargs,
                 )
@@ -3667,6 +3675,7 @@ def render(
                     alpha=alpha,
                     show_nodes=not no_nodes,
                     show_edges=not no_edges,
+                    show_centroids=not no_centroids,
                     background=background,
                     **overlay_kwargs,
                 )
@@ -3691,6 +3700,7 @@ def render(
                 alpha=alpha,
                 show_nodes=not no_nodes,
                 show_edges=not no_edges,
+                show_centroids=not no_centroids,
                 start=start_frame_idx,
                 end=end_frame_idx,
                 include_unlabeled=effective_all_frames,
