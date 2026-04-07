@@ -6374,3 +6374,437 @@ def test_labels_materialize_undistributed_label_images(tmp_path):
     # Undistributed label image survives round-trip
     undist = [li for li in materialized.label_images if li.frame_idx is None]
     assert len(undist) >= 0  # May be 0 if frame_idx is set during write
+
+
+def test_frame_index_build_and_lookup():
+    """Frame index builds on demand and provides O(1) lookups."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    lf5 = LabeledFrame(video=video, frame_idx=5)
+    labels = Labels(labeled_frames=[lf0, lf5], videos=[video], skeletons=[skeleton])
+
+    # get_frame returns correct frame by identity
+    assert labels.get_frame(video, 0) is lf0
+    assert labels.get_frame(video, 5) is lf5
+    assert labels.get_frame(video, 99) is None
+
+
+def test_frame_index_multi_video():
+    """Frame index correctly separates frames from different videos."""
+    v1 = Video(filename="v1.mp4", open_backend=False)
+    v2 = Video(filename="v2.mp4", open_backend=False)
+    lf_v1 = LabeledFrame(video=v1, frame_idx=0)
+    lf_v2 = LabeledFrame(video=v2, frame_idx=0)
+    labels = Labels(labeled_frames=[lf_v1, lf_v2], videos=[v1, v2])
+
+    assert labels.get_frame(v1, 0) is lf_v1
+    assert labels.get_frame(v2, 0) is lf_v2
+    assert labels.get_frame(v1, 0) is not labels.get_frame(v2, 0)
+
+
+def test_frame_index_staleness():
+    """Frame index auto-rebuilds when labeled_frames length changes."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf0], videos=[video], skeletons=[skeleton])
+
+    assert labels.get_frame(video, 0) is lf0
+    assert labels.get_frame(video, 1) is None
+
+    # Append a new frame — index should auto-rebuild
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    labels.labeled_frames.append(lf1)
+    assert labels.get_frame(video, 1) is lf1
+
+
+def test_frame_index_duplicate_warning():
+    """Duplicate (video, frame_idx) triggers a warning."""
+    video = Video(filename="test.mp4", open_backend=False)
+    lf0a = LabeledFrame(video=video, frame_idx=0)
+    lf0b = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf0a, lf0b], videos=[video])
+
+    import warnings
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        labels._ensure_frame_index()
+        assert len(w) == 1
+        assert "Duplicate" in str(w[0].message)
+
+    # Last-wins semantics
+    assert labels.get_frame(video, 0) is lf0b
+
+
+def test_track_index_build_and_lookup():
+    """Track index provides O(1) lookup by (video, track)."""
+    video = Video(filename="test.mp4", open_backend=False)
+    t1 = Track(name="t1")
+    t2 = Track(name="t2")
+    c1 = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=t1)
+    c2 = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=5, track=t1)
+    c3 = UserCentroid(x=5.0, y=6.0, video=video, frame_idx=2, track=t2)
+
+    labels = Labels(centroids=[c1, c2, c3], videos=[video], tracks=[t1, t2])
+
+    # Track 1 has 2 annotations, sorted by frame_idx
+    t1_anns = labels.get_track_annotations(video, t1)
+    assert len(t1_anns) == 2
+    assert t1_anns[0] is c1  # frame_idx=0
+    assert t1_anns[1] is c2  # frame_idx=5
+
+    # Track 2 has 1 annotation
+    t2_anns = labels.get_track_annotations(video, t2)
+    assert len(t2_anns) == 1
+    assert t2_anns[0] is c3
+
+    # Unknown track returns empty list
+    t3 = Track(name="t3")
+    assert labels.get_track_annotations(video, t3) == []
+
+
+def test_track_index_includes_instances():
+    """Track index includes instances, not just annotations."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    track = Track(name="t1")
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton, track=track)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels(labeled_frames=[lf], videos=[video], tracks=[track])
+
+    anns = labels.get_track_annotations(video, track)
+    assert len(anns) == 1
+    assert anns[0] is inst
+
+
+def test_reindex():
+    """reindex() forces index rebuild on next access."""
+    video = Video(filename="test.mp4", open_backend=False)
+    lf = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf], videos=[video])
+
+    # Build index
+    labels.get_frame(video, 0)
+    assert labels._frame_index is not None
+
+    # Reindex clears it
+    labels.reindex()
+    assert labels._frame_index is None
+    assert labels._track_index is None
+
+    # Rebuilds on next access
+    assert labels.get_frame(video, 0) is lf
+
+
+def test_find_uses_frame_index():
+    """find() uses frame index for O(1) eager lookups."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    frames = [LabeledFrame(video=video, frame_idx=i) for i in range(10)]
+    labels = Labels(labeled_frames=frames, videos=[video], skeletons=[skeleton])
+
+    # Single frame lookup
+    result = labels.find(video, 5)
+    assert len(result) == 1
+    assert result[0] is frames[5]
+
+    # Multiple frame lookup
+    result = labels.find(video, [2, 7])
+    assert len(result) == 2
+    assert result[0] is frames[2]
+    assert result[1] is frames[7]
+
+    # Missing frame with return_new
+    result = labels.find(video, 99, return_new=True)
+    assert len(result) == 1
+    assert result[0].frame_idx == 99
+
+    # Missing frame without return_new
+    result = labels.find(video, 99)
+    assert len(result) == 0
+
+
+def test_get_centroids_fast_path():
+    """get_centroids uses O(1) frame lookup when video+frame_idx given."""
+    video = Video(filename="test.mp4", open_backend=False)
+    c0 = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    c1 = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=1)
+    labels = Labels(centroids=[c0, c1], videos=[video])
+
+    # Fast path: both video and frame_idx
+    result = labels.get_centroids(video=video, frame_idx=0)
+    assert len(result) == 1
+    assert result[0] is c0
+
+    # Video only: iterates frames for that video
+    result = labels.get_centroids(video=video)
+    assert len(result) == 2
+
+    # Frame only: uses property
+    result = labels.get_centroids(frame_idx=0)
+    assert len(result) == 1
+
+    # No match
+    result = labels.get_centroids(video=video, frame_idx=99)
+    assert len(result) == 0
+
+
+def test_replace_videos_reindexes():
+    """replace_videos() invalidates indices after updating references."""
+    old_video = Video(filename="old.mp4", open_backend=False)
+    new_video = Video(filename="new.mp4", open_backend=False)
+    lf = LabeledFrame(video=old_video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf], videos=[old_video])
+
+    # Build index with old video
+    assert labels.get_frame(old_video, 0) is lf
+
+    # Replace video — index should be invalidated
+    labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
+
+    # Old video no longer in index
+    assert labels.get_frame(old_video, 0) is None
+
+    # New video found via rebuilt index
+    assert labels.get_frame(new_video, 0) is lf
+
+
+def test_track_index_includes_label_images():
+    """Track index includes label images via their objects' tracks."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track = Track(name="t1")
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(track=track, category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+    labels = Labels(label_images=[li], videos=[video], tracks=[track])
+
+    anns = labels.get_track_annotations(video, track)
+    assert len(anns) == 1
+    assert anns[0] is li
+
+
+def test_get_bboxes_fast_path():
+    """get_bboxes uses O(1) frame lookup and filters by track/instance."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track = Track(name="t1")
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton)
+    b1 = UserBoundingBox(
+        x1=0,
+        y1=0,
+        x2=10,
+        y2=10,
+        video=video,
+        frame_idx=0,
+        track=track,
+        instance=inst,
+    )
+    b2 = UserBoundingBox(
+        x1=5,
+        y1=5,
+        x2=15,
+        y2=15,
+        video=video,
+        frame_idx=0,
+    )
+    labels = Labels(bboxes=[b1, b2], videos=[video])
+
+    # Fast path with video+frame_idx
+    result = labels.get_bboxes(video=video, frame_idx=0)
+    assert len(result) == 2
+
+    # Filter by track
+    result = labels.get_bboxes(video=video, frame_idx=0, track=track)
+    assert len(result) == 1
+    assert result[0] is b1
+
+    # Filter by instance
+    result = labels.get_bboxes(video=video, frame_idx=0, instance=inst)
+    assert len(result) == 1
+    assert result[0] is b1
+
+    # No match
+    result = labels.get_bboxes(video=video, frame_idx=99)
+    assert len(result) == 0
+
+
+def test_get_masks_fast_path():
+    """get_masks uses O(1) frame lookup when video+frame_idx provided."""
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.zeros((10, 10), dtype=bool)
+    mask_data[2:8, 2:8] = True
+    m = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+    labels = Labels(masks=[m], videos=[video])
+
+    result = labels.get_masks(video=video, frame_idx=0)
+    assert len(result) == 1
+    assert result[0] is m
+
+    result = labels.get_masks(video=video, frame_idx=99)
+    assert len(result) == 0
+
+
+def test_get_label_images_fast_path():
+    """get_label_images uses O(1) frame lookup when video+frame_idx given."""
+    video = Video(filename="test.mp4", open_backend=False)
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+    labels = Labels(label_images=[li], videos=[video])
+
+    result = labels.get_label_images(video=video, frame_idx=0)
+    assert len(result) == 1
+    assert result[0] is li
+
+    result = labels.get_label_images(video=video, frame_idx=99)
+    assert len(result) == 0
+
+
+def test_append_invalidates_indices():
+    """append() invalidates cached indices."""
+    video = Video(filename="test.mp4", open_backend=False)
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf0], videos=[video])
+
+    # Build index
+    assert labels.get_frame(video, 0) is lf0
+    assert labels._frame_index is not None
+
+    # Append new frame — index should be invalidated
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    labels.append(lf1)
+    assert labels._frame_index is None
+
+    # Rebuilt on next access
+    assert labels.get_frame(video, 1) is lf1
+
+
+def test_extend_invalidates_indices():
+    """extend() invalidates cached indices."""
+    video = Video(filename="test.mp4", open_backend=False)
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf0], videos=[video])
+
+    # Build index
+    assert labels.get_frame(video, 0) is lf0
+
+    # Extend — index should be invalidated
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    lf2 = LabeledFrame(video=video, frame_idx=2)
+    labels.extend([lf1, lf2])
+    assert labels._frame_index is None
+
+    # Rebuilt on next access
+    assert labels.get_frame(video, 2) is lf2
+
+
+def test_clean_invalidates_indices():
+    """clean() invalidates cached indices."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton)
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    lf1 = LabeledFrame(video=video, frame_idx=1)  # Empty, will be removed
+    labels = Labels(labeled_frames=[lf0, lf1], videos=[video], skeletons=[skeleton])
+
+    # Build index
+    assert labels.get_frame(video, 1) is lf1
+
+    # Clean removes empty frame and invalidates index
+    labels.clean()
+    assert labels._frame_index is None
+    assert labels.get_frame(video, 1) is None
+    assert labels.get_frame(video, 0) is lf0
+
+
+def test_clean_preserves_frames_with_any_annotations():
+    """clean() preserves frames with any annotation type."""
+    video = Video(filename="test.mp4", open_backend=False)
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=1)
+    mask_data = np.zeros((10, 10), dtype=bool)
+    mask_data[2:8, 2:8] = True
+    m = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=2)
+    roi = UserROI(geometry=box(0, 0, 10, 10), video=video, frame_idx=3)
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(category="cell")},
+        video=video,
+        frame_idx=4,
+    )
+
+    labels = Labels(
+        centroids=[c],
+        bboxes=[b],
+        masks=[m],
+        rois=[roi],
+        label_images=[li],
+        videos=[video],
+    )
+
+    # All 5 frames exist (one per annotation type), none have instances
+    assert len(labels.labeled_frames) == 5
+
+    # Clean should preserve all — each has at least one annotation
+    labels.clean()
+    assert len(labels.labeled_frames) == 5
+
+    # Verify each frame's annotations survived
+    for lf in labels.labeled_frames:
+        has_any = lf.centroids or lf.bboxes or lf.masks or lf.label_images or lf.rois
+        assert has_any, f"Frame {lf.frame_idx} lost its annotations"
+
+
+def test_clean_removes_truly_empty_frames_only():
+    """clean() removes empty frames but keeps annotation-only and instance frames."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton)
+
+    # Frame 0: has instance
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    # Frame 1: has centroid only
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=1)
+    # Frame 2: truly empty
+    lf2 = LabeledFrame(video=video, frame_idx=2)
+
+    labels = Labels(
+        labeled_frames=[lf0, lf2], centroids=[c], videos=[video], skeletons=[skeleton]
+    )
+    assert len(labels.labeled_frames) == 3
+
+    labels.clean()
+
+    # Only the truly empty frame (2) should be removed
+    assert len(labels.labeled_frames) == 2
+    frame_idxs = {lf.frame_idx for lf in labels.labeled_frames}
+    assert frame_idxs == {0, 1}
+
+
+def test_get_rois_fast_path():
+    """get_rois uses O(1) frame lookup when video+frame_idx provided."""
+    video = Video(filename="test.mp4", open_backend=False)
+    roi1 = UserROI(geometry=box(0, 0, 10, 10), video=video, frame_idx=0)
+    roi2 = UserROI(geometry=box(5, 5, 15, 15), video=video, frame_idx=1)
+    labels = Labels(rois=[roi1, roi2], videos=[video])
+
+    # Fast path with video+frame_idx
+    result = labels.get_rois(video=video, frame_idx=0)
+    assert len(result) == 1
+    assert result[0] is roi1
+
+    # Video only: iterates frames for that video
+    result = labels.get_rois(video=video)
+    assert len(result) == 2
+
+    # No match
+    result = labels.get_rois(video=video, frame_idx=99)
+    assert len(result) == 0
