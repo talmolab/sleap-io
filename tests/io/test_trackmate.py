@@ -1,6 +1,5 @@
 """Tests for TrackMate CSV reader."""
 
-
 import pytest
 
 from sleap_io import Labels, Skeleton, load_file, load_trackmate, save_slp
