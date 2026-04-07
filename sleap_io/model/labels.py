@@ -1586,6 +1586,31 @@ class Labels:
         if tracks:
             self.tracks = [track for track in self.tracks if track in used_tracks]
 
+            # Remove annotations within frames that reference removed tracks
+            valid_tracks = set(id(t) for t in self.tracks)
+            target_frames = kept_frames if frames else self.labeled_frames
+            for lf in target_frames:
+                for attr in ("centroids", "bboxes", "masks", "rois"):
+                    ann_list = getattr(lf, attr)
+                    if ann_list:
+                        setattr(
+                            lf,
+                            attr,
+                            [
+                                a
+                                for a in ann_list
+                                if a.track is None or id(a.track) in valid_tracks
+                            ],
+                        )
+                if lf.label_images:
+                    for li in lf.label_images:
+                        if li.objects:
+                            li.objects = {
+                                k: v
+                                for k, v in li.objects.items()
+                                if v.track is None or id(v.track) in valid_tracks
+                            }
+
         if frames:
             self.labeled_frames = kept_frames
 
@@ -3359,6 +3384,10 @@ class Labels:
                         new_frame.instances.append(new_inst)
                         result.instances_added += 1
 
+                    # Copy annotations from other frame and remap references
+                    new_frame._merge_annotations(other_frame)
+                    self._remap_frame_annotations(new_frame, video_map, track_map)
+
                     self.append(new_frame)
                     result.frames_merged += 1
 
@@ -3407,6 +3436,10 @@ class Labels:
 
                     # Update frame instances
                     self_frame.instances = merged_instances
+
+                    # Remap annotation references (merge already copied them)
+                    self._remap_frame_annotations(self_frame, video_map, track_map)
+
                     result.frames_merged += 1
 
             # Step 5: Merge suggestions
@@ -3455,6 +3488,36 @@ class Labels:
             progress_callback(total_frames, total_frames, "Merge complete")
 
         return result
+
+    @staticmethod
+    def _remap_frame_annotations(
+        frame: LabeledFrame,
+        video_map: dict,
+        track_map: dict,
+    ) -> None:
+        """Remap video and track references on a frame's annotations in place.
+
+        Args:
+            frame: LabeledFrame whose annotations should be remapped.
+            video_map: Dictionary mapping old videos to new ones.
+            track_map: Dictionary mapping old tracks to new ones.
+        """
+        for ann in (
+            *frame.centroids,
+            *frame.bboxes,
+            *frame.masks,
+            *frame.rois,
+        ):
+            if ann.video in video_map:
+                ann.video = video_map[ann.video]
+            if ann.track is not None and ann.track in track_map:
+                ann.track = track_map[ann.track]
+        for li in frame.label_images:
+            if li.video in video_map:
+                li.video = video_map[li.video]
+            for info in li.objects.values():
+                if info.track is not None and info.track in track_map:
+                    info.track = track_map[info.track]
 
     def _map_instance(
         self,

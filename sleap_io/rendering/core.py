@@ -815,16 +815,14 @@ def render_image(
             node_names = []
             fidx_for_callback = frame_idx if frame_idx is not None else 0
 
-        # Get track info
-        track_indices = []
+        # Get track info using O(1) lookup map
         n_tracks = len(source.tracks)
-        for inst in instances:
-            if inst.track is not None and inst.track in source.tracks:
-                track_indices.append(source.tracks.index(inst.track))
-            else:
-                track_indices.append(0)
-
         has_tracks = n_tracks > 0
+        img_track_idx_map = {id(t): i for i, t in enumerate(source.tracks)}
+        track_indices = []
+        for inst in instances:
+            tidx = img_track_idx_map.get(id(inst.track)) if inst.track else None
+            track_indices.append(tidx if tidx is not None else 0)
 
         # Convert instances to point arrays (needed for both image size and rendering)
         instances_points = [inst.numpy() for inst in instances]
@@ -999,8 +997,8 @@ def render_image(
             centroid_pal = get_palette(palette, max(len(source.tracks), 1))
             c_colors = []
             for c in frame_centroids:
-                if c.track is not None and c.track in source.tracks:
-                    tidx = source.tracks.index(c.track)
+                tidx = img_track_idx_map.get(id(c.track)) if c.track else None
+                if tidx is not None:
                     c_colors.append(centroid_pal[tidx % len(centroid_pal)])
                 else:
                     c_colors.append(centroid_pal[0] if centroid_pal else (0, 255, 0))
@@ -1228,8 +1226,8 @@ def render_video(
     if preset is not None and preset in PRESETS:
         scale = PRESETS[preset]["scale"]
 
-    # Centroid list for this video (populated below if source is Labels).
-    _video_centroids: list = []
+    # Whether this video has centroids to render (populated below).
+    _has_video_centroids: bool = False
 
     # Resolve source
     if isinstance(source, Labels):
@@ -1298,14 +1296,10 @@ def render_video(
                 if include_unlabeled is None:
                     include_unlabeled = True
 
-        # Collect centroids for this video (for per-frame rendering).
+        # Check if centroids exist for this video (per-frame access via lf).
         if show_centroids and labels.centroids:
-            _video_centroids = [
-                c
-                for c in labels.centroids
-                if c.video is None or c.video is target_video
-            ]
-            if _video_centroids and include_unlabeled is None:
+            _has_video_centroids = bool(labels.get_centroids(video=target_video))
+            if _has_video_centroids and include_unlabeled is None:
                 include_unlabeled = True
 
         # Resolve None to default after auto-overlay logic
@@ -1382,11 +1376,9 @@ def render_video(
             }
         )
 
-    if not render_indices and _video_centroids:
-        # Derive frame indices from centroids (centroid-only rendering)
-        render_indices = sorted(
-            {c.frame_idx for c in _video_centroids if c.frame_idx is not None}
-        )
+    if not render_indices and _has_video_centroids:
+        # Derive frame indices from frames that have centroids
+        render_indices = sorted(lf.frame_idx for lf in labeled_frames if lf.centroids)
 
     if not render_indices:
         raise ValueError("No frames to render")
@@ -1451,7 +1443,7 @@ def render_video(
 
     # Build centroid color palette (by track).
     _centroid_palette: list[tuple[int, int, int]] = []
-    if _video_centroids and labels is not None:
+    if _has_video_centroids and labels is not None:
         _centroid_palette = get_palette(palette, max(len(labels.tracks), 1))
 
     # Pre-process overlay: determine type for per-frame dispatch
@@ -1542,13 +1534,21 @@ def render_video(
         )
         return image
 
+    # Pre-build track index map for O(1) track color lookups.
+    _track_idx_map: dict[int, int] = {}
+    if labels is not None and has_tracks:
+        _track_idx_map = {id(t): i for i, t in enumerate(labels.tracks)}
+
     def _draw_frame_centroids(
         image: np.ndarray, fidx: int, crop_off: tuple[float, float] = (0.0, 0.0)
     ) -> np.ndarray:
         """Draw centroids for a single frame onto the image."""
-        if not _video_centroids:
+        if not _has_video_centroids:
             return image
-        frame_centroids = [c for c in _video_centroids if c.frame_idx == fidx]
+
+        # Use frame-level centroid access instead of linear scan.
+        lf = frame_idx_to_lf.get(fidx)
+        frame_centroids = lf.centroids if lf is not None else []
         if not frame_centroids:
             return image
 
@@ -1558,11 +1558,11 @@ def render_video(
         if image.ndim == 2:
             image = np.stack([image] * 3, axis=-1)
 
-        # Assign colors by track.
+        # Assign colors by track using pre-built index map.
         centroid_colors = []
         for c in frame_centroids:
-            if c.track is not None and labels is not None and c.track in labels.tracks:
-                tidx = labels.tracks.index(c.track)
+            if c.track is not None and id(c.track) in _track_idx_map:
+                tidx = _track_idx_map[id(c.track)]
                 centroid_colors.append(_centroid_palette[tidx % len(_centroid_palette)])
             else:
                 centroid_colors.append(
@@ -1677,15 +1677,13 @@ def render_video(
             instances = list(lf.instances)
             instances_points = [inst.numpy() for inst in instances]
 
-            # Get track indices
+            # Get track indices using pre-built map
             track_indices = None
             if labels is not None and has_tracks:
                 track_indices = []
                 for inst in instances:
-                    if inst.track is not None and inst.track in labels.tracks:
-                        track_indices.append(labels.tracks.index(inst.track))
-                    else:
-                        track_indices.append(0)
+                    tidx = _track_idx_map.get(id(inst.track)) if inst.track else None
+                    track_indices.append(tidx if tidx is not None else 0)
 
             # Build instance metadata
             instance_metadata = []
