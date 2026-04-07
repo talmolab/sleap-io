@@ -729,7 +729,9 @@ user_frames = labels.user_labeled_frames  # Includes negative frames
 
 ### clean() Behavior
 
-When calling [`Labels.clean(frames=True)`][sleap_io.Labels.clean], negative frames are preserved even though they have no instances. Only non-negative empty frames are removed.
+When calling [`Labels.clean(frames=True)`][sleap_io.Labels.clean], negative frames are preserved even though they have no instances. Only non-negative empty frames are removed. Frames that contain spatial annotations (centroids, bounding boxes, masks, ROIs, or label images) but no instances are also preserved.
+
+When `tracks=True` (the default), `clean()` also removes spatial annotations within frames that reference tracks no longer in the dataset. This prevents orphaned references after track cleanup.
 
 ### Optional Dataset
 
