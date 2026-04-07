@@ -539,6 +539,21 @@ base.merge(other, instance=InstanceMatcher(method="spatial", threshold=2.0))
 
 ---
 
+## Spatial annotation handling {#spatial-annotations}
+
+In addition to instances, `merge()` handles spatial annotations nested in frames:
+centroids, bounding boxes, segmentation masks, ROIs, and label images.
+
+When frames are merged (whether creating new frames or merging into existing ones),
+annotations are copied along with the frame. Their **track** and **video** references
+are remapped using the same mappings built during skeleton, video, and track matching.
+This ensures annotations reference the correct objects in the merged dataset.
+
+This applies to all frame strategies — annotations are always included regardless of
+how instances are resolved.
+
+---
+
 ## Merging label images
 
 For segmentation workflows, [`merge_label_images()`][sleap_io.merge_label_images]
