@@ -13,6 +13,7 @@ from sleap_io import (
     Video,
 )
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.label_image import (
     LabelImage,
     PredictedLabelImage,
@@ -52,6 +53,7 @@ def make_labels_all_annotations() -> sleap_io.Labels:
     all_masks = []
     all_rois = []
     all_bboxes = []
+    all_centroids = []
     all_label_images = []
 
     for fi in range(3):
@@ -166,6 +168,34 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                 )
             all_bboxes.append(bbox)
 
+            # --- Centroid ---
+            if ii == 0:
+                centroid = UserCentroid(
+                    x=float(x_off + 5),
+                    y=float(y_off + 20),
+                    video=video,
+                    frame_idx=fi,
+                    track=track,
+                    instance=inst,
+                    category="fly",
+                    name=f"centroid_f{fi}_i{ii}",
+                    source="manual",
+                )
+            else:
+                centroid = PredictedCentroid(
+                    x=float(x_off + 5),
+                    y=float(y_off + 20),
+                    video=video,
+                    frame_idx=fi,
+                    track=track,
+                    instance=inst,
+                    category="fly",
+                    name=f"centroid_f{fi}_i{ii}",
+                    source="model_v1",
+                    score=0.95,
+                )
+            all_centroids.append(centroid)
+
         # --- Label Images ---
         # Compose label image from the two masks
         li_data = np.zeros((80, 200), dtype=np.int32)
@@ -235,6 +265,7 @@ def make_labels_all_annotations() -> sleap_io.Labels:
         masks=all_masks,
         rois=all_rois,
         bboxes=all_bboxes,
+        centroids=all_centroids,
         label_images=all_label_images,
     )
 

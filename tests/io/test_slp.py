@@ -6948,8 +6948,11 @@ def test_merge_label_images_pixel_integrity(tmp_path):
     )
 
     assert len(merged.label_images) == 6
-    for i, expected_data in enumerate(source_data):
-        np.testing.assert_array_equal(merged.label_images[i].data, expected_data)
+    # Verify all source data arrays are present (order may differ after merge)
+    merged_data = [li.data for li in merged.label_images]
+    for expected_data in source_data:
+        found = any(np.array_equal(md, expected_data) for md in merged_data)
+        assert found, "Expected label image data not found in merged result"
 
 
 def test_merge_label_images_dimension_mismatch(tmp_path):

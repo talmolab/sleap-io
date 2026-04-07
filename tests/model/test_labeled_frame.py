@@ -1134,3 +1134,85 @@ def test_replace_predictions_mixed_scenario():
 
     assert len(merged) == 5  # 2 users from self + 3 predictions from other
     assert len(conflicts) == 0
+
+
+def test_labeled_frame_annotation_fields():
+    """LabeledFrame has centroids, bboxes, masks, label_images, rois fields."""
+    from sleap_io.model.bbox import UserBoundingBox
+    from sleap_io.model.centroid import UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0)
+
+    lf = LabeledFrame(video=video, frame_idx=0, centroids=[c], bboxes=[b])
+    assert len(lf.centroids) == 1
+    assert lf.centroids[0] is c
+    assert len(lf.bboxes) == 1
+    assert lf.bboxes[0] is b
+    assert len(lf.masks) == 0
+    assert len(lf.label_images) == 0
+    assert len(lf.rois) == 0
+
+
+def test_labeled_frame_is_user_labeled_with_annotations():
+    """is_user_labeled returns True for frames with user annotations."""
+    from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+
+    # Frame with only user centroid — is user labeled
+    c_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    lf = LabeledFrame(video=video, frame_idx=0, centroids=[c_user])
+    assert lf.is_user_labeled
+
+    # Frame with only predicted centroid — not user labeled
+    c_pred = PredictedCentroid(x=1.0, y=2.0, video=video, frame_idx=0, score=0.5)
+    lf2 = LabeledFrame(video=video, frame_idx=1, centroids=[c_pred])
+    assert not lf2.is_user_labeled
+
+
+def test_labeled_frame_remove_predictions_annotations():
+    """remove_predictions removes predicted annotations from frame."""
+    from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+    from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    c_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    c_pred = PredictedCentroid(x=3.0, y=4.0, video=video, frame_idx=0, score=0.9)
+    b_user = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0)
+    b_pred = PredictedBoundingBox(
+        x1=5, y1=5, x2=15, y2=15, video=video, frame_idx=0, score=0.8
+    )
+
+    lf = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        centroids=[c_user, c_pred],
+        bboxes=[b_user, b_pred],
+    )
+    lf.remove_predictions()
+
+    assert len(lf.centroids) == 1
+    assert lf.centroids[0] is c_user
+    assert len(lf.bboxes) == 1
+    assert lf.bboxes[0] is b_user
+
+
+def test_labeled_frame_merge_annotations():
+    """merge() also merges annotation lists from the other frame."""
+    from sleap_io.model.centroid import UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    c1 = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    c2 = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[c1])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[c2])
+
+    lf1.merge(lf2, frame="keep_both")
+
+    # Annotations from lf2 should be merged into lf1
+    assert len(lf1.centroids) == 2
+    assert c1 in lf1.centroids
+    assert c2 in lf1.centroids
