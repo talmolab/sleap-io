@@ -2596,7 +2596,80 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     centroids = read_centroids(labels_path, videos, tracks)
     label_images, li_file = read_label_images(labels_path, videos, tracks)
 
-    # Create Labels with lazy state
+    # Build per-frame annotation dicts for lazy materialization
+    def _build_ann_by_frame(annotations, videos):
+        by_frame = {}
+        undistributed = []
+        for ann in annotations:
+            if ann.video is not None and ann.frame_idx is not None:
+                vid_idx = videos.index(ann.video) if ann.video in videos else -1
+                key = (vid_idx, ann.frame_idx)
+                by_frame.setdefault(key, []).append(ann)
+            else:
+                undistributed.append(ann)
+        return by_frame, undistributed
+
+    c_by_frame, c_undist = _build_ann_by_frame(centroids, videos)
+    b_by_frame, b_undist = _build_ann_by_frame(bboxes, videos)
+    m_by_frame, m_undist = _build_ann_by_frame(masks, videos)
+    r_by_frame, r_undist = _build_ann_by_frame(rois, videos)
+
+    lazy_store._centroid_by_frame = c_by_frame
+    lazy_store._bbox_by_frame = b_by_frame
+    lazy_store._mask_by_frame = m_by_frame
+    lazy_store._roi_by_frame = r_by_frame
+
+    lazy_store._undistributed_centroids = c_undist
+    lazy_store._undistributed_bboxes = b_undist
+    lazy_store._undistributed_masks = m_undist
+    lazy_store._undistributed_rois = r_undist
+
+    # Label images use the same pattern
+    li_by_frame: dict[tuple[int, int], list] = {}
+    li_undist: list = []
+    for li in label_images:
+        if li.video is not None and li.frame_idx is not None:
+            vid_idx = videos.index(li.video) if li.video in videos else -1
+            key = (vid_idx, li.frame_idx)
+            li_by_frame.setdefault(key, []).append(li)
+        else:
+            li_undist.append(li)
+    lazy_store._label_image_by_frame = li_by_frame
+    lazy_store._undistributed_label_images = li_undist
+
+    # Check for annotation-only frames not in /frames (e.g., old TrackMate SLPs)
+    frame_keys = set()
+    for row in frames_data:
+        frame_keys.add((int(row[1]), int(row[2])))  # (video_id, frame_idx)
+
+    all_ann_keys = set()
+    for d in (
+        lazy_store._centroid_by_frame,
+        lazy_store._bbox_by_frame,
+        lazy_store._mask_by_frame,
+        lazy_store._label_image_by_frame,
+        lazy_store._roi_by_frame,
+    ):
+        all_ann_keys.update(d.keys())
+
+    # Create non-lazy frames for annotations without matching /frames entries
+    annotation_only_frames = []
+    for vid_idx, fidx in sorted(all_ann_keys - frame_keys):
+        if 0 <= vid_idx < len(videos):
+            key = (vid_idx, fidx)
+            annotation_only_frames.append(
+                LabeledFrame(
+                    video=videos[vid_idx],
+                    frame_idx=fidx,
+                    centroids=lazy_store._centroid_by_frame.get(key, []),
+                    bboxes=lazy_store._bbox_by_frame.get(key, []),
+                    masks=lazy_store._mask_by_frame.get(key, []),
+                    label_images=lazy_store._label_image_by_frame.get(key, []),
+                    rois=lazy_store._roi_by_frame.get(key, []),
+                )
+            )
+
+    # Create Labels with lazy state (annotations are on the lazy store)
     labels = Labels(
         labeled_frames=lazy_frames,
         videos=videos,
@@ -2605,13 +2678,12 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
-        rois=rois,
-        masks=masks,
-        bboxes=bboxes,
-        centroids=centroids,
-        label_images=label_images,
         lazy_store=lazy_store,
     )
+
+    # Add annotation-only frames as supplementary (non-lazy) frames
+    if annotation_only_frames:
+        lazy_frames._supplementary.extend(annotation_only_frames)
     labels.provenance["filename"] = labels_path
 
     # Keep the HDF5 file handle alive for lazy label image data
@@ -5080,6 +5152,53 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
             bboxes = migrated_bboxes
             rois = remaining_rois
 
+    # Attach annotations to their corresponding LabeledFrames
+    frame_lookup: dict[tuple[int, int], LabeledFrame] = {}
+    for lf in labeled_frames:
+        vid_idx = videos.index(lf.video) if lf.video in videos else -1
+        frame_lookup[(vid_idx, lf.frame_idx)] = lf
+
+    def _get_or_create_frame(video, frame_idx):
+        vid_idx = videos.index(video) if video in videos else -1
+        key = (vid_idx, frame_idx)
+        if key not in frame_lookup:
+            lf = LabeledFrame(video=video, frame_idx=frame_idx)
+            labeled_frames.append(lf)
+            frame_lookup[key] = lf
+        return frame_lookup[key]
+
+    # Distribute annotations to frames, keeping undistributable ones
+    undist_centroids = []
+    for c in centroids:
+        if c.video is not None and c.frame_idx is not None:
+            _get_or_create_frame(c.video, c.frame_idx).centroids.append(c)
+        else:
+            undist_centroids.append(c)
+    undist_bboxes = []
+    for b in bboxes:
+        if b.video is not None and b.frame_idx is not None:
+            _get_or_create_frame(b.video, b.frame_idx).bboxes.append(b)
+        else:
+            undist_bboxes.append(b)
+    undist_masks = []
+    for m in masks:
+        if m.video is not None and m.frame_idx is not None:
+            _get_or_create_frame(m.video, m.frame_idx).masks.append(m)
+        else:
+            undist_masks.append(m)
+    undist_label_images = []
+    for li in label_images:
+        if li.video is not None and li.frame_idx is not None:
+            _get_or_create_frame(li.video, li.frame_idx).label_images.append(li)
+        else:
+            undist_label_images.append(li)
+    undist_rois = []
+    for r in rois:
+        if r.video is not None and r.frame_idx is not None:
+            _get_or_create_frame(r.video, r.frame_idx).rois.append(r)
+        else:
+            undist_rois.append(r)
+
     labels = Labels(
         labeled_frames=labeled_frames,
         videos=videos,
@@ -5089,11 +5208,11 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
-        rois=rois,
-        masks=masks,
-        bboxes=bboxes,
-        centroids=centroids,
-        label_images=label_images,
+        rois=undist_rois,
+        masks=undist_masks,
+        bboxes=undist_bboxes,
+        centroids=undist_centroids,
+        label_images=undist_label_images,
     )
     labels.provenance["filename"] = labels_path
 
@@ -5263,13 +5382,25 @@ def _write_labels_lazy(
         with h5py.File(labels_path, "a") as f:
             f.create_dataset("negative_frames", data=neg_data)
 
-    # Write ROIs, masks, bboxes, and label images (eagerly loaded even in lazy mode)
-    write_rois(labels_path, labels.rois, labels.videos, labels.tracks)
-    write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
-    write_bboxes(labels_path, labels.bboxes, labels.videos, labels.tracks)
-    write_centroids(labels_path, labels.centroids, labels.videos, labels.tracks)
+    # Write annotations from lazy store (per-frame dicts + undistributed)
+    all_centroids = [c for cs in lazy_store._centroid_by_frame.values() for c in cs]
+    all_centroids.extend(lazy_store._undistributed_centroids)
+    all_bboxes = [b for bs in lazy_store._bbox_by_frame.values() for b in bs]
+    all_bboxes.extend(lazy_store._undistributed_bboxes)
+    all_masks = [m for ms in lazy_store._mask_by_frame.values() for m in ms]
+    all_masks.extend(lazy_store._undistributed_masks)
+    all_rois = [r for rs in lazy_store._roi_by_frame.values() for r in rs]
+    all_rois.extend(lazy_store._undistributed_rois)
+    all_label_images = [
+        li for lis in lazy_store._label_image_by_frame.values() for li in lis
+    ]
+    all_label_images.extend(lazy_store._undistributed_label_images)
+    write_rois(labels_path, all_rois, labels.videos, labels.tracks)
+    write_masks(labels_path, all_masks, labels.videos, labels.tracks)
+    write_bboxes(labels_path, all_bboxes, labels.videos, labels.tracks)
+    write_centroids(labels_path, all_centroids, labels.videos, labels.tracks)
     # Note: instance associations are not persisted in lazy mode (no all_instances).
-    write_label_images(labels_path, labels.label_images, labels.videos, labels.tracks)
+    write_label_images(labels_path, all_label_images, labels.videos, labels.tracks)
 
 
 def write_labels(

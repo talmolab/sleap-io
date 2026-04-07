@@ -15,7 +15,12 @@ from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
+    from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.centroid import Centroid
+    from sleap_io.model.label_image import LabelImage
+    from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.matching import InstanceMatcher
+    from sleap_io.model.roi import ROI
 
 
 @define(eq=False)
@@ -29,6 +34,11 @@ class LabeledFrame:
         is_negative: If True, this frame is explicitly marked as containing no
             instances (a "negative" or background frame for training). This is
             distinct from frames that are simply empty (e.g., instances were deleted).
+        centroids: List of `Centroid` annotations for this frame.
+        bboxes: List of `BoundingBox` annotations for this frame.
+        masks: List of `SegmentationMask` annotations for this frame.
+        label_images: List of `LabelImage` annotations for this frame.
+        rois: List of `ROI` annotations for this frame.
 
     Notes:
         Instances of this class are hashed by identity, not by value. This means that
@@ -40,6 +50,11 @@ class LabeledFrame:
     frame_idx: int = field(converter=int)
     instances: list[Instance | PredictedInstance] = field(factory=list)
     is_negative: bool = field(default=False)
+    centroids: "list[Centroid]" = field(factory=list)
+    bboxes: "list[BoundingBox]" = field(factory=list)
+    masks: "list[SegmentationMask]" = field(factory=list)
+    label_images: "list[LabelImage]" = field(factory=list)
+    rois: "list[ROI]" = field(factory=list)
 
     def __len__(self) -> int:
         """Return the number of instances in the frame."""
@@ -68,13 +83,24 @@ class LabeledFrame:
 
     @property
     def is_user_labeled(self) -> bool:
-        """Return True if frame has user instances OR is explicitly negative.
+        """Return True if frame has user instances/annotations OR is negative.
 
         This property indicates whether the frame represents intentional user
-        annotation, either through labeled instances or explicit marking as a
+        annotation, either through labeled instances, user annotations
+        (centroids, bboxes, masks, label images), or explicit marking as a
         negative/background frame.
         """
-        return self.has_user_instances or self.is_negative
+        from sleap_io.model.label_image import PredictedLabelImage
+        from sleap_io.model.mask import PredictedSegmentationMask
+
+        return (
+            self.has_user_instances
+            or self.is_negative
+            or any(not c.is_predicted for c in self.centroids)
+            or any(not b.is_predicted for b in self.bboxes)
+            or any(not isinstance(m, PredictedSegmentationMask) for m in self.masks)
+            or any(not isinstance(li, PredictedLabelImage) for li in self.label_images)
+        )
 
     @property
     def predicted_instances(self) -> list[Instance]:
@@ -148,8 +174,27 @@ class LabeledFrame:
         return unused_predictions
 
     def remove_predictions(self):
-        """Remove all `PredictedInstance` objects from the frame."""
+        """Remove all predicted instances and annotations from the frame."""
+        from sleap_io.model.bbox import PredictedBoundingBox
+        from sleap_io.model.centroid import PredictedCentroid
+        from sleap_io.model.label_image import PredictedLabelImage
+        from sleap_io.model.mask import PredictedSegmentationMask
+        from sleap_io.model.roi import PredictedROI
+
         self.instances = [inst for inst in self.instances if type(inst) is Instance]
+        self.centroids = [
+            c for c in self.centroids if not isinstance(c, PredictedCentroid)
+        ]
+        self.bboxes = [
+            b for b in self.bboxes if not isinstance(b, PredictedBoundingBox)
+        ]
+        self.masks = [
+            m for m in self.masks if not isinstance(m, PredictedSegmentationMask)
+        ]
+        self.label_images = [
+            li for li in self.label_images if not isinstance(li, PredictedLabelImage)
+        ]
+        self.rois = [r for r in self.rois if not isinstance(r, PredictedROI)]
 
     def remove_empty_instances(self):
         """Remove all instances with no visible points."""
@@ -277,10 +322,13 @@ class LabeledFrame:
         conflicts = []
 
         if frame == "keep_original":
+            self._merge_annotations(other)
             return self.instances.copy(), conflicts
         elif frame == "keep_new":
+            self._merge_annotations(other)
             return other.instances.copy(), conflicts
         elif frame == "keep_both":
+            self._merge_annotations(other)
             return self.instances + other.instances, conflicts
         elif frame == "update_tracks":
             # match instances and update .track and tracking score of the old instances
@@ -290,6 +338,7 @@ class LabeledFrame:
                 self.instances[self_idx].tracking_score = other.instances[
                     other_idx
                 ].tracking_score
+            self._merge_annotations(other)
             return self.instances, conflicts
         elif frame == "replace_predictions":
             # Keep all user instances from original frame
@@ -298,6 +347,7 @@ class LabeledFrame:
             merged.extend(
                 inst for inst in other.instances if type(inst) is PredictedInstance
             )
+            self._merge_annotations(other)
             # No conflicts to report - this is a clean replacement
             return merged, []
 
@@ -370,4 +420,19 @@ class LabeledFrame:
                 if keep:
                     merged_instances.append(self_inst)
 
+        # Merge annotations from the other frame (extend, deduplicate by identity)
+        self._merge_annotations(other)
+
         return merged_instances, conflicts
+
+    def _merge_annotations(self, other: "LabeledFrame"):
+        """Merge annotation lists from another frame into this frame.
+
+        Extends centroids, bboxes, masks, label_images, and rois from the other
+        frame, skipping any that are already present (by identity).
+        """
+        for attr in ("centroids", "bboxes", "masks", "label_images", "rois"):
+            existing_ids = set(id(x) for x in getattr(self, attr))
+            for item in getattr(other, attr):
+                if id(item) not in existing_ids:
+                    getattr(self, attr).append(item)

@@ -63,6 +63,25 @@ class LazyDataStore:
         factory=set, alias="negative_frames"
     )
 
+    # Per-frame annotation lookups: (video_idx, frame_idx) -> list[annotation]
+    # These are eagerly loaded from HDF5 but attached to frames lazily.
+    _centroid_by_frame: dict = attrs.field(
+        factory=dict, repr=False, alias="centroid_by_frame"
+    )
+    _bbox_by_frame: dict = attrs.field(factory=dict, repr=False, alias="bbox_by_frame")
+    _mask_by_frame: dict = attrs.field(factory=dict, repr=False, alias="mask_by_frame")
+    _label_image_by_frame: dict = attrs.field(
+        factory=dict, repr=False, alias="label_image_by_frame"
+    )
+    _roi_by_frame: dict = attrs.field(factory=dict, repr=False, alias="roi_by_frame")
+
+    # Undistributed annotations (video=None or frame_idx=None, e.g. static ROIs)
+    _undistributed_rois: list = attrs.field(factory=list, repr=False)
+    _undistributed_masks: list = attrs.field(factory=list, repr=False)
+    _undistributed_bboxes: list = attrs.field(factory=list, repr=False)
+    _undistributed_centroids: list = attrs.field(factory=list, repr=False)
+    _undistributed_label_images: list = attrs.field(factory=list, repr=False)
+
     def __attrs_post_init__(self) -> None:
         """Validate index bounds on construction."""
         self.validate()
@@ -128,7 +147,9 @@ class LazyDataStore:
         Returns:
             A new LazyDataStore with copied arrays.
         """
-        return LazyDataStore(
+        from copy import deepcopy
+
+        new_store = LazyDataStore(
             frames_data=self.frames_data.copy(),
             instances_data=self.instances_data.copy(),
             pred_points_data=self.pred_points_data.copy(),
@@ -139,7 +160,38 @@ class LazyDataStore:
             format_id=self.format_id,
             source_path=self._source_path,
             negative_frames=self._negative_frames.copy(),
+            centroid_by_frame={
+                k: [deepcopy(c) for c in v] for k, v in self._centroid_by_frame.items()
+            },
+            bbox_by_frame={
+                k: [deepcopy(b) for b in v] for k, v in self._bbox_by_frame.items()
+            },
+            mask_by_frame={
+                k: [deepcopy(m) for m in v] for k, v in self._mask_by_frame.items()
+            },
+            label_image_by_frame={
+                k: [deepcopy(li) for li in v]
+                for k, v in self._label_image_by_frame.items()
+            },
+            roi_by_frame={
+                k: [deepcopy(r) for r in v] for k, v in self._roi_by_frame.items()
+            },
         )
+        # Copy undistributed annotations
+        new_store._undistributed_rois = [deepcopy(r) for r in self._undistributed_rois]
+        new_store._undistributed_masks = [
+            deepcopy(m) for m in self._undistributed_masks
+        ]
+        new_store._undistributed_bboxes = [
+            deepcopy(b) for b in self._undistributed_bboxes
+        ]
+        new_store._undistributed_centroids = [
+            deepcopy(c) for c in self._undistributed_centroids
+        ]
+        new_store._undistributed_label_images = [
+            deepcopy(li) for li in self._undistributed_label_images
+        ]
+        return new_store
 
     def materialize_frame(self, idx: int) -> "LabeledFrame":
         """Create a fully materialized LabeledFrame.
@@ -165,11 +217,24 @@ class LazyDataStore:
 
         is_negative = (video_id, frame_idx) in self._negative_frames
 
+        # Attach per-frame annotations from eagerly-loaded dicts
+        key = (video_id, frame_idx)
+        centroids = self._centroid_by_frame.get(key, [])
+        bboxes = self._bbox_by_frame.get(key, [])
+        masks = self._mask_by_frame.get(key, [])
+        label_images = self._label_image_by_frame.get(key, [])
+        rois = self._roi_by_frame.get(key, [])
+
         return LabeledFrame(
             video=self.videos[video_id],
             frame_idx=frame_idx,
             instances=instances,
             is_negative=is_negative,
+            centroids=centroids,
+            bboxes=bboxes,
+            masks=masks,
+            label_images=label_images,
+            rois=rois,
         )
 
     def _materialize_instance(self, idx: int) -> "Instance | PredictedInstance":
@@ -711,10 +776,11 @@ class LazyFrameList:
             store: The LazyDataStore containing raw frame data.
         """
         self._store = store
+        self._supplementary: list["LabeledFrame"] = []
 
     def __len__(self) -> int:
         """Return number of frames."""
-        return len(self._store)
+        return len(self._store) + len(self._supplementary)
 
     def __getitem__(self, idx: int | slice) -> "LabeledFrame | list[LabeledFrame]":
         """Get frame(s) by index or slice.
@@ -730,11 +796,18 @@ class LazyFrameList:
             IndexError: If index is out of range.
         """
         n = len(self)
+        n_store = len(self._store)
 
         if isinstance(idx, slice):
             # Handle slice
             indices = range(*idx.indices(n))
-            return [self._store.materialize_frame(i) for i in indices]
+            results = []
+            for i in indices:
+                if i < n_store:
+                    results.append(self._store.materialize_frame(i))
+                else:
+                    results.append(self._supplementary[i - n_store])
+            return results
 
         # Handle negative indexing
         if idx < 0:
@@ -744,12 +817,15 @@ class LazyFrameList:
         if idx < 0 or idx >= n:
             raise IndexError(f"Index {idx} out of range for {n} frames")
 
-        return self._store.materialize_frame(idx)
+        if idx < n_store:
+            return self._store.materialize_frame(idx)
+        return self._supplementary[idx - n_store]
 
     def __iter__(self) -> Iterator["LabeledFrame"]:
         """Iterate over frames, materializing each."""
-        for i in range(len(self)):
+        for i in range(len(self._store)):
             yield self._store.materialize_frame(i)
+        yield from self._supplementary
 
     def __repr__(self) -> str:
         """Return informative representation."""

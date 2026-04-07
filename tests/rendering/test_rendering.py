@@ -1581,18 +1581,24 @@ class TestRenderVideo:
             render_video(labels, show_progress=False)
 
     def test_render_video_no_skeleton_error(self):
-        """Test render_video raises error when no skeleton found."""
+        """Test render_video raises error when instances exist without skeleton.
+
+        Frames with only annotations (no instances) should not require a
+        skeleton and should not raise.
+        """
         from sleap_io.model.labeled_frame import LabeledFrame
         from sleap_io.model.labels import Labels
         from sleap_io.model.video import Video
         from sleap_io.rendering import render_video
 
         video = Video(filename="dummy.mp4")
+        # Empty frame (no instances, no annotations) — should not raise
         lf = LabeledFrame(video=video, frame_idx=0, instances=[])
         labels = Labels(videos=[video], labeled_frames=[lf])
 
-        with pytest.raises(ValueError, match="No skeleton found"):
-            render_video(labels, show_progress=False)
+        # No skeleton needed for empty frames
+        frames = render_video(labels, show_progress=False, background="black")
+        assert len(frames) == 1
 
     def test_render_video_with_background_color(self, labels_predictions):
         """Test render_video with solid background color."""
