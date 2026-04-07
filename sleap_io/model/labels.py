@@ -134,12 +134,30 @@ class Labels:
         default=None, repr=False, eq=False, init=False, hash=False
     )
 
+    # Frame index: (id(video), frame_idx) -> LabeledFrame. Rebuilt on demand.
+    _frame_index: "dict[tuple[int, int], LabeledFrame] | None" = field(
+        default=None, init=False, repr=False, eq=False
+    )
+    _frame_index_len: int = field(default=-1, init=False, repr=False, eq=False)
+
+    # Track index: (id(video), id(track)) -> list of annotations, sorted by
+    # frame_idx. Rebuilt on demand.
+    _track_index: "dict[tuple[int, int], list] | None" = field(
+        default=None, init=False, repr=False, eq=False
+    )
+    _track_index_len: int = field(default=-1, init=False, repr=False, eq=False)
+
     def __getstate__(self) -> dict:
-        """Return state for pickling/deepcopy, excluding h5py file handles."""
+        """Return state for pickling/deepcopy, excluding transient fields."""
         import attr
 
         state = {a.name: getattr(self, a.name) for a in attr.fields(type(self))}
         state["_label_image_file"] = None  # h5py cannot be pickled
+        # Indices are rebuilt on demand — exclude from serialization
+        state["_frame_index"] = None
+        state["_frame_index_len"] = -1
+        state["_track_index"] = None
+        state["_track_index_len"] = -1
         return state
 
     def __setstate__(self, state: dict) -> None:
@@ -533,6 +551,112 @@ class Labels:
             return self._lazy_flat_annotations("_roi_by_frame", "_undistributed_rois")
         return self._init_rois + [r for lf in self.labeled_frames for r in lf.rois]
 
+    def _ensure_frame_index(self) -> "dict[tuple[int, int], LabeledFrame]":
+        """Build or return the frame index, rebuilding if stale.
+
+        The index maps ``(id(video), frame_idx)`` to ``LabeledFrame``.
+        Staleness is detected by comparing ``len(labeled_frames)`` to the
+        stored length at last build time.
+
+        Returns:
+            The frame index dict.
+        """
+        import warnings
+
+        n = len(self.labeled_frames)
+        if self._frame_index is None or self._frame_index_len != n:
+            self._frame_index = {}
+            for lf in self.labeled_frames:
+                key = (id(lf.video), lf.frame_idx)
+                if key in self._frame_index:
+                    warnings.warn(
+                        f"Duplicate LabeledFrame for "
+                        f"video={lf.video!r}, frame_idx={lf.frame_idx}. "
+                        f"Using last occurrence.",
+                        stacklevel=2,
+                    )
+                self._frame_index[key] = lf
+            self._frame_index_len = n
+        return self._frame_index
+
+    def _ensure_track_index(self) -> "dict[tuple[int, int], list]":
+        """Build or return the track index, rebuilding if stale.
+
+        The index maps ``(id(video), id(track))`` to a list of all
+        annotations for that track in that video, sorted by ``frame_idx``.
+        Includes centroids, bboxes, masks, rois, and instances.
+
+        Returns:
+            The track index dict.
+        """
+        n = len(self.labeled_frames)
+        if self._track_index is None or self._track_index_len != n:
+            self._track_index = {}
+            for lf in self.labeled_frames:
+                vid = id(lf.video)
+                for ann in (
+                    *lf.centroids,
+                    *lf.bboxes,
+                    *lf.masks,
+                    *lf.rois,
+                    *lf.instances,
+                ):
+                    track = getattr(ann, "track", None)
+                    if track is not None:
+                        key = (vid, id(track))
+                        self._track_index.setdefault(key, []).append(ann)
+                for li in lf.label_images:
+                    for info in li.objects.values():
+                        if info.track is not None:
+                            key = (vid, id(info.track))
+                            self._track_index.setdefault(key, []).append(li)
+            # Sort each list by frame_idx
+            for v in self._track_index.values():
+                v.sort(key=lambda x: getattr(x, "frame_idx", 0) or 0)
+            self._track_index_len = n
+        return self._track_index
+
+    def get_frame(self, video: Video, frame_idx: int) -> "LabeledFrame | None":
+        """O(1) lookup of a LabeledFrame by video and frame index.
+
+        Args:
+            video: The video to look up.
+            frame_idx: The frame index to look up.
+
+        Returns:
+            The matching LabeledFrame, or None if not found.
+        """
+        return self._ensure_frame_index().get((id(video), frame_idx))
+
+    def get_track_annotations(self, video: Video, track: "Track") -> list:
+        """O(1) lookup of all annotations for a track in a video.
+
+        Args:
+            video: The video to look up.
+            track: The track to look up.
+
+        Returns:
+            List of annotations for this track, sorted by frame_idx.
+            Empty list if no annotations found.
+        """
+        return self._ensure_track_index().get((id(video), id(track)), [])
+
+    def reindex(self):
+        """Force rebuild of all indices on next access.
+
+        Call this after batch mutations that change frame identity (e.g.,
+        ``lf.frame_idx = new_idx``) or track assignments (e.g.,
+        ``c.track = new_track``).
+        """
+        self._invalidate_indices()
+
+    def _invalidate_indices(self):
+        """Clear all cached indices."""
+        self._frame_index = None
+        self._frame_index_len = -1
+        self._track_index = None
+        self._track_index_len = -1
+
     def _find_or_create_frame(self, video: Video, frame_idx: int) -> LabeledFrame:
         """Find existing LabeledFrame or create a new one.
 
@@ -543,11 +667,12 @@ class Labels:
         Returns:
             The existing or newly created LabeledFrame.
         """
-        for lf in self.labeled_frames:
-            if lf.video is video and lf.frame_idx == frame_idx:
-                return lf
+        lf = self.get_frame(video, frame_idx)
+        if lf is not None:
+            return lf
         lf = LabeledFrame(video=video, frame_idx=frame_idx)
         self.labeled_frames.append(lf)
+        self._invalidate_indices()
         return lf
 
     def _add_annotation(
@@ -1250,7 +1375,7 @@ class Labels:
 
             return results
 
-        # Eager path
+        # Eager path — use frame index for O(1) lookups
         if frame_idx is None:
             for lf in self.labeled_frames:
                 if lf.video == video:
@@ -1261,14 +1386,11 @@ class Labels:
             frame_idx = np.array(frame_idx).reshape(-1)
 
         for frame_ind in frame_idx:
-            result = None
-            for lf in self.labeled_frames:
-                if lf.video == video and lf.frame_idx == frame_ind:
-                    result = lf
-                    results.append(result)
-                    break
-            if result is None and return_new:
-                results.append(LabeledFrame(video=video, frame_idx=frame_ind))
+            lf = self.get_frame(video, int(frame_ind))
+            if lf is not None:
+                results.append(lf)
+            elif return_new:
+                results.append(LabeledFrame(video=video, frame_idx=int(frame_ind)))
 
         return results
 
@@ -1613,11 +1735,18 @@ class Labels:
         Returns:
             A list of matching segmentation masks.
         """
-        results = list(self.masks)
-        if video is not None:
-            results = [r for r in results if r.video is video]
-        if frame_idx is not None:
-            results = [r for r in results if r.frame_idx == frame_idx]
+        # Fast path: O(1) frame lookup when both video and frame_idx given
+        if video is not None and frame_idx is not None:
+            lf = self.get_frame(video, frame_idx)
+            results = list(lf.masks) if lf is not None else []
+        elif video is not None:
+            results = [
+                m for lf in self.labeled_frames if lf.video is video for m in lf.masks
+            ]
+        else:
+            results = list(self.masks)
+            if frame_idx is not None:
+                results = [r for r in results if r.frame_idx == frame_idx]
         if category is not None:
             results = [r for r in results if r.category == category]
         if track is not None:
@@ -1661,11 +1790,18 @@ class Labels:
             hierarchy (``UserBoundingBox`` vs ``PredictedBoundingBox``) for
             user/predicted distinction.
         """
-        results = list(self.bboxes)
-        if video is not None:
-            results = [b for b in results if b.video is video]
-        if frame_idx is not None:
-            results = [b for b in results if b.frame_idx == frame_idx]
+        # Fast path: O(1) frame lookup when both video and frame_idx given
+        if video is not None and frame_idx is not None:
+            lf = self.get_frame(video, frame_idx)
+            results = list(lf.bboxes) if lf is not None else []
+        elif video is not None:
+            results = [
+                b for lf in self.labeled_frames if lf.video is video for b in lf.bboxes
+            ]
+        else:
+            results = list(self.bboxes)
+            if frame_idx is not None:
+                results = [b for b in results if b.frame_idx == frame_idx]
         if category is not None:
             results = [b for b in results if b.category == category]
         if track is not None:
@@ -1705,11 +1841,21 @@ class Labels:
         Returns:
             A list of matching centroids.
         """
-        results = list(self.centroids)
-        if video is not None:
-            results = [c for c in results if c.video is video]
-        if frame_idx is not None:
-            results = [c for c in results if c.frame_idx == frame_idx]
+        # Fast path: O(1) frame lookup when both video and frame_idx given
+        if video is not None and frame_idx is not None:
+            lf = self.get_frame(video, frame_idx)
+            results = list(lf.centroids) if lf is not None else []
+        elif video is not None:
+            results = [
+                c
+                for lf in self.labeled_frames
+                if lf.video is video
+                for c in lf.centroids
+            ]
+        else:
+            results = list(self.centroids)
+            if frame_idx is not None:
+                results = [c for c in results if c.frame_idx == frame_idx]
         if category is not None:
             results = [c for c in results if c.category == category]
         if track is not None:
@@ -1752,11 +1898,21 @@ class Labels:
         Returns:
             A list of matching label images.
         """
-        results = list(self.label_images)
-        if video is not None:
-            results = [li for li in results if li.video is video]
-        if frame_idx is not None:
-            results = [li for li in results if li.frame_idx == frame_idx]
+        # Fast path: O(1) frame lookup when both video and frame_idx given
+        if video is not None and frame_idx is not None:
+            lf = self.get_frame(video, frame_idx)
+            results = list(lf.label_images) if lf is not None else []
+        elif video is not None:
+            results = [
+                li
+                for lf in self.labeled_frames
+                if lf.video is video
+                for li in lf.label_images
+            ]
+        else:
+            results = list(self.label_images)
+            if frame_idx is not None:
+                results = [li for li in results if li.frame_idx == frame_idx]
         if track is not None:
             results = [
                 li
@@ -2051,6 +2207,9 @@ class Labels:
 
         # Update the list of videos.
         self.videos = [video_map.get(video, video) for video in self.videos]
+
+        # Frame index is keyed by id(video), so must be rebuilt
+        self.reindex()
 
     def replace_filenames(
         self,
