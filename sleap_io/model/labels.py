@@ -940,6 +940,7 @@ class Labels:
         """
         self._check_not_lazy("append")
         self.labeled_frames.append(lf)
+        self._invalidate_indices()
 
         if update:
             if lf.video not in self.videos:
@@ -967,6 +968,7 @@ class Labels:
         """
         self._check_not_lazy("extend")
         self.labeled_frames.extend(lfs)
+        self._invalidate_indices()
 
         if update:
             for lf in lfs:
@@ -1587,6 +1589,8 @@ class Labels:
         if frames:
             self.labeled_frames = kept_frames
 
+        self._invalidate_indices()
+
     def remove_predictions(self, clean: bool = True):
         """Remove all predicted instances from the labels.
 
@@ -1675,8 +1679,6 @@ class Labels:
     ) -> list["ROI"]:
         """Query ROIs by video, frame, category, track, or instance.
 
-        Filters the `rois` list via linear scan.
-
         Args:
             video: If specified, only return ROIs for this video (identity
                 comparison).
@@ -1692,11 +1694,18 @@ class Labels:
         Returns:
             A list of matching ROIs.
         """
-        results = list(self.rois)
-        if video is not None:
-            results = [r for r in results if r.video is video]
-        if frame_idx is not None:
-            results = [r for r in results if r.frame_idx == frame_idx]
+        # Fast path: O(1) frame lookup when both video and frame_idx given
+        if video is not None and frame_idx is not None:
+            lf = self.get_frame(video, frame_idx)
+            results = list(lf.rois) if lf is not None else []
+        elif video is not None:
+            results = [
+                r for lf in self.labeled_frames if lf.video is video for r in lf.rois
+            ]
+        else:
+            results = list(self.rois)
+            if frame_idx is not None:
+                results = [r for r in results if r.frame_idx == frame_idx]
         if category is not None:
             results = [r for r in results if r.category == category]
         if track is not None:
@@ -2209,7 +2218,7 @@ class Labels:
         self.videos = [video_map.get(video, video) for video in self.videos]
 
         # Frame index is keyed by id(video), so must be rebuilt
-        self.reindex()
+        self._invalidate_indices()
 
     def replace_filenames(
         self,

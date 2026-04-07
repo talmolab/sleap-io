@@ -6666,3 +6666,143 @@ def test_get_label_images_fast_path():
 
     result = labels.get_label_images(video=video, frame_idx=99)
     assert len(result) == 0
+
+
+def test_append_invalidates_indices():
+    """append() invalidates cached indices."""
+    video = Video(filename="test.mp4", open_backend=False)
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf0], videos=[video])
+
+    # Build index
+    assert labels.get_frame(video, 0) is lf0
+    assert labels._frame_index is not None
+
+    # Append new frame — index should be invalidated
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    labels.append(lf1)
+    assert labels._frame_index is None
+
+    # Rebuilt on next access
+    assert labels.get_frame(video, 1) is lf1
+
+
+def test_extend_invalidates_indices():
+    """extend() invalidates cached indices."""
+    video = Video(filename="test.mp4", open_backend=False)
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf0], videos=[video])
+
+    # Build index
+    assert labels.get_frame(video, 0) is lf0
+
+    # Extend — index should be invalidated
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    lf2 = LabeledFrame(video=video, frame_idx=2)
+    labels.extend([lf1, lf2])
+    assert labels._frame_index is None
+
+    # Rebuilt on next access
+    assert labels.get_frame(video, 2) is lf2
+
+
+def test_clean_invalidates_indices():
+    """clean() invalidates cached indices."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton)
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    lf1 = LabeledFrame(video=video, frame_idx=1)  # Empty, will be removed
+    labels = Labels(labeled_frames=[lf0, lf1], videos=[video], skeletons=[skeleton])
+
+    # Build index
+    assert labels.get_frame(video, 1) is lf1
+
+    # Clean removes empty frame and invalidates index
+    labels.clean()
+    assert labels._frame_index is None
+    assert labels.get_frame(video, 1) is None
+    assert labels.get_frame(video, 0) is lf0
+
+
+def test_clean_preserves_frames_with_any_annotations():
+    """clean() preserves frames with any annotation type."""
+    video = Video(filename="test.mp4", open_backend=False)
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=1)
+    mask_data = np.zeros((10, 10), dtype=bool)
+    mask_data[2:8, 2:8] = True
+    m = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=2)
+    roi = UserROI(geometry=box(0, 0, 10, 10), video=video, frame_idx=3)
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(category="cell")},
+        video=video,
+        frame_idx=4,
+    )
+
+    labels = Labels(
+        centroids=[c], bboxes=[b], masks=[m], rois=[roi], label_images=[li],
+        videos=[video],
+    )
+
+    # All 5 frames exist (one per annotation type), none have instances
+    assert len(labels.labeled_frames) == 5
+
+    # Clean should preserve all — each has at least one annotation
+    labels.clean()
+    assert len(labels.labeled_frames) == 5
+
+    # Verify each frame's annotations survived
+    for lf in labels.labeled_frames:
+        has_any = (
+            lf.centroids or lf.bboxes or lf.masks or lf.label_images or lf.rois
+        )
+        assert has_any, f"Frame {lf.frame_idx} lost its annotations"
+
+
+def test_clean_removes_truly_empty_frames_only():
+    """clean() removes empty frames but keeps annotation-only and instance frames."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton)
+
+    # Frame 0: has instance
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    # Frame 1: has centroid only
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=1)
+    # Frame 2: truly empty
+    lf2 = LabeledFrame(video=video, frame_idx=2)
+
+    labels = Labels(
+        labeled_frames=[lf0, lf2], centroids=[c], videos=[video], skeletons=[skeleton]
+    )
+    assert len(labels.labeled_frames) == 3
+
+    labels.clean()
+
+    # Only the truly empty frame (2) should be removed
+    assert len(labels.labeled_frames) == 2
+    frame_idxs = {lf.frame_idx for lf in labels.labeled_frames}
+    assert frame_idxs == {0, 1}
+
+
+def test_get_rois_fast_path():
+    """get_rois uses O(1) frame lookup when video+frame_idx provided."""
+    video = Video(filename="test.mp4", open_backend=False)
+    roi1 = UserROI(geometry=box(0, 0, 10, 10), video=video, frame_idx=0)
+    roi2 = UserROI(geometry=box(5, 5, 15, 15), video=video, frame_idx=1)
+    labels = Labels(rois=[roi1, roi2], videos=[video])
+
+    # Fast path with video+frame_idx
+    result = labels.get_rois(video=video, frame_idx=0)
+    assert len(result) == 1
+    assert result[0] is roi1
+
+    # Video only: iterates frames for that video
+    result = labels.get_rois(video=video)
+    assert len(result) == 2
+
+    # No match
+    result = labels.get_rois(video=video, frame_idx=99)
+    assert len(result) == 0
