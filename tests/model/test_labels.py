@@ -6869,34 +6869,54 @@ def test_merge_remaps_annotation_tracks():
 
 
 def test_merge_remaps_annotations_existing_frame():
-    """merge() remaps annotation tracks when merging into existing frame."""
-    video = Video(filename="v.mp4", open_backend=False)
+    """merge() remaps annotation tracks when merging into existing frame.
+
+    Also covers the False branch of video remapping: self_frame already has
+    a centroid with video_self, which is NOT a key in video_map. Only the
+    incoming centroid (with video_other) should have its video remapped.
+    """
+    video_self = Video(filename="v.mp4", open_backend=False)
+    video_other = Video(filename="v.mp4", open_backend=False)
     skeleton = Skeleton(["A"])
     track_self = Track(name="animal")
     track_other = Track(name="animal")
 
-    # Self labels: frame 0 with instance
+    # Self labels: frame 0 with instance + pre-existing centroid
     inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skeleton)
-    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    c_self = UserCentroid(x=0.0, y=0.0, video=video_self, frame_idx=0, track=track_self)
+    lf0 = LabeledFrame(
+        video=video_self, frame_idx=0, instances=[inst], centroids=[c_self]
+    )
     self_labels = Labels(
-        labeled_frames=[lf0], videos=[video], skeletons=[skeleton], tracks=[track_self]
+        labeled_frames=[lf0],
+        videos=[video_self],
+        skeletons=[skeleton],
+        tracks=[track_self],
     )
 
-    # Other labels: same frame with centroid
-    c = UserCentroid(x=5.0, y=10.0, video=video, frame_idx=0, track=track_other)
-    other_lf = LabeledFrame(video=video, frame_idx=0, centroids=[c])
+    # Other labels: same frame with centroid referencing different video/track
+    c_other = UserCentroid(
+        x=5.0, y=10.0, video=video_other, frame_idx=0, track=track_other
+    )
+    other_lf = LabeledFrame(video=video_other, frame_idx=0, centroids=[c_other])
     other_labels = Labels(
         labeled_frames=[other_lf],
-        videos=[video],
+        videos=[video_other],
         skeletons=[skeleton],
         tracks=[track_other],
     )
 
     self_labels.merge(other_labels)
 
-    # Centroid should have been merged into existing frame with remapped track
-    assert len(lf0.centroids) == 1
-    assert lf0.centroids[0].track is track_self
+    # Both centroids should be on the frame
+    assert len(lf0.centroids) == 2
+    # Self's centroid: video unchanged (not in video_map), track unchanged
+    assert c_self.video is video_self
+    assert c_self.track is track_self
+    # Other's centroid: video remapped to video_self, track remapped to track_self
+    merged_other = [c for c in lf0.centroids if c is not c_self][0]
+    assert merged_other.video is video_self
+    assert merged_other.track is track_self
 
 
 def test_merge_remaps_label_image_tracks():
@@ -7046,3 +7066,136 @@ def test_remove_predictions_clears_predicted_annotations():
     assert type(lf.centroids[0]) is UserCentroid
     assert len(lf.bboxes) == 1
     assert type(lf.bboxes[0]) is UserBoundingBox
+
+
+def test_merge_remaps_annotations_with_different_videos():
+    """merge() remaps video references on annotations when videos differ.
+
+    Covers the existing-frame path where self already has label_images, exercising
+    the False branch of `li.video in video_map` (self's label_image video is NOT
+    in video_map, only other's is).
+    """
+    video_self = Video(filename="v.mp4", open_backend=False)
+    video_other = Video(filename="v.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    track = Track(name="t")
+    track_other = Track(name="t")
+
+    # Self labels: frame 0 with instance + label_image
+    inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skeleton)
+    li_self = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(track=track, category="cell")},
+        video=video_self,
+        frame_idx=0,
+    )
+    lf0 = LabeledFrame(
+        video=video_self, frame_idx=0, instances=[inst], label_images=[li_self]
+    )
+    self_labels = Labels(
+        labeled_frames=[lf0],
+        videos=[video_self],
+        skeletons=[skeleton],
+        tracks=[track],
+    )
+
+    # Other labels: same frame with label_image referencing other video/track
+    li_other = UserLabelImage(
+        data=np.array([[0, 2]], dtype=np.int32),
+        objects={2: LabelImage.Info(track=track_other, category="neuron")},
+        video=video_other,
+        frame_idx=0,
+    )
+    other_lf = LabeledFrame(video=video_other, frame_idx=0, label_images=[li_other])
+    other_labels = Labels(
+        labeled_frames=[other_lf],
+        videos=[video_other],
+        skeletons=[skeleton],
+        tracks=[track_other],
+    )
+
+    self_labels.merge(other_labels)
+
+    # Both label_images should be on the frame
+    assert len(lf0.label_images) == 2
+    # Self's label_image: video unchanged (not in video_map)
+    assert li_self.video is video_self
+    assert li_self.objects[1].track is track
+    # Other's label_image: video remapped, track remapped
+    merged_li = [li for li in lf0.label_images if li is not li_self][0]
+    assert merged_li.video is video_self
+    assert merged_li.objects[2].track is track
+
+
+def test_merge_annotation_trackless_and_label_images_with_different_video():
+    """merge() handles trackless annotations and label_images with video remapping."""
+    video_self = Video(filename="base.mp4", open_backend=False)
+    video_other = Video(filename="base.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+
+    self_labels = Labels(videos=[video_self], skeletons=[skeleton])
+
+    # Trackless centroid + label_image with no track on info
+    c = UserCentroid(x=1.0, y=2.0, video=video_other, frame_idx=0)
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(category="cell")},
+        video=video_other,
+        frame_idx=0,
+    )
+    lf = LabeledFrame(video=video_other, frame_idx=0, centroids=[c], label_images=[li])
+    other_labels = Labels(
+        labeled_frames=[lf], videos=[video_other], skeletons=[skeleton]
+    )
+
+    self_labels.merge(other_labels)
+
+    merged_lf = self_labels.find(video_self, 0)[0]
+    # Trackless centroid should survive with track=None
+    assert len(merged_lf.centroids) == 1
+    assert merged_lf.centroids[0].track is None
+    # Video should be remapped to video_self (matched by basename)
+    assert merged_lf.centroids[0].video is video_self
+    # Label image should be merged with video remapped
+    assert len(merged_lf.label_images) == 1
+    assert merged_lf.label_images[0].video is video_self
+    # Label image info track should remain None
+    assert merged_lf.label_images[0].objects[1].track is None
+
+
+def test_clean_removes_label_image_orphaned_tracks():
+    """clean() removes label_image object entries with orphaned tracks."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track_keep = Track(name="keep")
+    track_remove = Track(name="remove")
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skeleton, track=track_keep
+    )
+
+    li = UserLabelImage(
+        data=np.array([[0, 1, 2]], dtype=np.int32),
+        objects={
+            1: LabelImage.Info(track=track_keep, category="cell"),
+            2: LabelImage.Info(track=track_remove, category="cell"),
+        },
+        video=video,
+        frame_idx=0,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst], label_images=[li])
+
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_keep, track_remove],
+    )
+
+    # Remove track_remove externally, then clean
+    labels.tracks.remove(track_remove)
+    labels.clean()
+
+    # Only the object entry with track_keep should remain
+    assert len(lf.label_images[0].objects) == 1
+    assert 1 in lf.label_images[0].objects
+    assert lf.label_images[0].objects[1].track is track_keep
