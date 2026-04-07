@@ -1379,13 +1379,6 @@ def render_video(
     if not render_indices and _has_video_centroids:
         # Derive frame indices from frames that have centroids
         render_indices = sorted(lf.frame_idx for lf in labeled_frames if lf.centroids)
-        if not render_indices and labels is not None:
-            # Fallback: check all frames for this video
-            render_indices = sorted(
-                lf.frame_idx
-                for lf in labels.labeled_frames
-                if lf.video is target_video and lf.centroids
-            )
 
     if not render_indices:
         raise ValueError("No frames to render")

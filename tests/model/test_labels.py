@@ -7199,3 +7199,34 @@ def test_clean_removes_label_image_orphaned_tracks():
     assert len(lf.label_images[0].objects) == 1
     assert 1 in lf.label_images[0].objects
     assert lf.label_images[0].objects[1].track is track_keep
+
+
+def test_clean_orphaned_annotations_without_frame_removal():
+    """clean(frames=False, tracks=True) removes orphaned annotations."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track_keep = Track(name="keep")
+    track_remove = Track(name="remove")
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skeleton, track=track_keep
+    )
+
+    c_keep = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=track_keep)
+    c_remove = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0, track=track_remove)
+    lf = LabeledFrame(
+        video=video, frame_idx=0, instances=[inst], centroids=[c_keep, c_remove]
+    )
+
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_keep, track_remove],
+    )
+
+    # Remove track, then clean with frames=False
+    labels.tracks.remove(track_remove)
+    labels.clean(frames=False, tracks=True)
+
+    assert len(lf.centroids) == 1
+    assert lf.centroids[0].track is track_keep
