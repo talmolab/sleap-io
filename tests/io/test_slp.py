@@ -7585,3 +7585,165 @@ def test_slp_centroid_low_level(tmp_path):
     assert loaded[0].x == pytest.approx(1.0)
     assert loaded[0].y == pytest.approx(2.0)
     assert loaded[0].frame_idx == 5
+
+
+def test_slp_lazy_centroid_only_roundtrip(tmp_path):
+    """Lazy load of centroid-only SLP (annotation-only frames)."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(["A"])
+    track = Track(name="t1")
+    centroids = [
+        PredictedCentroid(
+            x=float(i),
+            y=float(i * 2),
+            video=video,
+            frame_idx=i,
+            track=track,
+            score=0.9,
+        )
+        for i in range(3)
+    ]
+    labels = Labels(
+        centroids=centroids, videos=[video], skeletons=[skeleton], tracks=[track]
+    )
+
+    path = str(tmp_path / "centroids.slp")
+    save_slp(labels, path)
+
+    # Lazy load — centroids go to supplementary frames or per-frame dicts
+    lazy = load_slp(path, lazy=True)
+    assert len(lazy.centroids) == 3
+    assert len(lazy.labeled_frames) >= 3
+
+    # Accessing by index works (including supplementary)
+    for i in range(len(lazy.labeled_frames)):
+        lf = lazy.labeled_frames[i]
+        assert lf is not None
+
+    # Slice access works
+    all_frames = lazy.labeled_frames[:]
+    assert len(all_frames) >= 3
+
+    # Save lazy and reload eagerly
+    path2 = str(tmp_path / "centroids2.slp")
+    save_slp(lazy, path2)
+    loaded = load_slp(path2)
+    assert len(loaded.centroids) == 3
+
+
+def test_slp_lazy_annotations_on_materialized_frames(tmp_path):
+    """Lazy materialize_frame attaches annotations from store dicts."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(["A"])
+    track = Track(name="t1")
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton, track=track)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=track)
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0)
+    mask_data = np.zeros((10, 10), dtype=bool)
+    mask_data[2:8, 2:8] = True
+    m = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+
+    labels = Labels(labeled_frames=[lf], centroids=[c], bboxes=[b], masks=[m])
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+
+    # Lazy load — annotations in per-frame dicts
+    lazy = load_slp(path, lazy=True)
+
+    # Access frame 0 — should have annotations attached
+    lf0 = lazy.labeled_frames[0]
+    assert len(lf0.centroids) == 1
+    assert len(lf0.bboxes) == 1
+    assert len(lf0.masks) == 1
+    assert len(lf0.instances) == 1
+
+
+def test_slp_lazy_supplementary_frame_indexing(tmp_path):
+    """Supplementary frames accessible by index and slice in LazyFrameList."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(["A"])
+    track = Track(name="t1")
+
+    # Create centroid-only labels (creates annotation-only frames)
+    centroids = [
+        PredictedCentroid(
+            x=float(i),
+            y=float(i),
+            video=video,
+            frame_idx=i,
+            track=track,
+            score=0.9,
+        )
+        for i in range(3)
+    ]
+    labels = Labels(
+        centroids=centroids, videos=[video], skeletons=[skeleton], tracks=[track]
+    )
+
+    path = str(tmp_path / "supp.slp")
+    save_slp(labels, path)
+    lazy = load_slp(path, lazy=True)
+
+    n = len(lazy.labeled_frames)
+    assert n >= 3
+
+    # Test individual index access (covers supplementary path)
+    for i in range(n):
+        lf = lazy.labeled_frames[i]
+        assert lf.video is not None
+
+    # Test negative index
+    last = lazy.labeled_frames[-1]
+    assert last is not None
+
+    # Test slice access (covers supplementary path in slice)
+    sliced = lazy.labeled_frames[0:n]
+    assert len(sliced) == n
+
+
+def test_slp_lazy_old_format_annotation_only_frames(tmp_path):
+    """Lazy load handles annotations not in /frames (old SLP format)."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(["A"])
+    track = Track(name="t1")
+
+    # Create SLP with instances on frame 0 + centroids on frame 1 (no instances)
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton, track=track)
+    c0 = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=track)
+    c1 = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=1, track=track)
+
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst])],
+        centroids=[c0, c1],
+    )
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+
+    # Remove frame 1 from /frames to simulate old format (annotation-only frame
+    # not in /frames)
+    with h5py.File(path, "a") as f:
+        frames = f["frames"][:]
+        # Keep only frame 0 (the one with instances)
+        new_frames = frames[frames["frame_idx"] == 0]
+        del f["frames"]
+        f.create_dataset("frames", data=new_frames)
+
+    # Lazy load — frame 1 centroid should create a supplementary frame
+    lazy = load_slp(path, lazy=True)
+    n = len(lazy.labeled_frames)
+
+    # Should have store frames + supplementary frames
+    assert n >= 2
+
+    # All centroids accessible
+    assert len(lazy.centroids) == 2
+
+    # Individual index access (covers supplementary path line 822)
+    for i in range(n):
+        lf = lazy.labeled_frames[i]
+        assert lf.video is not None
+
+    # Slice access (covers supplementary path line 809)
+    all_frames = lazy.labeled_frames[0:n]
+    assert len(all_frames) == n

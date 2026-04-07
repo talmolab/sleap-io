@@ -1216,3 +1216,22 @@ def test_labeled_frame_merge_annotations():
     assert len(lf1.centroids) == 2
     assert c1 in lf1.centroids
     assert c2 in lf1.centroids
+
+
+def test_labeled_frame_merge_annotations_dedup():
+    """_merge_annotations skips duplicates by identity."""
+    from sleap_io.model.centroid import UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    shared = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    unique = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[shared])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[shared, unique])
+
+    lf1._merge_annotations(lf2)
+
+    # shared should not be duplicated (same identity)
+    assert len(lf1.centroids) == 2
+    assert lf1.centroids.count(shared) == 1
+    assert unique in lf1.centroids

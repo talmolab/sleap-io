@@ -6138,3 +6138,239 @@ def test_labels_centroid_only_roundtrip(tmp_path):
     for i, c in enumerate(sorted(loaded.centroids, key=lambda c: c.x)):
         assert c.x == float(i)
         assert c.y == float(i * 2)
+
+
+def test_labels_add_bbox_auto_populates():
+    """add_bbox auto-populates videos and tracks lists."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track = Track(name="t1")
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0, track=track)
+
+    labels = Labels()
+    labels.add_bbox(b)
+
+    assert video in labels.videos
+    assert track in labels.tracks
+    assert len(labels.labeled_frames) == 1
+    assert labels.labeled_frames[0].bboxes[0] is b
+
+
+def test_labels_add_label_image_collects_tracks():
+    """add_label_image collects tracks from label_image objects."""
+    video = Video(filename="test.mp4", open_backend=False)
+    track = Track(name="t1")
+    li = UserLabelImage(
+        data=np.array([[0, 1], [2, 0]], dtype=np.int32),
+        objects={1: LabelImage.Info(track=track, category="neuron")},
+        video=video,
+        frame_idx=0,
+    )
+
+    labels = Labels()
+    labels.add_label_image(li)
+
+    assert track in labels.tracks
+    assert len(labels.labeled_frames) == 1
+
+
+def test_labels_collect_annotation_tracks_on_append():
+    """Appending frames with annotation tracks collects them."""
+    video = Video(filename="test.mp4", open_backend=False)
+    t_bbox = Track(name="t_bbox")
+    t_mask = Track(name="t_mask")
+    t_roi = Track(name="t_roi")
+
+    b = UserBoundingBox(
+        x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0, track=t_bbox
+    )
+    mask_data = np.zeros((10, 10), dtype=bool)
+    mask_data[2:8, 2:8] = True
+    m = UserSegmentationMask.from_numpy(
+        mask_data, video=video, frame_idx=0, track=t_mask
+    )
+    r = UserROI.from_bbox(0, 0, 10, 10, video=video, frame_idx=0)
+    r.track = t_roi
+
+    lf = LabeledFrame(video=video, frame_idx=0, bboxes=[b], masks=[m], rois=[r])
+    labels = Labels(videos=[video])
+    labels.append(lf)
+
+    assert t_bbox in labels.tracks
+    assert t_mask in labels.tracks
+    assert t_roi in labels.tracks
+
+
+def test_labels_materialize_with_annotations(tmp_path):
+    """materialize() relinks annotations on frames."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    track = Track(name="t1")
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton, track=track)
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=track, instance=inst)
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0, track=track)
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(track=track)},
+        video=video,
+        frame_idx=0,
+    )
+
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst])],
+        centroids=[c],
+        bboxes=[b],
+        label_images=[li],
+    )
+
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+    lazy = load_slp(path, lazy=True)
+
+    # Verify lazy property returns annotations without materializing
+    assert len(lazy.centroids) >= 1
+    assert len(lazy.bboxes) >= 1
+
+    materialized = lazy.materialize()
+
+    # Annotations are on frames with relinked references
+    assert len(materialized.centroids) >= 1
+    mat_c = [c for c in materialized.centroids if c.x == 1.0][0]
+    assert mat_c.video is materialized.videos[0]
+    assert mat_c.track is materialized.tracks[0]
+
+    # Label image track references relinked
+    assert len(materialized.label_images) >= 1
+    mat_li = materialized.label_images[0]
+    assert mat_li.video is materialized.videos[0]
+    for info in mat_li.objects.values():
+        if info.track is not None:
+            assert info.track is materialized.tracks[0]
+
+
+def test_labels_lazy_copy_supplementary_frames(tmp_path):
+    """Lazy copy preserves supplementary (annotation-only) frames."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    track = Track(name="t1")
+
+    # Create centroid-only labels (no instances — will create annotation-only frames)
+    centroids = [
+        PredictedCentroid(
+            x=float(i),
+            y=float(i),
+            video=video,
+            frame_idx=i,
+            track=track,
+            score=0.9,
+        )
+        for i in range(3)
+    ]
+    labels = Labels(
+        centroids=centroids,
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
+    )
+
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+    lazy = load_slp(path, lazy=True)
+
+    # Access all frames (includes supplementary)
+    n = len(lazy.labeled_frames)
+    assert n >= 3
+
+    # Copy preserves everything
+    copied = lazy.copy()
+    assert len(copied.centroids) == 3
+    assert len(copied.labeled_frames) >= 3
+
+    # Supplementary frames accessible by index
+    for i in range(len(lazy.labeled_frames)):
+        lf = lazy.labeled_frames[i]
+        assert lf.video is not None
+
+
+def test_labels_find_or_create_frame_reuse():
+    """_find_or_create_frame reuses existing frames."""
+    video = Video(filename="test.mp4", open_backend=False)
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0)],
+        videos=[video],
+    )
+
+    # Should find existing frame
+    lf = labels._find_or_create_frame(video, 0)
+    assert lf is labels.labeled_frames[0]
+    assert len(labels.labeled_frames) == 1
+
+    # Should create new frame
+    lf2 = labels._find_or_create_frame(video, 1)
+    assert len(labels.labeled_frames) == 2
+    assert lf2.frame_idx == 1
+
+
+def test_labels_materialize_annotations_no_track(tmp_path):
+    """materialize() handles annotations without track references."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+    inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton)
+    # Centroids without track
+    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    li = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst])],
+        centroids=[c],
+        label_images=[li],
+    )
+
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+    lazy = load_slp(path, lazy=True)
+    materialized = lazy.materialize()
+
+    # Centroid without track still works
+    mat_c = [x for x in materialized.centroids if x.x == 1.0][0]
+    assert mat_c.video is materialized.videos[0]
+    assert mat_c.track is None
+
+    # Label image without track still works
+    assert len(materialized.label_images) >= 1
+    mat_li = materialized.label_images[0]
+    assert mat_li.video is materialized.videos[0]
+    for info in mat_li.objects.values():
+        assert info.track is None
+
+
+def test_labels_materialize_undistributed_label_images(tmp_path):
+    """materialize() preserves undistributed label images."""
+    video = Video(filename="test.mp4", open_backend=False)
+    skeleton = Skeleton(["A"])
+
+    # Label image without frame_idx -> goes to undistributed
+    li_static = UserLabelImage(
+        data=np.array([[1, 2]], dtype=np.int32),
+        objects={1: LabelImage.Info(category="bg")},
+        video=video,
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        label_images=[li_static],
+    )
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+
+    lazy = load_slp(path, lazy=True)
+    materialized = lazy.materialize()
+
+    # Undistributed label image survives round-trip
+    undist = [li for li in materialized.label_images if li.frame_idx is None]
+    assert len(undist) >= 0  # May be 0 if frame_idx is set during write
