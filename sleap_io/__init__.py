@@ -27,6 +27,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "load_labelstudio",
             "load_leap",
             "load_nwb",
+            "load_trackmate",
             "load_skeleton",
             "load_slp",
             "load_ultralytics",
