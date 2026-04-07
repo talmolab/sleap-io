@@ -1238,3 +1238,82 @@ def test_labeled_frame_merge_annotations_dedup():
     # unique is copied, not the same object
     assert lf1.centroids[1] is not unique
     assert lf1.centroids[1].x == unique.x and lf1.centroids[1].y == unique.y
+
+
+def test_merge_annotations_keep_original():
+    """keep_original strategy keeps self's annotations and discards other's."""
+    from sleap_io.model.centroid import UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    self_c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    other_c = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_c])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_c])
+
+    lf1._merge_annotations(lf2, strategy="keep_original")
+
+    assert len(lf1.centroids) == 1
+    assert lf1.centroids[0] is self_c
+
+
+def test_merge_annotations_keep_new():
+    """keep_new strategy replaces self's annotations with copies of other's."""
+    from sleap_io.model.centroid import UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    self_c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    other_c = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_c])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_c])
+
+    lf1._merge_annotations(lf2, strategy="keep_new")
+
+    assert len(lf1.centroids) == 1
+    assert lf1.centroids[0] is not other_c  # copied, not same object
+    assert lf1.centroids[0].x == 3.0
+    assert lf1.centroids[0].y == 4.0
+
+
+def test_merge_annotations_replace_predictions():
+    """replace_predictions keeps user from self, replaces predicted with other's."""
+    from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    self_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    self_pred = PredictedCentroid(x=5.0, y=6.0, video=video, frame_idx=0, score=0.9)
+    other_pred = PredictedCentroid(x=7.0, y=8.0, video=video, frame_idx=0, score=0.8)
+    other_user = UserCentroid(x=9.0, y=10.0, video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_user, self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_pred, other_user])
+
+    lf1._merge_annotations(lf2, strategy="replace_predictions")
+
+    # self_user kept, self_pred removed, other_pred added (copied), other_user ignored
+    assert len(lf1.centroids) == 2
+    assert lf1.centroids[0] is self_user
+    assert lf1.centroids[1] is not other_pred
+    assert lf1.centroids[1].x == 7.0
+    assert lf1.centroids[1].is_predicted
+
+
+def test_merge_annotations_auto():
+    """Auto strategy behaves the same as replace_predictions for annotations."""
+    from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    self_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    self_pred = PredictedCentroid(x=5.0, y=6.0, video=video, frame_idx=0, score=0.9)
+    other_pred = PredictedCentroid(x=7.0, y=8.0, video=video, frame_idx=0, score=0.8)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_user, self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_pred])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    assert len(lf1.centroids) == 2
+    assert lf1.centroids[0] is self_user
+    assert lf1.centroids[1].x == 7.0
+    assert lf1.centroids[1].is_predicted

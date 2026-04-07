@@ -7330,3 +7330,96 @@ def test_merge_does_not_corrupt_source_annotations():
     # Source centroid in labels_b must still reference the original video/track
     assert lf_b.centroids[0].video is video_b
     assert lf_b.centroids[0].track is track_b
+
+
+def test_labels_merge_keep_original_discards_other_annotations():
+    """Labels.merge with frame='keep_original' does not add other's centroids."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="shared.mp4", open_backend=False)
+    track_a = Track(name="track_a")
+    track_b = Track(name="track_b")
+
+    inst_a = Instance([[0, 0], [1, 1]], skeleton=skel, track=track_a)
+    inst_b = Instance([[2, 2], [3, 3]], skeleton=skel, track=track_b)
+    c_a = UserCentroid(x=0.5, y=0.5, video=video, frame_idx=0, track=track_a)
+    c_b = UserCentroid(x=2.5, y=2.5, video=video, frame_idx=0, track=track_b)
+
+    labels_a = Labels(
+        skeletons=[skel],
+        videos=[video],
+        tracks=[track_a],
+        labeled_frames=[
+            LabeledFrame(video=video, frame_idx=0, instances=[inst_a], centroids=[c_a])
+        ],
+    )
+    labels_b = Labels(
+        skeletons=[skel],
+        videos=[video],
+        tracks=[track_b],
+        labeled_frames=[
+            LabeledFrame(video=video, frame_idx=0, instances=[inst_b], centroids=[c_b])
+        ],
+    )
+
+    labels_a.merge(labels_b, frame="keep_original")
+
+    # Only the original centroid should remain
+    merged_lf = labels_a.labeled_frames[0]
+    assert len(merged_lf.centroids) == 1
+    assert merged_lf.centroids[0].x == 0.5
+
+
+def test_labels_merge_replace_predictions_filters_annotations():
+    """Labels.merge with frame='replace_predictions' keeps user, replaces predicted."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="shared.mp4", open_backend=False)
+    track = Track(name="t")
+
+    inst_user = Instance([[0, 0], [1, 1]], skeleton=skel, track=track)
+    inst_pred = PredictedInstance([[4, 4], [5, 5]], skeleton=skel, track=track)
+    c_user = UserCentroid(x=0.5, y=0.5, video=video, frame_idx=0, track=track)
+    c_pred_self = PredictedCentroid(
+        x=4.5, y=4.5, video=video, frame_idx=0, track=track, score=0.9
+    )
+    c_pred_other = PredictedCentroid(
+        x=9.0, y=9.0, video=video, frame_idx=0, track=track, score=0.7
+    )
+
+    labels_a = Labels(
+        skeletons=[skel],
+        videos=[video],
+        tracks=[track],
+        labeled_frames=[
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[inst_user],
+                centroids=[c_user, c_pred_self],
+            )
+        ],
+    )
+    labels_b = Labels(
+        skeletons=[skel],
+        videos=[video],
+        tracks=[track],
+        labeled_frames=[
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[inst_pred],
+                centroids=[c_pred_other],
+            )
+        ],
+    )
+
+    labels_a.merge(labels_b, frame="replace_predictions")
+
+    merged_lf = labels_a.labeled_frames[0]
+    # User centroid kept, self's predicted removed, other's predicted added
+    assert len(merged_lf.centroids) == 2
+    user_centroids = [c for c in merged_lf.centroids if not c.is_predicted]
+    pred_centroids = [c for c in merged_lf.centroids if c.is_predicted]
+    assert len(user_centroids) == 1
+    assert user_centroids[0].x == 0.5
+    assert len(pred_centroids) == 1
+    assert pred_centroids[0].x == 9.0

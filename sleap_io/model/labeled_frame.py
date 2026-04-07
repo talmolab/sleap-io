@@ -323,13 +323,13 @@ class LabeledFrame:
         conflicts = []
 
         if frame == "keep_original":
-            self._merge_annotations(other)
+            self._merge_annotations(other, strategy="keep_original")
             return self.instances.copy(), conflicts
         elif frame == "keep_new":
-            self._merge_annotations(other)
+            self._merge_annotations(other, strategy="keep_new")
             return other.instances.copy(), conflicts
         elif frame == "keep_both":
-            self._merge_annotations(other)
+            self._merge_annotations(other, strategy="keep_both")
             return self.instances + other.instances, conflicts
         elif frame == "update_tracks":
             # match instances and update .track and tracking score of the old instances
@@ -339,7 +339,7 @@ class LabeledFrame:
                 self.instances[self_idx].tracking_score = other.instances[
                     other_idx
                 ].tracking_score
-            self._merge_annotations(other)
+            self._merge_annotations(other, strategy="update_tracks")
             return self.instances, conflicts
         elif frame == "replace_predictions":
             # Keep all user instances from original frame
@@ -348,7 +348,7 @@ class LabeledFrame:
             merged.extend(
                 inst for inst in other.instances if type(inst) is PredictedInstance
             )
-            self._merge_annotations(other)
+            self._merge_annotations(other, strategy="replace_predictions")
             # No conflicts to report - this is a clean replacement
             return merged, []
 
@@ -422,19 +422,50 @@ class LabeledFrame:
                     merged_instances.append(self_inst)
 
         # Merge annotations from the other frame (extend, deduplicate by identity)
-        self._merge_annotations(other)
+        self._merge_annotations(other, strategy="auto")
 
         return merged_instances, conflicts
 
-    def _merge_annotations(self, other: "LabeledFrame"):
+    def _merge_annotations(self, other: "LabeledFrame", strategy: str = "keep_both"):
         """Merge annotation lists from another frame into this frame.
 
         Shallow-copies annotations from the other frame to avoid mutating the
         source when references are later remapped. Video and track references
         are preserved so that ``_remap_frame_annotations`` can find them in
         the mapping dicts.
+
+        Args:
+            other: The frame to merge annotations from.
+            strategy: The merge strategy, matching the ``frame`` parameter of
+                ``merge()``. Controls which annotations are kept:
+
+                - ``"keep_original"`` / ``"update_tracks"``: Keep self only.
+                - ``"keep_new"``: Replace with other's annotations.
+                - ``"keep_both"``: Keep self + add other's (default).
+                - ``"replace_predictions"`` / ``"auto"``: Keep user from self,
+                  replace predicted with other's predicted.
         """
-        for attr in ("centroids", "bboxes", "masks", "label_images", "rois"):
+        attrs = ("centroids", "bboxes", "masks", "label_images", "rois")
+
+        if strategy in ("keep_original", "update_tracks"):
+            return
+
+        if strategy == "keep_new":
+            for attr in attrs:
+                setattr(self, attr, [copy(item) for item in getattr(other, attr)])
+            return
+
+        if strategy in ("replace_predictions", "auto"):
+            for attr in attrs:
+                kept = [a for a in getattr(self, attr) if not a.is_predicted]
+                for item in getattr(other, attr):
+                    if item.is_predicted:
+                        kept.append(copy(item))
+                setattr(self, attr, kept)
+            return
+
+        # "keep_both" (default)
+        for attr in attrs:
             existing_ids = set(id(x) for x in getattr(self, attr))
             for item in getattr(other, attr):
                 if id(item) not in existing_ids:
