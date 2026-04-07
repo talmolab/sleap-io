@@ -3237,3 +3237,169 @@ def test_render_video_crop_with_predicted_label_image_overlay():
     assert frames[0].shape == (30, 30, 3)
     # Label region (20:40, 20:40) maps to (10:30, 10:30) in cropped coords
     assert not np.all(frames[0][10:30, 10:30] == 0)
+
+
+# --- Centroid rendering tests ---
+
+
+def test_draw_centroids_basic():
+    """draw_centroids draws filled circles on the image."""
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.rendering.overlays import draw_centroids
+
+    img = np.full((100, 100, 3), 255, dtype=np.uint8)
+    c1 = UserCentroid(x=30.0, y=40.0)
+    c2 = UserCentroid(x=70.0, y=60.0)
+    result = draw_centroids(img, [c1, c2], color=(255, 0, 0), marker_size=8.0)
+    assert result.shape == (100, 100, 3)
+    red = (result[:, :, 0] > 200) & (result[:, :, 1] < 50) & (result[:, :, 2] < 50)
+    assert red.sum() > 0
+
+
+def test_draw_centroids_per_color():
+    """draw_centroids with per-centroid colors."""
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.rendering.overlays import draw_centroids
+
+    img = np.full((100, 100, 3), 255, dtype=np.uint8)
+    c1 = UserCentroid(x=25.0, y=25.0)
+    c2 = UserCentroid(x=75.0, y=75.0)
+    result = draw_centroids(
+        img, [c1, c2], colors=[(255, 0, 0), (0, 0, 255)], marker_size=8.0
+    )
+    red = (result[:, :, 0] > 200) & (result[:, :, 1] < 50)
+    blue = (result[:, :, 2] > 200) & (result[:, :, 0] < 50)
+    assert red.sum() > 0
+    assert blue.sum() > 0
+
+
+def test_draw_centroids_empty():
+    """draw_centroids with empty list is a no-op."""
+    from sleap_io.rendering.overlays import draw_centroids
+
+    img = np.full((50, 50, 3), 128, dtype=np.uint8)
+    result = draw_centroids(img, [], marker_size=5.0)
+    np.testing.assert_array_equal(result, img)
+
+
+def test_draw_centroids_grayscale():
+    """draw_centroids handles grayscale input."""
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.rendering.overlays import draw_centroids
+
+    img = np.full((50, 50), 128, dtype=np.uint8)
+    c = UserCentroid(x=25.0, y=25.0)
+    result = draw_centroids(img, [c], color=(255, 0, 0), marker_size=5.0)
+    assert result.ndim == 3
+    assert result.shape[2] == 3
+
+
+def test_draw_centroids_with_offset():
+    """draw_centroids applies coordinate offset."""
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.rendering.overlays import draw_centroids
+
+    img = np.full((50, 50, 3), 255, dtype=np.uint8)
+    c = UserCentroid(x=100.0, y=100.0)
+    result = draw_centroids(
+        img, [c], color=(0, 255, 0), marker_size=5.0, offset=(90.0, 90.0)
+    )
+    green = (result[:, :, 1] > 200) & (result[:, :, 0] < 50) & (result[:, :, 2] < 50)
+    assert green.sum() > 0
+
+
+def test_render_image_with_centroids():
+    """render_image draws centroids from Labels."""
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.model.instance import Track
+
+    track = Track(name="t1")
+    c = UserCentroid(x=25.0, y=25.0, frame_idx=0, track=track)
+    labels = sio.Labels(
+        skeletons=[sio.Skeleton(["A"])],
+        tracks=[track],
+        centroids=[c],
+    )
+    rendered = render_image(labels, frame_idx=0, video=None, background="white")
+    assert rendered.ndim == 3
+    non_white = np.any(rendered != 255, axis=-1)
+    assert non_white.sum() > 0
+
+
+def test_render_video_centroids_only():
+    """render_video works with centroid-only Labels (no labeled frames)."""
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.model.instance import Track
+
+    video = sio.Video(filename="test.mp4", open_backend=False)
+    video.backend_metadata["shape"] = (10, 64, 64, 3)
+    track = Track(name="t1")
+    centroids = [
+        UserCentroid(x=10.0, y=10.0, frame_idx=0, track=track, video=video),
+        UserCentroid(x=20.0, y=20.0, frame_idx=1, track=track, video=video),
+        UserCentroid(x=30.0, y=30.0, frame_idx=2, track=track, video=video),
+    ]
+    labels = sio.Labels(
+        videos=[video],
+        skeletons=[sio.Skeleton(["A"])],
+        tracks=[track],
+        centroids=centroids,
+    )
+    frames = render_video(
+        labels, background="black", show_progress=False, frame_inds=[0, 1, 2]
+    )
+    assert len(frames) == 3
+    # Centroid should be drawn on each frame (non-zero pixels).
+    for frame in frames:
+        assert np.any(frame != 0)
+
+
+def test_render_image_centroids_show_false():
+    """render_image with show_centroids=False skips centroid markers."""
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.model.instance import Track
+
+    # Use a Labels with a labeled frame AND a centroid so the off case still
+    # renders (it just skips centroid markers).
+    skel = sio.Skeleton(["A"])
+    track = Track(name="t1")
+    inst = sio.Instance.from_numpy(np.array([[50.0, 50.0]]), skeleton=skel)
+    lf = sio.LabeledFrame(
+        video=sio.Video(filename="test.mp4", open_backend=False),
+        frame_idx=0,
+        instances=[inst],
+    )
+    c = UserCentroid(x=10.0, y=10.0, frame_idx=0, track=track)
+    labels = sio.Labels(
+        labeled_frames=[lf],
+        skeletons=[skel],
+        tracks=[track],
+        centroids=[c],
+    )
+    rendered_on = render_image(
+        labels, lf_ind=0, background="white", show_centroids=True
+    )
+    rendered_off = render_image(
+        labels, lf_ind=0, background="white", show_centroids=False
+    )
+    on_count = np.any(rendered_on != 255, axis=-1).sum()
+    off_count = np.any(rendered_off != 255, axis=-1).sum()
+    assert on_count > off_count
+
+
+def test_render_video_centroids_no_track():
+    """render_video handles centroids without tracks."""
+    from sleap_io.model.centroid import PredictedCentroid
+
+    video = sio.Video(filename="test.mp4", open_backend=False)
+    video.backend_metadata["shape"] = (10, 64, 64, 3)
+    c = PredictedCentroid(x=25.0, y=25.0, frame_idx=0, score=0.9, video=video)
+    labels = sio.Labels(
+        videos=[video],
+        skeletons=[sio.Skeleton(["A"])],
+        centroids=[c],
+    )
+    frames = render_video(
+        labels, background="black", show_progress=False, frame_inds=[0]
+    )
+    assert len(frames) == 1
