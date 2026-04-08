@@ -549,8 +549,24 @@ annotations are copied along with the frame. Their **track** and **video** refer
 are remapped using the same mappings built during skeleton, video, and track matching.
 This ensures annotations reference the correct objects in the merged dataset.
 
-This applies to all frame strategies — annotations are always included regardless of
-how instances are resolved.
+Annotation handling follows the same frame merge strategy used for instances:
+
+| Strategy | Annotation behavior |
+|----------|---------------------|
+| `keep_original` | Keep self's annotations only |
+| `keep_new` | Replace with other's annotations |
+| `keep_both` | Keep all (deduplicated by identity) |
+| `update_tracks` | Spatial matching, then update track assignments on matched annotations |
+| `replace_predictions` | Keep user annotations from self, add predicted from other |
+| `auto` | Spatial matching + full user-vs-predicted resolution cascade |
+
+For `auto` and `update_tracks`, annotations are matched by centroid distance using the
+same threshold as instance matching (default 5 pixels). Each modality is resolved
+independently — centroids by `(x, y)`, bounding boxes and ROIs by their centroid, and
+masks by the centroid of their bounding box.
+
+New frames (no matching frame in the target) always copy all annotations from the
+source, regardless of strategy.
 
 ---
 
