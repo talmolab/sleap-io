@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from copy import copy
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from attrs import define, field
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from sleap_io.model.roi import ROI
 
 
-def _annotation_centroid_xy(annotation, attr: str) -> tuple[float, float] | None:
+def _annotation_centroid_xy(annotation: Any, attr: str) -> tuple[float, float] | None:
     """Extract centroid (x, y) from an annotation based on its modality.
 
     Args:
@@ -77,6 +77,9 @@ def _find_annotation_matches(
         List of ``(self_idx, other_idx, score)`` tuples where
         ``score = 1 / (1 + distance)``.
     """
+    # NOTE: O(n*m) brute-force without bipartite assignment. Callers are
+    # responsible for resolving many-to-one conflicts (e.g., greedy 1:1 in
+    # _resolve_annotation_auto). Fine for typical annotation counts per frame.
     matches = []
     for i, a in enumerate(self_list):
         c1 = _annotation_centroid_xy(a, attr)
@@ -124,34 +127,37 @@ def _resolve_annotation_auto(
     # 2. Find spatial matches
     matches = _find_annotation_matches(self_list, other_list, attr, threshold)
 
-    # 3. Group: best match per other_idx
-    other_to_self: dict[int, tuple[int, float]] = {}
-    for self_idx, other_idx, score in matches:
-        if other_idx not in other_to_self or score > other_to_self[other_idx][1]:
-            other_to_self[other_idx] = (self_idx, score)
+    # 3. Greedy one-to-one matching: sort by score descending, assign each
+    # self/other index at most once so no annotation is silently dropped.
+    matches.sort(key=lambda m: m[2], reverse=True)
+    matched_self: set[int] = set()
+    matched_other: set[int] = set()
+    other_to_self: dict[int, int] = {}
+    for self_idx, other_idx, _score in matches:
+        if self_idx not in matched_self and other_idx not in matched_other:
+            other_to_self[other_idx] = self_idx
+            matched_self.add(self_idx)
+            matched_other.add(other_idx)
 
     # 4. Process each annotation from other
     for other_idx, other_ann in enumerate(other_list):
         if other_idx in other_to_self:
-            self_idx, _score = other_to_self[other_idx]
+            self_idx = other_to_self[other_idx]
             self_ann = self_list[self_idx]
+            used_self_indices.add(self_idx)
 
             if not self_ann.is_predicted and not other_ann.is_predicted:
                 # user + user → keep self (already in merged)
-                used_self_indices.add(self_idx)
+                pass
             elif self_ann.is_predicted and not other_ann.is_predicted:
                 # predicted + user → replace with other's user
-                if self_idx not in used_self_indices:
-                    merged.append(copy(other_ann))
-                    used_self_indices.add(self_idx)
+                merged.append(copy(other_ann))
             elif not self_ann.is_predicted and other_ann.is_predicted:
                 # user + predicted → keep self (already in merged)
-                used_self_indices.add(self_idx)
+                pass
             else:
                 # predicted + predicted → keep other's (newer)
-                if self_idx not in used_self_indices:
-                    merged.append(copy(other_ann))
-                    used_self_indices.add(self_idx)
+                merged.append(copy(other_ann))
         else:
             # No match → add from other
             merged.append(copy(other_ann))

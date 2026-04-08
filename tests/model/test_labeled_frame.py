@@ -1596,3 +1596,26 @@ def test_merge_annotations_auto_empty_roi_unmatched():
 
     # Both kept: empty ROI has no centroid so it's unmatched
     assert len(lf1.rois) == 2
+
+
+def test_merge_annotations_auto_many_to_one():
+    """Auto uses one-to-one matching: second other annotation treated as unmatched."""
+    from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    # One prediction in self
+    self_pred = PredictedCentroid(x=10.0, y=10.0, video=video, frame_idx=0, score=0.9)
+    # Two users in other, both within threshold of self_pred
+    other_user_a = UserCentroid(x=11.0, y=10.0, video=video, frame_idx=0)  # dist=1.0
+    other_user_b = UserCentroid(x=10.0, y=11.0, video=video, frame_idx=0)  # dist=1.0
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_user_a, other_user_b])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # One replaces prediction via match, other added as unmatched — neither dropped
+    assert len(lf1.centroids) == 2
+    xs = {c.x for c in lf1.centroids}
+    assert xs == {11.0, 10.0}
+    assert all(not c.is_predicted for c in lf1.centroids)
