@@ -1498,3 +1498,61 @@ def test_merge_annotations_update_tracks_skips_label_images():
 
     # Label image track should be unchanged
     assert lf1.label_images[0].objects[1].track is track_a
+
+
+def test_merge_annotations_auto_label_images():
+    """Auto spatial matching works for label images."""
+    from sleap_io.model.label_image import (
+        LabelImage,
+        PredictedLabelImage,
+        UserLabelImage,
+    )
+
+    video = Video(filename="test.mp4", open_backend=False)
+    track = Track(name="t")
+
+    li_self = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(track=track, category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+    li_other = PredictedLabelImage(
+        data=np.array([[0, 2]], dtype=np.int32),
+        objects={2: LabelImage.Info(track=track, category="cell")},
+        video=video,
+        frame_idx=0,
+        score=0.9,
+    )
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, label_images=[li_self])
+    lf2 = LabeledFrame(video=video, frame_idx=0, label_images=[li_other])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # User from self kept, prediction from other ignored (user beats predicted)
+    assert len(lf1.label_images) == 1
+    assert not lf1.label_images[0].is_predicted
+
+
+def test_merge_annotations_auto_rois():
+    """Auto spatial matching works for ROIs."""
+    from shapely.geometry import box
+
+    from sleap_io.model.roi import PredictedROI, UserROI
+
+    video = Video(filename="test.mp4", open_backend=False)
+
+    self_pred = PredictedROI(
+        geometry=box(10, 10, 20, 20), video=video, frame_idx=0, score=0.8
+    )
+    other_user = UserROI(geometry=box(11, 11, 21, 21), video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, rois=[self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, rois=[other_user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Centroids are ~1.4px apart — prediction replaced by user
+    assert len(lf1.rois) == 1
+    assert not lf1.rois[0].is_predicted
