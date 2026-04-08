@@ -1300,7 +1300,7 @@ def test_merge_annotations_replace_predictions():
 
 
 def test_merge_annotations_auto():
-    """Auto strategy behaves the same as replace_predictions for annotations."""
+    """Auto strategy uses spatial matching for annotation resolution."""
     from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
@@ -1317,3 +1317,184 @@ def test_merge_annotations_auto():
     assert lf1.centroids[0] is self_user
     assert lf1.centroids[1].x == 7.0
     assert lf1.centroids[1].is_predicted
+
+
+def test_merge_annotations_auto_user_from_other_added():
+    """Auto adds user annotations from other when unmatched in self."""
+    from sleap_io.model.centroid import UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    self_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    # Far away — won't match self_user (distance > 5.0)
+    other_user = UserCentroid(x=50.0, y=60.0, video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_user])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Both should be present: self's user kept + other's user added (unmatched)
+    assert len(lf1.centroids) == 2
+    assert lf1.centroids[0] is self_user
+    assert lf1.centroids[1] is not other_user  # copied
+    assert lf1.centroids[1].x == 50.0
+
+
+def test_merge_annotations_auto_user_replaces_predicted():
+    """Auto replaces self's prediction with other's user when spatially matched."""
+    from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    self_pred = PredictedCentroid(x=10.0, y=20.0, video=video, frame_idx=0, score=0.9)
+    other_user = UserCentroid(x=11.0, y=20.5, video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Prediction replaced by user
+    assert len(lf1.centroids) == 1
+    assert not lf1.centroids[0].is_predicted
+    assert lf1.centroids[0].x == 11.0
+
+
+def test_merge_annotations_auto_keeps_unmatched_self_prediction():
+    """Auto keeps self's prediction when no match exists in other."""
+    from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    self_pred = PredictedCentroid(x=10.0, y=20.0, video=video, frame_idx=0, score=0.9)
+    # Far away — no match
+    other_user = UserCentroid(x=80.0, y=90.0, video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Self's prediction kept (unmatched) + other's user added (unmatched)
+    assert len(lf1.centroids) == 2
+    xs = {c.x for c in lf1.centroids}
+    assert xs == {10.0, 80.0}
+
+
+def test_merge_annotations_auto_bboxes():
+    """Auto spatial matching works for bounding boxes."""
+    from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+
+    video = Video(filename="test.mp4", open_backend=False)
+    self_pred = PredictedBoundingBox(
+        x1=10.0, y1=10.0, x2=20.0, y2=20.0, video=video, frame_idx=0, score=0.8
+    )
+    other_user = UserBoundingBox(
+        x1=11.0, y1=11.0, x2=21.0, y2=21.0, video=video, frame_idx=0
+    )
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, bboxes=[self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, bboxes=[other_user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Centroid distance ~1.4px, well within threshold — prediction replaced by user
+    assert len(lf1.bboxes) == 1
+    assert not lf1.bboxes[0].is_predicted
+    assert lf1.bboxes[0].x1 == 11.0
+
+
+def test_merge_annotations_auto_masks():
+    """Auto spatial matching works for segmentation masks."""
+    from sleap_io.model.mask import (
+        PredictedSegmentationMask,
+        UserSegmentationMask,
+    )
+
+    video = Video(filename="test.mp4", open_backend=False)
+    # Create small masks at nearby locations (overlapping bbox centroids)
+    mask_data = np.ones((10, 10), dtype=bool)
+    self_pred = PredictedSegmentationMask.from_numpy(
+        mask_data, video=video, frame_idx=0, score=0.7, offset=(5.0, 5.0)
+    )
+    other_user = UserSegmentationMask.from_numpy(
+        mask_data, video=video, frame_idx=0, offset=(6.0, 6.0)
+    )
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[other_user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Bbox centroids are close — prediction replaced by user
+    assert len(lf1.masks) == 1
+    assert not lf1.masks[0].is_predicted
+
+
+def test_merge_annotations_update_tracks_cascades():
+    """Update_tracks updates annotation tracks from spatially matched other."""
+    from sleap_io.model.centroid import UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    track_a = Track(name="a")
+    track_b = Track(name="b")
+
+    self_c = UserCentroid(x=10.0, y=20.0, video=video, frame_idx=0, track=track_a)
+    other_c = UserCentroid(x=11.0, y=20.5, video=video, frame_idx=0, track=track_b)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_c])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_c])
+
+    lf1._merge_annotations(lf2, strategy="update_tracks")
+
+    # Self's centroid track updated to other's track
+    assert len(lf1.centroids) == 1
+    assert lf1.centroids[0].track is track_b
+
+
+def test_merge_annotations_update_tracks_unmatched_unchanged():
+    """Update_tracks leaves unmatched annotations' tracks unchanged."""
+    from sleap_io.model.centroid import UserCentroid
+
+    video = Video(filename="test.mp4", open_backend=False)
+    track_a = Track(name="a")
+    track_b = Track(name="b")
+
+    self_c = UserCentroid(x=10.0, y=20.0, video=video, frame_idx=0, track=track_a)
+    # Far away — no match
+    other_c = UserCentroid(x=80.0, y=90.0, video=video, frame_idx=0, track=track_b)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_c])
+    lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_c])
+
+    lf1._merge_annotations(lf2, strategy="update_tracks")
+
+    assert lf1.centroids[0].track is track_a  # unchanged
+
+
+def test_merge_annotations_update_tracks_skips_label_images():
+    """Update_tracks does not modify label image tracks."""
+    from sleap_io.model.label_image import LabelImage, UserLabelImage
+
+    video = Video(filename="test.mp4", open_backend=False)
+    track_a = Track(name="a")
+    track_b = Track(name="b")
+
+    li_self = UserLabelImage(
+        data=np.array([[0, 1]], dtype=np.int32),
+        objects={1: LabelImage.Info(track=track_a, category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+    li_other = UserLabelImage(
+        data=np.array([[0, 2]], dtype=np.int32),
+        objects={2: LabelImage.Info(track=track_b, category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, label_images=[li_self])
+    lf2 = LabeledFrame(video=video, frame_idx=0, label_images=[li_other])
+
+    lf1._merge_annotations(lf2, strategy="update_tracks")
+
+    # Label image track should be unchanged
+    assert lf1.label_images[0].objects[1].track is track_a

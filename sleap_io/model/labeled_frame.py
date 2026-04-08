@@ -6,6 +6,7 @@ The `LabeledFrame` class is a data structure that contains `Instance`s and
 
 from __future__ import annotations
 
+import math
 from copy import copy
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,176 @@ if TYPE_CHECKING:
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.matching import InstanceMatcher
     from sleap_io.model.roi import ROI
+
+
+def _annotation_centroid_xy(annotation, attr: str) -> tuple[float, float] | None:
+    """Extract centroid (x, y) from an annotation based on its modality.
+
+    Args:
+        annotation: An annotation object (Centroid, BoundingBox, etc.).
+        attr: The attribute name indicating the modality.
+
+    Returns:
+        A tuple of (x, y) coordinates, or ``None`` if the centroid cannot be
+        computed (e.g., empty mask or empty ROI geometry).
+    """
+    if attr == "centroids":
+        return (annotation.x, annotation.y)
+    elif attr == "bboxes":
+        return annotation.centroid_xy
+    elif attr == "rois":
+        if annotation.geometry.is_empty:
+            return None
+        return annotation.centroid_xy
+    elif attr == "masks":
+        x, y, w, h = annotation.bbox
+        if w == 0 and h == 0:
+            return None
+        return (x + w / 2, y + h / 2)
+    elif attr == "label_images":
+        sx, sy = annotation.scale
+        ox, oy = annotation.offset
+        return (
+            (annotation.width / 2) / sx + ox,
+            (annotation.height / 2) / sy + oy,
+        )
+    return None
+
+
+def _find_annotation_matches(
+    self_list: list,
+    other_list: list,
+    attr: str,
+    threshold: float,
+) -> list[tuple[int, int, float]]:
+    """Find matching annotations between two lists by centroid distance.
+
+    Args:
+        self_list: Annotations from the self frame.
+        other_list: Annotations from the other frame.
+        attr: The attribute name indicating the modality.
+        threshold: Maximum centroid distance for a match (pixels).
+
+    Returns:
+        List of ``(self_idx, other_idx, score)`` tuples where
+        ``score = 1 / (1 + distance)``.
+    """
+    matches = []
+    for i, a in enumerate(self_list):
+        c1 = _annotation_centroid_xy(a, attr)
+        if c1 is None:
+            continue
+        for j, b in enumerate(other_list):
+            c2 = _annotation_centroid_xy(b, attr)
+            if c2 is None:
+                continue
+            dist = math.hypot(c1[0] - c2[0], c1[1] - c2[1])
+            if dist <= threshold:
+                matches.append((i, j, 1.0 / (1.0 + dist)))
+    return matches
+
+
+def _resolve_annotation_auto(
+    self_list: list,
+    other_list: list,
+    attr: str,
+    threshold: float,
+) -> list:
+    """Apply auto merge resolution to a list of annotations.
+
+    Mirrors the instance auto-merge cascade: keep user from self, spatially
+    match, apply user-vs-predicted resolution rules, add unmatched from other,
+    keep unmatched predictions from self.
+
+    Args:
+        self_list: Annotations from the self frame.
+        other_list: Annotations from the other frame.
+        attr: The attribute name indicating the modality.
+        threshold: Maximum centroid distance for a match (pixels).
+
+    Returns:
+        Merged list of annotations.
+    """
+    merged = []
+    used_self_indices: set[int] = set()
+
+    # 1. Keep all user annotations from self
+    for ann in self_list:
+        if not ann.is_predicted:
+            merged.append(ann)
+
+    # 2. Find spatial matches
+    matches = _find_annotation_matches(self_list, other_list, attr, threshold)
+
+    # 3. Group: best match per other_idx
+    other_to_self: dict[int, tuple[int, float]] = {}
+    for self_idx, other_idx, score in matches:
+        if other_idx not in other_to_self or score > other_to_self[other_idx][1]:
+            other_to_self[other_idx] = (self_idx, score)
+
+    # 4. Process each annotation from other
+    for other_idx, other_ann in enumerate(other_list):
+        if other_idx in other_to_self:
+            self_idx, _score = other_to_self[other_idx]
+            self_ann = self_list[self_idx]
+
+            if not self_ann.is_predicted and not other_ann.is_predicted:
+                # user + user → keep self (already in merged)
+                used_self_indices.add(self_idx)
+            elif self_ann.is_predicted and not other_ann.is_predicted:
+                # predicted + user → replace with other's user
+                if self_idx not in used_self_indices:
+                    merged.append(copy(other_ann))
+                    used_self_indices.add(self_idx)
+            elif not self_ann.is_predicted and other_ann.is_predicted:
+                # user + predicted → keep self (already in merged)
+                used_self_indices.add(self_idx)
+            else:
+                # predicted + predicted → keep other's (newer)
+                if self_idx not in used_self_indices:
+                    merged.append(copy(other_ann))
+                    used_self_indices.add(self_idx)
+        else:
+            # No match → add from other
+            merged.append(copy(other_ann))
+
+    # 5. Keep unmatched predictions from self
+    for self_idx, self_ann in enumerate(self_list):
+        if self_ann.is_predicted and self_idx not in used_self_indices:
+            merged.append(self_ann)
+
+    return merged
+
+
+def _resolve_annotation_update_tracks(
+    self_list: list,
+    other_list: list,
+    attr: str,
+    threshold: float,
+) -> None:
+    """Update track assignments on self's annotations from spatially matched other's.
+
+    Args:
+        self_list: Annotations from the self frame (modified in place).
+        other_list: Annotations from the other frame.
+        attr: The attribute name indicating the modality.
+        threshold: Maximum centroid distance for a match (pixels).
+    """
+    if attr == "label_images":
+        # LabelImage tracks are per-object in .objects dict, not top-level.
+        return
+
+    matches = _find_annotation_matches(self_list, other_list, attr, threshold)
+
+    # Best match per self_idx
+    self_to_other: dict[int, tuple[int, float]] = {}
+    for self_idx, other_idx, score in matches:
+        if self_idx not in self_to_other or score > self_to_other[self_idx][1]:
+            self_to_other[self_idx] = (other_idx, score)
+
+    for self_idx, (other_idx, _score) in self_to_other.items():
+        self_list[self_idx].track = other_list[other_idx].track
+        self_list[self_idx].tracking_score = other_list[other_idx].tracking_score
 
 
 @define(eq=False)
@@ -339,7 +510,11 @@ class LabeledFrame:
                 self.instances[self_idx].tracking_score = other.instances[
                     other_idx
                 ].tracking_score
-            self._merge_annotations(other, strategy="update_tracks")
+            self._merge_annotations(
+                other,
+                strategy="update_tracks",
+                threshold=instance_matcher.threshold,
+            )
             return self.instances, conflicts
         elif frame == "replace_predictions":
             # Keep all user instances from original frame
@@ -421,12 +596,19 @@ class LabeledFrame:
                 if keep:
                     merged_instances.append(self_inst)
 
-        # Merge annotations from the other frame (extend, deduplicate by identity)
-        self._merge_annotations(other, strategy="auto")
+        # Merge annotations from the other frame (spatial matching + resolution)
+        self._merge_annotations(
+            other, strategy="auto", threshold=instance_matcher.threshold
+        )
 
         return merged_instances, conflicts
 
-    def _merge_annotations(self, other: "LabeledFrame", strategy: str = "keep_both"):
+    def _merge_annotations(
+        self,
+        other: "LabeledFrame",
+        strategy: str = "keep_both",
+        threshold: float = 5.0,
+    ):
         """Merge annotation lists from another frame into this frame.
 
         Shallow-copies annotations from the other frame to avoid mutating the
@@ -439,15 +621,21 @@ class LabeledFrame:
             strategy: The merge strategy, matching the ``frame`` parameter of
                 ``merge()``. Controls which annotations are kept:
 
-                - ``"keep_original"`` / ``"update_tracks"``: Keep self only.
+                - ``"keep_original"``: Keep self only.
                 - ``"keep_new"``: Replace with other's annotations.
                 - ``"keep_both"``: Keep self + add other's (default).
-                - ``"replace_predictions"`` / ``"auto"``: Keep user from self,
-                  replace predicted with other's predicted.
+                - ``"replace_predictions"``: Keep user from self, replace
+                  predicted with other's predicted.
+                - ``"auto"``: Spatial matching + user-vs-predicted resolution
+                  cascade (mirrors instance auto-merge logic).
+                - ``"update_tracks"``: Spatial matching, then update track
+                  assignments on matched self annotations.
+            threshold: Maximum centroid distance (pixels) for spatial matching
+                in ``"auto"`` and ``"update_tracks"`` strategies.
         """
         attrs = ("centroids", "bboxes", "masks", "label_images", "rois")
 
-        if strategy in ("keep_original", "update_tracks"):
+        if strategy == "keep_original":
             return
 
         if strategy == "keep_new":
@@ -455,13 +643,31 @@ class LabeledFrame:
                 setattr(self, attr, [copy(item) for item in getattr(other, attr)])
             return
 
-        if strategy in ("replace_predictions", "auto"):
+        if strategy == "replace_predictions":
             for attr in attrs:
                 kept = [a for a in getattr(self, attr) if not a.is_predicted]
                 for item in getattr(other, attr):
                     if item.is_predicted:
                         kept.append(copy(item))
                 setattr(self, attr, kept)
+            return
+
+        if strategy == "auto":
+            for attr in attrs:
+                setattr(
+                    self,
+                    attr,
+                    _resolve_annotation_auto(
+                        getattr(self, attr), getattr(other, attr), attr, threshold
+                    ),
+                )
+            return
+
+        if strategy == "update_tracks":
+            for attr in attrs:
+                _resolve_annotation_update_tracks(
+                    getattr(self, attr), getattr(other, attr), attr, threshold
+                )
             return
 
         # "keep_both" (default)

@@ -7423,3 +7423,48 @@ def test_labels_merge_replace_predictions_filters_annotations():
     assert user_centroids[0].x == 0.5
     assert len(pred_centroids) == 1
     assert pred_centroids[0].x == 9.0
+
+
+def test_labels_merge_auto_annotations_spatial():
+    """Labels.merge with auto adds user centroids from other when unmatched."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="shared.mp4", open_backend=False)
+    track = Track(name="t")
+
+    inst_a = Instance([[0, 0], [1, 1]], skeleton=skel, track=track)
+    inst_b = Instance([[50, 50], [51, 51]], skeleton=skel, track=track)
+
+    # Self: user instance + user centroid at (0.5, 0.5)
+    c_self = UserCentroid(x=0.5, y=0.5, video=video, frame_idx=0, track=track)
+
+    # Other: user instance far away + user centroid at (50.5, 50.5) — unmatched
+    c_other = UserCentroid(x=50.5, y=50.5, video=video, frame_idx=0, track=track)
+
+    labels_a = Labels(
+        skeletons=[skel],
+        videos=[video],
+        tracks=[track],
+        labeled_frames=[
+            LabeledFrame(
+                video=video, frame_idx=0, instances=[inst_a], centroids=[c_self]
+            )
+        ],
+    )
+    labels_b = Labels(
+        skeletons=[skel],
+        videos=[video],
+        tracks=[track],
+        labeled_frames=[
+            LabeledFrame(
+                video=video, frame_idx=0, instances=[inst_b], centroids=[c_other]
+            )
+        ],
+    )
+
+    labels_a.merge(labels_b)  # default frame="auto"
+
+    merged_lf = labels_a.labeled_frames[0]
+    # Both user centroids should be present (unmatched — distance >> 5px)
+    assert len(merged_lf.centroids) == 2
+    xs = {c.x for c in merged_lf.centroids}
+    assert xs == {0.5, 50.5}
