@@ -1556,3 +1556,43 @@ def test_merge_annotations_auto_rois():
     # Centroids are ~1.4px apart — prediction replaced by user
     assert len(lf1.rois) == 1
     assert not lf1.rois[0].is_predicted
+
+
+def test_merge_annotations_auto_empty_mask_unmatched():
+    """Empty masks (no foreground) are treated as unmatched in auto."""
+    from sleap_io.model.mask import UserSegmentationMask
+
+    video = Video(filename="test.mp4", open_backend=False)
+    empty_mask = UserSegmentationMask.from_numpy(
+        np.zeros((10, 10), dtype=bool), video=video, frame_idx=0
+    )
+    normal_mask = UserSegmentationMask.from_numpy(
+        np.ones((10, 10), dtype=bool), video=video, frame_idx=0
+    )
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[empty_mask])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[normal_mask])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Both kept: empty mask has no centroid so it's unmatched
+    assert len(lf1.masks) == 2
+
+
+def test_merge_annotations_auto_empty_roi_unmatched():
+    """Empty ROI geometry is treated as unmatched in auto."""
+    from shapely.geometry import Point
+
+    from sleap_io.model.roi import UserROI
+
+    video = Video(filename="test.mp4", open_backend=False)
+    empty_roi = UserROI(geometry=Point().buffer(0), video=video, frame_idx=0)
+    normal_roi = UserROI(geometry=Point(10, 10).buffer(5), video=video, frame_idx=0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, rois=[empty_roi])
+    lf2 = LabeledFrame(video=video, frame_idx=0, rois=[normal_roi])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Both kept: empty ROI has no centroid so it's unmatched
+    assert len(lf1.rois) == 2
