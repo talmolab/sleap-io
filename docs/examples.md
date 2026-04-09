@@ -953,12 +953,16 @@ for mask in li.to_masks():
 
 ### Merge segmentation results
 
-Combine label images from multiple SLP files into one (e.g., after parallel batch processing).
+Combine label images from multiple SLP files into one (e.g., after parallel
+batch processing). This uses [`merge_label_images()`][sleap_io.merge_label_images],
+a specialized function that copies compressed HDF5 chunks directly between files
+without decompressing pixel data — much faster than loading everything into
+memory with [`Labels.merge()`](merging.md).
 
 ```python title="merge_segmentation.py" linenums="1"
 import sleap_io as sio
 
-# Merge multiple batch results — copies compressed chunks directly
+# Merge batch results at the file level (no decompression needed)
 merged = sio.merge_label_images(
     ["batch_0.slp", "batch_1.slp", "batch_2.slp"],
     "all_frames.slp",
@@ -966,9 +970,13 @@ merged = sio.merge_label_images(
 print(f"Merged: {len(merged.label_images)} total frames")
 ```
 
-!!! tip
-    For chunked-format sources (v2.2), merge copies raw compressed data without
-    decompression — it's I/O-bound, not CPU-bound.
+!!! info "Why not `Labels.merge()`?"
+    [`Labels.merge()`](merging.md) loads all data into Python objects, which is
+    necessary for matching and resolving conflicts between keypoint annotations.
+    For label images — which are typically non-overlapping frame batches from
+    parallel segmentation — `merge_label_images()` skips all of that and
+    concatenates the compressed pixel chunks directly. This makes it I/O-bound
+    rather than CPU-bound.
 
 !!! note "See also"
     - [Merging: Label images](merging.md#merging-label-images): Full merge documentation
