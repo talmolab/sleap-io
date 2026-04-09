@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.roi import ROI
-    from sleap_io.model.video import Video
 
 
 def _encode_rle(mask: np.ndarray) -> np.ndarray:
@@ -125,8 +124,6 @@ class SegmentationMask:
         name: Optional human-readable name for this mask.
         category: Optional category label (e.g., class name for detection).
         source: Optional string indicating the source of this annotation.
-        video: Optional `Video` this mask is associated with.
-        frame_idx: Optional frame index. If `None`, the mask is static.
         track: Optional `Track` this mask is associated with.
         tracking_score: Confidence of the track identity assignment. ``None``
             if unassigned or manually assigned.
@@ -152,8 +149,6 @@ class SegmentationMask:
     name: str = attrs.field(default="")
     category: str = attrs.field(default="")
     source: str = attrs.field(default="")
-    video: "Video | None" = attrs.field(default=None)
-    frame_idx: int | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
     tracking_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
@@ -210,8 +205,6 @@ class SegmentationMask:
             name=self.name,
             category=self.category,
             source=self.source,
-            video=self.video,
-            frame_idx=self.frame_idx,
             track=self.track,
             instance=self.instance,
             scale=(1.0, 1.0),
@@ -314,8 +307,6 @@ class SegmentationMask:
         x, y, w, h = self.bbox
         cls = PredictedBoundingBox if self.is_predicted else UserBoundingBox
         kwargs: dict = dict(
-            video=self.video,
-            frame_idx=self.frame_idx,
             track=self.track,
             instance=self.instance,
             category=self.category,
@@ -370,8 +361,6 @@ class SegmentationMask:
             name=self.name,
             category=self.category,
             source=self.source,
-            video=self.video,
-            frame_idx=self.frame_idx,
             track=self.track,
             instance=self.instance,
         )

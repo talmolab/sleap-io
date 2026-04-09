@@ -47,7 +47,6 @@ if TYPE_CHECKING:
     from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
-    from sleap_io.model.video import Video
 
 
 @attrs.define(eq=False)
@@ -65,8 +64,6 @@ class LabelImage:
         objects: Mapping from label ID to object metadata. Defines what each
             non-zero pixel value represents. Label IDs not in this dict are
             treated as having default (empty) metadata.
-        video: Associated ``Video``.
-        frame_idx: Frame index. ``None`` means static (applies to all frames).
         source: Source identifier string.
         scale: Resolution ratio ``(sx, sy)`` where ``sx = label_width / image_width``
             and ``sy = label_height / image_height``. ``(1.0, 1.0)`` means full
@@ -109,8 +106,6 @@ class LabelImage:
 
     _data: "np.ndarray | None" = attrs.field(default=None, alias="data")
     objects: dict[int, Info] = Factory(dict)
-    video: "Video | None" = attrs.field(default=None)
-    frame_idx: int | None = attrs.field(default=None)
     source: str = attrs.field(default="")
     scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
     offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))
@@ -203,8 +198,6 @@ class LabelImage:
         kwargs: dict = dict(
             data=data,
             objects=objects,
-            video=copy.deepcopy(self.video, memo),
-            frame_idx=self.frame_idx,
             source=self.source,
             scale=self.scale,
             offset=self.offset,
@@ -269,8 +262,6 @@ class LabelImage:
         kwargs: dict = dict(
             data=resized,
             objects={lid: attrs.evolve(info) for lid, info in self.objects.items()},
-            video=self.video,
-            frame_idx=self.frame_idx,
             source=self.source,
             scale=(1.0, 1.0),
             offset=(0.0, 0.0),
@@ -393,7 +384,7 @@ class LabelImage:
                 create new Tracks for any label IDs not already in the dict
                 (the dict is mutated in place to accumulate mappings across
                 calls). Default is ``False``.
-            **kwargs: Passed to the LabelImage constructor (video, frame_idx,
+            **kwargs: Passed to the LabelImage constructor (
                 source).
 
         Returns:
@@ -554,8 +545,8 @@ class LabelImage:
                 in ``Info.score`` for each object.
             create_tracks: If ``True`` and ``tracks`` is ``None``, auto-create
                 a ``Track`` per mask with ``name=str(label_id)``.
-            **kwargs: Passed to the ``LabelImage`` constructor (e.g., ``video``,
-                ``frame_idx``, ``source``, ``scale``, ``offset``). For
+            **kwargs: Passed to the ``LabelImage`` constructor (e.g.,
+                ``source``, ``scale``, ``offset``). For
                 ``PredictedLabelImage``, also accepts ``score``, ``score_map``.
 
         Returns:
@@ -573,8 +564,6 @@ class LabelImage:
                     tracks=[t1, t2],    # per-object tracks
                     scores=[0.95, 0.87],# per-object confidence
                     score=0.9,          # image-level confidence
-                    video=video,
-                    frame_idx=0,
                 )
 
         See Also:
@@ -669,7 +658,6 @@ class LabelImage:
         tracks: "dict[int, Track] | list[Track] | None" = None,
         categories: dict[int, str] | list[str] | None = None,
         create_tracks: bool = False,
-        frame_idx: list[int] | None = None,
         score: "float | list[float] | None" = None,
         score_map: np.ndarray | None = None,
         **kwargs,
@@ -695,9 +683,6 @@ class LabelImage:
                 auto-create one ``Track`` per unique non-zero label ID
                 found across all frames. The same ``Track`` object is
                 shared across frames. Default is ``False``.
-            frame_idx: Frame indices for each frame. If ``None``,
-                defaults to ``[0, 1, ..., T-1]``. Must have length ``T``
-                if provided.
             score: Confidence score(s) for ``PredictedLabelImage``. A
                 single float is broadcast to all frames; a list must have
                 length ``T``. Defaults to ``0.0`` for all frames if
@@ -705,15 +690,15 @@ class LabelImage:
             score_map: Optional ``(T, H, W)`` float32 array of per-pixel
                 confidence maps. Sliced per frame. Ignored for
                 ``UserLabelImage``.
-            **kwargs: Passed to every frame's constructor (``video``,
-                ``source``, ``scale``, ``offset``).
+            **kwargs: Passed to every frame's constructor (``source``,
+                ``scale``, ``offset``).
 
         Returns:
             A list of ``LabelImage`` objects, one per frame.
 
         Raises:
             ValueError: If ``data`` is not 3D (or a list), or if
-                ``frame_idx`` / ``score`` lengths don't match.
+                ``score`` lengths don't match.
 
         Note:
             For loading label images from TIFF files (single, multi-page,
@@ -727,7 +712,6 @@ class LabelImage:
             masks = np.stack(cellpose_masks)  # (T, H, W) int32
             label_images = sio.PredictedLabelImage.from_stack(
                 masks,
-                video=video,
                 source="cellpose:nuclei",
                 create_tracks=True,
                 score=1.0,
@@ -754,15 +738,6 @@ class LabelImage:
         n_frames = len(frames)
         if n_frames == 0:
             return []
-
-        # Validate frame_idx
-        if frame_idx is None:
-            frame_idx = list(range(n_frames))
-        elif len(frame_idx) != n_frames:
-            raise ValueError(
-                f"frame_idx length ({len(frame_idx)}) must match "
-                f"number of frames ({n_frames})."
-            )
 
         # Collect unique non-zero IDs across all frames
         all_ids: set[int] = set()
@@ -834,7 +809,6 @@ class LabelImage:
                 )
 
             frame_kwargs = dict(kwargs)
-            frame_kwargs["frame_idx"] = frame_idx[t]
             if is_predicted:
                 frame_kwargs["score"] = scores[t]
                 frame_kwargs["score_map"] = score_maps[t]
@@ -847,8 +821,8 @@ class LabelImage:
         """Decompose into per-object binary SegmentationMasks.
 
         Returns one SegmentationMask per unique non-zero label. Each mask
-        inherits track, category, name, instance, video, frame_idx, source,
-        scale, and offset from the ``LabelImage``.
+        inherits track, category, name, instance, source, scale, and offset
+        from the ``LabelImage``.
 
         Returns:
             A list of ``SegmentationMask`` objects, one per object.
@@ -867,8 +841,6 @@ class LabelImage:
                     category=info.category,
                     track=info.track,
                     instance=info.instance,
-                    video=self.video,
-                    frame_idx=self.frame_idx,
                     source=self.source,
                     scale=self.scale,
                     offset=self.offset,
@@ -934,8 +906,6 @@ class LabelImage:
             y2 = float((row_max[idx] + 1) / sy + oy)
 
             kwargs: dict = dict(
-                video=self.video,
-                frame_idx=self.frame_idx,
                 track=info.track,
                 instance=info.instance,
                 category=info.category,

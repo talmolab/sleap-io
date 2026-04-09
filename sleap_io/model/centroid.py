@@ -23,7 +23,6 @@ import numpy as np
 if TYPE_CHECKING:
     from sleap_io.model.instance import Instance, PredictedInstance, Track
     from sleap_io.model.skeleton import Skeleton
-    from sleap_io.model.video import Video
 
 
 def _make_centroid_skeleton():
@@ -64,15 +63,13 @@ def __getattr__(name):
 class Centroid:
     """A point representing the center of an object.
 
-    Supports optional 3D coordinates, video/frame/track/instance metadata,
+    Supports optional 3D coordinates, track/instance metadata,
     and interconversion with single-node ``Instance`` objects.
 
     Attributes:
         x: X-coordinate in pixel space.
         y: Y-coordinate in pixel space.
         z: Optional Z-coordinate for 3D data. ``None`` for 2D.
-        video: Video this centroid is associated with.
-        frame_idx: Frame index within the video.
         track: Optional tracking identity.
         tracking_score: Confidence of the track identity assignment. ``None``
             if unassigned or manually assigned.
@@ -93,8 +90,6 @@ class Centroid:
     x: float = attrs.field()
     y: float = attrs.field()
     z: float | None = attrs.field(default=None)
-    video: "Video | None" = attrs.field(default=None)
-    frame_idx: int | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
     tracking_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
