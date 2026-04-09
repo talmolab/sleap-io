@@ -1155,6 +1155,56 @@ def test_labeled_frame_annotation_fields():
     assert len(lf.rois) == 0
 
 
+def test_labeled_frame_append():
+    """LabeledFrame.append routes annotations to the correct container."""
+    import pytest
+
+    from sleap_io.model.bbox import UserBoundingBox
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.model.label_image import UserLabelImage
+    from sleap_io.model.mask import UserSegmentationMask
+    from sleap_io.model.roi import UserROI
+
+    video = Video(filename="test.mp4", open_backend=False)
+    lf = LabeledFrame(video=video, frame_idx=0)
+
+    # Instance
+    inst = Instance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=Skeleton(["A"])
+    )
+    lf.append(inst)
+    assert lf.instances[-1] is inst
+
+    # Centroid
+    c = UserCentroid(x=1.0, y=2.0)
+    lf.append(c)
+    assert lf.centroids[-1] is c
+
+    # BoundingBox
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10)
+    lf.append(b)
+    assert lf.bboxes[-1] is b
+
+    # SegmentationMask
+    m = UserSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool))
+    lf.append(m)
+    assert lf.masks[-1] is m
+
+    # LabelImage
+    li = UserLabelImage(data=np.zeros((4, 4), dtype=np.int32))
+    lf.append(li)
+    assert lf.label_images[-1] is li
+
+    # ROI
+    r = UserROI.from_bbox(0, 0, 10, 10)
+    lf.append(r)
+    assert lf.rois[-1] is r
+
+    # Unsupported type
+    with pytest.raises(TypeError, match="Cannot append"):
+        lf.append("not an annotation")
+
+
 def test_labeled_frame_is_user_labeled_with_annotations():
     """is_user_labeled returns True for frames with user annotations."""
     from sleap_io.model.centroid import PredictedCentroid, UserCentroid

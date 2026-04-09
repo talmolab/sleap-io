@@ -234,6 +234,49 @@ class LabeledFrame:
     label_images: "list[LabelImage]" = field(factory=list)
     rois: "list[ROI]" = field(factory=list)
 
+    def append(
+        self,
+        annotation: "Instance | PredictedInstance | Centroid | BoundingBox | SegmentationMask | LabelImage | ROI",
+    ) -> None:
+        """Append an annotation to the appropriate frame-level container.
+
+        Routes the annotation to the correct list based on its type:
+        ``Instance``/``PredictedInstance`` → ``instances``,
+        ``Centroid`` → ``centroids``, ``BoundingBox`` → ``bboxes``,
+        ``SegmentationMask`` → ``masks``, ``LabelImage`` → ``label_images``,
+        ``ROI`` → ``rois``.
+
+        Args:
+            annotation: The annotation object to add.
+
+        Raises:
+            TypeError: If the annotation type is not recognized.
+        """
+        from sleap_io.model.bbox import BoundingBox
+        from sleap_io.model.centroid import Centroid
+        from sleap_io.model.label_image import LabelImage
+        from sleap_io.model.mask import SegmentationMask
+        from sleap_io.model.roi import ROI
+
+        if isinstance(annotation, (Instance, PredictedInstance)):
+            self.instances.append(annotation)
+        elif isinstance(annotation, Centroid):
+            self.centroids.append(annotation)
+        elif isinstance(annotation, BoundingBox):
+            self.bboxes.append(annotation)
+        elif isinstance(annotation, SegmentationMask):
+            self.masks.append(annotation)
+        elif isinstance(annotation, LabelImage):
+            self.label_images.append(annotation)
+        elif isinstance(annotation, ROI):
+            self.rois.append(annotation)
+        else:
+            raise TypeError(
+                f"Cannot append {type(annotation).__name__} to LabeledFrame. "
+                f"Expected one of: Instance, PredictedInstance, Centroid, "
+                f"BoundingBox, SegmentationMask, LabelImage, ROI."
+            )
+
     def __len__(self) -> int:
         """Return the number of instances in the frame."""
         return len(self.instances)
