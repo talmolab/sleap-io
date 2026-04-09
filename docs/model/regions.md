@@ -1,13 +1,21 @@
 # Regions
 
-Beyond keypoint poses, sleap-io supports spatial annotation types: bounding
-boxes, regions of interest (vector polygons), segmentation masks (raster), and
-label images (dense instance segmentation). These can be associated with videos,
-frames, tracks, and instances, and are stored on the [`Labels`](labels.md) object
-via `labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`.
+Beyond keypoint poses, sleap-io supports spatial annotation types: centroids,
+bounding boxes, regions of interest (vector polygons), segmentation masks
+(raster), and label images (dense instance segmentation). Annotations are
+**nested per-frame** on [`LabeledFrame`](labels.md) — each frame stores its own
+lists of annotations (e.g., `lf.centroids`, `lf.bboxes`, `lf.masks`). The
+[`Labels`](labels.md) object provides flattened convenience properties
+(`labels.centroids`, `labels.bboxes`, etc.) that aggregate across all frames,
+as well as `add_*()` methods for inserting annotations into the correct frame
+automatically.
 
-sleap-io provides four spatial annotation types with different trade-offs:
+sleap-io provides five spatial annotation types with different trade-offs:
 
+- **`Centroid`** — lightweight point annotation representing the center of an
+  object with `x`, `y`, and optional `z` coordinates. Supports conversion to
+  and from single-node [`Instance`](poses.md) objects. Has `UserCentroid` and
+  `PredictedCentroid` subtypes.
 - **`BoundingBox`** — axis-aligned or rotated rectangles, stored as corner
   coordinates. Has `UserBoundingBox` and `PredictedBoundingBox` subtypes for
   distinguishing human annotations from model outputs.
@@ -23,12 +31,166 @@ sleap-io provides four spatial annotation types with different trade-offs:
   [StarDist](https://github.com/stardist/stardist). Has `UserLabelImage` and
   `PredictedLabelImage` subtypes.
 
-All four base classes are **abstract** — use the `User*` or `Predicted*`
-subclass to create instances. All four can be associated with a video, frame,
-track, and instance. They are stored on [`Labels`](labels.md) via
-`labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`, and
-can be converted between each other (bbox -> ROI -> mask, mask -> bbox, label
-image <-> masks, label image -> bboxes).
+All five base classes are **abstract** — use the `User*` or `Predicted*`
+subclass to create instances. All five can be associated with a video, frame,
+track, and instance. They are stored on [`LabeledFrame`](labels.md) and
+accessible via frame-level attributes or the flattened [`Labels`](labels.md)
+properties. The four geometry types can be converted between each other
+(bbox -> ROI -> mask, mask -> bbox, label image <-> masks, label image -> bboxes).
+
+---
+
+## Working with annotations in frames
+
+Since annotations are nested in [`LabeledFrame`](labels.md), you can add them
+directly to a frame or use the convenience methods on [`Labels`](labels.md).
+
+### Adding to a frame directly
+
+```pycon
+>>> import sleap_io as sio
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> lf = sio.LabeledFrame(video=video, frame_idx=0)
+>>> bbox = sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60, video=video, frame_idx=0)
+>>> lf.bboxes.append(bbox)
+>>> print(len(lf.bboxes))
+
+```
+
+### Adding via Labels convenience methods
+
+The `add_centroid()`, `add_bbox()`, `add_mask()`, `add_label_image()`, and
+`add_roi()` methods find or create the appropriate `LabeledFrame` and append
+the annotation:
+
+```pycon
+>>> import sleap_io as sio
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> labels = sio.Labels(videos=[video])
+>>> centroid = sio.UserCentroid(x=100, y=200, video=video, frame_idx=0)
+>>> labels.add_centroid(centroid)
+>>> bbox = sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60, video=video, frame_idx=0)
+>>> labels.add_bbox(bbox)
+>>> print(len(labels.centroids))
+>>> print(len(labels.bboxes))
+
+```
+
+The `labels.centroids`, `labels.bboxes`, `labels.masks`, `labels.label_images`,
+and `labels.rois` properties return flattened views across all frames.
+
+---
+
+## Centroids
+
+A `Centroid` represents a single point at the center of an object. Centroids
+are the primary annotation type for **object detection** workflows where full
+pose skeletons are not needed. `Centroid` is abstract — use `UserCentroid` or
+`PredictedCentroid`.
+
+Centroids support optional 3D coordinates (`z`), interconversion with
+single-node [`Instance`](poses.md) objects, and the same video/frame/track
+metadata as other annotation types.
+
+### Direct construction
+
+```pycon
+>>> import sleap_io as sio
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> centroid = sio.UserCentroid(
+...     x=100.0, y=200.0,
+...     video=video, frame_idx=0,
+... )
+>>> print(centroid.xy)
+>>> print(centroid.yx)
+
+```
+
+### From an Instance
+
+Create a centroid from an existing pose `Instance` using one of three methods:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 20], [30, 40], [50, 60]]),
+...     skeleton=skeleton,
+... )
+>>> centroid = sio.UserCentroid.from_instance(inst)
+>>> print(centroid.xy)
+
+```
+
+The `method` parameter controls how the center point is computed:
+
+| Method | Behavior |
+|--------|----------|
+| `"center_of_mass"` | Mean of all visible point coordinates (default) |
+| `"bbox_center"` | Center of the bounding box of visible points |
+| `"anchor"` | Coordinates of a specific node (requires `node` argument) |
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 20], [30, 40], [50, 60]]),
+...     skeleton=skeleton,
+... )
+>>> anchor_c = sio.UserCentroid.from_instance(inst, method="anchor", node="head")
+>>> print(anchor_c.xy)
+
+```
+
+### Converting back to an Instance
+
+A centroid can be converted to a single-node `Instance` for interoperability
+with pose-based workflows:
+
+```pycon
+>>> import sleap_io as sio
+>>> centroid = sio.UserCentroid(x=30.0, y=40.0)
+>>> inst = centroid.to_instance()
+>>> print(inst.numpy())
+
+```
+
+### User vs. predicted centroids
+
+`UserCentroid` and `PredictedCentroid` distinguish human annotations from
+model predictions. `PredictedCentroid` adds a `score` field for confidence:
+
+```pycon
+>>> import sleap_io as sio
+>>> user_c = sio.UserCentroid(x=10, y=20)
+>>> print(user_c.is_predicted)
+>>> pred_c = sio.PredictedCentroid(x=10, y=20, score=0.95)
+>>> print(pred_c.score)
+>>> print(pred_c.is_predicted)
+
+```
+
+When using `from_instance()`, the return type matches the input:
+`PredictedInstance` produces `PredictedCentroid`, `Instance` produces
+`UserCentroid`.
+
+### Metadata fields
+
+Every centroid can carry optional metadata:
+
+| Field       | Type               | Description                                  |
+| ----------- | ------------------ | -------------------------------------------- |
+| `video`     | [`Video`](video.md) `\| None`    | Associated video                             |
+| `frame_idx` | `int \| None`      | Frame index within the video                 |
+| `track`     | [`Track`](poses.md) `\| None`    | Tracking identity across frames              |
+| `tracking_score` | `float \| None` | Confidence of track identity assignment    |
+| `instance`  | [`Instance`](poses.md) `\| None` | Linked pose instance                         |
+| `z`         | `float \| None`    | Optional Z-coordinate for 3D data            |
+| `category`  | `str`              | Class label (e.g., `"cell"`)                 |
+| `name`      | `str`              | Human-readable name                          |
+| `source`    | `str`              | How the centroid was computed (e.g., `"center_of_mass"`) |
 
 ---
 
@@ -908,13 +1070,30 @@ classDiagram
         +ndarray score_map
     }
 
-    class Labels:::labels {
+    class Centroid:::regions {
+        <<abstract>>
+        +float x
+        +float y
+        +xy
+        +to_instance()
+        +from_instance()
+    }
+
+    class UserCentroid:::regions
+    class PredictedCentroid:::regions {
+        +float score
+    }
+
+    class LabeledFrame:::labels {
+        +centroids
         +bboxes
         +rois
         +masks
         +label_images
     }
 
+    Centroid <|-- UserCentroid
+    Centroid <|-- PredictedCentroid
     BoundingBox <|-- UserBoundingBox
     BoundingBox <|-- PredictedBoundingBox
     ROI <|-- UserROI
@@ -931,10 +1110,11 @@ classDiagram
     LabelImage --> SegmentationMask : to_masks()
     LabelImage --> BoundingBox : to_bboxes()
     SegmentationMask --> LabelImage : from_masks()
-    Labels "1" *-- "0..*" BoundingBox
-    Labels "1" *-- "0..*" ROI
-    Labels "1" *-- "0..*" SegmentationMask
-    Labels "1" *-- "0..*" LabelImage
+    LabeledFrame "1" *-- "0..*" Centroid
+    LabeledFrame "1" *-- "0..*" BoundingBox
+    LabeledFrame "1" *-- "0..*" ROI
+    LabeledFrame "1" *-- "0..*" SegmentationMask
+    LabeledFrame "1" *-- "0..*" LabelImage
 
     classDef regions fill:#d32f2f,stroke:#c62828,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
@@ -942,7 +1122,7 @@ classDiagram
 
 !!! note "See also"
 
-    - **[Labels & Frames](labels.md)**: Accessing bounding boxes, ROIs, masks, and label images from a `Labels` dataset via `labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`, including filtered queries with `get_bboxes()`, `get_rois()`, `get_masks()`, and `get_label_images()`.
+    - **[Labels & Frames](labels.md)**: Accessing annotations from a `Labels` dataset via `labels.centroids`, `labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`, including filtered queries with `get_centroids()`, `get_bboxes()`, `get_rois()`, `get_masks()`, and `get_label_images()`.
     - **[Rendering](../rendering.md)**: Visualizing segmentation overlays and bounding boxes on video frames.
     - **[TIFF Format](../formats/tiff.md)**: Reading and writing label images as TIFF files with sidecar metadata.
     - **[SLP Format](../formats/slp.md#label-images)**: HDF5 storage layout for label images (blob and chunked formats).
@@ -951,6 +1131,12 @@ classDiagram
 ---
 
 ## API reference
+
+::: sleap_io.Centroid
+
+::: sleap_io.UserCentroid
+
+::: sleap_io.PredictedCentroid
 
 ::: sleap_io.BoundingBox
 

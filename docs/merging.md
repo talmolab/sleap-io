@@ -568,6 +568,58 @@ masks by the centroid of their bounding box.
 New frames (no matching frame in the target) always copy all annotations from the
 source, regardless of strategy.
 
+### Example: merging with annotations
+
+```pycon
+>>> import sleap_io as sio
+>>> import numpy as np
+>>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> inst1 = sio.Instance.from_numpy(
+...     np.array([[10, 20], [30, 40], [50, 60]]),
+...     skeleton=skeleton,
+... )
+>>> lf1 = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst1])
+>>> lf1.bboxes.append(sio.UserBoundingBox(
+...     x1=5, y1=15, x2=55, y2=65, video=video, frame_idx=0,
+... ))
+>>> base = sio.Labels(labeled_frames=[lf1])
+>>> inst2 = sio.PredictedInstance.from_numpy(
+...     np.array([[10, 20, 0.9], [30, 40, 0.8], [50, 60, 0.7]]),
+...     skeleton=skeleton,
+...     score=0.9,
+... )
+>>> lf2 = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst2])
+>>> lf2.bboxes.append(sio.PredictedBoundingBox(
+...     x1=6, y1=16, x2=56, y2=66, video=video, frame_idx=0, score=0.9,
+... ))
+>>> base.merge(sio.Labels(labeled_frames=[lf2]))
+>>> print(len(base[0].bboxes))
+
+```
+
+### Per-modality spatial matching
+
+For `auto` and `update_tracks` strategies, annotations are paired by centroid
+distance. Each annotation type extracts its centroid differently:
+
+| Modality | Centroid source |
+|----------|----------------|
+| Centroids | `(x, y)` coordinates directly |
+| Bounding boxes | `centroid_xy` property (box center) |
+| ROIs | `centroid_xy` property (geometry centroid) |
+| Segmentation masks | Centroid of `bbox` (bounding box center) |
+
+The matching threshold is controlled by the `instance` parameter — the same
+threshold applies to both instance matching and annotation matching:
+
+```python
+from sleap_io.model.matching import InstanceMatcher
+
+# Use a wider threshold (10px) for annotation matching
+base.merge(other, instance=InstanceMatcher(method="spatial", threshold=10.0))
+```
+
 ---
 
 ## Merging label images
