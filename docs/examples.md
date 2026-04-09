@@ -709,23 +709,13 @@ video = sio.load_video("test.mp4")
 print(sio.get_default_video_plugin())  # "FFMPEG"
 ```
 
-!!! info "Backend trade-offs"
+!!! info "Video backend trade-offs"
 
-    **OpenCV** (`opencv`):
-
-    - ✅ Generally faster for frame reading
-    - ❌ May have compatibility issues on some platforms
-    - ❌ Frame seeking may be less accurate for some codecs
-
-    - ✅ Works out of the box (bundled with sleap-io)
-    - ✅ More reliable and cross-platform
-    - ✅ Better seeking accuracy
-    - ✅ Always installed with sleap-io (default)
-    - ❌ May be slower than OpenCV
-
-    **PyAV** (`pyav`):
-
-    - ✅ Alternative FFMPEG wrapper with different performance characteristics
+    | Backend | Install | Speed | Notes |
+    |---------|---------|-------|-------|
+    | **FFMPEG** (`FFMPEG`) | Bundled (always available) | Moderate | Default. Most reliable, best seeking accuracy |
+    | **OpenCV** (`opencv`) | `pip install sleap-io[opencv]` | Fastest | May have platform-specific issues |
+    | **PyAV** (`pyav`) | `pip install sleap-io[pyav]` | Fast | Alternative FFMPEG wrapper |
 
 Choose which backend to use when encoding frames in `.pkg.slp` files with `sio.save_slp()`.
 
@@ -753,18 +743,16 @@ print(sio.get_default_image_plugin())  # "opencv"
 
 !!! info "Image backend options"
 
-    **OpenCV** (`opencv`):
+    | Backend | Install | Notes |
+    |---------|---------|-------|
+    | **imageio** (`imageio`) | Bundled (always available) | Default. Encodes in RGB channel order |
+    | **OpenCV** (`opencv`) | `pip install sleap-io[opencv]` | Faster encoding. Encodes in BGR internally |
 
-    - ✅ Generally faster encoding
-    - Encodes in BGR channel order
-
-    - ✅ Always installed with sleap-io (default)
-    - ✅ More reliable and cross-platform
-    - Encodes in RGB channel order
+    RGB/BGR conversion is handled automatically — frames always load in RGB regardless of which backend was used for encoding.
 
 !!! note "Plugin vs backend terminology"
     - **Video plugins**: Used by `sio.load_video()` for reading video files (`opencv`, `FFMPEG`, `pyav`)
-    - **Image plugins**: Used by `sio.save_slp()` for encoding embedded frames (`opencv`, `imageio`)
+    - **Image plugins**: Used by `sio.save_slp()` for encoding embedded frames in `.pkg.slp` files (`opencv`, `imageio`)
     - Both can be set via `set_default_*_plugin()` functions
 
 !!! note "See also"
