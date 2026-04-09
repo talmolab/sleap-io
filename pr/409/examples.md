@@ -709,23 +709,13 @@ video = sio.load_video("test.mp4")
 print(sio.get_default_video_plugin())  # "FFMPEG"
 ```
 
-!!! info "Backend trade-offs"
+!!! info "Video backend trade-offs"
 
-    **OpenCV** (`opencv`):
-
-    - ✅ Generally faster for frame reading
-    - ❌ May have compatibility issues on some platforms
-    - ❌ Frame seeking may be less accurate for some codecs
-
-    - ✅ Works out of the box (bundled with sleap-io)
-    - ✅ More reliable and cross-platform
-    - ✅ Better seeking accuracy
-    - ✅ Always installed with sleap-io (default)
-    - ❌ May be slower than OpenCV
-
-    **PyAV** (`pyav`):
-
-    - ✅ Alternative FFMPEG wrapper with different performance characteristics
+    | Backend | Install | Speed | Notes |
+    |---------|---------|-------|-------|
+    | **FFMPEG** (`FFMPEG`) | Bundled (always available) | Moderate | Default. Most reliable, best seeking accuracy |
+    | **OpenCV** (`opencv`) | `pip install sleap-io[opencv]` | Fastest | May have platform-specific issues |
+    | **PyAV** (`pyav`) | `pip install sleap-io[pyav]` | Fast | Alternative FFMPEG wrapper |
 
 Choose which backend to use when encoding frames in `.pkg.slp` files with `sio.save_slp()`.
 
@@ -753,18 +743,16 @@ print(sio.get_default_image_plugin())  # "opencv"
 
 !!! info "Image backend options"
 
-    **OpenCV** (`opencv`):
+    | Backend | Install | Notes |
+    |---------|---------|-------|
+    | **imageio** (`imageio`) | Bundled (always available) | Default. Encodes in RGB channel order |
+    | **OpenCV** (`opencv`) | `pip install sleap-io[opencv]` | Faster encoding. Encodes in BGR internally |
 
-    - ✅ Generally faster encoding
-    - Encodes in BGR channel order
-
-    - ✅ Always installed with sleap-io (default)
-    - ✅ More reliable and cross-platform
-    - Encodes in RGB channel order
+    RGB/BGR conversion is handled automatically — frames always load in RGB regardless of which backend was used for encoding.
 
 !!! note "Plugin vs backend terminology"
     - **Video plugins**: Used by `sio.load_video()` for reading video files (`opencv`, `FFMPEG`, `pyav`)
-    - **Image plugins**: Used by `sio.save_slp()` for encoding embedded frames (`opencv`, `imageio`)
+    - **Image plugins**: Used by `sio.save_slp()` for encoding embedded frames in `.pkg.slp` files (`opencv`, `imageio`)
     - Both can be set via `set_default_*_plugin()` functions
 
 !!! note "See also"
@@ -785,12 +773,12 @@ Convert a `(T, H, W)` integer mask array into an SLP file with object metadata.
 import numpy as np
 import sleap_io as sio
 
-# Load masks from segmentation tool output — (T, H, W) int32
-# 0 = background, 1+ = object IDs
-masks = np.load("cellpose_masks.npy")
+# Load masks from segmentation tool output — (n_frames, height, width) int32
+# 0 = background, 1+ = object IDs per frame
+masks = np.load("cellpose_masks.npy")  # e.g., shape (100, 512, 512)
 
-# Create video reference
-video = sio.Video("microscopy.tif")
+# Load the source video
+video = sio.load_video("microscopy.tif")  # shape: (n_frames, height, width, channels)
 
 # Convert to PredictedLabelImages with shared tracks across frames
 label_images = sio.PredictedLabelImage.from_stack(
@@ -798,14 +786,8 @@ label_images = sio.PredictedLabelImage.from_stack(
     create_tracks=True, score=1.0,
 )
 
-# Collect tracks for serialization
-tracks = list({
-    info.track for li in label_images
-    for info in li.objects.values() if info.track is not None
-})
-
-# Save
-labels = sio.Labels(label_images=label_images, videos=[video], tracks=tracks)
+# Build Labels — label_images are distributed to LabeledFrames automatically
+labels = sio.Labels(label_images=label_images, videos=[video])
 labels.save("segmentation.slp")
 ```
 
@@ -839,11 +821,13 @@ Convert per-object binary masks from tools like [SAM](https://github.com/faceboo
 import numpy as np
 import sleap_io as sio
 
-# Per-object binary masks from SAM — (N, H, W) bool
-sam_masks = np.load("sam_masks.npy")  # e.g., shape (5, 512, 512)
+# Per-object binary masks from SAM — (n_objects, height, width) bool array
+# Each mask[i] is a binary mask for one detected object in a single frame
+sam_masks = np.load("sam_masks.npy")  # e.g., shape (5, 512, 512) = 5 objects
 object_scores = [0.95, 0.92, 0.88, 0.85, 0.80]
 
-video = sio.Video("microscopy.tif")
+# Load the source video (e.g., a single-frame or multi-frame TIFF)
+video = sio.load_video("microscopy.tif")  # shape: (n_frames, height, width, channels)
 
 # Create a PredictedLabelImage with tracks and per-object scores
 li = sio.PredictedLabelImage.from_binary_masks(
@@ -854,13 +838,15 @@ li = sio.PredictedLabelImage.from_binary_masks(
     video=video, frame_idx=0, source="sam",
 )
 
-labels = sio.Labels(label_images=[li], videos=[video])
+# Add the label image to a Labels dataset via a LabeledFrame
+labels = sio.Labels(videos=[video])
+labels.add_label_image(li)
 labels.save("sam_output.slp")
 ```
 
 !!! tip "When to use which import method"
-    - **`from_binary_masks`**: You have N separate boolean masks per object (SAM, Mask R-CNN).
-    - **`from_stack`**: You have a `(T, H, W)` integer array where each pixel value is an object ID (Cellpose, StarDist).
+    - **`from_binary_masks`**: You have per-object boolean masks for a single frame — shape `(n_objects, H, W)` (SAM, Mask R-CNN).
+    - **`from_stack`**: You have a `(n_frames, H, W)` integer array where each pixel value is an object ID (Cellpose, StarDist).
     - **`from_numpy`**: You have a single `(H, W)` integer array for one frame.
 
 !!! note "See also"
@@ -875,7 +861,7 @@ For datasets too large to hold in memory, write frames one at a time with consta
 import numpy as np
 import sleap_io as sio
 
-video = sio.Video("microscopy.tif")
+video = sio.load_video("microscopy.tif")  # shape: (n_frames, H, W, channels)
 
 # Shared dict accumulates track mappings across frames
 shared_tracks = {}

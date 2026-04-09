@@ -3852,26 +3852,37 @@
 <a id="__codelineno-26-12" name="__codelineno-26-12"></a><a href="#__codelineno-26-12"><span class="linenos" data-linenos="12 "></span></a><span class="nb">print</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">get_default_video_plugin</span><span class="p">())</span>  <span class="c1"># &quot;FFMPEG&quot;</span>
 </code></pre></div>
 <div class="admonition info">
-<p class="admonition-title">Backend trade-offs</p>
-<p><strong>OpenCV</strong> (<code>opencv</code>):</p>
-<ul>
-<li>✅ Generally faster for frame reading</li>
-<li>❌ May have compatibility issues on some platforms</li>
-<li>
-<p>❌ Frame seeking may be less accurate for some codecs</p>
-</li>
-<li>
-<p>✅ Works out of the box (bundled with sleap-io)</p>
-</li>
-<li>✅ More reliable and cross-platform</li>
-<li>✅ Better seeking accuracy</li>
-<li>✅ Always installed with sleap-io (default)</li>
-<li>❌ May be slower than OpenCV</li>
-</ul>
-<p><strong>PyAV</strong> (<code>pyav</code>):</p>
-<ul>
-<li>✅ Alternative FFMPEG wrapper with different performance characteristics</li>
-</ul>
+<p class="admonition-title">Video backend trade-offs</p>
+<table>
+<thead>
+<tr>
+<th>Backend</th>
+<th>Install</th>
+<th>Speed</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>FFMPEG</strong> (<code>FFMPEG</code>)</td>
+<td>Bundled (always available)</td>
+<td>Moderate</td>
+<td>Default. Most reliable, best seeking accuracy</td>
+</tr>
+<tr>
+<td><strong>OpenCV</strong> (<code>opencv</code>)</td>
+<td><code>pip install sleap-io[opencv]</code></td>
+<td>Fastest</td>
+<td>May have platform-specific issues</td>
+</tr>
+<tr>
+<td><strong>PyAV</strong> (<code>pyav</code>)</td>
+<td><code>pip install sleap-io[pyav]</code></td>
+<td>Fast</td>
+<td>Alternative FFMPEG wrapper</td>
+</tr>
+</tbody>
+</table>
 </div>
 <p>Choose which backend to use when encoding frames in <code>.pkg.slp</code> files with <code>sio.save_slp()</code>.</p>
 <div class="highlight"><span class="filename">image_backends.py</span><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1"></a><a href="#__codelineno-27-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
@@ -3897,24 +3908,34 @@
 </div>
 <div class="admonition info">
 <p class="admonition-title">Image backend options</p>
-<p><strong>OpenCV</strong> (<code>opencv</code>):</p>
-<ul>
-<li>✅ Generally faster encoding</li>
-<li>
-<p>Encodes in BGR channel order</p>
-</li>
-<li>
-<p>✅ Always installed with sleap-io (default)</p>
-</li>
-<li>✅ More reliable and cross-platform</li>
-<li>Encodes in RGB channel order</li>
-</ul>
+<table>
+<thead>
+<tr>
+<th>Backend</th>
+<th>Install</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>imageio</strong> (<code>imageio</code>)</td>
+<td>Bundled (always available)</td>
+<td>Default. Encodes in RGB channel order</td>
+</tr>
+<tr>
+<td><strong>OpenCV</strong> (<code>opencv</code>)</td>
+<td><code>pip install sleap-io[opencv]</code></td>
+<td>Faster encoding. Encodes in BGR internally</td>
+</tr>
+</tbody>
+</table>
+<p>RGB/BGR conversion is handled automatically — frames always load in RGB regardless of which backend was used for encoding.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Plugin vs backend terminology</p>
 <ul>
 <li><strong>Video plugins</strong>: Used by <code>sio.load_video()</code> for reading video files (<code>opencv</code>, <code>FFMPEG</code>, <code>pyav</code>)</li>
-<li><strong>Image plugins</strong>: Used by <code>sio.save_slp()</code> for encoding embedded frames (<code>opencv</code>, <code>imageio</code>)</li>
+<li><strong>Image plugins</strong>: Used by <code>sio.save_slp()</code> for encoding embedded frames in <code>.pkg.slp</code> files (<code>opencv</code>, <code>imageio</code>)</li>
 <li>Both can be set via <code>set_default_*_plugin()</code> functions</li>
 </ul>
 </div>
@@ -3934,12 +3955,12 @@
 <div class="highlight"><span class="filename">segmentation_to_slp.py</span><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1"></a><a href="#__codelineno-28-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-28-2" name="__codelineno-28-2"></a><a href="#__codelineno-28-2"><span class="linenos" data-linenos=" 2 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-28-3" name="__codelineno-28-3"></a><a href="#__codelineno-28-3"><span class="linenos" data-linenos=" 3 "></span></a>
-<a id="__codelineno-28-4" name="__codelineno-28-4"></a><a href="#__codelineno-28-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="c1"># Load masks from segmentation tool output — (T, H, W) int32</span>
-<a id="__codelineno-28-5" name="__codelineno-28-5"></a><a href="#__codelineno-28-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="c1"># 0 = background, 1+ = object IDs</span>
-<a id="__codelineno-28-6" name="__codelineno-28-6"></a><a href="#__codelineno-28-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="n">masks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;cellpose_masks.npy&quot;</span><span class="p">)</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4"></a><a href="#__codelineno-28-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="c1"># Load masks from segmentation tool output — (n_frames, height, width) int32</span>
+<a id="__codelineno-28-5" name="__codelineno-28-5"></a><a href="#__codelineno-28-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="c1"># 0 = background, 1+ = object IDs per frame</span>
+<a id="__codelineno-28-6" name="__codelineno-28-6"></a><a href="#__codelineno-28-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="n">masks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;cellpose_masks.npy&quot;</span><span class="p">)</span>  <span class="c1"># e.g., shape (100, 512, 512)</span>
 <a id="__codelineno-28-7" name="__codelineno-28-7"></a><a href="#__codelineno-28-7"><span class="linenos" data-linenos=" 7 "></span></a>
-<a id="__codelineno-28-8" name="__codelineno-28-8"></a><a href="#__codelineno-28-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="c1"># Create video reference</span>
-<a id="__codelineno-28-9" name="__codelineno-28-9"></a><a href="#__codelineno-28-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="s2">&quot;microscopy.tif&quot;</span><span class="p">)</span>
+<a id="__codelineno-28-8" name="__codelineno-28-8"></a><a href="#__codelineno-28-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="c1"># Load the source video</span>
+<a id="__codelineno-28-9" name="__codelineno-28-9"></a><a href="#__codelineno-28-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;microscopy.tif&quot;</span><span class="p">)</span>  <span class="c1"># shape: (n_frames, height, width, channels)</span>
 <a id="__codelineno-28-10" name="__codelineno-28-10"></a><a href="#__codelineno-28-10"><span class="linenos" data-linenos="10 "></span></a>
 <a id="__codelineno-28-11" name="__codelineno-28-11"></a><a href="#__codelineno-28-11"><span class="linenos" data-linenos="11 "></span></a><span class="c1"># Convert to PredictedLabelImages with shared tracks across frames</span>
 <a id="__codelineno-28-12" name="__codelineno-28-12"></a><a href="#__codelineno-28-12"><span class="linenos" data-linenos="12 "></span></a><span class="n">label_images</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">PredictedLabelImage</span><span class="o">.</span><span class="n">from_stack</span><span class="p">(</span>
@@ -3947,15 +3968,9 @@
 <a id="__codelineno-28-14" name="__codelineno-28-14"></a><a href="#__codelineno-28-14"><span class="linenos" data-linenos="14 "></span></a>    <span class="n">create_tracks</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">score</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
 <a id="__codelineno-28-15" name="__codelineno-28-15"></a><a href="#__codelineno-28-15"><span class="linenos" data-linenos="15 "></span></a><span class="p">)</span>
 <a id="__codelineno-28-16" name="__codelineno-28-16"></a><a href="#__codelineno-28-16"><span class="linenos" data-linenos="16 "></span></a>
-<a id="__codelineno-28-17" name="__codelineno-28-17"></a><a href="#__codelineno-28-17"><span class="linenos" data-linenos="17 "></span></a><span class="c1"># Collect tracks for serialization</span>
-<a id="__codelineno-28-18" name="__codelineno-28-18"></a><a href="#__codelineno-28-18"><span class="linenos" data-linenos="18 "></span></a><span class="n">tracks</span> <span class="o">=</span> <span class="nb">list</span><span class="p">({</span>
-<a id="__codelineno-28-19" name="__codelineno-28-19"></a><a href="#__codelineno-28-19"><span class="linenos" data-linenos="19 "></span></a>    <span class="n">info</span><span class="o">.</span><span class="n">track</span> <span class="k">for</span> <span class="n">li</span> <span class="ow">in</span> <span class="n">label_images</span>
-<a id="__codelineno-28-20" name="__codelineno-28-20"></a><a href="#__codelineno-28-20"><span class="linenos" data-linenos="20 "></span></a>    <span class="k">for</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">li</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">if</span> <span class="n">info</span><span class="o">.</span><span class="n">track</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-<a id="__codelineno-28-21" name="__codelineno-28-21"></a><a href="#__codelineno-28-21"><span class="linenos" data-linenos="21 "></span></a><span class="p">})</span>
-<a id="__codelineno-28-22" name="__codelineno-28-22"></a><a href="#__codelineno-28-22"><span class="linenos" data-linenos="22 "></span></a>
-<a id="__codelineno-28-23" name="__codelineno-28-23"></a><a href="#__codelineno-28-23"><span class="linenos" data-linenos="23 "></span></a><span class="c1"># Save</span>
-<a id="__codelineno-28-24" name="__codelineno-28-24"></a><a href="#__codelineno-28-24"><span class="linenos" data-linenos="24 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">label_images</span><span class="o">=</span><span class="n">label_images</span><span class="p">,</span> <span class="n">videos</span><span class="o">=</span><span class="p">[</span><span class="n">video</span><span class="p">],</span> <span class="n">tracks</span><span class="o">=</span><span class="n">tracks</span><span class="p">)</span>
-<a id="__codelineno-28-25" name="__codelineno-28-25"></a><a href="#__codelineno-28-25"><span class="linenos" data-linenos="25 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;segmentation.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-28-17" name="__codelineno-28-17"></a><a href="#__codelineno-28-17"><span class="linenos" data-linenos="17 "></span></a><span class="c1"># Build Labels — label_images are distributed to LabeledFrames automatically</span>
+<a id="__codelineno-28-18" name="__codelineno-28-18"></a><a href="#__codelineno-28-18"><span class="linenos" data-linenos="18 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">label_images</span><span class="o">=</span><span class="n">label_images</span><span class="p">,</span> <span class="n">videos</span><span class="o">=</span><span class="p">[</span><span class="n">video</span><span class="p">])</span>
+<a id="__codelineno-28-19" name="__codelineno-28-19"></a><a href="#__codelineno-28-19"><span class="linenos" data-linenos="19 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;segmentation.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
 <details class="tip">
 <summary>Custom tracks and categories per frame</summary>
@@ -3988,29 +4003,33 @@ after tracking). Without <code>create_tracks</code>, objects have no cross-frame
 <div class="highlight"><span class="filename">binary_masks_to_slp.py</span><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1"></a><a href="#__codelineno-30-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-30-2" name="__codelineno-30-2"></a><a href="#__codelineno-30-2"><span class="linenos" data-linenos=" 2 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-30-3" name="__codelineno-30-3"></a><a href="#__codelineno-30-3"><span class="linenos" data-linenos=" 3 "></span></a>
-<a id="__codelineno-30-4" name="__codelineno-30-4"></a><a href="#__codelineno-30-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="c1"># Per-object binary masks from SAM — (N, H, W) bool</span>
-<a id="__codelineno-30-5" name="__codelineno-30-5"></a><a href="#__codelineno-30-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="n">sam_masks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;sam_masks.npy&quot;</span><span class="p">)</span>  <span class="c1"># e.g., shape (5, 512, 512)</span>
-<a id="__codelineno-30-6" name="__codelineno-30-6"></a><a href="#__codelineno-30-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="n">object_scores</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.92</span><span class="p">,</span> <span class="mf">0.88</span><span class="p">,</span> <span class="mf">0.85</span><span class="p">,</span> <span class="mf">0.80</span><span class="p">]</span>
-<a id="__codelineno-30-7" name="__codelineno-30-7"></a><a href="#__codelineno-30-7"><span class="linenos" data-linenos=" 7 "></span></a>
-<a id="__codelineno-30-8" name="__codelineno-30-8"></a><a href="#__codelineno-30-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="s2">&quot;microscopy.tif&quot;</span><span class="p">)</span>
-<a id="__codelineno-30-9" name="__codelineno-30-9"></a><a href="#__codelineno-30-9"><span class="linenos" data-linenos=" 9 "></span></a>
-<a id="__codelineno-30-10" name="__codelineno-30-10"></a><a href="#__codelineno-30-10"><span class="linenos" data-linenos="10 "></span></a><span class="c1"># Create a PredictedLabelImage with tracks and per-object scores</span>
-<a id="__codelineno-30-11" name="__codelineno-30-11"></a><a href="#__codelineno-30-11"><span class="linenos" data-linenos="11 "></span></a><span class="n">li</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">PredictedLabelImage</span><span class="o">.</span><span class="n">from_binary_masks</span><span class="p">(</span>
-<a id="__codelineno-30-12" name="__codelineno-30-12"></a><a href="#__codelineno-30-12"><span class="linenos" data-linenos="12 "></span></a>    <span class="n">sam_masks</span><span class="p">,</span>
-<a id="__codelineno-30-13" name="__codelineno-30-13"></a><a href="#__codelineno-30-13"><span class="linenos" data-linenos="13 "></span></a>    <span class="n">create_tracks</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>          <span class="c1"># auto-create one Track per mask</span>
-<a id="__codelineno-30-14" name="__codelineno-30-14"></a><a href="#__codelineno-30-14"><span class="linenos" data-linenos="14 "></span></a>    <span class="n">scores</span><span class="o">=</span><span class="n">object_scores</span><span class="p">,</span>        <span class="c1"># per-object confidence → Info.score</span>
-<a id="__codelineno-30-15" name="__codelineno-30-15"></a><a href="#__codelineno-30-15"><span class="linenos" data-linenos="15 "></span></a>    <span class="n">score</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>                   <span class="c1"># image-level confidence</span>
-<a id="__codelineno-30-16" name="__codelineno-30-16"></a><a href="#__codelineno-30-16"><span class="linenos" data-linenos="16 "></span></a>    <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;sam&quot;</span><span class="p">,</span>
-<a id="__codelineno-30-17" name="__codelineno-30-17"></a><a href="#__codelineno-30-17"><span class="linenos" data-linenos="17 "></span></a><span class="p">)</span>
-<a id="__codelineno-30-18" name="__codelineno-30-18"></a><a href="#__codelineno-30-18"><span class="linenos" data-linenos="18 "></span></a>
-<a id="__codelineno-30-19" name="__codelineno-30-19"></a><a href="#__codelineno-30-19"><span class="linenos" data-linenos="19 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">label_images</span><span class="o">=</span><span class="p">[</span><span class="n">li</span><span class="p">],</span> <span class="n">videos</span><span class="o">=</span><span class="p">[</span><span class="n">video</span><span class="p">])</span>
-<a id="__codelineno-30-20" name="__codelineno-30-20"></a><a href="#__codelineno-30-20"><span class="linenos" data-linenos="20 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;sam_output.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4"></a><a href="#__codelineno-30-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="c1"># Per-object binary masks from SAM — (n_objects, height, width) bool array</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5"></a><a href="#__codelineno-30-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="c1"># Each mask[i] is a binary mask for one detected object in a single frame</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6"></a><a href="#__codelineno-30-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="n">sam_masks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;sam_masks.npy&quot;</span><span class="p">)</span>  <span class="c1"># e.g., shape (5, 512, 512) = 5 objects</span>
+<a id="__codelineno-30-7" name="__codelineno-30-7"></a><a href="#__codelineno-30-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="n">object_scores</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.92</span><span class="p">,</span> <span class="mf">0.88</span><span class="p">,</span> <span class="mf">0.85</span><span class="p">,</span> <span class="mf">0.80</span><span class="p">]</span>
+<a id="__codelineno-30-8" name="__codelineno-30-8"></a><a href="#__codelineno-30-8"><span class="linenos" data-linenos=" 8 "></span></a>
+<a id="__codelineno-30-9" name="__codelineno-30-9"></a><a href="#__codelineno-30-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="c1"># Load the source video (e.g., a single-frame or multi-frame TIFF)</span>
+<a id="__codelineno-30-10" name="__codelineno-30-10"></a><a href="#__codelineno-30-10"><span class="linenos" data-linenos="10 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;microscopy.tif&quot;</span><span class="p">)</span>  <span class="c1"># shape: (n_frames, height, width, channels)</span>
+<a id="__codelineno-30-11" name="__codelineno-30-11"></a><a href="#__codelineno-30-11"><span class="linenos" data-linenos="11 "></span></a>
+<a id="__codelineno-30-12" name="__codelineno-30-12"></a><a href="#__codelineno-30-12"><span class="linenos" data-linenos="12 "></span></a><span class="c1"># Create a PredictedLabelImage with tracks and per-object scores</span>
+<a id="__codelineno-30-13" name="__codelineno-30-13"></a><a href="#__codelineno-30-13"><span class="linenos" data-linenos="13 "></span></a><span class="n">li</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">PredictedLabelImage</span><span class="o">.</span><span class="n">from_binary_masks</span><span class="p">(</span>
+<a id="__codelineno-30-14" name="__codelineno-30-14"></a><a href="#__codelineno-30-14"><span class="linenos" data-linenos="14 "></span></a>    <span class="n">sam_masks</span><span class="p">,</span>
+<a id="__codelineno-30-15" name="__codelineno-30-15"></a><a href="#__codelineno-30-15"><span class="linenos" data-linenos="15 "></span></a>    <span class="n">create_tracks</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>          <span class="c1"># auto-create one Track per mask</span>
+<a id="__codelineno-30-16" name="__codelineno-30-16"></a><a href="#__codelineno-30-16"><span class="linenos" data-linenos="16 "></span></a>    <span class="n">scores</span><span class="o">=</span><span class="n">object_scores</span><span class="p">,</span>        <span class="c1"># per-object confidence → Info.score</span>
+<a id="__codelineno-30-17" name="__codelineno-30-17"></a><a href="#__codelineno-30-17"><span class="linenos" data-linenos="17 "></span></a>    <span class="n">score</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>                   <span class="c1"># image-level confidence</span>
+<a id="__codelineno-30-18" name="__codelineno-30-18"></a><a href="#__codelineno-30-18"><span class="linenos" data-linenos="18 "></span></a>    <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;sam&quot;</span><span class="p">,</span>
+<a id="__codelineno-30-19" name="__codelineno-30-19"></a><a href="#__codelineno-30-19"><span class="linenos" data-linenos="19 "></span></a><span class="p">)</span>
+<a id="__codelineno-30-20" name="__codelineno-30-20"></a><a href="#__codelineno-30-20"><span class="linenos" data-linenos="20 "></span></a>
+<a id="__codelineno-30-21" name="__codelineno-30-21"></a><a href="#__codelineno-30-21"><span class="linenos" data-linenos="21 "></span></a><span class="c1"># Add the label image to a Labels dataset via a LabeledFrame</span>
+<a id="__codelineno-30-22" name="__codelineno-30-22"></a><a href="#__codelineno-30-22"><span class="linenos" data-linenos="22 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">videos</span><span class="o">=</span><span class="p">[</span><span class="n">video</span><span class="p">])</span>
+<a id="__codelineno-30-23" name="__codelineno-30-23"></a><a href="#__codelineno-30-23"><span class="linenos" data-linenos="23 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">add_label_image</span><span class="p">(</span><span class="n">li</span><span class="p">)</span>
+<a id="__codelineno-30-24" name="__codelineno-30-24"></a><a href="#__codelineno-30-24"><span class="linenos" data-linenos="24 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;sam_output.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">When to use which import method</p>
 <ul>
-<li><strong><code>from_binary_masks</code></strong>: You have N separate boolean masks per object (SAM, Mask R-CNN).</li>
-<li><strong><code>from_stack</code></strong>: You have a <code>(T, H, W)</code> integer array where each pixel value is an object ID (Cellpose, StarDist).</li>
+<li><strong><code>from_binary_masks</code></strong>: You have per-object boolean masks for a single frame — shape <code>(n_objects, H, W)</code> (SAM, Mask R-CNN).</li>
+<li><strong><code>from_stack</code></strong>: You have a <code>(n_frames, H, W)</code> integer array where each pixel value is an object ID (Cellpose, StarDist).</li>
 <li><strong><code>from_numpy</code></strong>: You have a single <code>(H, W)</code> integer array for one frame.</li>
 </ul>
 </div>
@@ -4026,7 +4045,7 @@ after tracking). Without <code>create_tracks</code>, objects have no cross-frame
 <div class="highlight"><span class="filename">streaming_segmentation.py</span><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1"></a><a href="#__codelineno-31-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-31-2" name="__codelineno-31-2"></a><a href="#__codelineno-31-2"><span class="linenos" data-linenos=" 2 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-31-3" name="__codelineno-31-3"></a><a href="#__codelineno-31-3"><span class="linenos" data-linenos=" 3 "></span></a>
-<a id="__codelineno-31-4" name="__codelineno-31-4"></a><a href="#__codelineno-31-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="s2">&quot;microscopy.tif&quot;</span><span class="p">)</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4"></a><a href="#__codelineno-31-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;microscopy.tif&quot;</span><span class="p">)</span>  <span class="c1"># shape: (n_frames, H, W, channels)</span>
 <a id="__codelineno-31-5" name="__codelineno-31-5"></a><a href="#__codelineno-31-5"><span class="linenos" data-linenos=" 5 "></span></a>
 <a id="__codelineno-31-6" name="__codelineno-31-6"></a><a href="#__codelineno-31-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="c1"># Shared dict accumulates track mappings across frames</span>
 <a id="__codelineno-31-7" name="__codelineno-31-7"></a><a href="#__codelineno-31-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="n">shared_tracks</span> <span class="o">=</span> <span class="p">{}</span>
