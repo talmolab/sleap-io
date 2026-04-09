@@ -865,7 +865,7 @@ time to an SLP file with constant memory usage:
 ```python
 import sleap_io as sio
 
-video = sio.Video("microscopy.tif")
+video = sio.load_video("microscopy.tif")
 with sio.LabelImageWriter("output.slp", video=video) as writer:
     for frame_idx, mask in enumerate(segmentation_results):
         li = sio.PredictedLabelImage.from_numpy(

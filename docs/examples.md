@@ -785,12 +785,12 @@ Convert a `(T, H, W)` integer mask array into an SLP file with object metadata.
 import numpy as np
 import sleap_io as sio
 
-# Load masks from segmentation tool output — (T, H, W) int32
-# 0 = background, 1+ = object IDs
-masks = np.load("cellpose_masks.npy")
+# Load masks from segmentation tool output — (n_frames, height, width) int32
+# 0 = background, 1+ = object IDs per frame
+masks = np.load("cellpose_masks.npy")  # e.g., shape (100, 512, 512)
 
-# Create video reference
-video = sio.Video("microscopy.tif")
+# Load the source video
+video = sio.load_video("microscopy.tif")  # shape: (n_frames, height, width, channels)
 
 # Convert to PredictedLabelImages with shared tracks across frames
 label_images = sio.PredictedLabelImage.from_stack(
@@ -798,14 +798,8 @@ label_images = sio.PredictedLabelImage.from_stack(
     create_tracks=True, score=1.0,
 )
 
-# Collect tracks for serialization
-tracks = list({
-    info.track for li in label_images
-    for info in li.objects.values() if info.track is not None
-})
-
-# Save
-labels = sio.Labels(label_images=label_images, videos=[video], tracks=tracks)
+# Build Labels — label_images are distributed to LabeledFrames automatically
+labels = sio.Labels(label_images=label_images, videos=[video])
 labels.save("segmentation.slp")
 ```
 
@@ -839,11 +833,13 @@ Convert per-object binary masks from tools like [SAM](https://github.com/faceboo
 import numpy as np
 import sleap_io as sio
 
-# Per-object binary masks from SAM — (N, H, W) bool
-sam_masks = np.load("sam_masks.npy")  # e.g., shape (5, 512, 512)
+# Per-object binary masks from SAM — (n_objects, height, width) bool array
+# Each mask[i] is a binary mask for one detected object in a single frame
+sam_masks = np.load("sam_masks.npy")  # e.g., shape (5, 512, 512) = 5 objects
 object_scores = [0.95, 0.92, 0.88, 0.85, 0.80]
 
-video = sio.Video("microscopy.tif")
+# Load the source video (e.g., a single-frame or multi-frame TIFF)
+video = sio.load_video("microscopy.tif")  # shape: (n_frames, height, width, channels)
 
 # Create a PredictedLabelImage with tracks and per-object scores
 li = sio.PredictedLabelImage.from_binary_masks(
@@ -854,13 +850,15 @@ li = sio.PredictedLabelImage.from_binary_masks(
     video=video, frame_idx=0, source="sam",
 )
 
-labels = sio.Labels(label_images=[li], videos=[video])
+# Add the label image to a Labels dataset via a LabeledFrame
+labels = sio.Labels(videos=[video])
+labels.add_label_image(li)
 labels.save("sam_output.slp")
 ```
 
 !!! tip "When to use which import method"
-    - **`from_binary_masks`**: You have N separate boolean masks per object (SAM, Mask R-CNN).
-    - **`from_stack`**: You have a `(T, H, W)` integer array where each pixel value is an object ID (Cellpose, StarDist).
+    - **`from_binary_masks`**: You have per-object boolean masks for a single frame — shape `(n_objects, H, W)` (SAM, Mask R-CNN).
+    - **`from_stack`**: You have a `(n_frames, H, W)` integer array where each pixel value is an object ID (Cellpose, StarDist).
     - **`from_numpy`**: You have a single `(H, W)` integer array for one frame.
 
 !!! note "See also"
@@ -875,7 +873,7 @@ For datasets too large to hold in memory, write frames one at a time with consta
 import numpy as np
 import sleap_io as sio
 
-video = sio.Video("microscopy.tif")
+video = sio.load_video("microscopy.tif")  # shape: (n_frames, H, W, channels)
 
 # Shared dict accumulates track mappings across frames
 shared_tracks = {}
