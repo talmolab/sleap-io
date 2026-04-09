@@ -154,6 +154,7 @@ def read_trackmate_csv(
     """
     from sleap_io.model.centroid import PredictedCentroid
     from sleap_io.model.instance import Track
+    from sleap_io.model.labeled_frame import LabeledFrame
     from sleap_io.model.labels import Labels
     from sleap_io.model.video import Video as VideoClass
 
@@ -220,7 +221,7 @@ def read_trackmate_csv(
     tracks = list(track_map.values())
 
     # --- Build PredictedCentroid objects ---
-    centroids: list[PredictedCentroid] = []
+    frame_centroids: dict[int, list[PredictedCentroid]] = {}
     for row in rows:
         spot_id = int(row[col["ID"]])
         tid_str = row[col["TRACK_ID"]]
@@ -244,18 +245,22 @@ def read_trackmate_csv(
             x=x,
             y=y,
             z=z,
-            video=video_obj,
-            frame_idx=frame_idx,
             track=track,
             tracking_score=tracking_score,
             score=score,
             name=label,
             source="trackmate",
         )
-        centroids.append(centroid)
+        # Collect per-frame centroids for distribution to LabeledFrames
+        frame_centroids.setdefault(frame_idx, []).append(centroid)
 
     # --- Assemble Labels ---
     videos = [video_obj] if video_obj is not None else []
-    labels = Labels(videos=videos, tracks=tracks, centroids=centroids)
+    labeled_frames = []
+    for fidx, cents in sorted(frame_centroids.items()):
+        lf = LabeledFrame(video=video_obj, frame_idx=fidx)
+        lf.centroids.extend(cents)
+        labeled_frames.append(lf)
+    labels = Labels(videos=videos, tracks=tracks, labeled_frames=labeled_frames)
     labels.provenance["filename"] = str(spots_path)
     return labels

@@ -245,7 +245,6 @@ def _static_object_to_roi(name: str, coords: np.ndarray, video: Video) -> ROI:
         category=category,
         source="jabs",
         video=video,
-        frame_idx=None,
     )
 
 

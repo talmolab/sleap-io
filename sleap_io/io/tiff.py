@@ -239,8 +239,6 @@ def read_label_images(
                 UserLabelImage(
                     data=data,
                     objects=objects,
-                    video=video,
-                    frame_idx=frame_idx,
                     scale=sidecar_scale,
                     offset=sidecar_offset,
                 )
@@ -271,8 +269,6 @@ def read_label_images(
             UserLabelImage(
                 data=data,
                 objects=objects,
-                video=video,
-                frame_idx=frame_idx,
                 scale=sidecar_scale,
                 offset=sidecar_offset,
             )

@@ -389,14 +389,13 @@ def _load_overlay(
         raise click.ClickException(f"No label images loaded from: {overlay_path}")
 
     if frame_idx is not None:
-        matches = [li for li in label_images if li.frame_idx == frame_idx]
-        if not matches:
+        if frame_idx < 0 or frame_idx >= len(label_images):
             n_frames = len(label_images)
             raise click.ClickException(
                 f"--overlay frame index {frame_idx} out of range. "
                 f"Overlay has {n_frames} frames."
             )
-        return matches[0]
+        return label_images[frame_idx]
 
     return label_images
 
