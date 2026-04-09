@@ -59,6 +59,11 @@ classDiagram
         +Video video
         +int frame_idx
         +instances
+        +centroids
+        +bboxes
+        +masks
+        +label_images
+        +rois
     }
     class SuggestionFrame:::labels {
         +Video video
@@ -140,6 +145,16 @@ classDiagram
         +to_masks()
     }
 
+    class Centroid:::regions {
+        <<abstract>>
+        +float x
+        +float y
+    }
+    class UserCentroid:::regions
+    class PredictedCentroid:::regions {
+        +float score
+    }
+
     Skeleton "1" *-- "1..*" Node
     Skeleton "1" *-- "0..*" Edge
     Skeleton "1" *-- "0..*" Symmetry
@@ -162,6 +177,8 @@ classDiagram
     InstanceGroup --> Instance
     InstanceGroup --> Camera
 
+    Centroid <|-- UserCentroid
+    Centroid <|-- PredictedCentroid
     BoundingBox <|-- UserBoundingBox
     BoundingBox <|-- PredictedBoundingBox
     ROI <|-- UserROI
@@ -171,6 +188,11 @@ classDiagram
     LabelImage <|-- UserLabelImage
     LabelImage <|-- PredictedLabelImage
     LabelImage --> SegmentationMask : to_masks()
+    LabeledFrame --> Centroid
+    LabeledFrame --> BoundingBox
+    LabeledFrame --> ROI
+    LabeledFrame --> SegmentationMask
+    LabeledFrame --> LabelImage
 
     classDef poses fill:#0097a7,stroke:#00796b,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
@@ -200,6 +222,9 @@ classDiagram
 | [`RecordingSession`](3d.md) | [3D](3d.md) | Multi-camera recording linking cameras to videos |
 | [`FrameGroup`](3d.md) | [3D](3d.md) | Matched labeled frames across views at one time point |
 | [`InstanceGroup`](3d.md) | [3D](3d.md) | Same animal matched across cameras, with optional 3D points |
+| [`Centroid`](regions.md) | [Regions](regions.md) | Abstract base centroid point annotation |
+| [`UserCentroid`](regions.md) | [Regions](regions.md) | Human-annotated centroid |
+| [`PredictedCentroid`](regions.md) | [Regions](regions.md) | Model-predicted centroid with score |
 | [`ROI`](regions.md) | [Regions](regions.md) | Vector geometry annotation (polygon, etc.) |
 | [`SegmentationMask`](regions.md) | [Regions](regions.md) | Run-length encoded pixel mask |
 | [`BoundingBox`](regions.md) | [Regions](regions.md) | Axis-aligned or rotated bounding box |

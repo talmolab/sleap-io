@@ -114,6 +114,57 @@ You can also index with a `(video, frame_idx)` tuple:
 lf = labels[video, 0]  # same as labels.find(video, 0)[0]
 ```
 
+### Fast lookups
+
+`Labels` maintains lazy indices for O(1) frame and track lookups. Use
+`get_frame()` instead of `find()` when you need a single frame:
+
+```pycon
+>>> import sleap_io as sio
+>>> import numpy as np
+>>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> track = sio.Track("animal")
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 20], [5, 15], [0, 10]]),
+...     skeleton=skeleton,
+...     track=track,
+... )
+>>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+>>> labels = sio.Labels(labeled_frames=[lf])
+>>> print(labels.get_frame(video, 0))
+>>> print(labels.get_frame(video, 999))
+
+```
+
+Track-level queries return all annotations for a given track across frames,
+sorted by frame index:
+
+```pycon
+>>> import sleap_io as sio
+>>> import numpy as np
+>>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> track = sio.Track("animal")
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 20], [5, 15], [0, 10]]),
+...     skeleton=skeleton,
+...     track=track,
+... )
+>>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+>>> labels = sio.Labels(labeled_frames=[lf])
+>>> annotations = labels.get_track_annotations(video, track)
+>>> print(len(annotations))
+
+```
+
+After batch mutations (e.g., changing `frame_idx` or track assignments
+directly), call `reindex()` to rebuild the indices:
+
+```python
+labels.reindex()
+```
+
 ### Array conversion
 
 Convert all tracked instances to a NumPy array for numerical analysis:
@@ -170,6 +221,23 @@ new_skeleton = sio.Skeleton(["HEAD", "BODY", "TAIL"])
 labels.replace_skeleton(new_skeleton)
 ```
 
+**Adding spatial annotations** inserts annotations into the appropriate frame,
+creating the frame if needed:
+
+```python
+labels.add_centroid(sio.UserCentroid(x=100, y=200, video=video, frame_idx=0))
+labels.add_bbox(sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60, video=video, frame_idx=0))
+labels.add_mask(mask)
+labels.add_label_image(label_image)
+labels.add_roi(roi)
+```
+
+!!! note "See also"
+
+    See [Regions](regions.md) for details on creating spatial annotation objects
+    and [Working with annotations in frames](regions.md#working-with-annotations-in-frames)
+    for more examples.
+
 ### Saving
 
 Save labels to any supported format. The format is inferred from the file extension:
@@ -189,7 +257,7 @@ labels.save("output.pkg.slp", embed=True)
 
 ## Labeled frames
 
-A [`LabeledFrame`](#sleap_io.LabeledFrame) contains all annotations for a single frame of a [`Video`](video.md). Each frame holds a list of [`Instance`](poses.md) and/or [`PredictedInstance`](poses.md) objects.
+A [`LabeledFrame`](#sleap_io.LabeledFrame) contains all annotations for a single frame of a [`Video`](video.md). Each frame holds a list of [`Instance`](poses.md) and/or [`PredictedInstance`](poses.md) objects, along with optional spatial annotations: [`centroids`](regions.md), [`bboxes`](regions.md) (bounding boxes), [`masks`](regions.md) (segmentation masks), [`label_images`](regions.md), and [`rois`](regions.md) (regions of interest).
 
 ```pycon
 >>> import sleap_io as sio
@@ -324,6 +392,11 @@ classDiagram
         +Video video
         +int frame_idx
         +List~Instance~ instances
+        +List~Centroid~ centroids
+        +List~BoundingBox~ bboxes
+        +List~SegmentationMask~ masks
+        +List~LabelImage~ label_images
+        +List~ROI~ rois
     }
 
     class Instance {
@@ -363,6 +436,11 @@ classDiagram
     Instance "0..*" --> "1" Skeleton : uses
     Instance "0..*" --> "0..1" Track : belongs to
     SuggestionFrame "0..*" --> "1" Video : references
+    LabeledFrame "1" *-- "0..*" Centroid : centroids
+    LabeledFrame "1" *-- "0..*" BoundingBox : bboxes
+    LabeledFrame "1" *-- "0..*" SegmentationMask : masks
+    LabeledFrame "1" *-- "0..*" LabelImage : label_images
+    LabeledFrame "1" *-- "0..*" ROI : rois
     LabelsSet "1" *-- "1..*" Labels : contains
 ```
 
