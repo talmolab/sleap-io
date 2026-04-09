@@ -20,7 +20,7 @@ This page provides practical examples for common tasks with sleap-io. Each examp
 
 ### Create labels from raw data
 
-Build a complete labels dataset programmatically.
+Build a complete [`Labels`][sleap_io.Labels] dataset programmatically from a [`Skeleton`][sleap_io.Skeleton], [`Video`][sleap_io.Video], and [`Instance`][sleap_io.Instance] objects.
 
 ```python title="create_labels.py" linenums="1"
 import sleap_io as sio
@@ -56,12 +56,17 @@ labels.save("labels.slp")
 ```
 
 ??? tip "Creating predicted instances"
-    To create predictions with confidence scores:
+    To create predictions with confidence scores, include scores as the third
+    column of the points array:
     ```python
-    predicted_instance = sio.PredictedInstance.from_numpy(
-        points=points_array,
-        confidence=confidence_array,  # Shape: (n_nodes,)
-        skeleton=skeleton
+    predicted = sio.PredictedInstance.from_numpy(
+        np.array([
+            [10.2, 20.4, 0.9],   # head (x, y, score)
+            [5.8, 15.1, 0.8],    # thorax
+            [0.3, 10.6, 0.7],    # abdomen
+        ]),
+        skeleton=skeleton,
+        score=0.85,  # instance-level confidence
     )
     ```
 
@@ -73,7 +78,7 @@ labels.save("labels.slp")
 
 ### Convert labels to raw arrays
 
-Extract pose data as NumPy arrays for analysis or visualization.
+Extract pose data as NumPy arrays for analysis or visualization using [`Labels.numpy()`][sleap_io.Labels.numpy].
 
 ```python title="labels_to_numpy.py" linenums="1"
 import sleap_io as sio
@@ -104,7 +109,7 @@ assert xy_score == 3  # x, y, and confidence score
 
 ### Load and save in different formats
 
-Convert between supported formats with automatic format detection.
+Convert between supported formats with automatic format detection using [`load_file()`][sleap_io.load_file] and [`Labels.save()`][sleap_io.Labels.save].
 
 ```python title="format_conversion.py" linenums="1"
 import sleap_io as sio
@@ -158,40 +163,47 @@ sio.save_nwb(labels, "dataset_export.nwb", nwb_format="annotations_export")
 Include detailed experimental metadata when saving training annotations.
 
 ```python title="nwb_metadata.py" linenums="1"
-from sleap_io.io.nwb_annotations import save_labels
+import sleap_io as sio
 
-# Save with comprehensive metadata
-save_labels(
-    labels,
-    "training_data.nwb",
-    session_description="Mouse skilled reaching task - training dataset",
-    identifier="mouse_01_session_03_annotations",
-    session_start_time="2024-01-15T09:30:00",
-    annotator="John Doe",
-    nwb_kwargs={
-        # Session metadata
-        "session_id": "session_003",
-        "experimenter": ["John Doe", "Jane Smith"],
-        "lab": "Motor Control Lab",
-        "institution": "University of Example",
+labels = sio.load_file("labels.slp")
 
-        # Experimental details
-        "experiment_description": "Skilled reaching task with food pellet reward",
-        "protocol": "Protocol 2024-001",
-        "surgery": "Cranial window implant over M1",
-
-        # Subject information
-        "subject": {
-            "subject_id": "mouse_01",
-            "age": "P90",
-            "sex": "M",
-            "species": "Mus musculus",
-            "strain": "C57BL/6J",
-            "weight": "25g"
-        }
-    }
-)
+# Basic save with default metadata
+sio.save_nwb(labels, "training_data.nwb", nwb_format="annotations")
 ```
+
+??? tip "Advanced: custom NWB metadata (internal API)"
+    The public `save_nwb()` uses default metadata. To customize session
+    descriptions, subject info, and other NWB fields, use the internal
+    `save_labels()` function. This is not part of the public API and may
+    change between versions.
+
+    ```python
+    from sleap_io.io.nwb_annotations import save_labels
+
+    save_labels(
+        labels,
+        "training_data.nwb",
+        session_description="Mouse skilled reaching task - training dataset",
+        identifier="mouse_01_session_03_annotations",
+        session_start_time="2024-01-15T09:30:00",
+        annotator="John Doe",
+        nwb_kwargs={
+            "session_id": "session_003",
+            "experimenter": ["John Doe", "Jane Smith"],
+            "lab": "Motor Control Lab",
+            "institution": "University of Example",
+            "experiment_description": "Skilled reaching task with food pellet reward",
+            "subject": {
+                "subject_id": "mouse_01",
+                "age": "P90",
+                "sex": "M",
+                "species": "Mus musculus",
+                "strain": "C57BL/6J",
+                "weight": "25g",
+            },
+        },
+    )
+    ```
 
 !!! tip "Metadata best practices"
     Include as much metadata as possible for reproducibility:
@@ -204,41 +216,50 @@ save_labels(
 ### Export dataset with embedded videos
 
 Create self-contained NWB files with video frames for sharing complete datasets.
+The simplest approach uses the public API:
 
 ```python title="nwb_export.py" linenums="1"
-from sleap_io.io.nwb_annotations import export_labels, export_labeled_frames
+import sleap_io as sio
 
-# Method 1: Export complete dataset with all videos
-export_labels(
-    labels,
-    output_dir="export/",
-    nwb_filename="complete_dataset.nwb",
-    as_training=True,      # Include manual annotations
-    include_videos=True,    # Embed all video frames
-    include_skeleton=True   # Include skeleton definition
-)
+labels = sio.load_file("labels.slp")
 
-# Method 2: Export only frames with labels as a new video
-export_labeled_frames(
-    labels,
-    output_path="labeled_frames.avi",         # MJPEG video output
-    labels_output_path="labeled_frames.nwb",  # Corresponding labels
-    fps=30.0,                                  # Output frame rate
-    scale=1.0                                  # Video scale factor
-)
-
-# The export includes a FrameMap JSON file tracking frame origins
-import json
-with open("labeled_frames.frame_map.json", "r") as f:
-    frame_map = json.load(f)
-    print(f"Exported {frame_map['total_frames']} frames from {len(frame_map['videos'])} videos")
+# Export annotations with embedded video frames to NWB
+sio.save_nwb(labels, "dataset_export.nwb", nwb_format="annotations_export")
 ```
 
-!!! info "Export formats"
+??? tip "Advanced: fine-grained export control"
+    For more control over the export process (e.g., custom filenames, multi-subject
+    support), use the internal export functions directly. These are not part of the
+    public API and may change between versions.
 
-    - **Full export**: Includes all video frames, creating large but complete files
-    - **Labeled frames only**: Exports just frames with annotations, reducing file size
-    - **Frame provenance**: JSON metadata tracks which frames came from which source videos
+    ```python
+    from sleap_io.io.nwb_annotations import export_labels, export_labeled_frames
+
+    # Export annotations + MJPEG video + frame map to a directory
+    export_labels(
+        labels,
+        output_dir="export/",
+        mjpeg_filename="annotated_frames.avi",
+        frame_map_filename="frame_map.json",
+        nwb_filename="pose_training.nwb",
+        clean=True,  # Remove empty frames and predictions before export
+    )
+
+    # Or export just labeled frames with provenance tracking
+    frame_map = export_labeled_frames(
+        labels,
+        frame_map_path="export/frame_map.json",
+        mjpeg_path="export/labeled_frames.avi",
+        nwb_path="export/labeled_frames.nwb",
+    )
+    print(f"Exported {frame_map.total_frames} frames")
+    ```
+
+!!! info "Export contents"
+
+    - **NWB file**: Annotations in PoseTraining format with skeleton definition
+    - **MJPEG video**: Labeled frames re-encoded as a seekable MJPEG video
+    - **Frame map JSON**: Provenance metadata tracking which frames came from which source videos
 
 ### Convert between NWB and other formats
 
@@ -472,22 +493,27 @@ import numpy as np
 
 labels = sio.load_file("predictions.slp")
 
-# Convert to array of shape (n_frames, n_tracks, n_nodes, xy)
+# Convert to array — shape: (n_frames, n_tracks, n_nodes, 2)
 trx = labels.numpy()
 
-# Apply temporal filtering (example: simple moving average)
-window_size = 5
-trx_filtered = np.convolve(trx.reshape(-1), np.ones(window_size)/window_size, mode='same').reshape(trx.shape)
+# Apply temporal smoothing along the frame axis (axis=0)
+# This moving average operates independently per track/node/coordinate
+kernel = np.ones(5) / 5
+trx_smoothed = np.apply_along_axis(
+    lambda x: np.convolve(x, kernel, mode="same"), axis=0, arr=trx
+)
 
-# Update the labels with filtered data
-labels.update_from_numpy(trx_filtered)
+# Update the labels with smoothed coordinates
+labels.update_from_numpy(trx_smoothed)
 
-# Save the filtered version
-labels.save("predictions.filtered.slp")
+# Save the smoothed version
+labels.save("predictions.smoothed.slp")
 ```
 
-??? tip "Advanced filtering with movement"
-    For more sophisticated analysis and filtering, check out the [`movement`](https://movement.neuroinformatics.dev/) library for pose processing.
+!!! tip "Advanced filtering with movement"
+    For more sophisticated temporal filtering (Kalman, median, Savitzky-Golay),
+    check out the [`movement`](https://movement.neuroinformatics.dev/) library
+    which provides purpose-built tools for pose trajectory processing.
 
 !!! warning
     When updating from numpy, the array shape must match the original data structure exactly.
@@ -539,15 +565,18 @@ def on_progress(current, total):
 labels.save("labels.pkg.slp", embed="user", progress_callback=on_progress)
 ```
 
-**Cancellation support:**
+**Cancellation support** (e.g., for GUI integration where a user can click "Cancel"):
 
 ```python title="embed_with_cancel.py" linenums="1"
+import sleap_io as sio
 from sleap_io.io.slp import ExportCancelled
 
-cancelled = False
+labels = sio.load_file("labels.slp")
+
+cancelled = False  # Set to True from another thread/signal to cancel
 
 def on_progress(current, total):
-    return not cancelled  # Return False to cancel
+    return not cancelled  # Return False to cancel the export
 
 try:
     labels.save("output.pkg.slp", embed="user", progress_callback=on_progress)
@@ -991,14 +1020,14 @@ import sleap_io as sio
 
 labels = sio.load_slp("predictions.slp")
 
-# Render full video
+# Render full video (MP4 with skeleton overlays at source resolution)
 labels.render("output.mp4")
 
-# Fast preview (0.25x resolution)
+# Fast preview for iteration (0.25x resolution, faster encoding)
 labels.render("preview.mp4", preset="preview")
 
-# Single frame to image
-sio.render_image(labels.labeled_frames[0], "frame.png")
+# Single frame to PNG image
+sio.render_image(labels[0], "frame.png")
 ```
 
 ```bash title="CLI"
