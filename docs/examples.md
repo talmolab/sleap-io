@@ -861,30 +861,42 @@ For datasets too large to hold in memory, write frames one at a time with consta
 import numpy as np
 import sleap_io as sio
 
-video = sio.load_video("microscopy.tif")  # shape: (n_frames, H, W, channels)
-
-# Shared dict accumulates track mappings across frames
-shared_tracks = {}
+# Load source video for frame data and metadata
+video = sio.load_video("microscopy.tif")  # shape: (n_frames, height, width, channels)
 
 # Stream frames to SLP — file is created lazily on first add()
+# video is optional: associates all label images with this video in the SLP file
 with sio.LabelImageWriter("output.slp", video=video) as writer:
-    for frame_idx in range(n_frames):
-        mask = run_segmentation(frame_idx)  # your segmentation function
+    for frame_idx in range(len(video)):
+        # Read the frame and run your segmentation model
+        mask = run_segmentation(video[frame_idx])  # returns (H, W) int32
+
         li = sio.PredictedLabelImage.from_numpy(
             mask, video=video, frame_idx=frame_idx,
-            tracks=shared_tracks, create_tracks=True,
             source="cellpose:nuclei", score=1.0,
         )
         writer.add(li)
 # File finalized and closed on context exit
 ```
 
-!!! info "Accumulating tracks"
-    Passing a dict as ``tracks`` with ``create_tracks=True`` turns it into a shared
-    accumulator — existing entries are reused and new label IDs get fresh ``Track``
-    objects added to the dict in place. This gives cross-frame identity without
-    requiring all data in memory. The writer auto-collects new tracks from each
-    ``add()`` call.
+!!! info "Tracking across frames"
+    By default, each frame's objects are independent — no cross-frame identity.
+    To link objects across frames, pass a shared dict as ``tracks`` with
+    ``create_tracks=True``:
+
+    ```python
+    shared_tracks = {}  # accumulates {label_id: Track} across frames
+
+    li = sio.PredictedLabelImage.from_numpy(
+        mask, video=video, frame_idx=frame_idx,
+        tracks=shared_tracks, create_tracks=True,  # reuse existing, create new
+        source="cellpose:nuclei", score=1.0,
+    )
+    ```
+
+    Existing entries in the dict are reused and new label IDs get fresh ``Track``
+    objects added in place. This gives cross-frame identity without requiring all
+    data in memory. The writer auto-collects new tracks from each ``add()`` call.
 
 !!! tip "Memory and performance"
     The writer uses the chunked HDF5 format with gzip compression. Only one frame's
