@@ -86,13 +86,23 @@ def _run_pycon_interleaved(code: str) -> str:
 
 
 def _highlight_pycon(code: str) -> str:
-    """Syntax-highlight pycon code using Pygments and return HTML."""
+    """Syntax-highlight pycon code using Pygments and return HTML.
+
+    Produces the same ``<div class="highlight"><pre><code>...</code></pre></div>``
+    structure that ``pymdownx.superfences`` generates for normal fenced code
+    blocks. The ``<code>`` wrapper is required for Material theme CSS rules
+    (font-size, overflow, padding) to apply correctly.
+    """
     from pygments import highlight
     from pygments.formatters import HtmlFormatter
     from pygments.lexers import PythonConsoleLexer
 
-    formatter = HtmlFormatter(nowrap=False, cssclass="highlight")
-    return highlight(code, PythonConsoleLexer(), formatter)
+    formatter = HtmlFormatter(nowrap=True)
+    highlighted = highlight(code, PythonConsoleLexer(), formatter)
+    return (
+        f'<div class="highlight"><pre><span></span><code>{highlighted}'
+        f"</code></pre></div>"
+    )
 
 
 def _custom_pycon_formatter(
