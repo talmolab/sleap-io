@@ -917,26 +917,33 @@ import sleap_io as sio
 
 # Load — pixel data is lazy (metadata queries don't decompress)
 labels = sio.load_slp("segmentation.slp")
-li = labels.label_images[0]
-print(li.frame_idx, li.n_objects)  # no decompression yet
 
-# Extract all frames as (T, H, W) numpy array
-all_masks = np.stack([li.data for li in labels.label_images])
+# Access label images through frames (annotations are nested in LabeledFrames)
+lf = labels[0]  # first labeled frame
+print(lf.frame_idx, len(lf.label_images))  # no decompression yet
+
+# Inspect a single label image
+li = lf.label_images[0]
+print(li.n_objects, li.tracks, li.categories)  # still no decompression
+
+# Extract all frames as (n_frames, height, width) numpy array
+# .data triggers lazy decompression for each frame
+all_label_images = labels.label_images  # flattened view across all frames
+all_masks = np.stack([li.data for li in all_label_images])
 
 # Export as TIFF stack (with sidecar metadata JSON)
-sio.save_label_images("masks.tif", labels.label_images, stack=True)
+sio.save_label_images("masks.tif", all_label_images, stack=True)
 
-# Decompose one frame into per-object binary masks
-individual_masks = li.to_masks()
-for mask in individual_masks:
-    print(f"{mask.track}: {mask.area} pixels")
+# Decompose one frame into per-object binary SegmentationMasks
+for mask in li.to_masks():
+    print(f"{mask.category}: {mask.area} pixels")
 ```
 
 ??? example "Expected output shapes"
     For a dataset with 42 frames at 592x608 with 21 objects:
 
     - `all_masks.shape`: `(42, 592, 608)`, dtype `int32`
-    - `individual_masks`: list of 21 `SegmentationMask` objects
+    - `li.to_masks()`: list of 21 [`SegmentationMask`](model/regions.md#segmentation-masks) objects
     - Each mask: boolean array `(592, 608)` for one object
 
 !!! note "See also"
