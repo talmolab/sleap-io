@@ -12,24 +12,24 @@ automatically.
 
 sleap-io provides five spatial annotation types with different trade-offs:
 
-- **`Centroid`** — lightweight point annotation representing the center of an
+- **[`Centroid`][sleap_io.Centroid]** — lightweight point annotation representing the center of an
   object with `x`, `y`, and optional `z` coordinates. Supports conversion to
-  and from single-node [`Instance`](poses.md) objects. Has `UserCentroid` and
-  `PredictedCentroid` subtypes.
-- **`BoundingBox`** — axis-aligned or rotated rectangles, stored as corner
-  coordinates. Has `UserBoundingBox` and `PredictedBoundingBox` subtypes for
+  and from single-node [`Instance`](poses.md) objects. Has [`UserCentroid`][sleap_io.UserCentroid] and
+  [`PredictedCentroid`][sleap_io.PredictedCentroid] subtypes.
+- **[`BoundingBox`][sleap_io.BoundingBox]** — axis-aligned or rotated rectangles, stored as corner
+  coordinates. Has [`UserBoundingBox`][sleap_io.UserBoundingBox] and [`PredictedBoundingBox`][sleap_io.PredictedBoundingBox] subtypes for
   distinguishing human annotations from model outputs.
-- **`ROI`** — arbitrary vector geometry via Shapely (polygons, multi-polygons,
-  etc.). Can be static (whole video) or per-frame. Has `UserROI` and
-  `PredictedROI` subtypes.
-- **`SegmentationMask`** — per-pixel binary masks stored as run-length encoding
-  for compactness. One mask per object. Has `UserSegmentationMask` and
-  `PredictedSegmentationMask` subtypes.
-- **`LabelImage`** — dense per-pixel integer label image storing **all** objects
+- **[`ROI`][sleap_io.ROI]** — arbitrary vector geometry via Shapely (polygons, multi-polygons,
+  etc.). Can be static (whole video) or per-frame. Has [`UserROI`][sleap_io.UserROI] and
+  [`PredictedROI`][sleap_io.PredictedROI] subtypes.
+- **[`SegmentationMask`][sleap_io.SegmentationMask]** — per-pixel binary masks stored as run-length encoding
+  for compactness. One mask per object. Has [`UserSegmentationMask`][sleap_io.UserSegmentationMask] and
+  [`PredictedSegmentationMask`][sleap_io.PredictedSegmentationMask] subtypes.
+- **[`LabelImage`][sleap_io.LabelImage]** — dense per-pixel integer label image storing **all** objects
   for a frame in one array. Standard output of instance segmentation tools like
   [Cellpose](https://www.cellpose.org/) and
-  [StarDist](https://github.com/stardist/stardist). Has `UserLabelImage` and
-  `PredictedLabelImage` subtypes.
+  [StarDist](https://github.com/stardist/stardist). Has [`UserLabelImage`][sleap_io.UserLabelImage] and
+  [`PredictedLabelImage`][sleap_io.PredictedLabelImage] subtypes.
 
 All five base classes are **abstract** — use the `User*` or `Predicted*`
 subclass to create instances. All five can be associated with a video, frame,
@@ -83,10 +83,10 @@ and `labels.rois` properties return flattened views across all frames.
 
 ## Centroids
 
-A `Centroid` represents a single point at the center of an object. Centroids
+A [`Centroid`][sleap_io.Centroid] represents a single point at the center of an object. Centroids
 are the primary annotation type for **object detection** workflows where full
-pose skeletons are not needed. `Centroid` is abstract — use `UserCentroid` or
-`PredictedCentroid`.
+pose skeletons are not needed. `Centroid` is abstract — use [`UserCentroid`][sleap_io.UserCentroid] or
+[`PredictedCentroid`][sleap_io.PredictedCentroid].
 
 Centroids support optional 3D coordinates (`z`), interconversion with
 single-node [`Instance`](poses.md) objects, and the same video/frame/track
@@ -159,7 +159,7 @@ with pose-based workflows:
 
 ### User vs. predicted centroids
 
-`UserCentroid` and `PredictedCentroid` distinguish human annotations from
+[`UserCentroid`][sleap_io.UserCentroid] and [`PredictedCentroid`][sleap_io.PredictedCentroid] distinguish human annotations from
 model predictions. `PredictedCentroid` adds a `score` field for confidence:
 
 ```pycon
@@ -196,10 +196,10 @@ Every centroid can carry optional metadata:
 
 ## Bounding boxes
 
-A `BoundingBox` represents a rectangular region defined by its corner
+A [`BoundingBox`][sleap_io.BoundingBox] represents a rectangular region defined by its corner
 coordinates (`x1`, `y1`, `x2`, `y2`) and an optional rotation angle. Bounding
 boxes are the primary annotation type for object detection workflows.
-`BoundingBox` is abstract — use `UserBoundingBox` or `PredictedBoundingBox`.
+`BoundingBox` is abstract — use [`UserBoundingBox`][sleap_io.UserBoundingBox] or [`PredictedBoundingBox`][sleap_io.PredictedBoundingBox].
 
 ### Direct construction
 
@@ -248,7 +248,7 @@ the top-left corner:
 
 ### User vs. predicted bounding boxes
 
-`UserBoundingBox` and `PredictedBoundingBox` distinguish human annotations from
+[`UserBoundingBox`][sleap_io.UserBoundingBox] and [`PredictedBoundingBox`][sleap_io.PredictedBoundingBox] distinguish human annotations from
 model predictions. `PredictedBoundingBox` adds a `score` field for confidence:
 
 ```pycon
@@ -305,11 +305,11 @@ Every bounding box can carry optional metadata:
 
 ## Regions of interest
 
-An `ROI` represents a vector geometry annotation using
+An [`ROI`][sleap_io.ROI] represents a vector geometry annotation using
 [Shapely](https://shapely.readthedocs.io/) geometries. ROIs are suitable for
 defining arenas, exclusion zones, or arbitrary spatial regions: anything that
 is naturally described by a polygon or set of polygons rather than a simple
-rectangle. `ROI` is abstract — use `UserROI` or `PredictedROI`.
+rectangle. `ROI` is abstract — use [`UserROI`][sleap_io.UserROI] or [`PredictedROI`][sleap_io.PredictedROI].
 
 ### Static vs. temporal ROIs
 
@@ -413,7 +413,7 @@ GeoJSON-aware tools:
 
 ### User vs. predicted ROIs
 
-`UserROI` and `PredictedROI` distinguish human annotations from model
+[`UserROI`][sleap_io.UserROI] and [`PredictedROI`][sleap_io.PredictedROI] distinguish human annotations from model
 predictions. `PredictedROI` adds a `score` field for confidence:
 
 ```pycon
@@ -436,11 +436,11 @@ predictions. `PredictedROI` adds a `score` field for confidence:
 
 ## Segmentation masks
 
-A `SegmentationMask` stores per-pixel binary annotations in a compact
+A [`SegmentationMask`][sleap_io.SegmentationMask] stores per-pixel binary annotations in a compact
 run-length encoded (RLE) format. RLE avoids storing the full raster array,
 making masks efficient for storage and serialization while still supporting
 fast conversion to and from numpy arrays. `SegmentationMask` is abstract — use
-`UserSegmentationMask` or `PredictedSegmentationMask`.
+[`UserSegmentationMask`][sleap_io.UserSegmentationMask] or [`PredictedSegmentationMask`][sleap_io.PredictedSegmentationMask].
 
 ### From a numpy array
 
@@ -515,7 +515,7 @@ with the mask's score.
 
 ### User vs. predicted segmentation masks
 
-`UserSegmentationMask` and `PredictedSegmentationMask` distinguish human
+[`UserSegmentationMask`][sleap_io.UserSegmentationMask] and [`PredictedSegmentationMask`][sleap_io.PredictedSegmentationMask] distinguish human
 annotations from model predictions. `PredictedSegmentationMask` adds `score`
 and optional `score_map` fields:
 
@@ -542,13 +542,13 @@ using zlib compression to avoid bloating files.
 
 ## Label images
 
-A `LabelImage` stores dense per-pixel instance segmentation for a single video
+A [`LabelImage`][sleap_io.LabelImage] stores dense per-pixel instance segmentation for a single video
 frame, where each pixel value encodes which object occupies that pixel. Unlike a
-`SegmentationMask` — which is a binary mask for a single object — a
+[`SegmentationMask`][sleap_io.SegmentationMask] — which is a binary mask for a single object — a
 `LabelImage` stores **all** objects in one integer array. Background pixels are
 `0`, and each positive integer identifies a distinct object. The `objects` dict
 maps these IDs to metadata (track, category, name). `LabelImage` is abstract —
-use `UserLabelImage` or `PredictedLabelImage`.
+use [`UserLabelImage`][sleap_io.UserLabelImage] or [`PredictedLabelImage`][sleap_io.PredictedLabelImage].
 
 ### From a numpy array
 
@@ -802,7 +802,7 @@ the label image's scale and offset.
 
 ### User vs. predicted label images
 
-`UserLabelImage` and `PredictedLabelImage` distinguish human annotations from
+[`UserLabelImage`][sleap_io.UserLabelImage] and [`PredictedLabelImage`][sleap_io.PredictedLabelImage] distinguish human annotations from
 model predictions. `PredictedLabelImage` adds `score` and optional `score_map`
 fields, and per-object scores can be set via `LabelImage.Info.score`:
 

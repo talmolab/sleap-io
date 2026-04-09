@@ -861,30 +861,42 @@ For datasets too large to hold in memory, write frames one at a time with consta
 import numpy as np
 import sleap_io as sio
 
-video = sio.load_video("microscopy.tif")  # shape: (n_frames, H, W, channels)
-
-# Shared dict accumulates track mappings across frames
-shared_tracks = {}
+# Load source video for frame data and metadata
+video = sio.load_video("microscopy.tif")  # shape: (n_frames, height, width, channels)
 
 # Stream frames to SLP — file is created lazily on first add()
+# video is optional: associates all label images with this video in the SLP file
 with sio.LabelImageWriter("output.slp", video=video) as writer:
-    for frame_idx in range(n_frames):
-        mask = run_segmentation(frame_idx)  # your segmentation function
+    for frame_idx in range(len(video)):
+        # Read the frame and run your segmentation model
+        mask = run_segmentation(video[frame_idx])  # returns (H, W) int32
+
         li = sio.PredictedLabelImage.from_numpy(
             mask, video=video, frame_idx=frame_idx,
-            tracks=shared_tracks, create_tracks=True,
             source="cellpose:nuclei", score=1.0,
         )
         writer.add(li)
 # File finalized and closed on context exit
 ```
 
-!!! info "Accumulating tracks"
-    Passing a dict as ``tracks`` with ``create_tracks=True`` turns it into a shared
-    accumulator — existing entries are reused and new label IDs get fresh ``Track``
-    objects added to the dict in place. This gives cross-frame identity without
-    requiring all data in memory. The writer auto-collects new tracks from each
-    ``add()`` call.
+!!! info "Tracking across frames"
+    By default, each frame's objects are independent — no cross-frame identity.
+    To link objects across frames, pass a shared dict as ``tracks`` with
+    ``create_tracks=True``:
+
+    ```python
+    shared_tracks = {}  # accumulates {label_id: Track} across frames
+
+    li = sio.PredictedLabelImage.from_numpy(
+        mask, video=video, frame_idx=frame_idx,
+        tracks=shared_tracks, create_tracks=True,  # reuse existing, create new
+        source="cellpose:nuclei", score=1.0,
+    )
+    ```
+
+    Existing entries in the dict are reused and new label IDs get fresh ``Track``
+    objects added in place. This gives cross-frame identity without requiring all
+    data in memory. The writer auto-collects new tracks from each ``add()`` call.
 
 !!! tip "Memory and performance"
     The writer uses the chunked HDF5 format with gzip compression. Only one frame's
@@ -905,26 +917,33 @@ import sleap_io as sio
 
 # Load — pixel data is lazy (metadata queries don't decompress)
 labels = sio.load_slp("segmentation.slp")
-li = labels.label_images[0]
-print(li.frame_idx, li.n_objects)  # no decompression yet
 
-# Extract all frames as (T, H, W) numpy array
-all_masks = np.stack([li.data for li in labels.label_images])
+# Access label images through frames (annotations are nested in LabeledFrames)
+lf = labels[0]  # first labeled frame
+print(lf.frame_idx, len(lf.label_images))  # no decompression yet
+
+# Inspect a single label image
+li = lf.label_images[0]
+print(li.n_objects, li.tracks, li.categories)  # still no decompression
+
+# Extract all frames as (n_frames, height, width) numpy array
+# .data triggers lazy decompression for each frame
+all_label_images = labels.label_images  # flattened view across all frames
+all_masks = np.stack([li.data for li in all_label_images])
 
 # Export as TIFF stack (with sidecar metadata JSON)
-sio.save_label_images("masks.tif", labels.label_images, stack=True)
+sio.save_label_images("masks.tif", all_label_images, stack=True)
 
-# Decompose one frame into per-object binary masks
-individual_masks = li.to_masks()
-for mask in individual_masks:
-    print(f"{mask.track}: {mask.area} pixels")
+# Decompose one frame into per-object binary SegmentationMasks
+for mask in li.to_masks():
+    print(f"{mask.category}: {mask.area} pixels")
 ```
 
 ??? example "Expected output shapes"
     For a dataset with 42 frames at 592x608 with 21 objects:
 
     - `all_masks.shape`: `(42, 592, 608)`, dtype `int32`
-    - `individual_masks`: list of 21 `SegmentationMask` objects
+    - `li.to_masks()`: list of 21 [`SegmentationMask`](model/regions.md#segmentation-masks) objects
     - Each mask: boolean array `(592, 608)` for one object
 
 !!! note "See also"
@@ -934,12 +953,16 @@ for mask in individual_masks:
 
 ### Merge segmentation results
 
-Combine label images from multiple SLP files into one (e.g., after parallel batch processing).
+Combine label images from multiple SLP files into one (e.g., after parallel
+batch processing). This uses [`merge_label_images()`][sleap_io.merge_label_images],
+a specialized function that copies compressed HDF5 chunks directly between files
+without decompressing pixel data — much faster than loading everything into
+memory with [`Labels.merge()`](merging.md).
 
 ```python title="merge_segmentation.py" linenums="1"
 import sleap_io as sio
 
-# Merge multiple batch results — copies compressed chunks directly
+# Merge batch results at the file level (no decompression needed)
 merged = sio.merge_label_images(
     ["batch_0.slp", "batch_1.slp", "batch_2.slp"],
     "all_frames.slp",
@@ -947,9 +970,13 @@ merged = sio.merge_label_images(
 print(f"Merged: {len(merged.label_images)} total frames")
 ```
 
-!!! tip
-    For chunked-format sources (v2.2), merge copies raw compressed data without
-    decompression — it's I/O-bound, not CPU-bound.
+!!! info "Why not `Labels.merge()`?"
+    [`Labels.merge()`](merging.md) loads all data into Python objects, which is
+    necessary for matching and resolving conflicts between keypoint annotations.
+    For label images — which are typically non-overlapping frame batches from
+    parallel segmentation — `merge_label_images()` skips all of that and
+    concatenates the compressed pixel chunks directly. This makes it I/O-bound
+    rather than CPU-bound.
 
 !!! note "See also"
     - [Merging: Label images](merging.md#merging-label-images): Full merge documentation
