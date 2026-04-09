@@ -60,12 +60,14 @@ def test_roi_from_polygon_with_kwargs():
     assert roi.category == "cat1"
 
 
-def test_roi_is_static():
-    roi1 = UserROI(geometry=box(0, 0, 10, 10))
-    assert roi1.is_static
+def test_roi_video():
+    """ROI can have a video reference."""
+    video = Video(filename="test.mp4")
+    roi = UserROI(geometry=box(0, 0, 10, 10), video=video)
+    assert roi.video is video
 
-    roi2 = UserROI(geometry=box(0, 0, 10, 10), frame_idx=5)
-    assert not roi2.is_static
+    roi_no_video = UserROI(geometry=box(0, 0, 10, 10))
+    assert roi_no_video.video is None
 
 
 def test_roi_is_bbox():
@@ -112,9 +114,8 @@ def test_roi_to_mask():
 
 def test_roi_with_video():
     video = Video(filename="test.mp4")
-    roi = UserROI.from_bbox(0, 0, 10, 10, video=video, frame_idx=5)
+    roi = UserROI.from_bbox(0, 0, 10, 10, video=video)
     assert roi.video is video
-    assert roi.frame_idx == 5
 
 
 def test_rasterize_geometry_unsupported_type():
@@ -283,7 +284,6 @@ def test_roi_geo_interface_metadata():
     assert props["name"] == "test_roi"
     assert props["category"] == "arena"
     assert props["source"] == "manual"
-    assert props["frame_idx"] is None
 
 
 def test_roi_geo_interface_defaults():
@@ -293,7 +293,6 @@ def test_roi_geo_interface_defaults():
     assert props["name"] == ""
     assert props["category"] == ""
     assert props["source"] == ""
-    assert props["frame_idx"] is None
 
 
 def test_roi_is_predicted():

@@ -135,8 +135,7 @@ def test_read_labels_static_objects_as_rois(jabs_real_data_v5):
     assert roi.name == "corners"
     assert roi.category == "arena"
     assert roi.source == "jabs"
-    assert roi.frame_idx is None  # Static ROI
-    assert roi.video == labels.videos[0]
+    assert roi.video == labels.videos[0]  # Static ROI keeps video reference
 
 
 def test_jabs_roundtrip_preserves_static_objects(jabs_real_data_v5):

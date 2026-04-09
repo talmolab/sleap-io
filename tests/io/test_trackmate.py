@@ -71,15 +71,15 @@ def test_read_trackmate_basic(tmp_path):
     assert c0.x == pytest.approx(10.0)
     assert c0.y == pytest.approx(20.0)
     assert c0.z is None  # 0.0 -> None
-    assert c0.frame_idx == 0
     assert c0.score == pytest.approx(5.5)
     assert c0.name == "ID100"
     assert c0.source == "trackmate"
     assert c0.track is not None
     assert c0.track.name == "Track_0"
 
-    c2 = labels.centroids[2]
-    assert c2.track.name == "Track_1"
+    # Centroids are ordered by frame, so frame 0 has ID100 + ID200
+    c1 = labels.centroids[1]
+    assert c1.track.name == "Track_1"
 
 
 def test_read_trackmate_with_edges(tmp_path):
@@ -144,7 +144,7 @@ def test_read_trackmate_with_video(tmp_path):
 
     assert len(labels.videos) == 1
     assert labels.videos[0].filename == "my_video.tif"
-    assert labels.centroids[0].video is labels.videos[0]
+    assert labels.labeled_frames[0].video is labels.videos[0]
 
 
 def test_read_trackmate_unassigned_spots(tmp_path):
@@ -228,7 +228,7 @@ def test_load_trackmate_roundtrip(tmp_path):
     _write_spots(tmp_path / "data_spots.csv", spots)
     _write_edges(tmp_path / "data_edges.csv", edges)
 
-    labels = read_trackmate_csv(tmp_path / "data_spots.csv")
+    labels = read_trackmate_csv(tmp_path / "data_spots.csv", video="test.tif")
     assert len(labels.centroids) == 3
     assert len(labels.tracks) == 2
 
@@ -241,16 +241,19 @@ def test_load_trackmate_roundtrip(tmp_path):
     assert len(loaded.centroids) == 3
     assert len(loaded.tracks) == 2
 
+    # Centroids ordered by frame: frame 0 has [ID1, ID3], frame 1 has [ID2]
     c0 = loaded.centroids[0]
     assert c0.x == pytest.approx(10.0)
     assert c0.score == pytest.approx(5.0)
     assert c0.tracking_score is None  # First in track
 
+    # ID3 is at index 1 (frame 0, track 1)
     c1 = loaded.centroids[1]
-    assert c1.tracking_score == pytest.approx(0.75)
+    assert c1.track is loaded.tracks[1]
 
+    # ID2 is at index 2 (frame 1, track 0) - has tracking_score from edge
     c2 = loaded.centroids[2]
-    assert c2.track is loaded.tracks[1]
+    assert c2.tracking_score == pytest.approx(0.75)
 
 
 def test_read_trackmate_not_found(tmp_path):

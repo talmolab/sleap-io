@@ -24,8 +24,6 @@ def test_user_centroid_basic():
     assert c.x == 10.5
     assert c.y == 20.3
     assert c.z is None
-    assert c.video is None
-    assert c.frame_idx is None
     assert c.track is None
     assert c.tracking_score is None
     assert c.instance is None
@@ -41,7 +39,6 @@ def test_user_centroid_all_fields():
         x=1.0,
         y=2.0,
         z=3.0,
-        frame_idx=5,
         track=track,
         tracking_score=0.8,
         category="cell",
@@ -49,7 +46,6 @@ def test_user_centroid_all_fields():
         source="center_of_mass",
     )
     assert c.z == 3.0
-    assert c.frame_idx == 5
     assert c.track is track
     assert c.tracking_score == 0.8
     assert c.category == "cell"

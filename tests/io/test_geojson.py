@@ -187,7 +187,6 @@ def test_missing_properties_defaults(tmp_path):
     assert roi.name == ""
     assert roi.category == ""
     assert roi.source == ""
-    assert roi.frame_idx is None
 
 
 def test_single_feature_input(tmp_path):

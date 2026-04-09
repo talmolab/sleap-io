@@ -1142,8 +1142,8 @@ def test_labeled_frame_annotation_fields():
     from sleap_io.model.centroid import UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
-    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0)
+    c = UserCentroid(x=1.0, y=2.0)
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10)
 
     lf = LabeledFrame(video=video, frame_idx=0, centroids=[c], bboxes=[b])
     assert len(lf.centroids) == 1
@@ -1162,12 +1162,12 @@ def test_labeled_frame_is_user_labeled_with_annotations():
     video = Video(filename="test.mp4", open_backend=False)
 
     # Frame with only user centroid — is user labeled
-    c_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    c_user = UserCentroid(x=1.0, y=2.0)
     lf = LabeledFrame(video=video, frame_idx=0, centroids=[c_user])
     assert lf.is_user_labeled
 
     # Frame with only predicted centroid — not user labeled
-    c_pred = PredictedCentroid(x=1.0, y=2.0, video=video, frame_idx=0, score=0.5)
+    c_pred = PredictedCentroid(x=1.0, y=2.0, score=0.5)
     lf2 = LabeledFrame(video=video, frame_idx=1, centroids=[c_pred])
     assert not lf2.is_user_labeled
 
@@ -1178,12 +1178,10 @@ def test_labeled_frame_remove_predictions_annotations():
     from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    c_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
-    c_pred = PredictedCentroid(x=3.0, y=4.0, video=video, frame_idx=0, score=0.9)
-    b_user = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0)
-    b_pred = PredictedBoundingBox(
-        x1=5, y1=5, x2=15, y2=15, video=video, frame_idx=0, score=0.8
-    )
+    c_user = UserCentroid(x=1.0, y=2.0)
+    c_pred = PredictedCentroid(x=3.0, y=4.0, score=0.9)
+    b_user = UserBoundingBox(x1=0, y1=0, x2=10, y2=10)
+    b_pred = PredictedBoundingBox(x1=5, y1=5, x2=15, y2=15, score=0.8)
 
     lf = LabeledFrame(
         video=video,
@@ -1204,8 +1202,8 @@ def test_labeled_frame_merge_annotations():
     from sleap_io.model.centroid import UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    c1 = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
-    c2 = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0)
+    c1 = UserCentroid(x=1.0, y=2.0)
+    c2 = UserCentroid(x=3.0, y=4.0)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[c1])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[c2])
@@ -1224,8 +1222,8 @@ def test_labeled_frame_merge_annotations_dedup():
     from sleap_io.model.centroid import UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    shared = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
-    unique = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0)
+    shared = UserCentroid(x=1.0, y=2.0)
+    unique = UserCentroid(x=3.0, y=4.0)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[shared])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[shared, unique])
@@ -1245,8 +1243,8 @@ def test_merge_annotations_keep_original():
     from sleap_io.model.centroid import UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    self_c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
-    other_c = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0)
+    self_c = UserCentroid(x=1.0, y=2.0)
+    other_c = UserCentroid(x=3.0, y=4.0)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_c])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_c])
@@ -1262,8 +1260,8 @@ def test_merge_annotations_keep_new():
     from sleap_io.model.centroid import UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    self_c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
-    other_c = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=0)
+    self_c = UserCentroid(x=1.0, y=2.0)
+    other_c = UserCentroid(x=3.0, y=4.0)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_c])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_c])
@@ -1281,10 +1279,10 @@ def test_merge_annotations_replace_predictions():
     from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    self_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
-    self_pred = PredictedCentroid(x=5.0, y=6.0, video=video, frame_idx=0, score=0.9)
-    other_pred = PredictedCentroid(x=7.0, y=8.0, video=video, frame_idx=0, score=0.8)
-    other_user = UserCentroid(x=9.0, y=10.0, video=video, frame_idx=0)
+    self_user = UserCentroid(x=1.0, y=2.0)
+    self_pred = PredictedCentroid(x=5.0, y=6.0, score=0.9)
+    other_pred = PredictedCentroid(x=7.0, y=8.0, score=0.8)
+    other_user = UserCentroid(x=9.0, y=10.0)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_user, self_pred])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_pred, other_user])
@@ -1304,9 +1302,9 @@ def test_merge_annotations_auto():
     from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    self_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
-    self_pred = PredictedCentroid(x=5.0, y=6.0, video=video, frame_idx=0, score=0.9)
-    other_pred = PredictedCentroid(x=7.0, y=8.0, video=video, frame_idx=0, score=0.8)
+    self_user = UserCentroid(x=1.0, y=2.0)
+    self_pred = PredictedCentroid(x=5.0, y=6.0, score=0.9)
+    other_pred = PredictedCentroid(x=7.0, y=8.0, score=0.8)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_user, self_pred])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_pred])
@@ -1324,9 +1322,9 @@ def test_merge_annotations_auto_user_from_other_added():
     from sleap_io.model.centroid import UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    self_user = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0)
+    self_user = UserCentroid(x=1.0, y=2.0)
     # Far away — won't match self_user (distance > 5.0)
-    other_user = UserCentroid(x=50.0, y=60.0, video=video, frame_idx=0)
+    other_user = UserCentroid(x=50.0, y=60.0)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_user])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_user])
@@ -1345,8 +1343,8 @@ def test_merge_annotations_auto_user_replaces_predicted():
     from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    self_pred = PredictedCentroid(x=10.0, y=20.0, video=video, frame_idx=0, score=0.9)
-    other_user = UserCentroid(x=11.0, y=20.5, video=video, frame_idx=0)
+    self_pred = PredictedCentroid(x=10.0, y=20.0, score=0.9)
+    other_user = UserCentroid(x=11.0, y=20.5)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_pred])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_user])
@@ -1364,9 +1362,9 @@ def test_merge_annotations_auto_keeps_unmatched_self_prediction():
     from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 
     video = Video(filename="test.mp4", open_backend=False)
-    self_pred = PredictedCentroid(x=10.0, y=20.0, video=video, frame_idx=0, score=0.9)
+    self_pred = PredictedCentroid(x=10.0, y=20.0, score=0.9)
     # Far away — no match
-    other_user = UserCentroid(x=80.0, y=90.0, video=video, frame_idx=0)
+    other_user = UserCentroid(x=80.0, y=90.0)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_pred])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_user])
@@ -1384,12 +1382,8 @@ def test_merge_annotations_auto_bboxes():
     from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 
     video = Video(filename="test.mp4", open_backend=False)
-    self_pred = PredictedBoundingBox(
-        x1=10.0, y1=10.0, x2=20.0, y2=20.0, video=video, frame_idx=0, score=0.8
-    )
-    other_user = UserBoundingBox(
-        x1=11.0, y1=11.0, x2=21.0, y2=21.0, video=video, frame_idx=0
-    )
+    self_pred = PredictedBoundingBox(x1=10.0, y1=10.0, x2=20.0, y2=20.0, score=0.8)
+    other_user = UserBoundingBox(x1=11.0, y1=11.0, x2=21.0, y2=21.0)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, bboxes=[self_pred])
     lf2 = LabeledFrame(video=video, frame_idx=0, bboxes=[other_user])
@@ -1413,11 +1407,9 @@ def test_merge_annotations_auto_masks():
     # Create small masks at nearby locations (overlapping bbox centroids)
     mask_data = np.ones((10, 10), dtype=bool)
     self_pred = PredictedSegmentationMask.from_numpy(
-        mask_data, video=video, frame_idx=0, score=0.7, offset=(5.0, 5.0)
+        mask_data, score=0.7, offset=(5.0, 5.0)
     )
-    other_user = UserSegmentationMask.from_numpy(
-        mask_data, video=video, frame_idx=0, offset=(6.0, 6.0)
-    )
+    other_user = UserSegmentationMask.from_numpy(mask_data, offset=(6.0, 6.0))
 
     lf1 = LabeledFrame(video=video, frame_idx=0, masks=[self_pred])
     lf2 = LabeledFrame(video=video, frame_idx=0, masks=[other_user])
@@ -1437,8 +1429,8 @@ def test_merge_annotations_update_tracks_cascades():
     track_a = Track(name="a")
     track_b = Track(name="b")
 
-    self_c = UserCentroid(x=10.0, y=20.0, video=video, frame_idx=0, track=track_a)
-    other_c = UserCentroid(x=11.0, y=20.5, video=video, frame_idx=0, track=track_b)
+    self_c = UserCentroid(x=10.0, y=20.0, track=track_a)
+    other_c = UserCentroid(x=11.0, y=20.5, track=track_b)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_c])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_c])
@@ -1458,9 +1450,9 @@ def test_merge_annotations_update_tracks_unmatched_unchanged():
     track_a = Track(name="a")
     track_b = Track(name="b")
 
-    self_c = UserCentroid(x=10.0, y=20.0, video=video, frame_idx=0, track=track_a)
+    self_c = UserCentroid(x=10.0, y=20.0, track=track_a)
     # Far away — no match
-    other_c = UserCentroid(x=80.0, y=90.0, video=video, frame_idx=0, track=track_b)
+    other_c = UserCentroid(x=80.0, y=90.0, track=track_b)
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_c])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_c])
@@ -1481,14 +1473,10 @@ def test_merge_annotations_update_tracks_skips_label_images():
     li_self = UserLabelImage(
         data=np.array([[0, 1]], dtype=np.int32),
         objects={1: LabelImage.Info(track=track_a, category="cell")},
-        video=video,
-        frame_idx=0,
     )
     li_other = UserLabelImage(
         data=np.array([[0, 2]], dtype=np.int32),
         objects={2: LabelImage.Info(track=track_b, category="cell")},
-        video=video,
-        frame_idx=0,
     )
 
     lf1 = LabeledFrame(video=video, frame_idx=0, label_images=[li_self])
@@ -1514,14 +1502,10 @@ def test_merge_annotations_auto_label_images():
     li_self = UserLabelImage(
         data=np.array([[0, 1]], dtype=np.int32),
         objects={1: LabelImage.Info(track=track, category="cell")},
-        video=video,
-        frame_idx=0,
     )
     li_other = PredictedLabelImage(
         data=np.array([[0, 2]], dtype=np.int32),
         objects={2: LabelImage.Info(track=track, category="cell")},
-        video=video,
-        frame_idx=0,
         score=0.9,
     )
 
@@ -1543,10 +1527,8 @@ def test_merge_annotations_auto_rois():
 
     video = Video(filename="test.mp4", open_backend=False)
 
-    self_pred = PredictedROI(
-        geometry=box(10, 10, 20, 20), video=video, frame_idx=0, score=0.8
-    )
-    other_user = UserROI(geometry=box(11, 11, 21, 21), video=video, frame_idx=0)
+    self_pred = PredictedROI(geometry=box(10, 10, 20, 20), score=0.8)
+    other_user = UserROI(geometry=box(11, 11, 21, 21))
 
     lf1 = LabeledFrame(video=video, frame_idx=0, rois=[self_pred])
     lf2 = LabeledFrame(video=video, frame_idx=0, rois=[other_user])
@@ -1563,12 +1545,8 @@ def test_merge_annotations_auto_empty_mask_unmatched():
     from sleap_io.model.mask import UserSegmentationMask
 
     video = Video(filename="test.mp4", open_backend=False)
-    empty_mask = UserSegmentationMask.from_numpy(
-        np.zeros((10, 10), dtype=bool), video=video, frame_idx=0
-    )
-    normal_mask = UserSegmentationMask.from_numpy(
-        np.ones((10, 10), dtype=bool), video=video, frame_idx=0
-    )
+    empty_mask = UserSegmentationMask.from_numpy(np.zeros((10, 10), dtype=bool))
+    normal_mask = UserSegmentationMask.from_numpy(np.ones((10, 10), dtype=bool))
 
     lf1 = LabeledFrame(video=video, frame_idx=0, masks=[empty_mask])
     lf2 = LabeledFrame(video=video, frame_idx=0, masks=[normal_mask])
@@ -1586,8 +1564,8 @@ def test_merge_annotations_auto_empty_roi_unmatched():
     from sleap_io.model.roi import UserROI
 
     video = Video(filename="test.mp4", open_backend=False)
-    empty_roi = UserROI(geometry=Point().buffer(0), video=video, frame_idx=0)
-    normal_roi = UserROI(geometry=Point(10, 10).buffer(5), video=video, frame_idx=0)
+    empty_roi = UserROI(geometry=Point().buffer(0))
+    normal_roi = UserROI(geometry=Point(10, 10).buffer(5))
 
     lf1 = LabeledFrame(video=video, frame_idx=0, rois=[empty_roi])
     lf2 = LabeledFrame(video=video, frame_idx=0, rois=[normal_roi])
@@ -1604,10 +1582,10 @@ def test_merge_annotations_auto_many_to_one():
 
     video = Video(filename="test.mp4", open_backend=False)
     # One prediction in self
-    self_pred = PredictedCentroid(x=10.0, y=10.0, video=video, frame_idx=0, score=0.9)
+    self_pred = PredictedCentroid(x=10.0, y=10.0, score=0.9)
     # Two users in other, both within threshold of self_pred
-    other_user_a = UserCentroid(x=11.0, y=10.0, video=video, frame_idx=0)  # dist=1.0
-    other_user_b = UserCentroid(x=10.0, y=11.0, video=video, frame_idx=0)  # dist=1.0
+    other_user_a = UserCentroid(x=11.0, y=10.0)  # dist=1.0
+    other_user_b = UserCentroid(x=10.0, y=11.0)  # dist=1.0
 
     lf1 = LabeledFrame(video=video, frame_idx=0, centroids=[self_pred])
     lf2 = LabeledFrame(video=video, frame_idx=0, centroids=[other_user_a, other_user_b])

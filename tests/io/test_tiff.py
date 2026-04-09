@@ -30,7 +30,7 @@ def test_read_single_tiff(tmp_path):
     result = read_label_images(tiff_path)
 
     assert len(result) == 1
-    assert result[0].frame_idx == 0
+    assert result[0].n_objects >= 0  # basic sanity check
     np.testing.assert_array_equal(result[0].data, data.astype(np.int32))
     assert result[0].n_objects == 2
 
@@ -51,7 +51,6 @@ def test_read_multipage_tiff(tmp_path):
 
     assert len(result) == 3
     for i, li in enumerate(result):
-        assert li.frame_idx == i
         np.testing.assert_array_equal(li.data, frames[i].astype(np.int32))
 
 
@@ -66,7 +65,6 @@ def test_read_tiff_directory(tmp_path):
 
     assert len(result) == 3
     for i, li in enumerate(result):
-        assert li.frame_idx == i
         np.testing.assert_array_equal(li.data, frames[i].astype(np.int32))
 
 
@@ -114,7 +112,6 @@ def test_sidecar_roundtrip(tmp_path):
             1: LabelImage.Info(track=track_a, category="neuron"),
             3: LabelImage.Info(track=track_b, category="glia"),
         },
-        frame_idx=0,
     )
 
     tiff_path = tmp_path / "labeled.tif"
@@ -183,7 +180,7 @@ def test_write_stack_roundtrip(tmp_path):
                 track=track_lookup[lid_int],
                 category=cat_lookup[lid_int],
             )
-        label_images.append(UserLabelImage(data=data, objects=objects, frame_idx=i))
+        label_images.append(UserLabelImage(data=data, objects=objects))
 
     tiff_path = tmp_path / "roundtrip.tif"
     write_label_images(tiff_path, label_images, stack=True)
@@ -192,7 +189,6 @@ def test_write_stack_roundtrip(tmp_path):
     assert len(result) == len(label_images)
     for i in range(len(result)):
         np.testing.assert_array_equal(result[i].data, frames_data[i])
-        assert result[i].frame_idx == i
 
     # Verify track names from sidecar
     assert result[0].objects[1].track.name == "obj_a"
@@ -220,7 +216,7 @@ def test_write_directory_roundtrip(tmp_path):
         for lid in ids:
             lid_int = int(lid)
             objects[lid_int] = LabelImage.Info(track=track_lookup[lid_int])
-        label_images.append(UserLabelImage(data=data, objects=objects, frame_idx=i))
+        label_images.append(UserLabelImage(data=data, objects=objects))
 
     dir_path = tmp_path / "frames_dir"
     write_label_images(dir_path, label_images, stack=False)
@@ -236,7 +232,6 @@ def test_write_directory_roundtrip(tmp_path):
     assert len(result) == 2
     for i in range(len(result)):
         np.testing.assert_array_equal(result[i].data, frames_data[i])
-        assert result[i].frame_idx == i
 
     # Verify sidecar was written for the directory
     sidecar_path = tmp_path / "frames_dir.meta.json"
@@ -250,7 +245,7 @@ def test_write_directory_roundtrip(tmp_path):
 def test_empty_label_image_roundtrip(tmp_path):
     """Write and read back a LabelImage with all-zero data (no objects)."""
     data = np.zeros((4, 4), dtype=np.int32)
-    li = UserLabelImage(data=data, frame_idx=0)
+    li = UserLabelImage(data=data)
 
     tiff_path = tmp_path / "empty.tif"
     write_label_images(tiff_path, [li])
@@ -265,7 +260,7 @@ def test_empty_label_image_roundtrip(tmp_path):
 def test_tiff_spatial_metadata_roundtrip(tmp_path):
     """Write and read back a LabelImage with scale/offset via sidecar."""
     data = _make_label_array(8, 8, 2)
-    li = UserLabelImage(data=data, frame_idx=0, scale=(0.5, 0.5), offset=(10.0, 20.0))
+    li = UserLabelImage(data=data, scale=(0.5, 0.5), offset=(10.0, 20.0))
 
     tiff_path = tmp_path / "spatial.tif"
     write_label_images(tiff_path, [li])
@@ -280,7 +275,7 @@ def test_tiff_spatial_metadata_roundtrip(tmp_path):
 def test_tiff_default_spatial_roundtrip(tmp_path):
     """LabelImage with default scale/offset reads back with defaults."""
     data = _make_label_array(8, 8, 2)
-    li = UserLabelImage(data=data, frame_idx=0)
+    li = UserLabelImage(data=data)
 
     tiff_path = tmp_path / "default.tif"
     write_label_images(tiff_path, [li])
@@ -295,7 +290,7 @@ def test_tiff_default_spatial_roundtrip(tmp_path):
 def test_tiff_sidecar_v1_compat(tmp_path):
     """Old sidecar without scale/offset loads with defaults."""
     data = _make_label_array(8, 8, 2)
-    li = UserLabelImage(data=data, frame_idx=0)
+    li = UserLabelImage(data=data)
 
     tiff_path = tmp_path / "old.tif"
     write_label_images(tiff_path, [li])

@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingBox
-from sleap_io.model.video import Video
 
 
 def test_bbox_abstract():
@@ -22,8 +21,6 @@ def test_bbox_basic():
     assert bbox.width == 100
     assert bbox.height == 80
     assert bbox.angle == 0.0
-    assert bbox.video is None
-    assert bbox.frame_idx is None
     assert bbox.track is None
     assert bbox.instance is None
     assert bbox.category == ""
@@ -55,12 +52,7 @@ def test_bbox_from_xyxy_swapped_raises():
 
 
 def test_bbox_from_xyxy_with_kwargs():
-    video = Video(filename="test.mp4")
-    bbox = UserBoundingBox.from_xyxy(
-        10, 20, 110, 100, video=video, frame_idx=5, category="mouse"
-    )
-    assert bbox.video is video
-    assert bbox.frame_idx == 5
+    bbox = UserBoundingBox.from_xyxy(10, 20, 110, 100, category="mouse")
     assert bbox.category == "mouse"
 
 
@@ -246,18 +238,17 @@ def test_bbox_to_roi_rotated():
 
 
 def test_bbox_to_roi_preserves_metadata():
-    video = Video(filename="test.mp4")
     bbox = UserBoundingBox(
         x1=40,
         y1=45,
         x2=60,
         y2=55,
-        video=video,
-        frame_idx=3,
+        name="b1",
+        category="mouse",
     )
     roi = bbox.to_roi()
-    assert roi.video is video
-    assert roi.frame_idx == 3
+    assert roi.name == "b1"
+    assert roi.category == "mouse"
 
 
 def test_bbox_to_mask():
