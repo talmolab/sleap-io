@@ -350,6 +350,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#support" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3072,6 +3083,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#support" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3120,63 +3142,58 @@
 <a href="https://github.com/talmolab/sleap-io/releases/"><img alt="Release" src="https://img.shields.io/github/v/release/talmolab/sleap-io?label=Latest" /></a>
 <img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/sleap-io" />
 <a href="https://pypi.org/project/sleap-io"><img alt="PyPI" src="https://img.shields.io/pypi/v/sleap-io?label=PyPI" /></a></p>
-<p>Standalone utilities for working with animal pose tracking data.</p>
-<p>This is intended to be a complement to the core <a href="https://github.com/talmolab/sleap">SLEAP</a>
-package that aims to provide functionality for interacting with pose tracking-related
-data structures and file formats with minimal dependencies. This package <em>does not</em>
-have any functionality related to labeling, training, or inference.</p>
+<p>A standalone Python library and CLI for working with animal pose tracking data.
+Read, write, convert, and manipulate pose data across formats with minimal
+dependencies.</p>
+<p>Complements the core <a href="https://github.com/talmolab/sleap">SLEAP</a> package but
+does <em>not</em> include labeling, training, or inference.</p>
 <h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
-<p>The main purpose of this library is to provide utilities to load/save from different
-<a href="formats/">formats</a> for pose data and standardize them into our common <a href="model/">Data Model</a>.</p>
 <ul>
-<li>Read/write labels in <a href="formats/#sleap_io.load_slp">SLP</a>, <a href="formats/#sleap_io.load_nwb">NWB</a>, <a href="formats/#sleap_io.load_alphatracker">AlphaTracker</a>, <a href="formats/#sleap_io.load_dlc">DeepLabCut</a>, <a href="formats/#sleap_io.load_jabs">JABS</a>, <a href="formats/#sleap_io.load_labelstudio">LabelStudio</a>, <a href="formats/#sleap_io.load_leap">LEAP</a>, <a href="formats/#csv-format-csv">CSV</a> and <a href="formats/#sleap_io.load_ultralytics">Ultralytics YOLO</a> formats.</li>
-<li>Support for <a href="model/labels/#sleap_io.LabelsSet">LabelsSet</a> to manage multiple dataset splits (train/val/test) and export to different formats.</li>
-<li><a href="formats/#sleap_io.load_video">Read videos in any format</a>, work them in a <a href="model/video/#sleap_io.Video">numpy-like interface</a> whether the video files are accessible or not, and <a href="formats/#sleap_io.save_video">easily save them out</a>.</li>
+<li><strong>Multi-format I/O</strong> -- Read and write <a href="formats/#sleap-native-format-slp">SLEAP</a>, <a href="formats/#nwb-format-nwb">NWB</a>, <a href="formats/#coco-format-json">COCO</a>, <a href="formats/#deeplabcut-format-h5-csv">DeepLabCut</a>, <a href="formats/#ultralytics-yolo-format">Ultralytics YOLO</a>, <a href="formats/#jabs-format-h5">JABS</a>, <a href="formats/#label-studio-format-json">Label Studio</a>, <a href="formats/#csv-format-csv">CSV</a>, <a href="formats/#sleap-analysis-hdf5-format-h5">Analysis HDF5</a>, <a href="formats/#alphatracker-format">AlphaTracker</a>, and <a href="formats/#leap-format-mat">LEAP</a> formats</li>
+<li><strong>CLI tools</strong> -- Inspect, convert, render, and transform data from the command line (<a href="cli/">reference</a>)</li>
+<li><strong>Rendering</strong> -- Produce publication-quality videos and images with pose overlays, customizable colors, markers, and presets (<a href="rendering/">guide</a>)</li>
+<li><strong>Transforms</strong> -- Crop, scale, rotate, pad, and flip videos with automatic coordinate adjustment (<a href="transforms/">guide</a>)</li>
+<li><strong>Merging</strong> -- Combine annotations from multiple sources with flexible matching strategies (<a href="merging/">guide</a>)</li>
+<li><strong>Codecs</strong> -- Convert to/from NumPy arrays, DataFrames (pandas/polars), and dictionaries (<a href="codecs/">guide</a>)</li>
+<li><strong>Video I/O</strong> -- Read any video format via pluggable backends (FFMPEG, OpenCV, PyAV) with a NumPy-like interface (<a href="model/video/">model</a>)</li>
+<li><strong>Lazy loading</strong> -- Load large SLP files up to 90x faster by deferring object creation (<a href="formats/slp/#lazy-loading">details</a>)</li>
+<li><strong>Dataset splits</strong> -- Create train/val/test splits and export to formats like Ultralytics YOLO (<a href="examples/#make-trainingvalidationtest-splits">example</a>)</li>
 </ul>
-<p>This enables ease-of-use through format-agnostic operations that make it easy to work
-with pose data, including utilities for common tasks. Some of these include:</p>
-<ul>
-<li><a href="examples/#create-labels-from-raw-data">Create labels from a custom format</a></li>
-<li><a href="examples/#convert-labels-to-raw-arrays">Convert labels to numpy arrays for analysis</a></li>
-<li><a href="examples/#fix-video-paths">Fix video paths in the labels</a></li>
-<li><a href="examples/#make-trainingvalidationtest-splits">Make training/validation/test splits</a></li>
-<li><a href="examples/#convert-to-ultralytics-yolo-format">Convert to Ultralytics YOLO format</a></li>
-<li><a href="examples/#replace-skeleton">Replace a skeleton</a></li>
-</ul>
-<p>See <a href="examples/">Examples</a> for more usage examples and recipes.</p>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
-<h3 id="from-pypi">From PyPI<a class="headerlink" href="#from-pypi" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip install sleap-io
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
 </code></pre></div>
-<p>or</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>conda install -c conda-forge sleap-io
+<p>Or use without installing:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uvx<span class="w"> </span>sleap-io<span class="w"> </span>show<span class="w"> </span>labels.slp
 </code></pre></div>
-<h3 id="from-source-latest-version">From source (latest version)<a class="headerlink" href="#from-source-latest-version" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip install git+https://github.com/talmolab/sleap-io.git@main
+<p>See <a href="install/">Installation</a> for all options including <code>uv</code>, <code>conda</code>, CLI tool install, and development setup.</p>
+<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<h3 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w">                                    </span><span class="c1"># Inspect a file</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels.nwb<span class="w">                </span><span class="c1"># Convert formats</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w">            </span><span class="c1"># Render video</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--scale<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>-o<span class="w"> </span>scaled.slp<span class="w">    </span><span class="c1"># Transform</span>
 </code></pre></div>
-<h3 id="optional-dependencies">Optional Dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">&para;</a></h3>
-<p>Video support is included by default via imageio-ffmpeg. For faster video backends or additional format support:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip install sleap-io[opencv]  # For OpenCV backend (fastest)
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pip install sleap-io[pyav]     # For PyAV backend (balanced speed/features)
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pip install sleap-io[mat]      # For LEAP .mat file support
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>pip install sleap-io[all]      # All optional backends and formats
-</code></pre></div></p>
-<h3 id="development-installation">Development Installation<a class="headerlink" href="#development-installation" title="Permanent link">&para;</a></h3>
-<p>For development, use one of the following:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>uv sync --all-extras           # Recommended: install with uv
+<h3 id="python">Python<a class="headerlink" href="#python" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Load and convert between formats</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;predictions.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Convert to NumPy arrays</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">trx</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>  <span class="c1"># (n_frames, n_tracks, n_nodes, 2)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Merge annotations from multiple sources</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">base</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;manual_annotations.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">))</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">base</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;merged.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>conda env create -f environment.yml
-</code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pip install -e .[dev,all]      # Install with all extras for development
-</code></pre></div></p>
+<p>See <a href="examples/">Examples</a> for more recipes including creating labels from scratch, NWB export, rendering, skeleton replacement, and YOLO/COCO export.</p>
 <h2 id="support">Support<a class="headerlink" href="#support" title="Permanent link">&para;</a></h2>
-<p>For technical inquiries specific to this package, please <a href="https://github.com/talmolab/sleap-io/issues">open an Issue</a>
-with a description of your problem or request.</p>
-<p>For general SLEAP usage, see the <a href="https://sleap.ai">main website</a>.</p>
-<p>Other questions? Reach out to <code>talmo@salk.edu</code>.</p>
+<p>For technical inquiries, please <a href="https://github.com/talmolab/sleap-io/issues">open an Issue</a>.</p>
+<p>For general SLEAP usage, see <a href="https://sleap.ai">sleap.ai</a>.</p>
 <h2 id="license">License<a class="headerlink" href="#license" title="Permanent link">&para;</a></h2>
-<p>This package is distributed under a BSD 3-Clause License and can be used without
-restrictions. See <a href="https://github.com/talmolab/sleap-io/blob/main/LICENSE"><code>LICENSE</code></a> for details.</p>
+<p>BSD 3-Clause License. See <a href="https://github.com/talmolab/sleap-io/blob/main/LICENSE"><code>LICENSE</code></a> for details.</p>
 
 
 

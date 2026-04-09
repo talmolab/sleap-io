@@ -3068,6 +3068,11 @@
         +Video video
         +int frame_idx
         +instances
+        +centroids
+        +bboxes
+        +masks
+        +label_images
+        +rois
     }
     class SuggestionFrame:::labels {
         +Video video
@@ -3149,6 +3154,16 @@
         +to_masks()
     }
 
+    class Centroid:::regions {
+        &lt;&lt;abstract&gt;&gt;
+        +float x
+        +float y
+    }
+    class UserCentroid:::regions
+    class PredictedCentroid:::regions {
+        +float score
+    }
+
     Skeleton "1" *-- "1..*" Node
     Skeleton "1" *-- "0..*" Edge
     Skeleton "1" *-- "0..*" Symmetry
@@ -3171,6 +3186,8 @@
     InstanceGroup --&gt; Instance
     InstanceGroup --&gt; Camera
 
+    Centroid &lt;|-- UserCentroid
+    Centroid &lt;|-- PredictedCentroid
     BoundingBox &lt;|-- UserBoundingBox
     BoundingBox &lt;|-- PredictedBoundingBox
     ROI &lt;|-- UserROI
@@ -3180,6 +3197,11 @@
     LabelImage &lt;|-- UserLabelImage
     LabelImage &lt;|-- PredictedLabelImage
     LabelImage --&gt; SegmentationMask : to_masks()
+    LabeledFrame --&gt; Centroid
+    LabeledFrame --&gt; BoundingBox
+    LabeledFrame --&gt; ROI
+    LabeledFrame --&gt; SegmentationMask
+    LabeledFrame --&gt; LabelImage
 
     classDef poses fill:#0097a7,stroke:#00796b,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
@@ -3280,6 +3302,21 @@
 <td><a href="3d/"><code>InstanceGroup</code></a></td>
 <td><a href="3d/">3D</a></td>
 <td>Same animal matched across cameras, with optional 3D points</td>
+</tr>
+<tr>
+<td><a href="regions/"><code>Centroid</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Abstract base centroid point annotation</td>
+</tr>
+<tr>
+<td><a href="regions/"><code>UserCentroid</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Human-annotated centroid</td>
+</tr>
+<tr>
+<td><a href="regions/"><code>PredictedCentroid</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Model-predicted centroid with score</td>
 </tr>
 <tr>
 <td><a href="regions/"><code>ROI</code></a></td>

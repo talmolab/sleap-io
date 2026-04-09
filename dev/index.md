@@ -6,85 +6,76 @@
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/sleap-io)
 [![PyPI](https://img.shields.io/pypi/v/sleap-io?label=PyPI)](https://pypi.org/project/sleap-io)
 
-Standalone utilities for working with animal pose tracking data.
+A standalone Python library and CLI for working with animal pose tracking data.
+Read, write, convert, and manipulate pose data across formats with minimal
+dependencies.
 
-This is intended to be a complement to the core [SLEAP](https://github.com/talmolab/sleap)
-package that aims to provide functionality for interacting with pose tracking-related
-data structures and file formats with minimal dependencies. This package *does not*
-have any functionality related to labeling, training, or inference.
+Complements the core [SLEAP](https://github.com/talmolab/sleap) package but
+does *not* include labeling, training, or inference.
 
 ## Features
 
-The main purpose of this library is to provide utilities to load/save from different
-[formats](formats/) for pose data and standardize them into our common [Data Model](model/index.md).
-
-- Read/write labels in [SLP](formats/#sleap_io.load_slp), [NWB](formats/#sleap_io.load_nwb), [AlphaTracker](formats/#sleap_io.load_alphatracker), [DeepLabCut](formats/#sleap_io.load_dlc), [JABS](formats/#sleap_io.load_jabs), [LabelStudio](formats/#sleap_io.load_labelstudio), [LEAP](formats/#sleap_io.load_leap), [CSV](formats/#csv-format-csv) and [Ultralytics YOLO](formats/#sleap_io.load_ultralytics) formats.
-- Support for [LabelsSet](model/labels.md#sleap_io.LabelsSet) to manage multiple dataset splits (train/val/test) and export to different formats.
-- [Read videos in any format](formats/#sleap_io.load_video), work them in a [numpy-like interface](model/video.md#sleap_io.Video) whether the video files are accessible or not, and [easily save them out](formats/#sleap_io.save_video).
-
-This enables ease-of-use through format-agnostic operations that make it easy to work
-with pose data, including utilities for common tasks. Some of these include:
-
-- [Create labels from a custom format](examples.md#create-labels-from-raw-data)
-- [Convert labels to numpy arrays for analysis](examples.md#convert-labels-to-raw-arrays)
-- [Fix video paths in the labels](examples.md#fix-video-paths)
-- [Make training/validation/test splits](examples.md#make-trainingvalidationtest-splits)
-- [Convert to Ultralytics YOLO format](examples.md#convert-to-ultralytics-yolo-format)
-- [Replace a skeleton](examples.md#replace-skeleton)
-
-See [Examples](examples.md) for more usage examples and recipes.
-
+- **Multi-format I/O** -- Read and write [SLEAP](formats/index.md#sleap-native-format-slp), [NWB](formats/index.md#nwb-format-nwb), [COCO](formats/index.md#coco-format-json), [DeepLabCut](formats/index.md#deeplabcut-format-h5-csv), [Ultralytics YOLO](formats/index.md#ultralytics-yolo-format), [JABS](formats/index.md#jabs-format-h5), [Label Studio](formats/index.md#label-studio-format-json), [CSV](formats/index.md#csv-format-csv), [Analysis HDF5](formats/index.md#sleap-analysis-hdf5-format-h5), [AlphaTracker](formats/index.md#alphatracker-format), and [LEAP](formats/index.md#leap-format-mat) formats
+- **CLI tools** -- Inspect, convert, render, and transform data from the command line ([reference](cli.md))
+- **Rendering** -- Produce publication-quality videos and images with pose overlays, customizable colors, markers, and presets ([guide](rendering.md))
+- **Transforms** -- Crop, scale, rotate, pad, and flip videos with automatic coordinate adjustment ([guide](transforms.md))
+- **Merging** -- Combine annotations from multiple sources with flexible matching strategies ([guide](merging.md))
+- **Codecs** -- Convert to/from NumPy arrays, DataFrames (pandas/polars), and dictionaries ([guide](codecs.md))
+- **Video I/O** -- Read any video format via pluggable backends (FFMPEG, OpenCV, PyAV) with a NumPy-like interface ([model](model/video.md))
+- **Lazy loading** -- Load large SLP files up to 90x faster by deferring object creation ([details](formats/slp.md#lazy-loading))
+- **Dataset splits** -- Create train/val/test splits and export to formats like Ultralytics YOLO ([example](examples.md#make-trainingvalidationtest-splits))
 
 ## Installation
 
-### From PyPI
-```
-pip install sleap-io
-```
-
-or
-
-```
-conda install -c conda-forge sleap-io
+```bash
+pip install "sleap-io[all]"
 ```
 
-### From source (latest version)
-```
-pip install git+https://github.com/talmolab/sleap-io.git@main
+Or use without installing:
+
+```bash
+uvx sleap-io show labels.slp
 ```
 
-### Optional Dependencies
+See [Installation](install.md) for all options including `uv`, `conda`, CLI tool install, and development setup.
 
-Video support is included by default via imageio-ffmpeg. For faster video backends or additional format support:
-```
-pip install sleap-io[opencv]  # For OpenCV backend (fastest)
-pip install sleap-io[pyav]     # For PyAV backend (balanced speed/features)
-pip install sleap-io[mat]      # For LEAP .mat file support
-pip install sleap-io[all]      # All optional backends and formats
-```
+## Quick start
 
-### Development Installation
+### CLI
 
-For development, use one of the following:
-```
-uv sync --all-extras           # Recommended: install with uv
-```
-```
-conda env create -f environment.yml
-```
-```
-pip install -e .[dev,all]      # Install with all extras for development
+```bash
+sio show labels.slp                                    # Inspect a file
+sio convert -i labels.slp -o labels.nwb                # Convert formats
+sio render -i predictions.slp -o output.mp4            # Render video
+sio transform labels.slp --scale 0.5 -o scaled.slp    # Transform
 ```
 
+### Python
+
+```python
+import sleap_io as sio
+
+# Load and convert between formats
+labels = sio.load_file("predictions.slp")
+labels.save("predictions.nwb")
+
+# Convert to NumPy arrays
+trx = labels.numpy()  # (n_frames, n_tracks, n_nodes, 2)
+
+# Merge annotations from multiple sources
+base = sio.load_file("manual_annotations.slp")
+base.merge(sio.load_file("predictions.slp"))
+base.save("merged.slp")
+```
+
+See [Examples](examples.md) for more recipes including creating labels from scratch, NWB export, rendering, skeleton replacement, and YOLO/COCO export.
 
 ## Support
-For technical inquiries specific to this package, please [open an Issue](https://github.com/talmolab/sleap-io/issues)
-with a description of your problem or request.
 
-For general SLEAP usage, see the [main website](https://sleap.ai).
+For technical inquiries, please [open an Issue](https://github.com/talmolab/sleap-io/issues).
 
-Other questions? Reach out to `talmo@salk.edu`.
+For general SLEAP usage, see [sleap.ai](https://sleap.ai).
 
 ## License
-This package is distributed under a BSD 3-Clause License and can be used without
-restrictions. See [`LICENSE`](https://github.com/talmolab/sleap-io/blob/main/LICENSE) for details.
+
+BSD 3-Clause License. See [`LICENSE`](https://github.com/talmolab/sleap-io/blob/main/LICENSE) for details.
