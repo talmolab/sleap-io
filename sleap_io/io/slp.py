@@ -992,8 +992,6 @@ def write_videos(
 
     # First determine which videos need embedding
     for video_ind, video in enumerate(videos):
-        if video is None:
-            continue
         # Check if video has an open backend with embedded images
         has_backend_with_embedded = (
             type(video.backend) is HDF5Video and video.backend.has_embedded_images
@@ -1140,8 +1138,6 @@ def write_videos(
     # so we only need to store source_video (immediate parent).
     with h5py.File(labels_path, "a") as f:
         for video_ind, video in enumerate(videos):
-            if video is None:
-                continue
             dataset = f"video{video_ind}"
 
             # If original_videos is provided (e.g., during embedding), use those
@@ -2986,7 +2982,6 @@ def _read_bboxes_columnar(
     bboxes: list[BoundingBox] = []
     for i in range(len(x1_arr)):
         video_idx = int(video_arr[i])
-        videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(frame_idx_arr[i])
 
@@ -3054,7 +3049,6 @@ def _read_bboxes_legacy(
     bboxes: list[BoundingBox] = []
     for i, row in enumerate(bbox_data):
         video_idx = int(row["video"])
-        videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(row["frame_idx"])
 
@@ -3239,7 +3233,6 @@ def read_centroids(
     centroids: list[Centroid] = []
     for i in range(len(x_arr)):
         video_idx = int(video_arr[i])
-        videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(frame_idx_arr[i])
 
@@ -3490,7 +3483,6 @@ def read_masks(
         rle_counts = np.frombuffer(rle_raw.tobytes(), dtype=np.uint32)
 
         video_idx = int(row["video"])
-        videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(row["frame_idx"])
 
@@ -3876,7 +3868,6 @@ def read_label_images(
     label_images: list[LabelImage] = []
     for i, row in enumerate(li_data):
         video_idx = int(row["video"])
-        videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(row["frame_idx"])
 
@@ -5177,36 +5168,6 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     bbox_tuples = read_bboxes(labels_path, videos, tracks, instances)
     centroid_tuples = read_centroids(labels_path, videos, tracks, instances)
     li_tuples, _li_file = read_label_images(labels_path, videos, tracks, instances)
-
-    # Migrate old-style bbox ROIs to BoundingBox objects (skip predicted ROIs)
-    if not bbox_tuples:
-        migrated_bbox_tuples: list[tuple[BoundingBox, int, int]] = []
-        remaining_roi_tuples: list[tuple[ROI, int, int]] = []
-        for roi, vid_idx, fidx in roi_tuples:
-            if roi.is_bbox and not roi.is_predicted:
-                minx, miny, maxx, maxy = roi.geometry.bounds
-                migrated_bbox_tuples.append(
-                    (
-                        UserBoundingBox.from_xyxy(
-                            minx,
-                            miny,
-                            maxx,
-                            maxy,
-                            track=roi.track,
-                            instance=roi.instance,
-                            category=roi.category,
-                            name=roi.name,
-                            source=roi.source,
-                        ),
-                        vid_idx,
-                        fidx,
-                    )
-                )
-            else:
-                remaining_roi_tuples.append((roi, vid_idx, fidx))
-        if migrated_bbox_tuples:
-            bbox_tuples = migrated_bbox_tuples
-            roi_tuples = remaining_roi_tuples
 
     # Attach annotations to their corresponding LabeledFrames
     frame_lookup: dict[tuple[int, int], LabeledFrame] = {}

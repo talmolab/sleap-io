@@ -4309,16 +4309,14 @@ def test_slp_roi_roundtrip(tmp_path):
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
     assert format_id == 1.5
 
-    # Read back — bbox-shaped ROI is migrated to BoundingBox, but since the
-    # static ROI has no frame context (frame_idx=-1), the migrated bbox is
-    # undistributable. The triangle stays as a static ROI.
     loaded = load_slp(path)
 
-    # Triangle polygon remains as static ROI
-    assert len(loaded.rois) == 1
-    r = loaded.rois[0]
-    assert r.category == "arena"
-    assert r.track is loaded.tracks[0]
+    # Both ROIs round-trip as ROIs (no bbox migration)
+    assert len(loaded.rois) == 2
+    roi_names = {r.name for r in loaded.rois}
+    assert "bbox1" in roi_names
+    triangle = [r for r in loaded.rois if r.category == "arena"][0]
+    assert triangle.track is loaded.tracks[0]
 
 
 def test_slp_mask_roundtrip(tmp_path):
@@ -4726,48 +4724,36 @@ def test_slp_predicted_bbox_roundtrip(tmp_path):
     assert b_pred.score == pytest.approx(0.95, abs=1e-5)
 
 
-def test_slp_bbox_migration(tmp_path):
-    """Test that old-style bbox ROIs are migrated to BoundingBox on read."""
+def test_slp_bbox_no_migration(tmp_path):
+    """Bbox-shaped ROIs are NOT migrated to BoundingBox (no legacy format shipped)."""
     video = Video(filename="test.mp4")
     track = Track(name="animal1")
 
-    # Create ROIs: one bbox-shaped, one non-bbox polygon
-    roi_bbox = UserROI.from_bbox(
-        10,
-        20,
-        100,
-        80,
-        video=video,
-        track=track,
-        name="bbox_roi",
-        category="mouse",
-    )
+    roi_bbox = UserROI.from_bbox(10, 20, 100, 80, video=video, track=track, name="r1")
     roi_polygon = UserROI.from_polygon(
-        [(0, 0), (100, 0), (50, 100)],
-        video=video,
-        name="triangle",
-        category="arena",
+        [(0, 0), (100, 0), (50, 100)], video=video, name="r2"
     )
 
     skeleton = Skeleton(nodes=["A"])
+    lf = LabeledFrame(video=video, frame_idx=0, rois=[roi_bbox])
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
         tracks=[track],
-        rois=[roi_bbox, roi_polygon],
+        rois=[roi_polygon],
     )
 
-    # Write without bboxes (old-style file)
-    path = str(tmp_path / "old_style.slp")
+    path = str(tmp_path / "no_migration.slp")
     save_slp(labels, path)
-
-    # Read back — bbox-shaped ROI is migrated to BoundingBox (but lost since
-    # static ROIs have frame_idx=-1). Triangle stays as static ROI.
     loaded = load_slp(path)
 
-    assert len(loaded.rois) == 1
-    assert loaded.rois[0].name == "triangle"
-    assert loaded.rois[0].category == "arena"
+    # Both ROIs survive as ROIs — no migration to BoundingBox
+    assert len(loaded.bboxes) == 0
+    assert len(loaded.rois) == 2
+    roi_names = {r.name for r in loaded.rois}
+    assert "r1" in roi_names
+    assert "r2" in roi_names
 
 
 def test_slp_bbox_lazy_roundtrip(tmp_path):
