@@ -864,12 +864,13 @@ li = sio.PredictedLabelImage.from_binary_masks(
     create_tracks=True,          # auto-create one Track per mask
     scores=object_scores,        # per-object confidence → Info.score
     score=0.9,                   # image-level confidence
-    video=video, frame_idx=0, source="sam",
+    source="sam",
 )
 
 # Add the label image to a Labels dataset via a LabeledFrame
-labels = sio.Labels(videos=[video])
-labels.add_label_image(li)
+lf = sio.LabeledFrame(video=video, frame_idx=0)
+lf.append(li)
+labels = sio.Labels(labeled_frames=[lf])
 labels.save("sam_output.slp")
 ```
 
@@ -901,7 +902,7 @@ with sio.LabelImageWriter("output.slp", video=video) as writer:
         mask = run_segmentation(video[frame_idx])  # returns (H, W) int32
 
         li = sio.PredictedLabelImage.from_numpy(
-            mask, video=video, frame_idx=frame_idx,
+            mask,
             source="cellpose:nuclei", score=1.0,
         )
         writer.add(li)
@@ -917,7 +918,7 @@ with sio.LabelImageWriter("output.slp", video=video) as writer:
     shared_tracks = {}  # accumulates {label_id: Track} across frames
 
     li = sio.PredictedLabelImage.from_numpy(
-        mask, video=video, frame_idx=frame_idx,
+        mask,
         tracks=shared_tracks, create_tracks=True,  # reuse existing, create new
         source="cellpose:nuclei", score=1.0,
     )

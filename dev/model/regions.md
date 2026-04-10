@@ -7,8 +7,7 @@ bounding boxes, regions of interest (vector polygons), segmentation masks
 lists of annotations (e.g., `lf.centroids`, `lf.bboxes`, `lf.masks`). The
 [`Labels`](labels.md) object provides flattened convenience properties
 (`labels.centroids`, `labels.bboxes`, etc.) that aggregate across all frames,
-as well as `add_*()` methods for inserting annotations into the correct frame
-automatically.
+and query methods (e.g., `labels.get_centroids()`) for filtered access.
 
 sleap-io provides five spatial annotation types with different trade-offs:
 
@@ -32,8 +31,8 @@ sleap-io provides five spatial annotation types with different trade-offs:
   [`PredictedLabelImage`][sleap_io.PredictedLabelImage] subtypes.
 
 All five base classes are **abstract** — use the `User*` or `Predicted*`
-subclass to create instances. All five can be associated with a video, frame,
-track, and instance. They are stored on [`LabeledFrame`](labels.md) and
+subclass to create instances. All five can be associated with a track and
+instance. They are stored on [`LabeledFrame`](labels.md) and
 accessible via frame-level attributes or the flattened [`Labels`](labels.md)
 properties. The four geometry types can be converted between each other
 (bbox -> ROI -> mask, mask -> bbox, label image <-> masks, label image -> bboxes).
@@ -42,35 +41,18 @@ properties. The four geometry types can be converted between each other
 
 ## Working with annotations in frames
 
-Since annotations are nested in [`LabeledFrame`](labels.md), you can add them
-directly to a frame or use the convenience methods on [`Labels`](labels.md).
-
-### Adding to a frame directly
+Since annotations are nested in [`LabeledFrame`](labels.md), you add them
+directly to a frame's annotation lists.
 
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0)
->>> bbox = sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60, video=video, frame_idx=0)
->>> lf.bboxes.append(bbox)
->>> print(len(lf.bboxes))
-
-```
-
-### Adding via Labels convenience methods
-
-The `add_centroid()`, `add_bbox()`, `add_mask()`, `add_label_image()`, and
-`add_roi()` methods find or create the appropriate `LabeledFrame` and append
-the annotation:
-
-```pycon
->>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
->>> labels = sio.Labels(videos=[video])
->>> centroid = sio.UserCentroid(x=100, y=200, video=video, frame_idx=0)
->>> labels.add_centroid(centroid)
->>> bbox = sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60, video=video, frame_idx=0)
->>> labels.add_bbox(bbox)
+>>> bbox = sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60)
+>>> lf.append(bbox)
+>>> centroid = sio.UserCentroid(x=100, y=200)
+>>> lf.append(centroid)
+>>> labels = sio.Labels(labeled_frames=[lf])
 >>> print(len(labels.centroids))
 >>> print(len(labels.bboxes))
 
@@ -89,17 +71,14 @@ pose skeletons are not needed. `Centroid` is abstract — use [`UserCentroid`][s
 [`PredictedCentroid`][sleap_io.PredictedCentroid].
 
 Centroids support optional 3D coordinates (`z`), interconversion with
-single-node [`Instance`](poses.md) objects, and the same video/frame/track
-metadata as other annotation types.
+single-node [`Instance`](poses.md) objects, and the same track/instance metadata as other annotation types.
 
 ### Direct construction
 
 ```pycon
 >>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
 >>> centroid = sio.UserCentroid(
 ...     x=100.0, y=200.0,
-...     video=video, frame_idx=0,
 ... )
 >>> print(centroid.xy)
 >>> print(centroid.yx)
@@ -182,8 +161,6 @@ Every centroid can carry optional metadata:
 
 | Field       | Type               | Description                                  |
 | ----------- | ------------------ | -------------------------------------------- |
-| `video`     | [`Video`](video.md) `\| None`    | Associated video                             |
-| `frame_idx` | `int \| None`      | Frame index within the video                 |
 | `track`     | [`Track`](poses.md) `\| None`    | Tracking identity across frames              |
 | `tracking_score` | `float \| None` | Confidence of track identity assignment    |
 | `instance`  | [`Instance`](poses.md) `\| None` | Linked pose instance                         |
@@ -205,10 +182,8 @@ boxes are the primary annotation type for object detection workflows.
 
 ```pycon
 >>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
 >>> bbox = sio.UserBoundingBox(
 ...     x1=75, y1=160, x2=125, y2=240,
-...     video=video, frame_idx=0,
 ... )
 >>> print(bbox.area)
 >>> print(bbox.xyxy)
@@ -227,8 +202,7 @@ corner coordinates:
 
 ```pycon
 >>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
->>> bbox2 = sio.UserBoundingBox.from_xyxy(75, 160, 125, 240, video=video, frame_idx=0)
+>>> bbox2 = sio.UserBoundingBox.from_xyxy(75, 160, 125, 240)
 >>> print(bbox2.x_center)
 >>> print(bbox2.width)
 
@@ -239,8 +213,7 @@ the top-left corner:
 
 ```pycon
 >>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
->>> bbox3 = sio.UserBoundingBox.from_xywh(75, 160, 50, 80, video=video, frame_idx=0)
+>>> bbox3 = sio.UserBoundingBox.from_xywh(75, 160, 50, 80)
 >>> print(bbox3.x_center)
 >>> print(bbox3.y_center)
 
@@ -253,15 +226,13 @@ model predictions. `PredictedBoundingBox` adds a `score` field for confidence:
 
 ```pycon
 >>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
 >>> user_bbox = sio.UserBoundingBox(
 ...     x1=75, y1=160, x2=125, y2=240,
-...     video=video, frame_idx=0,
 ... )
 >>> print(user_bbox.is_predicted)
 >>> pred_bbox = sio.PredictedBoundingBox(
 ...     x1=75, y1=160, x2=125, y2=240,
-...     video=video, frame_idx=0, score=0.95,
+...     score=0.95,
 ... )
 >>> print(pred_bbox.score)
 >>> print(pred_bbox.is_predicted)
@@ -276,10 +247,9 @@ meaningful for axis-aligned rectangles:
 
 ```pycon
 >>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
 >>> rotated = sio.UserBoundingBox(
 ...     x1=75, y1=160, x2=125, y2=240,
-...     angle=0.785, video=video, frame_idx=0,
+...     angle=0.785,
 ... )
 >>> print(rotated.is_rotated)
 >>> print(rotated.corners.shape)
@@ -293,8 +263,6 @@ Every bounding box can carry optional metadata:
 
 | Field       | Type               | Description                                  |
 | ----------- | ------------------ | -------------------------------------------- |
-| `video`     | [`Video`](video.md) `\| None`    | Associated video                             |
-| `frame_idx` | `int \| None`      | Frame index within the video                 |
 | `track`     | [`Track`](poses.md) `\| None`    | Tracking identity across frames              |
 | `instance`  | [`Instance`](poses.md) `\| None` | Linked pose instance                         |
 | `category`  | `str`              | Class label (e.g., `"mouse"`)                |
@@ -313,9 +281,7 @@ rectangle. `ROI` is abstract — use [`UserROI`][sleap_io.UserROI] or [`Predicte
 
 ### Static vs. temporal ROIs
 
-An ROI is **static** when `frame_idx` is `None`, meaning it applies to all
-frames of the video (e.g., an arena boundary). When `frame_idx` is set, the ROI
-applies only to that specific frame.
+ROIs can be **static** (applying to all frames of a video) or **frame-bound** (attached to a specific `LabeledFrame`). Static ROIs are stored in `Labels.static_rois` and have a `video` attribute. Frame-bound ROIs are stored on individual `LabeledFrame.rois` lists.
 
 ### From polygon coordinates
 
@@ -342,7 +308,6 @@ Construct an ROI directly from any Shapely geometry object:
 >>> roi = sio.UserROI(geometry=box(10, 20, 100, 200), video=video)
 >>> print(roi.area)
 >>> print(roi.bounds)
->>> print(roi.is_static)
 
 ```
 
@@ -352,10 +317,8 @@ Any `BoundingBox` can be converted to an `ROI` with `.to_roi()`:
 
 ```pycon
 >>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
 >>> bbox = sio.UserBoundingBox(
 ...     x1=75, y1=160, x2=125, y2=240,
-...     video=video, frame_idx=0,
 ... )
 >>> roi_from_bbox = bbox.to_roi()
 >>> print(roi_from_bbox.area)
@@ -447,11 +410,10 @@ fast conversion to and from numpy arrays. `SegmentationMask` is abstract — use
 ```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
 >>> mask_data = np.zeros((480, 640), dtype=bool)
 >>> mask_data[100:200, 150:300] = True  # rectangular region
 >>> mask = sio.UserSegmentationMask.from_numpy(
-...     mask_data, video=video, frame_idx=0,
+...     mask_data,
 ... )
 >>> print(mask.area)
 >>> print(mask.height)
@@ -869,7 +831,7 @@ video = sio.load_video("microscopy.tif")
 with sio.LabelImageWriter("output.slp", video=video) as writer:
     for frame_idx, mask in enumerate(segmentation_results):
         li = sio.PredictedLabelImage.from_numpy(
-            mask, video=video, frame_idx=frame_idx,
+            mask,
             source="cellpose:nuclei", create_tracks=True, score=1.0,
         )
         writer.add(li)
@@ -951,7 +913,6 @@ labels = sio.load_slp("large_dataset.slp")
 # Metadata queries — no decompression
 li = labels.get_label_images(frame_idx=42)[0]
 print(li.tracks)      # free
-print(li.frame_idx)   # free
 print(li.height)      # free (cached from metadata)
 
 # Pixel data decompressed on first access, then cached
@@ -980,18 +941,16 @@ geometrically meaningful:
 | `LabelImage`        | `list[BoundingBox]`   | `li.to_bboxes()`                  |
 | `list[SegmentationMask]` | `LabelImage`     | `UserLabelImage.from_masks(masks)` |
 
-All conversions preserve metadata (video, frame_idx, track, instance, name,
+All conversions preserve metadata (track, instance, name,
 category, source) when applicable. `to_bbox()` and `to_bboxes()` preserve
 prediction semantics (`Predicted*` inputs produce `Predicted*` outputs with
 scores). Other conversions return `User*` types.
 
 ```pycon
 >>> import sleap_io as sio
->>> video = sio.Video("test.mp4", open_backend=False)
 >>> # BoundingBox -> ROI -> SegmentationMask -> polygon ROI
 >>> bbox = sio.UserBoundingBox(
 ...     x1=40, y1=35, x2=60, y2=65,
-...     video=video, frame_idx=0,
 ... )
 >>> roi = bbox.to_roi()
 >>> print(roi.area)
@@ -1029,7 +988,6 @@ classDiagram
         <<abstract>>
         +geometry
         +str name
-        +is_static
         +to_mask()
         +explode()
     }
