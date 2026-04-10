@@ -7725,7 +7725,7 @@ def test_slp_lazy_old_format_annotation_only_frames(tmp_path):
         assert lf.video is not None
 
     # Slice access (covers supplementary path line 809)
-    all_frames = lazy.labeled_frames[0:n]
+    _ = lazy.labeled_frames[0:n]
 
 
 def test_write_centroids_default_contexts(tmp_path):
