@@ -1169,9 +1169,7 @@ def test_labeled_frame_append():
     lf = LabeledFrame(video=video, frame_idx=0)
 
     # Instance
-    inst = Instance.from_numpy(
-        np.array([[1.0, 2.0]]), skeleton=Skeleton(["A"])
-    )
+    inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=Skeleton(["A"]))
     lf.append(inst)
     assert lf.instances[-1] is inst
 
