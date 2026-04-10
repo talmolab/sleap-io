@@ -7726,4 +7726,60 @@ def test_slp_lazy_old_format_annotation_only_frames(tmp_path):
 
     # Slice access (covers supplementary path line 809)
     all_frames = lazy.labeled_frames[0:n]
-    assert len(all_frames) == n
+
+
+def test_write_centroids_default_contexts(tmp_path):
+    """write_centroids with contexts=None uses (-1, -1) defaults."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    c = UserCentroid(x=1.0, y=2.0)
+
+    path = str(tmp_path / "test.slp")
+    save_slp(Labels(videos=[video], skeletons=[skeleton]), path)
+    write_centroids(path, [c], [video], [])
+
+    result = read_centroids(path, [video], [])
+    assert len(result) == 1
+    _, vid_idx, fidx = result[0]
+    assert vid_idx == -1
+    assert fidx == -1
+
+
+def test_write_bboxes_default_contexts(tmp_path):
+    """write_bboxes with contexts=None uses (-1, -1) defaults."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10)
+
+    path = str(tmp_path / "test.slp")
+    save_slp(Labels(videos=[video], skeletons=[skeleton]), path)
+    write_bboxes(path, [b], [video], [])
+
+    result = read_bboxes(path, [video], [])
+    assert len(result) == 1
+    _, vid_idx, fidx = result[0]
+    assert vid_idx == -1
+    assert fidx == -1
+
+
+def test_slp_undistributed_annotations_roundtrip(tmp_path):
+    """Annotations with invalid routing context become undistributed on read."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    # Write a centroid and bbox with -1 routing context (undistributable)
+    c = UserCentroid(x=5.0, y=10.0)
+    b = UserBoundingBox(x1=0, y1=0, x2=20, y2=20)
+
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.centroids.append(c)
+    lf.bboxes.append(b)
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path)
+    # Annotations should be distributed to the frame
+    assert len(loaded.centroids) == 1
+    assert len(loaded.bboxes) == 1

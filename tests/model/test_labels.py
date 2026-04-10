@@ -7384,3 +7384,78 @@ def test_labels_merge_auto_annotations_spatial():
     assert len(merged_lf.centroids) == 2
     xs = {c.x for c in merged_lf.centroids}
     assert xs == {0.5, 50.5}
+
+
+def test_labels_get_label_images_by_frame_idx_only():
+    """get_label_images(frame_idx=N) without video filters by frame index."""
+    video = Video(filename="test.mp4", open_backend=False)
+    li0 = UserLabelImage(data=np.zeros((2, 2), dtype=np.int32))
+    li1 = UserLabelImage(data=np.ones((2, 2), dtype=np.int32))
+    lf0 = LabeledFrame(video=video, frame_idx=0, label_images=[li0])
+    lf1 = LabeledFrame(video=video, frame_idx=1, label_images=[li1])
+    labels = Labels(labeled_frames=[lf0, lf1])
+
+    assert labels.get_label_images(frame_idx=0) == [li0]
+    assert labels.get_label_images(frame_idx=1) == [li1]
+    assert labels.get_label_images(frame_idx=99) == []
+
+
+def test_labels_replace_videos_updates_static_rois():
+    """replace_videos should update video references on static ROIs."""
+    old_video = Video(filename="old.mp4")
+    new_video = Video(filename="new.mp4")
+    static_roi = UserROI.from_bbox(0, 0, 100, 100, video=old_video)
+
+    labels = Labels(videos=[old_video], rois=[static_roi])
+    labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
+
+    assert static_roi.video is new_video
+
+
+def test_labels_materialize_static_rois_with_refs(tmp_path):
+    """materialize() deep copies static ROIs and relinks video/track refs."""
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+    skeleton = Skeleton(["A"])
+    static_roi = UserROI.from_bbox(0, 0, 50, 50, video=video)
+    static_roi.track = track
+
+    lf = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        tracks=[track],
+        skeletons=[skeleton],
+        rois=[static_roi],
+    )
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+
+    lazy = load_slp(path, lazy=True)
+    materialized = lazy.materialize()
+
+    assert len(materialized.static_rois) == 1
+    mat_roi = materialized.static_rois[0]
+    assert mat_roi.video is materialized.videos[0]
+    assert mat_roi.track is materialized.tracks[0]
+
+
+def test_remap_frame_annotations_with_rois():
+    """_remap_frame_annotations remaps ROI video and track references."""
+    old_video = Video(filename="old.mp4")
+    new_video = Video(filename="new.mp4")
+    old_track = Track(name="old")
+    new_track = Track(name="new")
+
+    roi = UserROI.from_bbox(0, 0, 10, 10, video=old_video)
+    roi.track = old_track
+    lf = LabeledFrame(video=old_video, frame_idx=0, rois=[roi])
+
+    Labels._remap_frame_annotations(
+        lf,
+        video_map={old_video: new_video},
+        track_map={old_track: new_track},
+    )
+
+    assert roi.video is new_video
+    assert roi.track is new_track

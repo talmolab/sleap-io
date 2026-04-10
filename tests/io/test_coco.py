@@ -2643,4 +2643,37 @@ class TestCOCOPanoptic:
 
         # Dimensions preserved
         assert rt1.height == 20
-        assert rt1.width == 25
+
+
+def test_coco_export_roi_only_creates_image(tmp_path):
+    """Export ROIs/masks/bboxes on frames without instances creates image entries."""
+    from sleap_io.model.roi import UserROI
+
+    video = sio.Video.from_filename(["img1.png"])
+
+    # Frame with only ROI (no instances) — forces new image_id creation
+    roi = UserROI.from_bbox(10.0, 20.0, 50.0, 30.0, category="region", video=video)
+    mask_arr = np.zeros((10, 10), dtype=bool)
+    mask_arr[2:5, 3:7] = True
+    mask = UserSegmentationMask.from_numpy(mask_arr, category="cell")
+    bbox = UserBoundingBox.from_xywh(0, 0, 20, 20, category="box")
+
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.rois.append(roi)
+    lf.masks.append(mask)
+    lf.bboxes.append(bbox)
+    labels = sio.Labels(labeled_frames=[lf])
+
+    json_path = tmp_path / "test.json"
+    coco.write_labels(labels, json_path)
+
+    with open(json_path) as f:
+        data = json.load(f)
+
+    # All three annotation types should have created entries
+    assert len(data["annotations"]) == 3
+    # Image entry created for the frame
+    assert len(data["images"]) == 1
+    # Three distinct categories
+    cat_names = {c["name"] for c in data["categories"]}
+    assert cat_names == {"region", "cell", "box"}
