@@ -221,15 +221,15 @@ new_skeleton = sio.Skeleton(["HEAD", "BODY", "TAIL"])
 labels.replace_skeleton(new_skeleton)
 ```
 
-**Adding spatial annotations** inserts annotations into the appropriate frame,
-creating the frame if needed:
+**Adding spatial annotations** to a frame by appending to its annotation lists:
 
 ```python
-labels.add_centroid(sio.UserCentroid(x=100, y=200, video=video, frame_idx=0))
-labels.add_bbox(sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60, video=video, frame_idx=0))
-labels.add_mask(mask)
-labels.add_label_image(label_image)
-labels.add_roi(roi)
+lf = labels.get(video, 0)  # get or create LabeledFrame for frame 0
+lf.append(sio.UserCentroid(x=100, y=200))
+lf.append(sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60))
+lf.append(mask)
+lf.append(label_image)
+lf.append(roi)
 ```
 
 !!! note "See also"
