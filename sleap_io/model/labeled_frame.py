@@ -236,7 +236,10 @@ class LabeledFrame:
 
     def append(
         self,
-        annotation: "Instance | PredictedInstance | Centroid | BoundingBox | SegmentationMask | LabelImage | ROI",
+        annotation: (
+            "Instance | PredictedInstance | Centroid"
+            " | BoundingBox | SegmentationMask | LabelImage | ROI"
+        ),
     ) -> None:
         """Append an annotation to the appropriate frame-level container.
 
