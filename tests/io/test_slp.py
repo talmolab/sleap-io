@@ -7763,23 +7763,32 @@ def test_write_bboxes_default_contexts(tmp_path):
 
 
 def test_slp_undistributed_annotations_roundtrip(tmp_path):
-    """Annotations with invalid routing context become undistributed on read."""
+    """Annotations written with -1 routing context are undistributed on read."""
+    from sleap_io.io.slp import write_masks
+
     video = Video(filename="test.mp4")
     skeleton = Skeleton(nodes=["A"])
-
-    # Write a centroid and bbox with -1 routing context (undistributable)
-    c = UserCentroid(x=5.0, y=10.0)
-    b = UserBoundingBox(x1=0, y1=0, x2=20, y2=20)
-
     lf = LabeledFrame(video=video, frame_idx=0)
-    lf.centroids.append(c)
-    lf.bboxes.append(b)
     labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "test.slp")
     save_slp(labels, path)
 
-    loaded = load_slp(path)
-    # Annotations should be distributed to the frame
-    assert len(loaded.centroids) == 1
-    assert len(loaded.bboxes) == 1
+    # Write annotations with -1 routing context (undistributable)
+    c = UserCentroid(x=5.0, y=10.0)
+    b = UserBoundingBox(x1=0, y1=0, x2=20, y2=20)
+    mask_data = np.zeros((5, 5), dtype=bool)
+    mask_data[1:4, 1:4] = True
+    m = UserSegmentationMask.from_numpy(mask_data)
+
+    write_centroids(path, [c], [video], [], contexts=[(-1, -1)])
+    write_bboxes(path, [b], [video], [], contexts=[(-1, -1)])
+    write_masks(path, [m], [video], [], contexts=[(-1, -1)])
+
+    # read_labels should put these in undistributed (not on any frame)
+    loaded = read_labels(path)
+    # The existing LabeledFrame at frame_idx=0 has no annotations
+    lf0 = [lf for lf in loaded.labeled_frames if lf.frame_idx == 0][0]
+    assert len(lf0.centroids) == 0
+    assert len(lf0.bboxes) == 0
+    assert len(lf0.masks) == 0
