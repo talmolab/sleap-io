@@ -287,12 +287,9 @@ def test_from_numpy_categories_dict():
 
 def test_from_numpy_with_kwargs():
     """from_numpy should pass kwargs to constructor."""
-    vid = Video(filename="test.mp4")
     data = np.array([[1]], dtype=np.int32)
-    li = UserLabelImage.from_numpy(data, video=vid, frame_idx=42, source="test")
+    li = UserLabelImage.from_numpy(data, source="test")
 
-    assert li.video is vid
-    assert li.frame_idx == 42
     assert li.source == "test"
 
 
@@ -359,15 +356,12 @@ def test_to_masks():
     """to_masks should decompose into per-object binary masks."""
     t1, t2 = Track(name="a"), Track(name="b")
     data = np.array([[1, 0], [0, 2]], dtype=np.int32)
-    vid = Video(filename="test.mp4")
     li = UserLabelImage(
         data=data,
         objects={
             1: LabelImage.Info(track=t1, category="neuron", name="cell_1"),
             2: LabelImage.Info(track=t2, category="glia", name="cell_2"),
         },
-        video=vid,
-        frame_idx=5,
         source="test_source",
     )
     masks = li.to_masks()
@@ -378,8 +372,6 @@ def test_to_masks():
     assert masks[0].track is t1
     assert masks[0].category == "neuron"
     assert masks[0].name == "cell_1"
-    assert masks[0].video is vid
-    assert masks[0].frame_idx == 5
     assert masks[0].source == "test_source"
     # Second mask (label 2)
     np.testing.assert_array_equal(masks[1].data, [[False, False], [False, True]])
@@ -418,7 +410,8 @@ def test_eq_false():
 
 
 def test_labels_integration():
-    """LabelImage should work with Labels.get_label_images()."""
+    """LabelImage should work with Labels via LabeledFrames."""
+    from sleap_io.model.labeled_frame import LabeledFrame
     from sleap_io.model.labels import Labels
 
     vid1 = Video(filename="a.mp4")
@@ -428,31 +421,27 @@ def test_labels_integration():
     li1 = UserLabelImage(
         data=np.array([[1]], dtype=np.int32),
         objects={1: LabelImage.Info(track=t1, category="neuron")},
-        video=vid1,
-        frame_idx=0,
     )
     li2 = UserLabelImage(
         data=np.array([[2]], dtype=np.int32),
         objects={2: LabelImage.Info(category="glia")},
-        video=vid1,
-        frame_idx=1,
     )
     li3 = UserLabelImage(
         data=np.array([[1]], dtype=np.int32),
         objects={1: LabelImage.Info(track=t1)},
-        video=vid2,
-        frame_idx=0,
     )
 
-    labels = Labels(label_images=[li1, li2, li3])
+    lf1 = LabeledFrame(video=vid1, frame_idx=0)
+    lf1.label_images.append(li1)
+    lf2 = LabeledFrame(video=vid1, frame_idx=1)
+    lf2.label_images.append(li2)
+    lf3 = LabeledFrame(video=vid2, frame_idx=0)
+    lf3.label_images.append(li3)
 
-    # Filter by video
-    assert labels.get_label_images(video=vid1) == [li1, li2]
-    assert labels.get_label_images(video=vid2) == [li3]
+    labels = Labels(labeled_frames=[lf1, lf2, lf3])
 
-    # Filter by frame_idx
-    assert labels.get_label_images(frame_idx=0) == [li1, li3]
-    assert labels.get_label_images(frame_idx=1) == [li2]
+    # All label images across frames
+    assert len(labels.label_images) == 3
 
     # Filter by track (checks objects metadata)
     assert labels.get_label_images(track=t1) == [li1, li3]
@@ -460,9 +449,6 @@ def test_labels_integration():
     # Filter by category
     assert labels.get_label_images(category="neuron") == [li1]
     assert labels.get_label_images(category="glia") == [li2]
-
-    # Combined filters
-    assert labels.get_label_images(video=vid1, track=t1) == [li1]
 
 
 def test_info_score():
@@ -786,12 +772,7 @@ def test_from_binary_masks_predicted():
 def test_from_binary_masks_kwargs():
     """Extra kwargs should pass through to the constructor."""
     m1 = np.array([[True, False], [False, False]])
-    video = Video(filename="test.mp4")
-    li = UserLabelImage.from_binary_masks(
-        [m1], video=video, frame_idx=5, source="cellpose"
-    )
-    assert li.video is video
-    assert li.frame_idx == 5
+    li = UserLabelImage.from_binary_masks([m1], source="cellpose")
     assert li.source == "cellpose"
 
 
@@ -1113,7 +1094,6 @@ def test_from_stack_basic():
         assert isinstance(li, UserLabelImage)
         assert li.height == 4
         assert li.width == 5
-        assert li.frame_idx == i
 
 
 def test_from_stack_list_input():
@@ -1195,14 +1175,13 @@ def test_from_stack_categories():
     assert result[0].objects[2].category == "glia"
 
 
-def test_from_stack_frame_idx_custom():
-    """Custom frame_idx should be applied per frame."""
+def test_from_stack_source_kwarg():
+    """Shared kwargs should propagate to all frames."""
     stack = np.zeros((3, 2, 2), dtype=np.int32)
-    result = UserLabelImage.from_stack(stack, frame_idx=[10, 20, 30])
+    result = UserLabelImage.from_stack(stack, source="cellpose")
 
-    assert result[0].frame_idx == 10
-    assert result[1].frame_idx == 20
-    assert result[2].frame_idx == 30
+    for li in result:
+        assert li.source == "cellpose"
 
 
 def test_from_stack_predicted():
@@ -1259,19 +1238,16 @@ def test_from_stack_track_consistency():
 
 def test_from_stack_kwargs():
     """Shared kwargs should propagate to all frames."""
-    vid = Video(filename="test.mp4")
     stack = np.zeros((2, 3, 3), dtype=np.int32)
 
     result = UserLabelImage.from_stack(
         stack,
-        video=vid,
         source="cellpose",
         scale=(0.5, 0.5),
         offset=(10.0, 20.0),
     )
 
     for li in result:
-        assert li.video is vid
         assert li.source == "cellpose"
         assert li.scale == (0.5, 0.5)
         assert li.offset == (10.0, 20.0)
@@ -1281,13 +1257,6 @@ def test_from_stack_non_3d_raises():
     """from_stack with a 2D array should raise ValueError."""
     with pytest.raises(ValueError, match="\\(T, H, W\\)"):
         UserLabelImage.from_stack(np.zeros((3, 3), dtype=np.int32))
-
-
-def test_from_stack_frame_idx_mismatch_raises():
-    """from_stack with wrong frame_idx length should raise."""
-    stack = np.zeros((3, 3, 3), dtype=np.int32)
-    with pytest.raises(ValueError, match="frame_idx length"):
-        UserLabelImage.from_stack(stack, frame_idx=[0, 1])
 
 
 def test_from_stack_empty():
@@ -1479,19 +1448,14 @@ def test_to_bboxes_metadata():
     data = np.zeros((10, 10), dtype=np.int32)
     data[1:3, 1:3] = 1
     track = Track(name="t1")
-    video = Video(filename="test.mp4")
     li = UserLabelImage(
         data=data,
         objects={1: LabelImage.Info(track=track, category="cell", name="obj1")},
-        video=video,
-        frame_idx=5,
         source="cellpose",
     )
     bboxes = li.to_bboxes()
     bb = bboxes[0]
     assert bb.track is track
-    assert bb.video is video
-    assert bb.frame_idx == 5
     assert bb.category == "cell"
     assert bb.name == "obj1"
     assert bb.source == "cellpose"

@@ -1149,7 +1149,10 @@ def write_videos(
                 if reference_mode == VideoReferenceMode.EMBED and original_videos:
                     # For embed mode, save the pre-embedding video as source
                     source_to_save = pre_embed_video
-                elif pre_embed_video.source_video is not None:
+                elif (
+                    pre_embed_video is not None
+                    and pre_embed_video.source_video is not None
+                ):
                     source_to_save = pre_embed_video.source_video
 
             # Write source_video metadata to the video group
@@ -2590,29 +2593,28 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     lazy_frames = LazyFrameList(lazy_store)
 
     # Read ROIs, masks, bboxes, and label images eagerly (typically small count)
-    rois = read_rois(labels_path, videos, tracks)
-    masks = read_masks(labels_path, videos, tracks)
-    bboxes = read_bboxes(labels_path, videos, tracks)
-    centroids = read_centroids(labels_path, videos, tracks)
-    label_images, li_file = read_label_images(labels_path, videos, tracks)
+    roi_tuples = read_rois(labels_path, videos, tracks)
+    mask_tuples = read_masks(labels_path, videos, tracks)
+    bbox_tuples = read_bboxes(labels_path, videos, tracks)
+    centroid_tuples = read_centroids(labels_path, videos, tracks)
+    li_tuples, li_file = read_label_images(labels_path, videos, tracks)
 
     # Build per-frame annotation dicts for lazy materialization
-    def _build_ann_by_frame(annotations, videos):
+    def _build_ann_by_frame(ann_tuples):
         by_frame = {}
         undistributed = []
-        for ann in annotations:
-            if ann.video is not None and ann.frame_idx is not None:
-                vid_idx = videos.index(ann.video) if ann.video in videos else -1
-                key = (vid_idx, ann.frame_idx)
+        for ann, vid_idx, fidx in ann_tuples:
+            if vid_idx >= 0 and fidx >= 0:
+                key = (vid_idx, fidx)
                 by_frame.setdefault(key, []).append(ann)
             else:
                 undistributed.append(ann)
         return by_frame, undistributed
 
-    c_by_frame, c_undist = _build_ann_by_frame(centroids, videos)
-    b_by_frame, b_undist = _build_ann_by_frame(bboxes, videos)
-    m_by_frame, m_undist = _build_ann_by_frame(masks, videos)
-    r_by_frame, r_undist = _build_ann_by_frame(rois, videos)
+    c_by_frame, c_undist = _build_ann_by_frame(centroid_tuples)
+    b_by_frame, b_undist = _build_ann_by_frame(bbox_tuples)
+    m_by_frame, m_undist = _build_ann_by_frame(mask_tuples)
+    r_by_frame, r_undist = _build_ann_by_frame(roi_tuples)
 
     lazy_store._centroid_by_frame = c_by_frame
     lazy_store._bbox_by_frame = b_by_frame
@@ -2625,15 +2627,7 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     lazy_store._undistributed_rois = r_undist
 
     # Label images use the same pattern
-    li_by_frame: dict[tuple[int, int], list] = {}
-    li_undist: list = []
-    for li in label_images:
-        if li.video is not None and li.frame_idx is not None:
-            vid_idx = videos.index(li.video) if li.video in videos else -1
-            key = (vid_idx, li.frame_idx)
-            li_by_frame.setdefault(key, []).append(li)
-        else:
-            li_undist.append(li)
+    li_by_frame, li_undist = _build_ann_by_frame(li_tuples)
     lazy_store._label_image_by_frame = li_by_frame
     lazy_store._undistributed_label_images = li_undist
 
@@ -2698,7 +2692,7 @@ def read_rois(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
-) -> list[ROI]:
+) -> list[tuple[ROI, int, int]]:
     """Read ROI annotations from a SLEAP labels file.
 
     Args:
@@ -2710,7 +2704,9 @@ def read_rois(
             associations will not be restored.
 
     Returns:
-        A list of ROI objects. Returns an empty list if no ROIs are stored.
+        A list of ``(roi, video_idx, frame_idx)`` tuples. ``video_idx`` and
+        ``frame_idx`` are the routing context read from the file (``-1``
+        means undistributable). Returns an empty list if no ROIs are stored.
     """
     import shapely
 
@@ -2762,7 +2758,6 @@ def read_rois(
         video = videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(row["frame_idx"])
-        frame_idx = None if frame_idx_val == -1 else frame_idx_val
 
         track_idx = int(row["track"])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
@@ -2791,7 +2786,6 @@ def read_rois(
             category=categories[i] if i < len(categories) else "",
             source=sources[i] if i < len(sources) else "",
             video=video,
-            frame_idx=frame_idx,
             track=track,
             tracking_score=tracking_score,
             instance=instance,
@@ -2807,7 +2801,7 @@ def read_rois(
 
         # Store raw index for deferred resolution (lazy loading)
         roi._instance_idx = instance_idx
-        rois.append(roi)
+        rois.append((roi, video_idx, frame_idx_val))
 
     return rois
 
@@ -2818,6 +2812,7 @@ def write_rois(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    contexts: list[tuple[int, int]] | None = None,
 ) -> None:
     """Write ROI annotations to a SLEAP labels file.
 
@@ -2828,9 +2823,14 @@ def write_rois(
         tracks: List of Track objects for index mapping.
         instances: Optional list of Instance/PredictedInstance objects for index
             mapping. If provided, ROI instance associations will be persisted.
+        contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
+            for each ROI. If ``None``, defaults to ``(-1, -1)`` for all.
     """
     if not rois:
         return
+
+    if contexts is None:
+        contexts = [(-1, -1)] * len(rois)
 
     import shapely
 
@@ -2856,15 +2856,14 @@ def write_rois(
     names = []
     sources = []
 
-    for roi in rois:
+    for i_roi, roi in enumerate(rois):
         wkb = shapely.to_wkb(roi.geometry)
         wkb_start = wkb_offset
         wkb_end = wkb_offset + len(wkb)
         wkb_chunks.append(np.frombuffer(wkb, dtype=np.uint8))
         wkb_offset = wkb_end
 
-        video_idx = videos.index(roi.video) if roi.video in videos else -1
-        frame_idx = roi.frame_idx if roi.frame_idx is not None else -1
+        video_idx, frame_idx = contexts[i_roi]
         track_idx = tracks.index(roi.track) if roi.track in tracks else -1
 
         instance_idx = roi._instance_idx  # Use stored index as default
@@ -2923,7 +2922,7 @@ def read_bboxes(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
-) -> list[BoundingBox]:
+) -> list[tuple[BoundingBox, int, int]]:
     """Read bounding box annotations from a SLEAP labels file.
 
     Args:
@@ -2935,8 +2934,9 @@ def read_bboxes(
             associations will not be restored.
 
     Returns:
-        A list of BoundingBox objects. Returns an empty list if no bboxes are
-        stored.
+        A list of ``(bbox, video_idx, frame_idx)`` tuples. ``video_idx`` and
+        ``frame_idx`` are the routing context read from the file (``-1``
+        means undistributable). Returns an empty list if no bboxes are stored.
     """
     with h5py.File(labels_path, "r") as f:
         if "bboxes" not in f:
@@ -2961,7 +2961,7 @@ def _read_bboxes_columnar(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None,
-) -> list[BoundingBox]:
+) -> list[tuple[BoundingBox, int, int]]:
     """Read bboxes from columnar /bboxes group (v2.0+ format)."""
     x1_arr = grp["x1"][:]
     y1_arr = grp["y1"][:]
@@ -2982,10 +2982,8 @@ def _read_bboxes_columnar(
     bboxes: list[BoundingBox] = []
     for i in range(len(x1_arr)):
         video_idx = int(video_arr[i])
-        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(frame_idx_arr[i])
-        frame_idx = None if frame_idx_val == -1 else frame_idx_val
 
         track_idx = int(track_arr[i])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
@@ -3016,8 +3014,6 @@ def _read_bboxes_columnar(
             x2=float(x2_arr[i]),
             y2=float(y2_arr[i]),
             angle=float(angle_arr[i]),
-            video=video,
-            frame_idx=frame_idx,
             track=track,
             tracking_score=tracking_score,
             instance=instance,
@@ -3032,7 +3028,7 @@ def _read_bboxes_columnar(
             bbox = UserBoundingBox(**kwargs)
 
         bbox._instance_idx = instance_idx
-        bboxes.append(bbox)
+        bboxes.append((bbox, video_idx, frame_idx_val))
 
     return bboxes
 
@@ -3045,7 +3041,7 @@ def _read_bboxes_legacy(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None,
-) -> list[BoundingBox]:
+) -> list[tuple[BoundingBox, int, int]]:
     """Read bboxes from legacy structured array format (pre-v2.0)."""
     if len(bbox_data) == 0:
         return []
@@ -3053,10 +3049,8 @@ def _read_bboxes_legacy(
     bboxes: list[BoundingBox] = []
     for i, row in enumerate(bbox_data):
         video_idx = int(row["video"])
-        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(row["frame_idx"])
-        frame_idx = None if frame_idx_val == -1 else frame_idx_val
 
         track_idx = int(row["track"])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
@@ -3080,8 +3074,6 @@ def _read_bboxes_legacy(
             x2=xc + w / 2,
             y2=yc + h / 2,
             angle=float(row["angle"]),
-            video=video,
-            frame_idx=frame_idx,
             track=track,
             instance=instance,
             category=categories[i] if i < len(categories) else "",
@@ -3096,7 +3088,7 @@ def _read_bboxes_legacy(
             bbox = UserBoundingBox(**kwargs)
 
         bbox._instance_idx = instance_idx
-        bboxes.append(bbox)
+        bboxes.append((bbox, video_idx, frame_idx_val))
 
     return bboxes
 
@@ -3107,6 +3099,7 @@ def write_bboxes(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    contexts: list[tuple[int, int]] | None = None,
 ) -> None:
     """Write bounding box annotations to a SLEAP labels file.
 
@@ -3118,9 +3111,14 @@ def write_bboxes(
         instances: Optional list of Instance/PredictedInstance objects for index
             mapping. If provided, bounding box instance associations will be
             persisted.
+        contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
+            for each bounding box. If ``None``, defaults to ``(-1, -1)`` for all.
     """
     if not bboxes:
         return
+
+    if contexts is None:
+        contexts = [(-1, -1)] * len(bboxes)
 
     n = len(bboxes)
     x1_arr = np.empty(n, dtype=np.float64)
@@ -3146,8 +3144,7 @@ def write_bboxes(
         y2_arr[i] = bbox.y2
         angle_arr[i] = bbox.angle
 
-        video_arr[i] = videos.index(bbox.video) if bbox.video in videos else -1
-        frame_idx_arr[i] = bbox.frame_idx if bbox.frame_idx is not None else -1
+        video_arr[i], frame_idx_arr[i] = contexts[i]
         track_arr[i] = tracks.index(bbox.track) if bbox.track in tracks else -1
 
         instance_idx = bbox._instance_idx
@@ -3194,7 +3191,7 @@ def read_centroids(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
-) -> "list[Centroid]":
+) -> "list[tuple[Centroid, int, int]]":
     """Read centroid annotations from a SLEAP labels file.
 
     Args:
@@ -3205,7 +3202,9 @@ def read_centroids(
             relinking centroid instance associations.
 
     Returns:
-        A list of Centroid objects. Returns an empty list if no centroids are
+        A list of ``(centroid, video_idx, frame_idx)`` tuples. ``video_idx``
+        and ``frame_idx`` are the routing context read from the file (``-1``
+        means undistributable). Returns an empty list if no centroids are
         stored.
     """
     from sleap_io.model.centroid import PredictedCentroid, UserCentroid
@@ -3234,10 +3233,8 @@ def read_centroids(
     centroids: list[Centroid] = []
     for i in range(len(x_arr)):
         video_idx = int(video_arr[i])
-        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(frame_idx_arr[i])
-        frame_idx = None if frame_idx_val == -1 else frame_idx_val
 
         track_idx = int(track_arr[i])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
@@ -3272,8 +3269,6 @@ def read_centroids(
             x=float(x_arr[i]),
             y=float(y_arr[i]),
             z=z,
-            video=video,
-            frame_idx=frame_idx,
             track=track,
             tracking_score=tracking_score,
             instance=instance,
@@ -3288,7 +3283,7 @@ def read_centroids(
             centroid = UserCentroid(**kwargs)
 
         centroid._instance_idx = instance_idx
-        centroids.append(centroid)
+        centroids.append((centroid, video_idx, frame_idx_val))
 
     return centroids
 
@@ -3299,6 +3294,7 @@ def write_centroids(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    contexts: list[tuple[int, int]] | None = None,
 ) -> None:
     """Write centroid annotations to a SLEAP labels file.
 
@@ -3309,11 +3305,16 @@ def write_centroids(
         tracks: List of Track objects for index mapping.
         instances: Optional list of Instance/PredictedInstance objects for index
             mapping.
+        contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
+            for each centroid. If ``None``, defaults to ``(-1, -1)`` for all.
     """
     from sleap_io.model.centroid import PredictedCentroid
 
     if not centroids:
         return
+
+    if contexts is None:
+        contexts = [(-1, -1)] * len(centroids)
 
     n = len(centroids)
     x_arr = np.empty(n, dtype=np.float64)
@@ -3335,8 +3336,7 @@ def write_centroids(
         y_arr[i] = centroid.y
         z_arr[i] = centroid.z if centroid.z is not None else float("nan")
 
-        video_arr[i] = videos.index(centroid.video) if centroid.video in videos else -1
-        frame_idx_arr[i] = centroid.frame_idx if centroid.frame_idx is not None else -1
+        video_arr[i], frame_idx_arr[i] = contexts[i]
         track_arr[i] = tracks.index(centroid.track) if centroid.track in tracks else -1
 
         instance_idx = centroid._instance_idx
@@ -3383,7 +3383,7 @@ def read_masks(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
-) -> list[SegmentationMask]:
+) -> list[tuple[SegmentationMask, int, int]]:
     """Read segmentation masks from a SLEAP labels file.
 
     Args:
@@ -3395,7 +3395,9 @@ def read_masks(
             associations will not be restored.
 
     Returns:
-        A list of SegmentationMask objects. Returns empty list if none stored.
+        A list of ``(mask, video_idx, frame_idx)`` tuples. ``video_idx`` and
+        ``frame_idx`` are the routing context read from the file (``-1``
+        means undistributable). Returns empty list if none stored.
     """
     try:
         mask_data = read_hdf5_dataset(labels_path, "masks")
@@ -3481,10 +3483,8 @@ def read_masks(
         rle_counts = np.frombuffer(rle_raw.tobytes(), dtype=np.uint32)
 
         video_idx = int(row["video"])
-        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(row["frame_idx"])
-        frame_idx = None if frame_idx_val == -1 else frame_idx_val
 
         track_idx = int(row["track"])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
@@ -3526,8 +3526,6 @@ def read_masks(
             name=names[i] if i < len(names) else "",
             category=categories[i] if i < len(categories) else "",
             source=sources[i] if i < len(sources) else "",
-            video=video,
-            frame_idx=frame_idx,
             track=track,
             tracking_score=tracking_score,
             instance=instance,
@@ -3552,7 +3550,7 @@ def read_masks(
             mask = UserSegmentationMask(**kwargs)
 
         mask._instance_idx = instance_idx
-        masks.append(mask)
+        masks.append((mask, video_idx, frame_idx_val))
 
     return masks
 
@@ -3563,6 +3561,7 @@ def write_masks(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    contexts: list[tuple[int, int]] | None = None,
 ) -> None:
     """Write segmentation masks to a SLEAP labels file.
 
@@ -3573,9 +3572,14 @@ def write_masks(
         tracks: List of Track objects for index mapping.
         instances: Optional list of Instance/PredictedInstance objects for index
             mapping. If provided, mask instance associations will be persisted.
+        contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
+            for each mask. If ``None``, defaults to ``(-1, -1)`` for all.
     """
     if not masks:
         return
+
+    if contexts is None:
+        contexts = [(-1, -1)] * len(masks)
 
     mask_dtype = np.dtype(
         [
@@ -3605,7 +3609,7 @@ def write_masks(
     names = []
     sources = []
 
-    for mask in masks:
+    for i_mask, mask in enumerate(masks):
         # Pack uint32 RLE counts as raw bytes (uint8)
         rle_bytes = mask.rle_counts.astype(np.uint32).tobytes()
         rle_uint8 = np.frombuffer(rle_bytes, dtype=np.uint8)
@@ -3614,8 +3618,7 @@ def write_masks(
         rle_chunks.append(rle_uint8)
         rle_offset = rle_end
 
-        video_idx = videos.index(mask.video) if mask.video in videos else -1
-        frame_idx = mask.frame_idx if mask.frame_idx is not None else -1
+        video_idx, frame_idx = contexts[i_mask]
         track_idx = tracks.index(mask.track) if mask.track in tracks else -1
 
         instance_idx = mask._instance_idx  # Use stored index as default
@@ -3731,7 +3734,7 @@ def read_label_images(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
-) -> tuple[list[LabelImage], "h5py.File | None"]:
+) -> tuple[list[tuple[LabelImage, int, int]], "h5py.File | None"]:
     """Read label image annotations from a SLEAP labels file.
 
     Supports both the legacy blob format (v1.8-v2.1) and the chunked format
@@ -3748,11 +3751,13 @@ def read_label_images(
             associations will not be restored.
 
     Returns:
-        A tuple of ``(label_images, h5py_file)`` where ``label_images`` is a
-        list of LabelImage objects and ``h5py_file`` is the open HDF5 file
-        handle that must be kept alive for lazy data access (or ``None`` if no
-        label images were found). The caller is responsible for storing and
-        eventually closing the file handle.
+        A tuple of ``(label_image_tuples, h5py_file)`` where
+        ``label_image_tuples`` is a list of ``(li, video_idx, frame_idx)``
+        tuples with routing context (``-1`` means undistributable), and
+        ``h5py_file`` is the open HDF5 file handle that must be kept alive
+        for lazy data access (or ``None`` if no label images were found).
+        The caller is responsible for storing and eventually closing the
+        file handle.
     """
     try:
         li_data = read_hdf5_dataset(labels_path, "label_images")
@@ -3863,10 +3868,8 @@ def read_label_images(
     label_images: list[LabelImage] = []
     for i, row in enumerate(li_data):
         video_idx = int(row["video"])
-        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
 
         frame_idx_val = int(row["frame_idx"])
-        frame_idx = None if frame_idx_val == -1 else frame_idx_val
 
         height = int(row["height"])
         width = int(row["width"])
@@ -3940,8 +3943,6 @@ def read_label_images(
         kwargs = dict(
             data=None,
             objects=objects,
-            video=video,
-            frame_idx=frame_idx,
             source=source,
             scale=scale,
             offset=offset,
@@ -3975,7 +3976,7 @@ def read_label_images(
         li._height = height
         li._width = width
 
-        label_images.append(li)
+        label_images.append((li, video_idx, frame_idx_val))
 
     return label_images, f
 
@@ -3986,6 +3987,7 @@ def write_label_images(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    contexts: list[tuple[int, int]] | None = None,
 ) -> None:
     """Write label image annotations to a SLEAP labels file.
 
@@ -4005,9 +4007,14 @@ def write_label_images(
         instances: Optional list of Instance/PredictedInstance objects for index
             mapping. If provided, label image instance associations will be
             persisted.
+        contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
+            for each label image. If ``None``, defaults to ``(-1, -1)`` for all.
     """
     if not label_images:
         return
+
+    if contexts is None:
+        contexts = [(-1, -1)] * len(label_images)
 
     # Determine if we can use chunked format (requires uniform frame sizes)
     shapes = {(li.height, li.width) for li in label_images}
@@ -4039,8 +4046,7 @@ def write_label_images(
             )
 
         for i, li in enumerate(label_images):
-            video_idx = videos.index(li.video) if li.video in videos else -1
-            frame_idx = li.frame_idx if li.frame_idx is not None else -1
+            video_idx, frame_idx = contexts[i]
 
             if use_chunked:
                 # Write pixel data directly via write_direct_chunk (43x faster)
@@ -4368,7 +4374,12 @@ class LabelImageWriter:
             self._capacity *= 2
             self._pixel_dset.resize(self._capacity, axis=0)
 
-    def add(self, label_image: LabelImage) -> None:
+    def add(
+        self,
+        label_image: LabelImage,
+        video_idx: int = -1,
+        frame_idx: int = -1,
+    ) -> None:
         """Add a single label image to the file.
 
         The first call creates the HDF5 file and locks the frame dimensions.
@@ -4376,6 +4387,8 @@ class LabelImageWriter:
 
         Args:
             label_image: The label image to write.
+            video_idx: Video index for routing context. Defaults to ``-1``.
+            frame_idx: Frame index for routing context. Defaults to ``-1``.
 
         Raises:
             ValueError: If the frame dimensions don't match the first frame.
@@ -4383,6 +4396,13 @@ class LabelImageWriter:
         """
         if self._finalized:
             raise RuntimeError("Writer has already been finalized.")
+
+        # Auto-resolve video_idx from self.video when not explicitly provided
+        if video_idx == -1 and self.video is not None:
+            video_idx = 0
+        # Auto-resolve frame_idx from write count when not explicitly provided
+        if frame_idx == -1:
+            frame_idx = self._count
 
         h, w = label_image.height, label_image.width
         self._ensure_file(h, w)
@@ -4401,12 +4421,7 @@ class LabelImageWriter:
         compressed = zlib.compress(label_image.data.astype(np.int32).tobytes(), level=1)
         self._pixel_dset.id.write_direct_chunk((idx, 0, 0), compressed)
 
-        # Collect video index
-        videos = [self.video] if self.video is not None else []
-        video_idx = (
-            videos.index(label_image.video) if label_image.video in videos else -1
-        )
-        frame_idx = label_image.frame_idx if label_image.frame_idx is not None else -1
+        # Use provided routing context (video_idx, frame_idx are parameters)
 
         # Build object rows (auto-collect new tracks)
         n_objects = len(label_image.objects)
@@ -4571,12 +4586,25 @@ class LabelImageWriter:
         write_tracks(self.path, self.tracks)
         _write_metadata_standalone(self.path, skeletons=skeletons)
 
-        li_images, li_file = read_label_images(self.path, videos, self.tracks, [])
+        li_tuples, li_file = read_label_images(self.path, videos, self.tracks, [])
+        # Distribute label images to frames
+        labeled_frames = []
+        frame_lookup: dict[tuple[int, int], LabeledFrame] = {}
+        for li, vid_idx, fidx in li_tuples:
+            key = (vid_idx, fidx)
+            if key not in frame_lookup:
+                video = videos[vid_idx] if 0 <= vid_idx < len(videos) else None
+                if video is not None:
+                    lf = LabeledFrame(video=video, frame_idx=fidx)
+                    labeled_frames.append(lf)
+                    frame_lookup[key] = lf
+            if key in frame_lookup:
+                frame_lookup[key].label_images.append(li)
         labels = Labels(
+            labeled_frames=labeled_frames,
             videos=videos,
             skeletons=skeletons,
             tracks=self.tracks,
-            label_images=li_images,
         )
         if li_file is not None:
             labels._label_image_file = li_file
@@ -5012,13 +5040,30 @@ def merge_label_images(
         _write_metadata_standalone(dest_path)
 
         # Return Labels pointing at the merged file
-        li_images, li_file = read_label_images(
+        li_tuples, li_file = read_label_images(
             dest_path, merged_videos, merged_tracks, []
         )
+        # Distribute label images to frames
+        labeled_frames = []
+        frame_lookup: dict[tuple[int, int], LabeledFrame] = {}
+        for li, vid_idx, fidx in li_tuples:
+            key = (vid_idx, fidx)
+            if key not in frame_lookup:
+                video = (
+                    merged_videos[vid_idx]
+                    if 0 <= vid_idx < len(merged_videos)
+                    else None
+                )
+                if video is not None:
+                    lf = LabeledFrame(video=video, frame_idx=fidx)
+                    labeled_frames.append(lf)
+                    frame_lookup[key] = lf
+            if key in frame_lookup:
+                frame_lookup[key].label_images.append(li)
         labels = Labels(
+            labeled_frames=labeled_frames,
             videos=merged_videos,
             tracks=merged_tracks,
-            label_images=li_images,
         )
         if li_file is not None:
             labels._label_image_file = li_file
@@ -5118,39 +5163,11 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
 
     identities = read_identities(labels_path)
     sessions = read_sessions(labels_path, videos, labeled_frames, identities=identities)
-    rois = read_rois(labels_path, videos, tracks, instances)
-    masks = read_masks(labels_path, videos, tracks, instances)
-    bboxes = read_bboxes(labels_path, videos, tracks, instances)
-    centroids = read_centroids(labels_path, videos, tracks, instances)
-    label_images, _li_file = read_label_images(labels_path, videos, tracks, instances)
-
-    # Migrate old-style bbox ROIs to BoundingBox objects (skip predicted ROIs)
-    if not bboxes:
-        migrated_bboxes: list[BoundingBox] = []
-        remaining_rois: list[ROI] = []
-        for roi in rois:
-            if roi.is_bbox and not roi.is_predicted:
-                minx, miny, maxx, maxy = roi.geometry.bounds
-                migrated_bboxes.append(
-                    UserBoundingBox.from_xyxy(
-                        minx,
-                        miny,
-                        maxx,
-                        maxy,
-                        video=roi.video,
-                        frame_idx=roi.frame_idx,
-                        track=roi.track,
-                        instance=roi.instance,
-                        category=roi.category,
-                        name=roi.name,
-                        source=roi.source,
-                    )
-                )
-            else:
-                remaining_rois.append(roi)
-        if migrated_bboxes:
-            bboxes = migrated_bboxes
-            rois = remaining_rois
+    roi_tuples = read_rois(labels_path, videos, tracks, instances)
+    mask_tuples = read_masks(labels_path, videos, tracks, instances)
+    bbox_tuples = read_bboxes(labels_path, videos, tracks, instances)
+    centroid_tuples = read_centroids(labels_path, videos, tracks, instances)
+    li_tuples, _li_file = read_label_images(labels_path, videos, tracks, instances)
 
     # Attach annotations to their corresponding LabeledFrames
     frame_lookup: dict[tuple[int, int], LabeledFrame] = {}
@@ -5158,44 +5175,58 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         vid_idx = videos.index(lf.video) if lf.video in videos else -1
         frame_lookup[(vid_idx, lf.frame_idx)] = lf
 
-    def _get_or_create_frame(video, frame_idx):
-        vid_idx = videos.index(video) if video in videos else -1
+    def _get_or_create_frame(vid_idx, frame_idx):
         key = (vid_idx, frame_idx)
         if key not in frame_lookup:
-            lf = LabeledFrame(video=video, frame_idx=frame_idx)
-            labeled_frames.append(lf)
-            frame_lookup[key] = lf
+            video = videos[vid_idx] if 0 <= vid_idx < len(videos) else None
+            if video is not None:
+                lf = LabeledFrame(video=video, frame_idx=frame_idx)
+                labeled_frames.append(lf)
+                frame_lookup[key] = lf
+                return lf
+            return None
         return frame_lookup[key]
 
     # Distribute annotations to frames, keeping undistributable ones
     undist_centroids = []
-    for c in centroids:
-        if c.video is not None and c.frame_idx is not None:
-            _get_or_create_frame(c.video, c.frame_idx).centroids.append(c)
-        else:
-            undist_centroids.append(c)
+    for c, vid_idx, fidx in centroid_tuples:
+        if vid_idx >= 0 and fidx >= 0:
+            lf = _get_or_create_frame(vid_idx, fidx)
+            if lf is not None:
+                lf.centroids.append(c)
+                continue
+        undist_centroids.append(c)
     undist_bboxes = []
-    for b in bboxes:
-        if b.video is not None and b.frame_idx is not None:
-            _get_or_create_frame(b.video, b.frame_idx).bboxes.append(b)
-        else:
-            undist_bboxes.append(b)
+    for b, vid_idx, fidx in bbox_tuples:
+        if vid_idx >= 0 and fidx >= 0:
+            lf = _get_or_create_frame(vid_idx, fidx)
+            if lf is not None:
+                lf.bboxes.append(b)
+                continue
+        undist_bboxes.append(b)
     undist_masks = []
-    for m in masks:
-        if m.video is not None and m.frame_idx is not None:
-            _get_or_create_frame(m.video, m.frame_idx).masks.append(m)
-        else:
-            undist_masks.append(m)
+    for m, vid_idx, fidx in mask_tuples:
+        if vid_idx >= 0 and fidx >= 0:
+            lf = _get_or_create_frame(vid_idx, fidx)
+            if lf is not None:
+                lf.masks.append(m)
+                continue
+        undist_masks.append(m)
     undist_label_images = []
-    for li in label_images:
-        if li.video is not None and li.frame_idx is not None:
-            _get_or_create_frame(li.video, li.frame_idx).label_images.append(li)
-        else:
-            undist_label_images.append(li)
+    for li, vid_idx, fidx in li_tuples:
+        if vid_idx >= 0 and fidx >= 0:
+            lf = _get_or_create_frame(vid_idx, fidx)
+            if lf is not None:
+                lf.label_images.append(li)
+                continue
+        undist_label_images.append(li)
     undist_rois = []
-    for r in rois:
-        if r.video is not None and r.frame_idx is not None:
-            _get_or_create_frame(r.video, r.frame_idx).rois.append(r)
+    for r, vid_idx, fidx in roi_tuples:
+        if vid_idx >= 0 and fidx >= 0:
+            lf = _get_or_create_frame(vid_idx, fidx)
+            if lf is not None:
+                lf.rois.append(r)
+                continue
         else:
             undist_rois.append(r)
 
@@ -5209,10 +5240,6 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         sessions=sessions,
         provenance=provenance,
         rois=undist_rois,
-        masks=undist_masks,
-        bboxes=undist_bboxes,
-        centroids=undist_centroids,
-        label_images=undist_label_images,
     )
     labels.provenance["filename"] = labels_path
 
@@ -5383,24 +5410,57 @@ def _write_labels_lazy(
             f.create_dataset("negative_frames", data=neg_data)
 
     # Write annotations from lazy store (per-frame dicts + undistributed)
-    all_centroids = [c for cs in lazy_store._centroid_by_frame.values() for c in cs]
-    all_centroids.extend(lazy_store._undistributed_centroids)
-    all_bboxes = [b for bs in lazy_store._bbox_by_frame.values() for b in bs]
-    all_bboxes.extend(lazy_store._undistributed_bboxes)
-    all_masks = [m for ms in lazy_store._mask_by_frame.values() for m in ms]
-    all_masks.extend(lazy_store._undistributed_masks)
-    all_rois = [r for rs in lazy_store._roi_by_frame.values() for r in rs]
-    all_rois.extend(lazy_store._undistributed_rois)
-    all_label_images = [
-        li for lis in lazy_store._label_image_by_frame.values() for li in lis
-    ]
-    all_label_images.extend(lazy_store._undistributed_label_images)
-    write_rois(labels_path, all_rois, labels.videos, labels.tracks)
-    write_masks(labels_path, all_masks, labels.videos, labels.tracks)
-    write_bboxes(labels_path, all_bboxes, labels.videos, labels.tracks)
-    write_centroids(labels_path, all_centroids, labels.videos, labels.tracks)
+    # Build annotation lists with routing contexts from the lazy store keys
+    def _collect_from_lazy(by_frame, undistributed):
+        """Collect annotations and contexts from lazy store dicts."""
+        anns = []
+        ctxs = []
+        for (vid_idx, fidx), ann_list in by_frame.items():
+            for ann in ann_list:
+                anns.append(ann)
+                ctxs.append((vid_idx, fidx))
+        for ann in undistributed:
+            anns.append(ann)
+            ctxs.append((-1, -1))
+        return anns, ctxs
+
+    all_centroids, centroid_ctxs = _collect_from_lazy(
+        lazy_store._centroid_by_frame, lazy_store._undistributed_centroids
+    )
+    all_bboxes, bbox_ctxs = _collect_from_lazy(
+        lazy_store._bbox_by_frame, lazy_store._undistributed_bboxes
+    )
+    all_masks, mask_ctxs = _collect_from_lazy(
+        lazy_store._mask_by_frame, lazy_store._undistributed_masks
+    )
+    all_rois, roi_ctxs = _collect_from_lazy(
+        lazy_store._roi_by_frame, lazy_store._undistributed_rois
+    )
+    all_label_images, li_ctxs = _collect_from_lazy(
+        lazy_store._label_image_by_frame, lazy_store._undistributed_label_images
+    )
+    write_rois(labels_path, all_rois, labels.videos, labels.tracks, contexts=roi_ctxs)
+    write_masks(
+        labels_path, all_masks, labels.videos, labels.tracks, contexts=mask_ctxs
+    )
+    write_bboxes(
+        labels_path, all_bboxes, labels.videos, labels.tracks, contexts=bbox_ctxs
+    )
+    write_centroids(
+        labels_path,
+        all_centroids,
+        labels.videos,
+        labels.tracks,
+        contexts=centroid_ctxs,
+    )
     # Note: instance associations are not persisted in lazy mode (no all_instances).
-    write_label_images(labels_path, all_label_images, labels.videos, labels.tracks)
+    write_label_images(
+        labels_path,
+        all_label_images,
+        labels.videos,
+        labels.tracks,
+        contexts=li_ctxs,
+    )
 
 
 def write_labels(
@@ -5547,22 +5607,83 @@ def write_labels(
     write_lfs(labels_path, labels)
     write_negative_frames(labels_path, labels)
 
-    # Collect all instances across all frames for ROI/bbox instance mapping
+    # Collect all instances and build annotation lists with routing contexts
     all_instances: list[Instance | PredictedInstance] = []
+    all_centroids: list = []
+    centroid_contexts: list[tuple[int, int]] = []
+    all_bboxes: list = []
+    bbox_contexts: list[tuple[int, int]] = []
+    all_masks: list = []
+    mask_contexts: list[tuple[int, int]] = []
+    all_label_images: list = []
+    li_contexts: list[tuple[int, int]] = []
+    all_rois: list = []
+    roi_contexts: list[tuple[int, int]] = []
+
     for lf in labels.labeled_frames:
         all_instances.extend(lf.instances)
-    write_rois(labels_path, labels.rois, labels.videos, labels.tracks, all_instances)
-    write_masks(labels_path, labels.masks, labels.videos, labels.tracks, all_instances)
-    write_bboxes(
-        labels_path, labels.bboxes, labels.videos, labels.tracks, all_instances
-    )
-    write_centroids(
-        labels_path, labels.centroids, labels.videos, labels.tracks, all_instances
-    )
-    write_label_images(
+        vid_idx = labels.videos.index(lf.video) if lf.video in labels.videos else -1
+        ctx = (vid_idx, lf.frame_idx)
+        for c in lf.centroids:
+            all_centroids.append(c)
+            centroid_contexts.append(ctx)
+        for b in lf.bboxes:
+            all_bboxes.append(b)
+            bbox_contexts.append(ctx)
+        for m in lf.masks:
+            all_masks.append(m)
+            mask_contexts.append(ctx)
+        for li in lf.label_images:
+            all_label_images.append(li)
+            li_contexts.append(ctx)
+        for r in lf.rois:
+            all_rois.append(r)
+            roi_contexts.append(ctx)
+
+    # Add static ROIs (not tied to any frame)
+    for r in labels.static_rois:
+        all_rois.append(r)
+        roi_contexts.append(
+            (labels.videos.index(r.video) if r.video in labels.videos else -1, -1)
+        )
+
+    write_rois(
         labels_path,
-        labels.label_images,
+        all_rois,
         labels.videos,
         labels.tracks,
         all_instances,
+        contexts=roi_contexts,
+    )
+    write_masks(
+        labels_path,
+        all_masks,
+        labels.videos,
+        labels.tracks,
+        all_instances,
+        contexts=mask_contexts,
+    )
+    write_bboxes(
+        labels_path,
+        all_bboxes,
+        labels.videos,
+        labels.tracks,
+        all_instances,
+        contexts=bbox_contexts,
+    )
+    write_centroids(
+        labels_path,
+        all_centroids,
+        labels.videos,
+        labels.tracks,
+        all_instances,
+        contexts=centroid_contexts,
+    )
+    write_label_images(
+        labels_path,
+        all_label_images,
+        labels.videos,
+        labels.tracks,
+        all_instances,
+        contexts=li_contexts,
     )

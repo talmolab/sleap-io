@@ -55,7 +55,7 @@ label_images = sio.load_label_images(
 )
 ```
 
-Each returned [`LabelImage`][sleap_io.LabelImage] has `frame_idx` set to its position in the stack (0, 1, 2, ...).
+Each returned [`LabelImage`][sleap_io.LabelImage] corresponds to one frame in the stack, ordered by position (0, 1, 2, ...).
 
 ## Writing
 
@@ -91,7 +91,6 @@ masks_stack = np.stack(masks)  # (T, H, W) int32
 video = sio.Video(filename="experiment.tif")
 label_images = sio.PredictedLabelImage.from_stack(
     masks_stack,
-    video=video,
     source="cellpose:nuclei",
     create_tracks=True,
     score=1.0,
@@ -101,7 +100,11 @@ label_images = sio.PredictedLabelImage.from_stack(
 sio.save_label_images("cellpose_masks.tif", label_images)
 
 # Or save as SLP (preserves tracks, categories, and provenance)
-labels = sio.Labels(label_images=label_images, videos=[video])
+labeled_frames = [
+    sio.LabeledFrame(video=video, frame_idx=i, label_images=[li])
+    for i, li in enumerate(label_images)
+]
+labels = sio.Labels(labeled_frames=labeled_frames, videos=[video])
 labels.provenance["segmentation_model"] = "cellpose"
 labels.provenance["cellpose_diameter"] = 25
 labels.save("cellpose_masks.slp")

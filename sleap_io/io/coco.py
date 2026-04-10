@@ -400,8 +400,6 @@ def read_labels(
                     # keypoints
                     roi_kwargs = dict(
                         category=cat_name,
-                        video=video,
-                        frame_idx=frame_idx,
                         instance=instance,
                     )
 
@@ -437,8 +435,6 @@ def read_labels(
                             w,
                             h,
                             category=cat_name,
-                            video=video,
-                            frame_idx=frame_idx,
                             instance=instance,
                         )
                         bboxes.append(bbox_obj)
@@ -446,8 +442,6 @@ def read_labels(
                     # Detection-only annotation: create ROIs/masks/bboxes
                     roi_kwargs = dict(
                         category=cat_name,
-                        video=video,
-                        frame_idx=frame_idx,
                     )
 
                     # Handle segmentation field
@@ -496,14 +490,22 @@ def read_labels(
                             )
                         bboxes.append(bbox_obj)
 
-        # Create labeled frame
+        # Create labeled frame with annotations attached directly
         if instances or image_id in image_annotations:
             labeled_frame = LabeledFrame(
                 video=video, frame_idx=frame_idx, instances=instances
             )
+            labeled_frame.rois.extend(rois)
+            labeled_frame.masks.extend(masks)
+            labeled_frame.bboxes.extend(bboxes)
             labeled_frames.append(labeled_frame)
 
-    return Labels(labeled_frames=labeled_frames, rois=rois, masks=masks, bboxes=bboxes)
+        # Reset per-frame annotation lists
+        rois = []
+        masks = []
+        bboxes = []
+
+    return Labels(labeled_frames=labeled_frames)
 
 
 def read_labels_set(
@@ -770,145 +772,146 @@ def convert_labels(
 
         image_id_counter += 1
 
-    # Export ROIs as COCO annotations
-    for roi in labels.rois:
-        # Get or create category
-        cat_name = roi.category if roi.category else "object"
-        if cat_name not in category_name_to_id:
-            category = {
-                "id": category_id_counter,
-                "name": cat_name,
+    # Export ROIs, masks, and bboxes as COCO annotations (iterate by frame)
+    for lf in labels.labeled_frames:
+        for roi in lf.rois:
+            # Get or create category
+            cat_name = roi.category if roi.category else "object"
+            if cat_name not in category_name_to_id:
+                category = {
+                    "id": category_id_counter,
+                    "name": cat_name,
+                }
+                coco_data["categories"].append(category)
+                category_name_to_id[cat_name] = category_id_counter
+                category_id_counter += 1
+            category_id = category_name_to_id[cat_name]
+
+            # Find image_id for this ROI
+            image_id = _get_or_create_image_id(
+                lf.video,
+                lf.frame_idx,
+                video_frame_to_image_id,
+                coco_data,
+                image_id_counter,
+            )
+            if image_id >= image_id_counter:
+                image_id_counter = image_id + 1
+
+            annotation = {
+                "id": annotation_id_counter,
+                "image_id": image_id,
+                "category_id": category_id,
+                "iscrowd": 0,
             }
-            coco_data["categories"].append(category)
-            category_name_to_id[cat_name] = category_id_counter
-            category_id_counter += 1
-        category_id = category_name_to_id[cat_name]
 
-        # Find image_id for this ROI
-        image_id = _get_or_create_image_id(
-            roi.video,
-            roi.frame_idx,
-            video_frame_to_image_id,
-            coco_data,
-            image_id_counter,
-        )
-        if image_id >= image_id_counter:
-            image_id_counter = image_id + 1
+            # Write ROI as polygon segmentation with bounding box
+            coords = list(roi.geometry.exterior.coords)
+            flat = []
+            for x, y in coords[:-1]:  # Exclude closing vertex
+                flat.extend([float(x), float(y)])
+            annotation["segmentation"] = [flat]
+            minx, miny, maxx, maxy = roi.bounds
+            annotation["bbox"] = [
+                minx,
+                miny,
+                maxx - minx,
+                maxy - miny,
+            ]
+            annotation["area"] = float(roi.area)
 
-        annotation = {
-            "id": annotation_id_counter,
-            "image_id": image_id,
-            "category_id": category_id,
-            "iscrowd": 0,
-        }
+            coco_data["annotations"].append(annotation)
+            annotation_id_counter += 1
 
-        # Write ROI as polygon segmentation with bounding box
-        coords = list(roi.geometry.exterior.coords)
-        flat = []
-        for x, y in coords[:-1]:  # Exclude closing vertex
-            flat.extend([float(x), float(y)])
-        annotation["segmentation"] = [flat]
-        minx, miny, maxx, maxy = roi.bounds
-        annotation["bbox"] = [
-            minx,
-            miny,
-            maxx - minx,
-            maxy - miny,
-        ]
-        annotation["area"] = float(roi.area)
+        # Export masks as COCO RLE annotations
+        for seg_mask in lf.masks:
+            cat_name = seg_mask.category if seg_mask.category else "object"
+            if cat_name not in category_name_to_id:
+                category = {
+                    "id": category_id_counter,
+                    "name": cat_name,
+                }
+                coco_data["categories"].append(category)
+                category_name_to_id[cat_name] = category_id_counter
+                category_id_counter += 1
+            category_id = category_name_to_id[cat_name]
 
-        coco_data["annotations"].append(annotation)
-        annotation_id_counter += 1
+            image_id = _get_or_create_image_id(
+                lf.video,
+                lf.frame_idx,
+                video_frame_to_image_id,
+                coco_data,
+                image_id_counter,
+            )
+            if image_id >= image_id_counter:
+                image_id_counter = image_id + 1
 
-    # Export masks as COCO RLE annotations
-    for seg_mask in labels.masks:
-        cat_name = seg_mask.category if seg_mask.category else "object"
-        if cat_name not in category_name_to_id:
-            category = {
-                "id": category_id_counter,
-                "name": cat_name,
+            # COCO expects full-frame masks; resample if scaled/offset
+            export_mask = seg_mask
+            if seg_mask.has_spatial_transform:
+                target_h, target_w = seg_mask.image_extent
+                export_mask = seg_mask.resampled(target_h, target_w)
+
+            mask_data = export_mask.data
+            rle = _encode_coco_rle(mask_data)
+
+            bbox_xywh = export_mask.bbox
+            annotation = {
+                "id": annotation_id_counter,
+                "image_id": image_id,
+                "category_id": category_id,
+                "segmentation": rle,
+                "bbox": list(bbox_xywh),
+                "area": float(export_mask.area),
+                "iscrowd": 1,
             }
-            coco_data["categories"].append(category)
-            category_name_to_id[cat_name] = category_id_counter
-            category_id_counter += 1
-        category_id = category_name_to_id[cat_name]
 
-        image_id = _get_or_create_image_id(
-            seg_mask.video,
-            seg_mask.frame_idx,
-            video_frame_to_image_id,
-            coco_data,
-            image_id_counter,
-        )
-        if image_id >= image_id_counter:
-            image_id_counter = image_id + 1
+            coco_data["annotations"].append(annotation)
+            annotation_id_counter += 1
 
-        # COCO expects full-frame masks; resample if scaled/offset
-        export_mask = seg_mask
-        if seg_mask.has_spatial_transform:
-            target_h, target_w = seg_mask.image_extent
-            export_mask = seg_mask.resampled(target_h, target_w)
+        # Export bounding boxes as COCO bbox annotations (skip instance-linked bboxes
+        # since those are already represented in the keypoint annotations above).
+        # Note: Rotated bboxes are not supported by COCO format.
+        # BoundingBox.xywh raises ValueError for rotated boxes.
+        for bbox_obj in lf.bboxes:
+            if bbox_obj.instance is not None:
+                continue
+            cat_name = bbox_obj.category if bbox_obj.category else "object"
+            if cat_name not in category_name_to_id:
+                category = {
+                    "id": category_id_counter,
+                    "name": cat_name,
+                }
+                coco_data["categories"].append(category)
+                category_name_to_id[cat_name] = category_id_counter
+                category_id_counter += 1
+            category_id = category_name_to_id[cat_name]
 
-        mask_data = export_mask.data
-        rle = _encode_coco_rle(mask_data)
+            image_id = _get_or_create_image_id(
+                lf.video,
+                lf.frame_idx,
+                video_frame_to_image_id,
+                coco_data,
+                image_id_counter,
+            )
+            if image_id >= image_id_counter:
+                image_id_counter = image_id + 1
 
-        bbox_xywh = export_mask.bbox
-        annotation = {
-            "id": annotation_id_counter,
-            "image_id": image_id,
-            "category_id": category_id,
-            "segmentation": rle,
-            "bbox": list(bbox_xywh),
-            "area": float(export_mask.area),
-            "iscrowd": 1,
-        }
-
-        coco_data["annotations"].append(annotation)
-        annotation_id_counter += 1
-
-    # Export bounding boxes as COCO bbox annotations (skip instance-linked bboxes
-    # since those are already represented in the keypoint annotations above).
-    # Note: Rotated bboxes are not supported by COCO format.
-    # BoundingBox.xywh raises ValueError for rotated boxes.
-    for bbox_obj in labels.bboxes:
-        if bbox_obj.instance is not None:
-            continue
-        cat_name = bbox_obj.category if bbox_obj.category else "object"
-        if cat_name not in category_name_to_id:
-            category = {
-                "id": category_id_counter,
-                "name": cat_name,
+            x, y, w, h = bbox_obj.xywh
+            annotation = {
+                "id": annotation_id_counter,
+                "image_id": image_id,
+                "category_id": category_id,
+                "bbox": [float(x), float(y), float(w), float(h)],
+                "area": float(bbox_obj.area),
+                "iscrowd": 0,
             }
-            coco_data["categories"].append(category)
-            category_name_to_id[cat_name] = category_id_counter
-            category_id_counter += 1
-        category_id = category_name_to_id[cat_name]
 
-        image_id = _get_or_create_image_id(
-            bbox_obj.video,
-            bbox_obj.frame_idx,
-            video_frame_to_image_id,
-            coco_data,
-            image_id_counter,
-        )
-        if image_id >= image_id_counter:
-            image_id_counter = image_id + 1
+            if isinstance(bbox_obj, PredictedBoundingBox):
+                annotation["score"] = float(bbox_obj.score)
 
-        x, y, w, h = bbox_obj.xywh
-        annotation = {
-            "id": annotation_id_counter,
-            "image_id": image_id,
-            "category_id": category_id,
-            "bbox": [float(x), float(y), float(w), float(h)],
-            "area": float(bbox_obj.area),
-            "iscrowd": 0,
-        }
-
-        if isinstance(bbox_obj, PredictedBoundingBox):
-            annotation["score"] = float(bbox_obj.score)
-
-        coco_data["annotations"].append(annotation)
-        annotation_id_counter += 1
+            coco_data["annotations"].append(annotation)
+            annotation_id_counter += 1
 
     return coco_data
 
@@ -1026,7 +1029,17 @@ def read_coco_panoptic(
     # Track pool: shared across frames for thing segments
     track_pool: dict[int, Track] = {}
 
-    label_images = []
+    # Build image_id -> file_name mapping
+    image_filenames = []
+    image_id_to_idx = {}
+    for img in data.get("images", []):
+        image_id_to_idx[img["id"]] = len(image_filenames)
+        image_filenames.append(img.get("file_name", ""))
+
+    # Create a single video from the image filenames
+    video = Video(filename=image_filenames) if image_filenames else Video(filename="")
+
+    labeled_frames = []
     frame_idx = 0
     for ann in data.get("annotations", []):
         png_filename = ann["file_name"]
@@ -1065,12 +1078,13 @@ def read_coco_panoptic(
         li = UserLabelImage(
             data=label_data,
             objects=objects,
-            frame_idx=frame_idx,
         )
-        label_images.append(li)
+        lf = LabeledFrame(video=video, frame_idx=frame_idx)
+        lf.label_images.append(li)
+        labeled_frames.append(lf)
         frame_idx += 1
 
-    return Labels(label_images=label_images)
+    return Labels(labeled_frames=labeled_frames)
 
 
 def write_coco_panoptic(

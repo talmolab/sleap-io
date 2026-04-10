@@ -1550,16 +1550,20 @@ def test_write_bbox_label_file(tmp_path):
 def test_write_roi_labels_splitting(tmp_path):
     """ROIs should be split across train/val/test according to split_ratios."""
     # Create 10 synthetic single-image "videos" with ROIs
+    labeled_frames = []
     rois = []
     for i in range(10):
         img = np.zeros((50, 50, 3), dtype=np.uint8)
         img_path = tmp_path / f"img_{i}.png"
         iio.imwrite(str(img_path), img)
         video = Video.from_filename(str(img_path))
-        roi = UserROI.from_bbox(5, 5, 20, 20, category="obj", video=video, frame_idx=0)
+        roi = UserROI.from_bbox(5, 5, 20, 20, category="obj", video=video)
         rois.append(roi)
+        lf = LabeledFrame(video=video, frame_idx=0)
+        lf.rois.append(roi)
+        labeled_frames.append(lf)
 
-    labels = Labels(rois=rois)
+    labels = Labels(labeled_frames=labeled_frames)
     class_names = _build_class_names_from_rois(rois)
 
     dataset_path = tmp_path / "dataset"

@@ -2928,13 +2928,12 @@ def test_render_video_overlay_callable():
 
 
 def test_render_video_overlay_list_by_frame_idx():
-    """render_video with list overlay should filter objects by frame_idx."""
+    """render_video with list overlay applies masks to all frames (no frame_idx)."""
     labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
 
     mask_data = np.zeros((64, 64), dtype=bool)
     mask_data[10:30, 10:30] = True
     mask = UserSegmentationMask.from_numpy(mask_data)
-    mask.frame_idx = 0  # Only apply to frame 0
 
     frames = render_video(
         labels,
@@ -2947,8 +2946,9 @@ def test_render_video_overlay_list_by_frame_idx():
     )
 
     assert len(frames) == 2
-    # Frame 0 should have overlay applied (masked region differs from bg)
+    # Mask without frame_idx is applied to all frames
     assert not np.array_equal(frames[0][20, 20], frames[0][0, 0])
+    assert not np.array_equal(frames[1][20, 20], frames[1][0, 0])
 
 
 def test_render_video_overlay_static_objects():
@@ -3090,7 +3090,7 @@ def test_apply_overlay_label_image():
     label_data = np.zeros((50, 50), dtype=np.int32)
     label_data[10:30, 10:30] = 1
 
-    label_img = UserLabelImage(data=label_data, frame_idx=0)
+    label_img = UserLabelImage(data=label_data)
 
     result = _apply_overlay(img, label_img, alpha=0.5)
 
@@ -3110,7 +3110,7 @@ def test_render_image_overlay_label_image_object():
     label_data[5:25, 5:25] = 1
     label_data[25:45, 25:45] = 2
 
-    label_img = UserLabelImage(data=label_data, frame_idx=0)
+    label_img = UserLabelImage(data=label_data)
 
     result = render_image(image=img, overlay=label_img, overlay_alpha=0.5)
 
@@ -3128,11 +3128,9 @@ def test_render_video_overlay_label_images():
 
     li0 = UserLabelImage(
         data=np.array(np.pad(np.ones((20, 20), dtype=np.int32), ((10, 20), (10, 20)))),
-        frame_idx=0,
     )
     li1 = UserLabelImage(
         data=np.array(np.pad(np.full((15, 15), 2, dtype=np.int32), ((30, 5), (30, 5)))),
-        frame_idx=1,
     )
 
     frames = render_video(
@@ -3159,15 +3157,15 @@ def test_render_video_spatial_only_no_poses():
     video = sio.Video(filename="dummy.mp4")
     li0 = UserLabelImage(
         data=np.array(np.pad(np.ones((20, 20), dtype=np.int32), ((10, 34), (10, 34)))),
-        video=video,
-        frame_idx=0,
     )
     li1 = UserLabelImage(
         data=np.array(np.pad(np.full((15, 15), 2, dtype=np.int32), ((40, 9), (40, 9)))),
-        video=video,
-        frame_idx=1,
     )
-    labels = sio.Labels(videos=[video], label_images=[li0, li1])
+    lf0 = sio.LabeledFrame(video=video, frame_idx=0)
+    lf0.label_images.append(li0)
+    lf1 = sio.LabeledFrame(video=video, frame_idx=1)
+    lf1.label_images.append(li1)
+    labels = sio.Labels(labeled_frames=[lf0, lf1])
 
     frames = render_video(
         labels,
@@ -3194,7 +3192,7 @@ def test_render_video_crop_with_user_label_image_overlay():
 
     label_data = np.zeros((50, 50), dtype=np.int32)
     label_data[20:40, 20:40] = 1
-    li = UserLabelImage(data=label_data, frame_idx=0)
+    li = UserLabelImage(data=label_data)
 
     frames = render_video(
         labels_obj,
@@ -3222,7 +3220,6 @@ def test_render_video_crop_with_predicted_label_image_overlay():
     label_data[20:40, 20:40] = 1
     li = PredictedLabelImage(
         data=label_data,
-        frame_idx=0,
         score=0.9,
         score_map=np.ones((50, 50), dtype=np.float32) * 0.8,
     )
@@ -3320,13 +3317,16 @@ def test_render_image_with_centroids():
     from sleap_io.model.instance import Track
 
     track = Track(name="t1")
-    c = UserCentroid(x=25.0, y=25.0, frame_idx=0, track=track)
+    c = UserCentroid(x=25.0, y=25.0, track=track)
+    video = sio.Video(filename="dummy.mp4", open_backend=False)
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.centroids.append(c)
     labels = sio.Labels(
+        labeled_frames=[lf],
         skeletons=[sio.Skeleton(["A"])],
         tracks=[track],
-        centroids=[c],
     )
-    rendered = render_image(labels, frame_idx=0, video=None, background="white")
+    rendered = render_image(labels, frame_idx=0, video=video, background="white")
     assert rendered.ndim == 3
     non_white = np.any(rendered != 255, axis=-1)
     assert non_white.sum() > 0
@@ -3340,16 +3340,19 @@ def test_render_video_centroids_only():
     video = sio.Video(filename="test.mp4", open_backend=False)
     video.backend_metadata["shape"] = (10, 64, 64, 3)
     track = Track(name="t1")
-    centroids = [
-        UserCentroid(x=10.0, y=10.0, frame_idx=0, track=track, video=video),
-        UserCentroid(x=20.0, y=20.0, frame_idx=1, track=track, video=video),
-        UserCentroid(x=30.0, y=30.0, frame_idx=2, track=track, video=video),
-    ]
+    c0 = UserCentroid(x=10.0, y=10.0, track=track)
+    c1 = UserCentroid(x=20.0, y=20.0, track=track)
+    c2 = UserCentroid(x=30.0, y=30.0, track=track)
+    lf0 = sio.LabeledFrame(video=video, frame_idx=0)
+    lf0.centroids.append(c0)
+    lf1 = sio.LabeledFrame(video=video, frame_idx=1)
+    lf1.centroids.append(c1)
+    lf2 = sio.LabeledFrame(video=video, frame_idx=2)
+    lf2.centroids.append(c2)
     labels = sio.Labels(
-        videos=[video],
+        labeled_frames=[lf0, lf1, lf2],
         skeletons=[sio.Skeleton(["A"])],
         tracks=[track],
-        centroids=centroids,
     )
     frames = render_video(
         labels, background="black", show_progress=False, frame_inds=[0, 1, 2]
@@ -3375,12 +3378,12 @@ def test_render_image_centroids_show_false():
         frame_idx=0,
         instances=[inst],
     )
-    c = UserCentroid(x=10.0, y=10.0, frame_idx=0, track=track)
+    c = UserCentroid(x=10.0, y=10.0, track=track)
+    lf.centroids.append(c)
     labels = sio.Labels(
         labeled_frames=[lf],
         skeletons=[skel],
         tracks=[track],
-        centroids=[c],
     )
     rendered_on = render_image(
         labels, lf_ind=0, background="white", show_centroids=True
@@ -3399,11 +3402,12 @@ def test_render_video_centroids_no_track():
 
     video = sio.Video(filename="test.mp4", open_backend=False)
     video.backend_metadata["shape"] = (10, 64, 64, 3)
-    c = PredictedCentroid(x=25.0, y=25.0, frame_idx=0, score=0.9, video=video)
+    c = PredictedCentroid(x=25.0, y=25.0, score=0.9)
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.centroids.append(c)
     labels = sio.Labels(
-        videos=[video],
+        labeled_frames=[lf],
         skeletons=[sio.Skeleton(["A"])],
-        centroids=[c],
     )
     frames = render_video(
         labels, background="black", show_progress=False, frame_inds=[0]

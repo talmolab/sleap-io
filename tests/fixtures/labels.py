@@ -50,15 +50,13 @@ def make_labels_all_annotations() -> sleap_io.Labels:
     tracks = [Track(name="fly_0"), Track(name="fly_1")]
 
     labeled_frames = []
-    all_masks = []
-    all_rois = []
-    all_bboxes = []
-    all_centroids = []
-    all_label_images = []
 
     for fi in range(3):
         instances = []
         frame_masks = []
+        frame_rois = []
+        frame_bboxes = []
+        frame_centroids = []
 
         for ii in range(2):
             track = tracks[ii]
@@ -87,8 +85,6 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     name=f"mask_f{fi}_i{ii}",
                     category="fly",
                     source="manual",
-                    video=video,
-                    frame_idx=fi,
                     track=track,
                     instance=inst,
                 )
@@ -99,14 +95,11 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     name=f"mask_f{fi}_i{ii}",
                     category="fly",
                     source="model_v1",
-                    video=video,
-                    frame_idx=fi,
                     track=track,
                     instance=inst,
                     score=0.92,
                     score_map=score_map,
                 )
-            all_masks.append(mask)
             frame_masks.append(mask)
 
             # --- ROI ---
@@ -118,7 +111,6 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     category="fly",
                     source="manual",
                     video=video,
-                    frame_idx=fi,
                     track=track,
                     instance=inst,
                 )
@@ -129,12 +121,11 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     category="fly",
                     source="model_v1",
                     video=video,
-                    frame_idx=fi,
                     track=track,
                     instance=inst,
                     score=0.88,
                 )
-            all_rois.append(roi)
+            frame_rois.append(roi)
 
             # --- Bounding Box ---
             if ii == 0:
@@ -143,8 +134,6 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     y1=float(y_off - 5),
                     x2=float(x_off + 25),
                     y2=float(y_off + 45),
-                    video=video,
-                    frame_idx=fi,
                     track=track,
                     instance=inst,
                     category="fly",
@@ -157,8 +146,6 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     y1=float(y_off - 5),
                     x2=float(x_off + 25),
                     y2=float(y_off + 45),
-                    video=video,
-                    frame_idx=fi,
                     track=track,
                     instance=inst,
                     category="fly",
@@ -166,15 +153,13 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     source="model_v1",
                     score=0.97,
                 )
-            all_bboxes.append(bbox)
+            frame_bboxes.append(bbox)
 
             # --- Centroid ---
             if ii == 0:
                 centroid = UserCentroid(
                     x=float(x_off + 5),
                     y=float(y_off + 20),
-                    video=video,
-                    frame_idx=fi,
                     track=track,
                     instance=inst,
                     category="fly",
@@ -185,8 +170,6 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                 centroid = PredictedCentroid(
                     x=float(x_off + 5),
                     y=float(y_off + 20),
-                    video=video,
-                    frame_idx=fi,
                     track=track,
                     instance=inst,
                     category="fly",
@@ -194,7 +177,7 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     source="model_v1",
                     score=0.95,
                 )
-            all_centroids.append(centroid)
+            frame_centroids.append(centroid)
 
         # --- Label Images ---
         # Compose label image from the two masks
@@ -219,11 +202,8 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     instance=instances[1],
                 ),
             },
-            video=video,
-            frame_idx=fi,
             source="manual",
         )
-        all_label_images.append(user_li)
 
         # Predicted label image with score_map and per-object scores
         pred_score_map = np.where(li_data > 0, 0.9, 0.05).astype(np.float32)
@@ -245,28 +225,24 @@ def make_labels_all_annotations() -> sleap_io.Labels:
                     score=0.90,
                 ),
             },
-            video=video,
-            frame_idx=fi,
             source="model_v1",
             score=0.88,
             score_map=pred_score_map,
         )
-        all_label_images.append(pred_li)
 
-        labeled_frames.append(
-            LabeledFrame(video=video, frame_idx=fi, instances=instances)
-        )
+        lf = LabeledFrame(video=video, frame_idx=fi, instances=instances)
+        lf.masks.extend(frame_masks)
+        lf.rois.extend(frame_rois)
+        lf.bboxes.extend(frame_bboxes)
+        lf.centroids.extend(frame_centroids)
+        lf.label_images.extend([user_li, pred_li])
+        labeled_frames.append(lf)
 
     return sleap_io.Labels(
         labeled_frames=labeled_frames,
         videos=[video],
         skeletons=[skeleton],
         tracks=tracks,
-        masks=all_masks,
-        rois=all_rois,
-        bboxes=all_bboxes,
-        centroids=all_centroids,
-        label_images=all_label_images,
     )
 
 

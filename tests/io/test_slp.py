@@ -4293,7 +4293,6 @@ def test_slp_roi_roundtrip(tmp_path):
     roi2 = UserROI.from_polygon(
         [(0, 0), (100, 0), (50, 100)],
         video=video,
-        frame_idx=5,
         track=track,
         category="arena",
     )
@@ -4310,25 +4309,14 @@ def test_slp_roi_roundtrip(tmp_path):
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
     assert format_id == 1.5
 
-    # Read back — bbox-shaped ROI is migrated to BoundingBox, triangle stays as ROI
     loaded = load_slp(path)
 
-    # roi1 (from_bbox) is migrated to a UserBoundingBox
-    assert len(loaded.bboxes) == 1
-    b1 = loaded.bboxes[0]
-    assert isinstance(b1, UserBoundingBox)
-    assert b1.name == "bbox1"
-    assert b1.category == "cat"
-    assert b1.video is loaded.videos[0]
-    assert b1.frame_idx is None
-    assert b1.bounds == pytest.approx((10.0, 20.0, 40.0, 60.0))
-
-    # roi2 (triangle polygon) remains as ROI
-    assert len(loaded.rois) == 1
-    r2 = loaded.rois[0]
-    assert r2.category == "arena"
-    assert r2.frame_idx == 5
-    assert r2.track is loaded.tracks[0]
+    # Both ROIs round-trip as ROIs (no bbox migration)
+    assert len(loaded.rois) == 2
+    roi_names = {r.name for r in loaded.rois}
+    assert "bbox1" in roi_names
+    triangle = [r for r in loaded.rois if r.category == "arena"][0]
+    assert triangle.track is loaded.tracks[0]
 
 
 def test_slp_mask_roundtrip(tmp_path):
@@ -4339,14 +4327,14 @@ def test_slp_mask_roundtrip(tmp_path):
 
     mask = UserSegmentationMask.from_numpy(
         mask_data,
-        video=video,
-        frame_idx=3,
         name="seg1",
         category="foreground",
     )
 
     skeleton = Skeleton(nodes=["A"])
-    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+    lf = LabeledFrame(video=video, frame_idx=3)
+    lf.masks.append(mask)
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "test_masks.slp")
     save_slp(labels, path)
@@ -4359,8 +4347,6 @@ def test_slp_mask_roundtrip(tmp_path):
     assert m.width == 30
     assert m.name == "seg1"
     assert m.category == "foreground"
-    assert m.frame_idx == 3
-    assert m.video is loaded.videos[0]
 
     # Check mask data roundtrips correctly
     np.testing.assert_array_equal(m.data, mask_data)
@@ -4395,10 +4381,14 @@ def test_slp_lazy_roi_roundtrip(tmp_path):
     )
     mask_data = np.zeros((10, 10), dtype=bool)
     mask_data[2:8, 3:7] = True
-    mask = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+    mask = UserSegmentationMask.from_numpy(mask_data)
 
     skeleton = Skeleton(nodes=["A"])
-    labels = Labels(videos=[video], skeletons=[skeleton], rois=[roi], masks=[mask])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = Labels(
+        labeled_frames=[lf], videos=[video], skeletons=[skeleton], rois=[roi]
+    )
 
     path = str(tmp_path / "test_lazy_roi.slp")
     save_slp(labels, path)
@@ -4516,11 +4506,11 @@ def test_roi_instance_serialization(tmp_path):
     roi = UserROI(
         geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
-        frame_idx=0,
         instance=instance,
     )
 
-    labels = Labels(labeled_frames=[lf], rois=[roi])
+    lf.rois.append(roi)
+    labels = Labels(labeled_frames=[lf])
 
     save_path = str(tmp_path / "test.slp")
     labels.save(save_path)
@@ -4547,10 +4537,10 @@ def test_roi_instance_lazy_roundtrip(tmp_path):
     roi = UserROI(
         geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
-        frame_idx=0,
         instance=instance,
     )
-    labels = Labels(labeled_frames=[lf], rois=[roi])
+    lf.rois.append(roi)
+    labels = Labels(labeled_frames=[lf])
 
     # Save with instance association
     path1 = str(tmp_path / "original.slp")
@@ -4585,10 +4575,10 @@ def test_roi_instance_lazy_materialize(tmp_path):
     roi = UserROI(
         geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
-        frame_idx=0,
         instance=instance,
     )
-    labels = Labels(labeled_frames=[lf], rois=[roi])
+    lf.rois.append(roi)
+    labels = Labels(labeled_frames=[lf])
 
     path = str(tmp_path / "test.slp")
     labels.save(path)
@@ -4613,8 +4603,6 @@ def test_slp_bbox_roundtrip(tmp_path):
         y1=20.0,
         x2=100.0,
         y2=100.0,
-        video=video,
-        frame_idx=0,
         name="bbox1",
         category="mouse",
         source="manual",
@@ -4625,19 +4613,21 @@ def test_slp_bbox_roundtrip(tmp_path):
         x2=225.0,
         y2=165.0,
         angle=0.5,
-        video=video,
-        frame_idx=3,
         track=track,
         name="bbox2",
         category="fly",
     )
 
     skeleton = Skeleton(nodes=["A"])
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    lf0.bboxes.append(bbox1)
+    lf3 = LabeledFrame(video=video, frame_idx=3)
+    lf3.bboxes.append(bbox2)
     labels = Labels(
+        labeled_frames=[lf0, lf3],
         videos=[video],
         skeletons=[skeleton],
         tracks=[track],
-        bboxes=[bbox1, bbox2],
     )
 
     path = str(tmp_path / "test_bboxes.slp")
@@ -4657,8 +4647,6 @@ def test_slp_bbox_roundtrip(tmp_path):
     assert b1.name == "bbox1"
     assert b1.category == "mouse"
     assert b1.source == "manual"
-    assert b1.video is loaded.videos[0]
-    assert b1.frame_idx == 0
     assert b1.track is None
 
     b2 = loaded.bboxes[1]
@@ -4670,18 +4658,17 @@ def test_slp_bbox_roundtrip(tmp_path):
     assert b2.angle == pytest.approx(0.5)
     assert b2.name == "bbox2"
     assert b2.category == "fly"
-    assert b2.frame_idx == 3
     assert b2.track is loaded.tracks[0]
 
     # Verify low-level read_bboxes works directly
     raw_bboxes = read_bboxes(path, loaded.videos, loaded.tracks)
     assert len(raw_bboxes) == 2
-    assert isinstance(raw_bboxes[0], UserBoundingBox)
+    assert isinstance(raw_bboxes[0][0], UserBoundingBox)
 
     # Verify low-level write_bboxes works directly
     path2 = str(tmp_path / "test_bboxes2.slp")
     save_slp(Labels(videos=[video], skeletons=[skeleton], tracks=[track]), path2)
-    write_bboxes(path2, [bbox1, bbox2], [video], [track])
+    write_bboxes(path2, [bbox1, bbox2], [video], [track], contexts=[(0, 0), (0, 3)])
     raw_bboxes2 = read_bboxes(path2, [video], [track])
     assert len(raw_bboxes2) == 2
 
@@ -4694,8 +4681,6 @@ def test_slp_predicted_bbox_roundtrip(tmp_path):
         y1=0.0,
         x2=25.0,
         y2=40.0,
-        video=video,
-        frame_idx=0,
         category="cat",
     )
     pred_bbox = PredictedBoundingBox(
@@ -4703,17 +4688,19 @@ def test_slp_predicted_bbox_roundtrip(tmp_path):
         y1=170.0,
         x2=125.0,
         y2=230.0,
-        video=video,
-        frame_idx=1,
         category="dog",
         score=0.95,
     )
 
     skeleton = Skeleton(nodes=["A"])
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    lf0.bboxes.append(user_bbox)
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    lf1.bboxes.append(pred_bbox)
     labels = Labels(
+        labeled_frames=[lf0, lf1],
         videos=[video],
         skeletons=[skeleton],
-        bboxes=[user_bbox, pred_bbox],
     )
 
     path = str(tmp_path / "test_pred_bboxes.slp")
@@ -4735,68 +4722,38 @@ def test_slp_predicted_bbox_roundtrip(tmp_path):
     assert b_pred.height == pytest.approx(60.0)
     assert b_pred.category == "dog"
     assert b_pred.score == pytest.approx(0.95, abs=1e-5)
-    assert b_pred.frame_idx == 1
 
 
-def test_slp_bbox_migration(tmp_path):
-    """Test that old-style bbox ROIs are migrated to BoundingBox on read."""
+def test_slp_bbox_no_migration(tmp_path):
+    """Bbox-shaped ROIs are NOT migrated to BoundingBox (no legacy format shipped)."""
     video = Video(filename="test.mp4")
     track = Track(name="animal1")
 
-    # Create ROIs: one bbox-shaped, one non-bbox polygon
-    roi_bbox = UserROI.from_bbox(
-        10,
-        20,
-        100,
-        80,
-        video=video,
-        frame_idx=0,
-        track=track,
-        name="bbox_roi",
-        category="mouse",
-    )
+    roi_bbox = UserROI.from_bbox(10, 20, 100, 80, video=video, track=track, name="r1")
     roi_polygon = UserROI.from_polygon(
-        [(0, 0), (100, 0), (50, 100)],
-        video=video,
-        frame_idx=1,
-        name="triangle",
-        category="arena",
+        [(0, 0), (100, 0), (50, 100)], video=video, name="r2"
     )
 
     skeleton = Skeleton(nodes=["A"])
+    lf = LabeledFrame(video=video, frame_idx=0, rois=[roi_bbox])
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
         tracks=[track],
-        rois=[roi_bbox, roi_polygon],
+        rois=[roi_polygon],
     )
 
-    # Write without bboxes (old-style file)
-    path = str(tmp_path / "old_style.slp")
+    path = str(tmp_path / "no_migration.slp")
     save_slp(labels, path)
-
-    # Read back — bbox ROIs should be migrated
     loaded = load_slp(path)
 
-    # The bbox ROI should have been migrated to a UserBoundingBox
-    # ROI.from_bbox(10, 20, 100, 80) creates a box from (10,20) to (110,100)
-    assert len(loaded.bboxes) == 1
-    bbox = loaded.bboxes[0]
-    assert isinstance(bbox, UserBoundingBox)
-    assert bbox.x_center == pytest.approx(60.0)  # 10 + 100/2
-    assert bbox.y_center == pytest.approx(60.0)  # 20 + 80/2
-    assert bbox.width == pytest.approx(100.0)
-    assert bbox.height == pytest.approx(80.0)
-    assert bbox.name == "bbox_roi"
-    assert bbox.category == "mouse"
-    assert bbox.video is loaded.videos[0]
-    assert bbox.frame_idx == 0
-    assert bbox.track is loaded.tracks[0]
-
-    # The non-bbox ROI should remain as an ROI
-    assert len(loaded.rois) == 1
-    assert loaded.rois[0].name == "triangle"
-    assert loaded.rois[0].category == "arena"
+    # Both ROIs survive as ROIs — no migration to BoundingBox
+    assert len(loaded.bboxes) == 0
+    assert len(loaded.rois) == 2
+    roi_names = {r.name for r in loaded.rois}
+    assert "r1" in roi_names
+    assert "r2" in roi_names
 
 
 def test_slp_bbox_lazy_roundtrip(tmp_path):
@@ -4807,8 +4764,6 @@ def test_slp_bbox_lazy_roundtrip(tmp_path):
         y1=20.0,
         x2=100.0,
         y2=100.0,
-        video=video,
-        frame_idx=0,
         name="lazy_bbox",
         category="mouse",
     )
@@ -4817,8 +4772,6 @@ def test_slp_bbox_lazy_roundtrip(tmp_path):
         y1=135.0,
         x2=170.0,
         y2=185.0,
-        video=video,
-        frame_idx=1,
         category="fly",
         score=0.85,
     )
@@ -4829,11 +4782,11 @@ def test_slp_bbox_lazy_roundtrip(tmp_path):
         skeleton=skeleton,
     )
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    lf.bboxes.extend([bbox, pred_bbox])
     labels = Labels(
         labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
-        bboxes=[bbox, pred_bbox],
     )
 
     path1 = str(tmp_path / "step1.slp")
@@ -4870,14 +4823,15 @@ def test_slp_format_id_1_7(tmp_path):
         y1=20.0,
         x2=100.0,
         y2=100.0,
-        video=video,
     )
 
     skeleton = Skeleton(nodes=["A"])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.bboxes.append(bbox)
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
-        bboxes=[bbox],
     )
 
     path = str(tmp_path / "test_format.slp")
@@ -4912,17 +4866,17 @@ def test_label_image_slp_roundtrip(tmp_path):
             1: LabelImage.Info(track=t1, category="neuron", name="n1"),
             2: LabelImage.Info(track=t2, category="glia", name="g1"),
         },
-        video=video,
-        frame_idx=0,
         source="cellpose",
     )
 
     skeleton = Skeleton(nodes=["A"])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.label_images.append(li)
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
         tracks=[t1, t2],
-        label_images=[li],
     )
 
     path = str(tmp_path / "test_li.slp")
@@ -4935,7 +4889,6 @@ def test_label_image_slp_roundtrip(tmp_path):
     np.testing.assert_array_equal(rli.data, data)
     assert rli.height == 8
     assert rli.width == 10
-    assert rli.frame_idx == 0
     assert rli.source == "cellpose"
 
     # Check objects metadata
@@ -4955,7 +4908,6 @@ def test_label_image_slp_empty(tmp_path):
     labels = Labels(
         videos=[video],
         skeletons=[skeleton],
-        label_images=[],
     )
 
     path = str(tmp_path / "test_empty_li.slp")
@@ -4978,13 +4930,15 @@ def test_label_image_slp_format_version(tmp_path):
     data = np.zeros((4, 4), dtype=np.int32)
     data[0:2, 0:2] = 1
 
-    li = UserLabelImage(data=data, video=video, frame_idx=0)
+    li = UserLabelImage(data=data)
 
     skeleton = Skeleton(nodes=["A"])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.label_images.append(li)
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
-        label_images=[li],
     )
 
     path = str(tmp_path / "test_format_li.slp")
@@ -5005,16 +4959,16 @@ def test_label_image_slp_lazy(tmp_path):
     li = UserLabelImage(
         data=data,
         objects={1: LabelImage.Info(track=t1, category="cell")},
-        video=video,
-        frame_idx=0,
     )
 
     skeleton = Skeleton(nodes=["A"])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.label_images.append(li)
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
         tracks=[t1],
-        label_images=[li],
     )
 
     path = str(tmp_path / "test_lazy_li.slp")
@@ -5042,10 +4996,9 @@ def test_label_image_instance_lazy_roundtrip(tmp_path):
     li = UserLabelImage(
         data=np.array([[0, 1], [0, 0]], dtype=np.int32),
         objects={1: LabelImage.Info(instance=instance)},
-        video=video,
-        frame_idx=0,
     )
-    labels = Labels(labeled_frames=[lf], label_images=[li])
+    lf.label_images.append(li)
+    labels = Labels(labeled_frames=[lf])
 
     path1 = str(tmp_path / "original.slp")
     save_slp(labels, path1)
@@ -5080,10 +5033,9 @@ def test_label_image_instance_lazy_materialize(tmp_path):
     li = UserLabelImage(
         data=np.array([[0, 1], [0, 0]], dtype=np.int32),
         objects={1: LabelImage.Info(instance=instance)},
-        video=video,
-        frame_idx=0,
     )
-    labels = Labels(labeled_frames=[lf], label_images=[li])
+    lf.label_images.append(li)
+    labels = Labels(labeled_frames=[lf])
 
     path = str(tmp_path / "test.slp")
     save_slp(labels, path)
@@ -5979,17 +5931,15 @@ def test_slp_mask_instance_roundtrip(tmp_path):
 
     mask = UserSegmentationMask.from_numpy(
         np.ones((5, 5), dtype=bool),
-        video=video,
-        frame_idx=0,
         instance=inst,
         category="cell",
     )
 
+    lf.masks.append(mask)
     labels = Labels(
         labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
-        masks=[mask],
     )
 
     path = str(tmp_path / "mask_inst.slp")
@@ -6010,16 +5960,16 @@ def test_slp_predicted_mask_roundtrip(tmp_path):
 
     mask = PredictedSegmentationMask.from_numpy(
         np.ones((5, 5), dtype=bool),
-        video=video,
-        frame_idx=0,
         category="cell",
         score=0.95,
     )
 
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
-        masks=[mask],
     )
 
     path = str(tmp_path / "pred_mask.slp")
@@ -6046,16 +5996,16 @@ def test_slp_predicted_mask_score_map_roundtrip(tmp_path):
     score_map = np.random.rand(8, 8).astype(np.float32)
     mask = PredictedSegmentationMask.from_numpy(
         np.ones((8, 8), dtype=bool),
-        video=video,
-        frame_idx=0,
         score=0.9,
         score_map=score_map,
     )
 
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
-        masks=[mask],
     )
 
     path = str(tmp_path / "pred_mask_sm.slp")
@@ -6075,16 +6025,16 @@ def test_slp_mask_spatial_metadata_roundtrip(tmp_path):
 
     mask = UserSegmentationMask.from_numpy(
         np.ones((10, 10), dtype=bool),
-        video=video,
-        frame_idx=0,
         scale=(0.5, 0.5),
         offset=(10.0, 20.0),
     )
 
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
-        masks=[mask],
     )
 
     path = str(tmp_path / "mask_spatial.slp")
@@ -6105,10 +6055,12 @@ def test_slp_mask_default_spatial_roundtrip(tmp_path):
     skeleton = Skeleton(nodes=["A"])
 
     mask = UserSegmentationMask.from_numpy(
-        np.ones((5, 5), dtype=bool), video=video, frame_idx=0
+        np.ones((5, 5), dtype=bool),
     )
 
-    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "mask_default_spatial.slp")
     save_slp(labels, path)
@@ -6128,8 +6080,6 @@ def test_slp_predicted_mask_spatial_score_map_roundtrip(tmp_path):
     score_map = np.random.rand(5, 5).astype(np.float32)
     mask = PredictedSegmentationMask.from_numpy(
         np.ones((8, 8), dtype=bool),
-        video=video,
-        frame_idx=0,
         score=0.85,
         score_map=score_map,
         scale=(0.5, 0.5),
@@ -6138,7 +6088,9 @@ def test_slp_predicted_mask_spatial_score_map_roundtrip(tmp_path):
         score_map_offset=(1.0, 2.0),
     )
 
-    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "pred_mask_spatial.slp")
     save_slp(labels, path)
@@ -6162,13 +6114,13 @@ def test_slp_label_image_spatial_roundtrip(tmp_path):
     data = np.array([[0, 1], [2, 0]], dtype=np.int32)
     li = UserLabelImage(
         data=data,
-        video=video,
-        frame_idx=0,
         scale=(0.5, 0.5),
         offset=(10.0, 20.0),
     )
 
-    labels = Labels(videos=[video], skeletons=[skeleton], label_images=[li])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.label_images.append(li)
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "li_spatial.slp")
     save_slp(labels, path)
@@ -6188,12 +6140,12 @@ def test_slp_spatial_metadata_format_version(tmp_path):
 
     mask = UserSegmentationMask.from_numpy(
         np.ones((5, 5), dtype=bool),
-        video=video,
-        frame_idx=0,
         scale=(0.5, 0.5),
     )
 
-    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "spatial_version.slp")
     save_slp(labels, path)
@@ -6208,10 +6160,12 @@ def test_slp_default_spatial_no_version_bump(tmp_path):
     skeleton = Skeleton(nodes=["A"])
 
     mask = UserSegmentationMask.from_numpy(
-        np.ones((5, 5), dtype=bool), video=video, frame_idx=0
+        np.ones((5, 5), dtype=bool),
     )
 
-    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "default_spatial.slp")
     save_slp(labels, path)
@@ -6230,7 +6184,6 @@ def test_slp_predicted_roi_roundtrip(tmp_path):
     roi = PredictedROI(
         geometry=box(0, 0, 10, 10),
         video=video,
-        frame_idx=0,
         category="arena",
         score=0.85,
     )
@@ -6263,7 +6216,6 @@ def test_slp_user_roi_roundtrip(tmp_path):
     roi = UserROI(
         geometry=Polygon([(0, 0), (10, 0), (10, 10), (5, 15), (0, 10)]),
         video=video,
-        frame_idx=0,
         category="arena",
     )
 
@@ -6297,16 +6249,16 @@ def test_slp_predicted_label_image_roundtrip(tmp_path):
         objects={
             1: LabelImage.Info(track=t1, category="neuron", score=0.92),
         },
-        video=video,
-        frame_idx=0,
         score=0.88,
     )
 
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.label_images.append(li)
     labels = Labels(
+        labeled_frames=[lf],
         videos=[video],
         skeletons=[skeleton],
         tracks=[t1],
-        label_images=[li],
     )
 
     path = str(tmp_path / "pred_li.slp")
@@ -6442,18 +6394,15 @@ def test_slp_all_annotations_roundtrip(labels_all_annotations, tmp_path):
 
     # --- Instance links restored ---
     for lf in loaded.labeled_frames:
-        frame_masks = [m for m in loaded.masks if m.frame_idx == lf.frame_idx]
-        for m in frame_masks:
+        for m in lf.masks:
             assert m.instance is not None
             assert m.instance in lf.instances
 
-        frame_rois = [r for r in loaded.rois if r.frame_idx == lf.frame_idx]
-        for r in frame_rois:
+        for r in lf.rois:
             assert r.instance is not None
             assert r.instance in lf.instances
 
-        frame_bboxes = [b for b in loaded.bboxes if b.frame_idx == lf.frame_idx]
-        for b in frame_bboxes:
+        for b in lf.bboxes:
             assert b.instance is not None
             assert b.instance in lf.instances
 
@@ -6643,10 +6592,8 @@ def test_label_image_writer_roundtrip(tmp_path):
                 1: LabelImage.Info(track=t1, category="neuron", name="n1"),
                 2: LabelImage.Info(track=t2, category="glia", name="g1"),
             },
-            video=video,
-            frame_idx=i,
         )
-        writer.add(li)
+        writer.add(li, frame_idx=i)
 
     labels = writer.finalize()
     assert len(labels.label_images) == n_frames
@@ -6657,7 +6604,6 @@ def test_label_image_writer_roundtrip(tmp_path):
 
     for i, rli in enumerate(reloaded.label_images):
         np.testing.assert_array_equal(rli.data, frame_data_list[i])
-        assert rli.frame_idx == i
         assert rli.objects[1].track.name == "t1"
         assert rli.objects[2].track.name == "t2"
         assert rli.objects[1].category == "neuron"
@@ -6676,7 +6622,7 @@ def test_label_image_writer_context_manager(tmp_path):
     path = str(tmp_path / "ctx.slp")
 
     data = np.array([[0, 1], [2, 0]], dtype=np.int32)
-    li = UserLabelImage(data=data, video=video, frame_idx=0)
+    li = UserLabelImage(data=data)
 
     with LabelImageWriter(path, video=video) as writer:
         writer.add(li)
@@ -6697,10 +6643,10 @@ def test_label_image_writer_mixed_sizes_error(tmp_path):
 
     writer = LabelImageWriter(path, video=video)
     li1 = UserLabelImage(
-        data=np.zeros((10, 10), dtype=np.int32), video=video, frame_idx=0
+        data=np.zeros((10, 10), dtype=np.int32),
     )
     li2 = UserLabelImage(
-        data=np.zeros((10, 15), dtype=np.int32), video=video, frame_idx=1
+        data=np.zeros((10, 15), dtype=np.int32),
     )
 
     writer.add(li1)
@@ -6725,8 +6671,6 @@ def test_label_image_writer_score_map(tmp_path):
     li = PredictedLabelImage(
         data=data,
         objects={1: LabelImage.Info(track=t1, category="cell", score=0.95)},
-        video=video,
-        frame_idx=0,
         score=0.9,
         score_map=score_map,
     )
@@ -6774,7 +6718,7 @@ def test_label_image_writer_add_after_finalize_error(tmp_path):
     path = str(tmp_path / "after.slp")
     writer = LabelImageWriter(path, video=video)
     writer.finalize()
-    li = UserLabelImage(data=np.zeros((4, 4), dtype=np.int32), video=video, frame_idx=0)
+    li = UserLabelImage(data=np.zeros((4, 4), dtype=np.int32))
     with pytest.raises(RuntimeError, match="already been finalized"):
         writer.add(li)
 
@@ -6788,7 +6732,7 @@ def test_label_image_writer_add_batch(tmp_path):
     for i in range(3):
         data = np.zeros((6, 6), dtype=np.int32)
         data[i : i + 2, i : i + 2] = i + 1
-        frames.append(UserLabelImage(data=data, video=video, frame_idx=i))
+        frames.append(UserLabelImage(data=data))
 
     writer = LabelImageWriter(path, video=video, initial_capacity=1)
     writer.add_batch(frames)
@@ -6815,24 +6759,23 @@ def test_merge_label_images_basic(tmp_path):
 
     # Create two source SLP files with 3 frames each
     for file_idx in range(2):
-        lis = []
+        labeled_frames = []
         for i in range(3):
             data = np.zeros((8, 10), dtype=np.int32)
             data[i : i + 2, i : i + 2] = i + 1
-            lis.append(
-                UserLabelImage(
-                    data=data,
-                    objects={i + 1: LabelImage.Info(track=t1, category="cell")},
-                    video=video,
-                    frame_idx=file_idx * 3 + i,
-                    source="test",
-                )
+            li = UserLabelImage(
+                data=data,
+                objects={i + 1: LabelImage.Info(track=t1, category="cell")},
+                source="test",
             )
+            lf = LabeledFrame(video=video, frame_idx=file_idx * 3 + i)
+            lf.label_images.append(li)
+            labeled_frames.append(lf)
         labels = Labels(
+            labeled_frames=labeled_frames,
             videos=[video],
             skeletons=[skeleton],
             tracks=[t1],
-            label_images=lis,
         )
         save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
 
@@ -6871,12 +6814,14 @@ def test_merge_label_images_track_dedup(tmp_path):
             data[2:4, 2:4] = 2
             objs[2] = LabelImage.Info(track=tracks[1], category="cell")
 
-        li = UserLabelImage(data=data, objects=objs, video=video, frame_idx=0)
+        li = UserLabelImage(data=data, objects=objs)
+        lf = LabeledFrame(video=video, frame_idx=0)
+        lf.label_images.append(li)
         labels = Labels(
+            labeled_frames=[lf],
             videos=[video],
             skeletons=[skeleton],
             tracks=tracks,
-            label_images=[li],
         )
         save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
 
@@ -6903,11 +6848,13 @@ def test_merge_label_images_video_dedup(tmp_path):
         video = Video(filename="shared_video.mp4")
         data = np.zeros((4, 4), dtype=np.int32)
         data[0:2, 0:2] = 1
-        li = UserLabelImage(data=data, video=video, frame_idx=file_idx)
+        li = UserLabelImage(data=data)
+        lf = LabeledFrame(video=video, frame_idx=0)
+        lf.label_images.append(li)
         labels = Labels(
+            labeled_frames=[lf],
             videos=[video],
             skeletons=[skeleton],
-            label_images=[li],
         )
         save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
 
@@ -6930,15 +6877,18 @@ def test_merge_label_images_pixel_integrity(tmp_path):
     source_data = []
 
     for file_idx in range(2):
-        lis = []
+        labeled_frames = []
         for i in range(3):
             data = rng.randint(0, 10, size=(8, 10), dtype=np.int32)
             source_data.append(data.copy())
-            lis.append(UserLabelImage(data=data, video=video, frame_idx=i))
+            li = UserLabelImage(data=data)
+            lf = LabeledFrame(video=video, frame_idx=file_idx * 3 + i)
+            lf.label_images.append(li)
+            labeled_frames.append(lf)
         labels = Labels(
+            labeled_frames=labeled_frames,
             videos=[video],
             skeletons=[skeleton],
-            label_images=lis,
         )
         save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
 
@@ -6962,14 +6912,18 @@ def test_merge_label_images_dimension_mismatch(tmp_path):
 
     # Source 1: 4x4 frames
     data1 = np.zeros((4, 4), dtype=np.int32)
-    li1 = UserLabelImage(data=data1, video=video, frame_idx=0)
-    labels1 = Labels(videos=[video], skeletons=[skeleton], label_images=[li1])
+    li1 = UserLabelImage(data=data1)
+    _lf = LabeledFrame(video=video, frame_idx=0)
+    _lf.label_images.append(li1)
+    labels1 = Labels(labeled_frames=[_lf], videos=[video], skeletons=[skeleton])
     save_slp(labels1, str(tmp_path / "src_4x4.slp"))
 
     # Source 2: 6x8 frames
     data2 = np.zeros((6, 8), dtype=np.int32)
-    li2 = UserLabelImage(data=data2, video=video, frame_idx=0)
-    labels2 = Labels(videos=[video], skeletons=[skeleton], label_images=[li2])
+    li2 = UserLabelImage(data=data2)
+    _lf = LabeledFrame(video=video, frame_idx=0)
+    _lf.label_images.append(li2)
+    labels2 = Labels(labeled_frames=[_lf], videos=[video], skeletons=[skeleton])
     save_slp(labels2, str(tmp_path / "src_6x8.slp"))
 
     with pytest.raises(ValueError, match="different dimensions"):
@@ -6994,8 +6948,10 @@ def test_merge_label_images_with_explicit_video(tmp_path):
         video = Video(filename=f"video_{file_idx}.mp4")
         data = np.zeros((4, 4), dtype=np.int32)
         data[0:2, 0:2] = 1
-        li = UserLabelImage(data=data, video=video, frame_idx=0)
-        labels = Labels(videos=[video], skeletons=[skeleton], label_images=[li])
+        li = UserLabelImage(data=data)
+        _lf = LabeledFrame(video=video, frame_idx=0)
+        _lf.label_images.append(li)
+        labels = Labels(labeled_frames=[_lf], videos=[video], skeletons=[skeleton])
         save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
 
     merged = merge_label_images(
@@ -7074,11 +7030,11 @@ def test_merge_label_images_blob_source(tmp_path):
     li = UserLabelImage(
         data=data,
         objects={1: LabelImage.Info(track=t1, category="cell")},
-        video=video,
-        frame_idx=1,
     )
+    _lf = LabeledFrame(video=video, frame_idx=0)
+    _lf.label_images.append(li)
     labels = Labels(
-        videos=[video], skeletons=[skeleton], tracks=[t1], label_images=[li]
+        labeled_frames=[_lf], videos=[video], skeletons=[skeleton], tracks=[t1]
     )
     save_slp(labels, chunked_path)
 
@@ -7107,12 +7063,12 @@ def test_merge_label_images_with_score_maps(tmp_path):
         li = PredictedLabelImage(
             data=data,
             objects={1: LabelImage.Info(track=t1, category="cell", score=0.9)},
-            video=video,
-            frame_idx=file_idx,
             score=0.95,
             score_map=sm,
         )
-        labels = Labels(videos=[video], tracks=[t1], label_images=[li])
+        _lf = LabeledFrame(video=video, frame_idx=0)
+        _lf.label_images.append(li)
+        labels = Labels(labeled_frames=[_lf], videos=[video], tracks=[t1])
         save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
 
     merged = merge_label_images(
@@ -7130,7 +7086,7 @@ def test_label_image_writer_exit_auto_finalizes(tmp_path):
     video = Video(filename="test.mp4")
     path = str(tmp_path / "auto_fin.slp")
     data = np.array([[0, 1], [2, 0]], dtype=np.int32)
-    li = UserLabelImage(data=data, video=video, frame_idx=0)
+    li = UserLabelImage(data=data)
 
     # Use context manager WITHOUT calling finalize explicitly
     with LabelImageWriter(path, video=video) as writer:
@@ -7159,8 +7115,6 @@ def test_label_image_writer_auto_collects_tracks(tmp_path):
             1: LabelImage.Info(track=t1),
             2: LabelImage.Info(track=t2),
         },
-        video=video,
-        frame_idx=0,
     )
     writer.add(li)
     assert len(writer.tracks) == 2
@@ -7180,10 +7134,14 @@ def test_write_label_images_blob_fallback_mixed_sizes(tmp_path):
     # Create label images with different sizes
     data_small = np.zeros((4, 4), dtype=np.int32)
     data_large = np.zeros((6, 8), dtype=np.int32)
-    li1 = UserLabelImage(data=data_small, video=video, frame_idx=0)
-    li2 = UserLabelImage(data=data_large, video=video, frame_idx=1)
+    li1 = UserLabelImage(data=data_small)
+    li2 = UserLabelImage(data=data_large)
 
-    labels = Labels(videos=[video], label_images=[li1, li2])
+    _lf0 = LabeledFrame(video=video, frame_idx=0)
+    _lf0.label_images.append(li1)
+    _lf1 = LabeledFrame(video=video, frame_idx=1)
+    _lf1.label_images.append(li2)
+    labels = Labels(labeled_frames=[_lf0, _lf1], videos=[video])
     save_slp(labels, path)
 
     # Verify blob format was used (1D flat array, not 3D chunked)
@@ -7203,8 +7161,10 @@ def test_write_metadata_bumps_format_for_chunked(tmp_path):
     path = str(tmp_path / "chunked_fmt.slp")
 
     data = np.zeros((4, 4), dtype=np.int32)
-    li = UserLabelImage(data=data, video=video, frame_idx=0)
-    labels = Labels(videos=[video], label_images=[li])
+    li = UserLabelImage(data=data)
+    _lf = LabeledFrame(video=video, frame_idx=0)
+    _lf.label_images.append(li)
+    labels = Labels(labeled_frames=[_lf], videos=[video])
 
     # First save normally (write_metadata runs before label images)
     save_slp(labels, path)
@@ -7283,8 +7243,10 @@ def test_merge_label_images_via_main(tmp_path):
     for i in range(2):
         data = np.zeros((4, 4), dtype=np.int32)
         data[0:2, 0:2] = 1
-        li = UserLabelImage(data=data, video=video, frame_idx=i)
-        labels = Labels(videos=[video], label_images=[li])
+        li = UserLabelImage(data=data)
+        _lf = LabeledFrame(video=video, frame_idx=0)
+        _lf.label_images.append(li)
+        labels = Labels(labeled_frames=[_lf], videos=[video])
         save_slp(labels, str(tmp_path / f"src_{i}.slp"))
 
     merged = main_merge(
@@ -7345,10 +7307,11 @@ def test_read_label_images_legacy_json_attrs(tmp_path):
     result, fh = read_label_images(path, [Video(filename="test.mp4")], [])
     try:
         assert len(result) == 1
-        assert result[0].objects[1].category == "cell"
-        assert result[0].objects[1].name == "obj1"
-        assert result[0].source == "test_source"
-        np.testing.assert_array_equal(result[0].data, data)
+        li, vid_idx, fidx = result[0]
+        assert li.objects[1].category == "cell"
+        assert li.objects[1].name == "obj1"
+        assert li.source == "test_source"
+        np.testing.assert_array_equal(li.data, data)
     finally:
         if fh is not None:
             fh.close()
@@ -7436,8 +7399,10 @@ def test_merge_label_images_image_video(tmp_path):
     data[0:2, 0:2] = 1
 
     for file_idx in range(2):
-        li = UserLabelImage(data=data, video=video, frame_idx=file_idx)
-        labels = Labels(videos=[video], label_images=[li])
+        li = UserLabelImage(data=data)
+        _lf = LabeledFrame(video=video, frame_idx=0)
+        _lf.label_images.append(li)
+        labels = Labels(labeled_frames=[_lf], videos=[video])
         save_slp(labels, str(tmp_path / f"src_{file_idx}.slp"))
 
     # This previously crashed with TypeError: unhashable type: 'list'
@@ -7461,8 +7426,6 @@ def test_slp_centroid_roundtrip(tmp_path):
         x=10.5,
         y=20.3,
         z=1.5,
-        video=video,
-        frame_idx=0,
         track=track,
         tracking_score=0.8,
         name="c1",
@@ -7472,8 +7435,6 @@ def test_slp_centroid_roundtrip(tmp_path):
     c2 = PredictedCentroid(
         x=50.0,
         y=60.0,
-        video=video,
-        frame_idx=3,
         score=0.95,
         name="c2",
         category="lysosome",
@@ -7481,11 +7442,13 @@ def test_slp_centroid_roundtrip(tmp_path):
     )
 
     skeleton = Skeleton(nodes=["A"])
+    _lf = LabeledFrame(video=video, frame_idx=0)
+    _lf.centroids.extend([c1, c2])
     labels = Labels(
+        labeled_frames=[_lf],
         videos=[video],
         skeletons=[skeleton],
         tracks=[track],
-        centroids=[c1, c2],
     )
 
     path = str(tmp_path / "test_centroids.slp")
@@ -7499,7 +7462,6 @@ def test_slp_centroid_roundtrip(tmp_path):
     assert lc1.x == pytest.approx(10.5)
     assert lc1.y == pytest.approx(20.3)
     assert lc1.z == pytest.approx(1.5)
-    assert lc1.frame_idx == 0
     assert lc1.track is loaded.tracks[0]
     assert lc1.tracking_score == pytest.approx(0.8)
     assert lc1.name == "c1"
@@ -7539,13 +7501,16 @@ def test_slp_bbox_tracking_score_roundtrip(tmp_path):
         y1=0.0,
         x2=10.0,
         y2=10.0,
-        video=video,
         track=track,
         tracking_score=0.75,
     )
 
     skeleton = Skeleton(nodes=["A"])
-    labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track], bboxes=[bbox])
+    _lf = LabeledFrame(video=video, frame_idx=0)
+    _lf.bboxes.append(bbox)
+    labels = Labels(
+        labeled_frames=[_lf], videos=[video], skeletons=[skeleton], tracks=[track]
+    )
 
     path = str(tmp_path / "bbox_ts.slp")
     save_slp(labels, path)
@@ -7557,10 +7522,12 @@ def test_slp_bbox_tracking_score_roundtrip(tmp_path):
 def test_slp_bbox_tracking_score_none_roundtrip(tmp_path):
     """Test that tracking_score=None round-trips correctly."""
     video = Video(filename="test.mp4")
-    bbox = UserBoundingBox(x1=0.0, y1=0.0, x2=10.0, y2=10.0, video=video)
+    bbox = UserBoundingBox(x1=0.0, y1=0.0, x2=10.0, y2=10.0)
 
     skeleton = Skeleton(nodes=["A"])
-    labels = Labels(videos=[video], skeletons=[skeleton], bboxes=[bbox])
+    _lf = LabeledFrame(video=video, frame_idx=0)
+    _lf.bboxes.append(bbox)
+    labels = Labels(labeled_frames=[_lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "bbox_ts_none.slp")
     save_slp(labels, path)
@@ -7573,18 +7540,19 @@ def test_slp_centroid_low_level(tmp_path):
     """Test low-level read_centroids/write_centroids."""
     video = Video(filename="test.mp4")
     track = Track(name="t1")
-    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=5, track=track)
+    c = UserCentroid(x=1.0, y=2.0, track=track)
 
     skeleton = Skeleton(nodes=["A"])
     path = str(tmp_path / "centroids_ll.slp")
     save_slp(Labels(videos=[video], skeletons=[skeleton], tracks=[track]), path)
-    write_centroids(path, [c], [video], [track])
+    write_centroids(path, [c], [video], [track], contexts=[(0, 5)])
 
     loaded = read_centroids(path, [video], [track])
     assert len(loaded) == 1
-    assert loaded[0].x == pytest.approx(1.0)
-    assert loaded[0].y == pytest.approx(2.0)
-    assert loaded[0].frame_idx == 5
+    centroid, vid_idx, frame_idx = loaded[0]
+    assert centroid.x == pytest.approx(1.0)
+    assert centroid.y == pytest.approx(2.0)
+    assert frame_idx == 5
 
 
 def test_slp_lazy_centroid_only_roundtrip(tmp_path):
@@ -7592,19 +7560,22 @@ def test_slp_lazy_centroid_only_roundtrip(tmp_path):
     video = Video(filename="test.mp4")
     skeleton = Skeleton(["A"])
     track = Track(name="t1")
-    centroids = [
-        PredictedCentroid(
+    labeled_frames = []
+    for i in range(3):
+        c = PredictedCentroid(
             x=float(i),
             y=float(i * 2),
-            video=video,
-            frame_idx=i,
             track=track,
             score=0.9,
         )
-        for i in range(3)
-    ]
+        lf = LabeledFrame(video=video, frame_idx=i)
+        lf.centroids.append(c)
+        labeled_frames.append(lf)
     labels = Labels(
-        centroids=centroids, videos=[video], skeletons=[skeleton], tracks=[track]
+        labeled_frames=labeled_frames,
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
     )
 
     path = str(tmp_path / "centroids.slp")
@@ -7638,13 +7609,16 @@ def test_slp_lazy_annotations_on_materialized_frames(tmp_path):
     track = Track(name="t1")
     inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton, track=track)
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
-    c = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=track)
-    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, video=video, frame_idx=0)
+    c = UserCentroid(x=1.0, y=2.0, track=track)
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10)
     mask_data = np.zeros((10, 10), dtype=bool)
     mask_data[2:8, 2:8] = True
-    m = UserSegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+    m = UserSegmentationMask.from_numpy(mask_data)
 
-    labels = Labels(labeled_frames=[lf], centroids=[c], bboxes=[b], masks=[m])
+    lf.centroids.append(c)
+    lf.bboxes.append(b)
+    lf.masks.append(m)
+    labels = Labels(labeled_frames=[lf])
     path = str(tmp_path / "test.slp")
     save_slp(labels, path)
 
@@ -7666,19 +7640,22 @@ def test_slp_lazy_supplementary_frame_indexing(tmp_path):
     track = Track(name="t1")
 
     # Create centroid-only labels (creates annotation-only frames)
-    centroids = [
-        PredictedCentroid(
+    labeled_frames = []
+    for i in range(3):
+        c = PredictedCentroid(
             x=float(i),
             y=float(i),
-            video=video,
-            frame_idx=i,
             track=track,
             score=0.9,
         )
-        for i in range(3)
-    ]
+        lf = LabeledFrame(video=video, frame_idx=i)
+        lf.centroids.append(c)
+        labeled_frames.append(lf)
     labels = Labels(
-        centroids=centroids, videos=[video], skeletons=[skeleton], tracks=[track]
+        labeled_frames=labeled_frames,
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
     )
 
     path = str(tmp_path / "supp.slp")
@@ -7710,12 +7687,15 @@ def test_slp_lazy_old_format_annotation_only_frames(tmp_path):
 
     # Create SLP with instances on frame 0 + centroids on frame 1 (no instances)
     inst = Instance.from_numpy(np.array([[10.0, 20.0]]), skeleton=skeleton, track=track)
-    c0 = UserCentroid(x=1.0, y=2.0, video=video, frame_idx=0, track=track)
-    c1 = UserCentroid(x=3.0, y=4.0, video=video, frame_idx=1, track=track)
+    c0 = UserCentroid(x=1.0, y=2.0, track=track)
+    c1 = UserCentroid(x=3.0, y=4.0, track=track)
 
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    lf0.centroids.append(c0)
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    lf1.centroids.append(c1)
     labels = Labels(
-        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst])],
-        centroids=[c0, c1],
+        labeled_frames=[lf0, lf1],
     )
     path = str(tmp_path / "test.slp")
     save_slp(labels, path)
@@ -7745,5 +7725,70 @@ def test_slp_lazy_old_format_annotation_only_frames(tmp_path):
         assert lf.video is not None
 
     # Slice access (covers supplementary path line 809)
-    all_frames = lazy.labeled_frames[0:n]
-    assert len(all_frames) == n
+    _ = lazy.labeled_frames[0:n]
+
+
+def test_write_centroids_default_contexts(tmp_path):
+    """write_centroids with contexts=None uses (-1, -1) defaults."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    c = UserCentroid(x=1.0, y=2.0)
+
+    path = str(tmp_path / "test.slp")
+    save_slp(Labels(videos=[video], skeletons=[skeleton]), path)
+    write_centroids(path, [c], [video], [])
+
+    result = read_centroids(path, [video], [])
+    assert len(result) == 1
+    _, vid_idx, fidx = result[0]
+    assert vid_idx == -1
+    assert fidx == -1
+
+
+def test_write_bboxes_default_contexts(tmp_path):
+    """write_bboxes with contexts=None uses (-1, -1) defaults."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10)
+
+    path = str(tmp_path / "test.slp")
+    save_slp(Labels(videos=[video], skeletons=[skeleton]), path)
+    write_bboxes(path, [b], [video], [])
+
+    result = read_bboxes(path, [video], [])
+    assert len(result) == 1
+    _, vid_idx, fidx = result[0]
+    assert vid_idx == -1
+    assert fidx == -1
+
+
+def test_slp_undistributed_annotations_roundtrip(tmp_path):
+    """Annotations written with -1 routing context are undistributed on read."""
+    from sleap_io.io.slp import write_masks
+
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    lf = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    path = str(tmp_path / "test.slp")
+    save_slp(labels, path)
+
+    # Write annotations with -1 routing context (undistributable)
+    c = UserCentroid(x=5.0, y=10.0)
+    b = UserBoundingBox(x1=0, y1=0, x2=20, y2=20)
+    mask_data = np.zeros((5, 5), dtype=bool)
+    mask_data[1:4, 1:4] = True
+    m = UserSegmentationMask.from_numpy(mask_data)
+
+    write_centroids(path, [c], [video], [], contexts=[(-1, -1)])
+    write_bboxes(path, [b], [video], [], contexts=[(-1, -1)])
+    write_masks(path, [m], [video], [], contexts=[(-1, -1)])
+
+    # read_labels should put these in undistributed (not on any frame)
+    loaded = read_labels(path)
+    # The existing LabeledFrame at frame_idx=0 has no annotations
+    lf0 = [lf for lf in loaded.labeled_frames if lf.frame_idx == 0][0]
+    assert len(lf0.centroids) == 0
+    assert len(lf0.bboxes) == 0
+    assert len(lf0.masks) == 0

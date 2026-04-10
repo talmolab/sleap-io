@@ -116,13 +116,9 @@ class Labels:
     sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
 
-    # Annotation fields: accepted as constructor kwargs via alias, distributed
-    # into LabeledFrames at init time, then cleared. Access via properties.
-    _init_rois: "list[ROI]" = field(factory=list, alias="rois")
-    _init_masks: "list[SegmentationMask]" = field(factory=list, alias="masks")
-    _init_bboxes: "list[BoundingBox]" = field(factory=list, alias="bboxes")
-    _init_centroids: "list[Centroid]" = field(factory=list, alias="centroids")
-    _init_label_images: "list[LabelImage]" = field(factory=list, alias="label_images")
+    # Static ROIs: ROIs not tied to any specific frame (e.g., arena boundaries).
+    # Accepted via constructor with alias="rois" for backward compatibility.
+    _static_rois: "list[ROI]" = field(factory=list, alias="rois")
 
     # Internal lazy state (private, not part of public API)
     _lazy_store: "LazyDataStore | None" = field(
@@ -359,11 +355,9 @@ class Labels:
         for lf in labeled_frames:
             all_instances.extend(lf.instances)
 
-        # Relink annotations on each frame (video, track, instance references)
+        # Relink annotations on each frame (track, instance references)
         for lf in labeled_frames:
-            for ann in (*lf.centroids, *lf.bboxes, *lf.masks, *lf.rois):
-                if ann.video is not None:
-                    ann.video = video_map.get(id(ann.video), ann.video)
+            for ann in (*lf.centroids, *lf.bboxes, *lf.masks):
                 if ann.track is not None:
                     ann.track = track_map.get(id(ann.track), ann.track)
                 # Resolve deferred instance link from _instance_idx
@@ -371,9 +365,16 @@ class Labels:
                 if ann.instance is None and 0 <= idx < len(all_instances):
                     ann.instance = all_instances[idx]
                     ann._instance_idx = -1
+            for r in lf.rois:
+                if r.video is not None:
+                    r.video = video_map.get(id(r.video), r.video)
+                if r.track is not None:
+                    r.track = track_map.get(id(r.track), r.track)
+                idx = r._instance_idx
+                if r.instance is None and 0 <= idx < len(all_instances):
+                    r.instance = all_instances[idx]
+                    r._instance_idx = -1
             for li in lf.label_images:
-                if li.video is not None:
-                    li.video = video_map.get(id(li.video), li.video)
                 for info in li.objects.values():
                     if info.track is not None:
                         info.track = track_map.get(id(info.track), info.track)
@@ -382,32 +383,15 @@ class Labels:
                         info.instance = all_instances[idx]
                         info._instance_idx = -1
 
-        # Deep copy undistributed annotations (static ROIs, etc.) and relink
-        # Use zip with originals to look up old id() for video/track mapping
-        def _deepcopy_and_relink(originals):
-            copies = []
-            for orig in originals:
-                new = deepcopy(orig)
-                if orig.video is not None:
-                    new.video = video_map.get(id(orig.video), new.video)
-                if orig.track is not None:
-                    new.track = track_map.get(id(orig.track), new.track)
-                copies.append(new)
-            return copies
-
-        undist_rois = _deepcopy_and_relink(self._lazy_store._undistributed_rois)
-        undist_masks = _deepcopy_and_relink(self._lazy_store._undistributed_masks)
-        undist_bboxes = _deepcopy_and_relink(self._lazy_store._undistributed_bboxes)
-        undist_centroids = _deepcopy_and_relink(
-            self._lazy_store._undistributed_centroids
-        )
-
-        undist_label_images = []
-        for orig_li in self._lazy_store._undistributed_label_images:
-            new_li = deepcopy(orig_li)
-            if orig_li.video is not None:
-                new_li.video = video_map.get(id(orig_li.video), new_li.video)
-            undist_label_images.append(new_li)
+        # Deep copy static ROIs and relink video/track
+        static_rois = []
+        for orig in self._lazy_store._undistributed_rois:
+            new = deepcopy(orig)
+            if orig.video is not None:
+                new.video = video_map.get(id(orig.video), new.video)
+            if orig.track is not None:
+                new.track = track_map.get(id(orig.track), new.track)
+            static_rois.append(new)
 
         return Labels(
             labeled_frames=labeled_frames,
@@ -416,64 +400,16 @@ class Labels:
             tracks=new_tracks,
             suggestions=new_suggestions,
             provenance=dict(self.provenance),
-            rois=undist_rois,
-            masks=undist_masks,
-            bboxes=undist_bboxes,
-            centroids=undist_centroids,
-            label_images=undist_label_images,
+            rois=static_rois,
         )
 
     def __attrs_post_init__(self):
-        """Distribute annotations into frames and update metadata lists."""
-        # Skip distribution and update for lazy Labels - metadata is already
+        """Update metadata lists."""
+        # Skip update for lazy Labels - metadata is already
         # set from HDF5 and annotations are handled by LazyDataStore
         if self.is_lazy:
             return
-        self._distribute_annotations()
         self.update()
-
-    def _distribute_annotations(self):
-        """Move flat annotation lists into their corresponding LabeledFrames.
-
-        Iterates annotations passed via constructor kwargs (``rois``, ``masks``,
-        ``bboxes``, ``centroids``, ``label_images``), finds or creates the
-        matching ``LabeledFrame`` for each annotation's ``(video, frame_idx)``,
-        and appends the annotation to that frame's list.
-
-        Annotations with ``video=None`` or ``frame_idx=None`` (e.g., static
-        ROIs) cannot be distributed and are kept in the ``_init_*`` fields.
-        The corresponding properties include these undistributed annotations.
-        """
-        # Build lookup for existing frames
-        frame_map: dict[tuple[int, int], LabeledFrame] = {}
-        for lf in self.labeled_frames:
-            frame_map[(id(lf.video), lf.frame_idx)] = lf
-
-        def get_or_create(video: Video, frame_idx: int) -> LabeledFrame:
-            key = (id(video), frame_idx)
-            if key not in frame_map:
-                lf = LabeledFrame(video=video, frame_idx=frame_idx)
-                self.labeled_frames.append(lf)
-                frame_map[key] = lf
-            return frame_map[key]
-
-        # Distribute each annotation type, keeping undistributable ones
-        for init_attr, frame_attr in (
-            ("_init_centroids", "centroids"),
-            ("_init_bboxes", "bboxes"),
-            ("_init_masks", "masks"),
-            ("_init_label_images", "label_images"),
-            ("_init_rois", "rois"),
-        ):
-            remaining = []
-            for ann in getattr(self, init_attr):
-                video = ann.video
-                frame_idx = ann.frame_idx
-                if video is not None and frame_idx is not None:
-                    getattr(get_or_create(video, frame_idx), frame_attr).append(ann)
-                else:
-                    remaining.append(ann)
-            setattr(self, init_attr, remaining)
 
     def update(self):
         """Update data structures based on contents.
@@ -507,15 +443,18 @@ class Labels:
         return undist + [ann for anns in by_frame.values() for ann in anns]
 
     @property
+    def static_rois(self) -> "list[ROI]":
+        """Static ROIs not tied to any specific frame."""
+        return self._static_rois
+
+    @property
     def centroids(self) -> "list[Centroid]":
         """Flat view of all centroids across all frames."""
         if self.is_lazy:
             return self._lazy_flat_annotations(
                 "_centroid_by_frame", "_undistributed_centroids"
             )
-        return self._init_centroids + [
-            c for lf in self.labeled_frames for c in lf.centroids
-        ]
+        return [c for lf in self.labeled_frames for c in lf.centroids]
 
     @property
     def bboxes(self) -> "list[BoundingBox]":
@@ -524,14 +463,14 @@ class Labels:
             return self._lazy_flat_annotations(
                 "_bbox_by_frame", "_undistributed_bboxes"
             )
-        return self._init_bboxes + [b for lf in self.labeled_frames for b in lf.bboxes]
+        return [b for lf in self.labeled_frames for b in lf.bboxes]
 
     @property
     def masks(self) -> "list[SegmentationMask]":
         """Flat view of all segmentation masks across all frames."""
         if self.is_lazy:
             return self._lazy_flat_annotations("_mask_by_frame", "_undistributed_masks")
-        return self._init_masks + [m for lf in self.labeled_frames for m in lf.masks]
+        return [m for lf in self.labeled_frames for m in lf.masks]
 
     @property
     def label_images(self) -> "list[LabelImage]":
@@ -540,16 +479,14 @@ class Labels:
             return self._lazy_flat_annotations(
                 "_label_image_by_frame", "_undistributed_label_images"
             )
-        return self._init_label_images + [
-            li for lf in self.labeled_frames for li in lf.label_images
-        ]
+        return [li for lf in self.labeled_frames for li in lf.label_images]
 
     @property
     def rois(self) -> "list[ROI]":
-        """Flat view of all ROIs across all frames."""
+        """Flat view of all ROIs across all frames (includes static ROIs)."""
         if self.is_lazy:
             return self._lazy_flat_annotations("_roi_by_frame", "_undistributed_rois")
-        return self._init_rois + [r for lf in self.labeled_frames for r in lf.rois]
+        return self._static_rois + [r for lf in self.labeled_frames for r in lf.rois]
 
     def _ensure_frame_index(self) -> "dict[tuple[int, int], LabeledFrame]":
         """Build or return the frame index, rebuilding if stale.
@@ -592,6 +529,7 @@ class Labels:
         n = len(self.labeled_frames)
         if self._track_index is None or self._track_index_len != n:
             self._track_index = {}
+            ann_frame_idx: dict[int, int] = {}
             for lf in self.labeled_frames:
                 vid = id(lf.video)
                 for ann in (
@@ -601,18 +539,20 @@ class Labels:
                     *lf.rois,
                     *lf.instances,
                 ):
+                    ann_frame_idx[id(ann)] = lf.frame_idx
                     track = getattr(ann, "track", None)
                     if track is not None:
                         key = (vid, id(track))
                         self._track_index.setdefault(key, []).append(ann)
                 for li in lf.label_images:
+                    ann_frame_idx[id(li)] = lf.frame_idx
                     for info in li.objects.values():
                         if info.track is not None:
                             key = (vid, id(info.track))
                             self._track_index.setdefault(key, []).append(li)
-            # Sort each list by frame_idx
+            # Sort each list by frame_idx (derived from parent LabeledFrame)
             for v in self._track_index.values():
-                v.sort(key=lambda x: getattr(x, "frame_idx", 0) or 0)
+                v.sort(key=lambda x: ann_frame_idx.get(id(x), 0) or 0)
             self._track_index_len = n
         return self._track_index
 
@@ -686,83 +626,6 @@ class Labels:
         self.labeled_frames.append(lf)
         self._invalidate_indices()
         return lf
-
-    def _add_annotation(
-        self,
-        annotation: "Centroid | BoundingBox | SegmentationMask | LabelImage | ROI",
-        attr: str,
-    ) -> None:
-        """Add an annotation to the appropriate LabeledFrame.
-
-        Args:
-            annotation: The annotation to add. Must have ``video`` and
-                ``frame_idx`` set.
-            attr: The attribute name on LabeledFrame (e.g., ``"centroids"``).
-
-        Raises:
-            ValueError: If the annotation has ``video=None`` or
-                ``frame_idx=None``.
-        """
-        if annotation.video is None or annotation.frame_idx is None:
-            raise ValueError(
-                f"{type(annotation).__name__} must have video and frame_idx set."
-            )
-        lf = self._find_or_create_frame(annotation.video, annotation.frame_idx)
-        getattr(lf, attr).append(annotation)
-        self._invalidate_indices()
-        # Auto-populate metadata lists
-        if annotation.video not in self.videos:
-            self.videos.append(annotation.video)
-        track = getattr(annotation, "track", None)
-        if track is not None and track not in self.tracks:
-            self.tracks.append(track)
-
-    def add_centroid(self, centroid: "Centroid") -> None:
-        """Add a centroid to the appropriate LabeledFrame.
-
-        Finds or creates a LabeledFrame for ``(centroid.video, centroid.frame_idx)``
-        and appends the centroid. Also updates ``videos`` and ``tracks`` lists.
-
-        Raises:
-            ValueError: If ``centroid.video`` or ``centroid.frame_idx`` is None.
-        """
-        self._add_annotation(centroid, "centroids")
-
-    def add_bbox(self, bbox: "BoundingBox") -> None:
-        """Add a bounding box to the appropriate LabeledFrame.
-
-        Raises:
-            ValueError: If ``bbox.video`` or ``bbox.frame_idx`` is None.
-        """
-        self._add_annotation(bbox, "bboxes")
-
-    def add_mask(self, mask: "SegmentationMask") -> None:
-        """Add a segmentation mask to the appropriate LabeledFrame.
-
-        Raises:
-            ValueError: If ``mask.video`` or ``mask.frame_idx`` is None.
-        """
-        self._add_annotation(mask, "masks")
-
-    def add_label_image(self, label_image: "LabelImage") -> None:
-        """Add a label image to the appropriate LabeledFrame.
-
-        Raises:
-            ValueError: If ``label_image.video`` or ``label_image.frame_idx`` is None.
-        """
-        self._add_annotation(label_image, "label_images")
-        # Also auto-populate tracks from label_image objects
-        for info in label_image.objects.values():
-            if info.track is not None and info.track not in self.tracks:
-                self.tracks.append(info.track)
-
-    def add_roi(self, roi: "ROI") -> None:
-        """Add an ROI to the appropriate LabeledFrame.
-
-        Raises:
-            ValueError: If ``roi.video`` or ``roi.frame_idx`` is None.
-        """
-        self._add_annotation(roi, "rois")
 
     def __getitem__(
         self,
@@ -1691,22 +1554,9 @@ class Labels:
         return (instance for lf in self.labeled_frames for instance in lf.instances)
 
     @property
-    def static_rois(self) -> list["ROI"]:
-        """Return ROIs that are static (not tied to a specific frame).
-
-        Returns:
-            A list of ROIs where `frame_idx` is `None`.
-        """
-        return [roi for roi in self.rois if roi.is_static]
-
-    @property
     def temporal_rois(self) -> list["ROI"]:
-        """Return ROIs that are tied to specific frames.
-
-        Returns:
-            A list of ROIs where `frame_idx` is not `None`.
-        """
-        return [roi for roi in self.rois if not roi.is_static]
+        """Return ROIs that are tied to specific frames (on LabeledFrames)."""
+        return [r for lf in self.labeled_frames for r in lf.rois]
 
     def get_rois(
         self,
@@ -1742,10 +1592,15 @@ class Labels:
             results = [
                 r for lf in self.labeled_frames if lf.video is video for r in lf.rois
             ]
+        elif frame_idx is not None:
+            results = [
+                r
+                for lf in self.labeled_frames
+                if lf.frame_idx == frame_idx
+                for r in lf.rois
+            ]
         else:
             results = list(self.rois)
-            if frame_idx is not None:
-                results = [r for r in results if r.frame_idx == frame_idx]
         if category is not None:
             results = [r for r in results if r.category == category]
         if track is not None:
@@ -1790,10 +1645,15 @@ class Labels:
             results = [
                 m for lf in self.labeled_frames if lf.video is video for m in lf.masks
             ]
+        elif frame_idx is not None:
+            results = [
+                m
+                for lf in self.labeled_frames
+                if lf.frame_idx == frame_idx
+                for m in lf.masks
+            ]
         else:
             results = list(self.masks)
-            if frame_idx is not None:
-                results = [r for r in results if r.frame_idx == frame_idx]
         if category is not None:
             results = [r for r in results if r.category == category]
         if track is not None:
@@ -1843,10 +1703,15 @@ class Labels:
             results = [
                 b for lf in self.labeled_frames if lf.video is video for b in lf.bboxes
             ]
+        elif frame_idx is not None:
+            results = [
+                b
+                for lf in self.labeled_frames
+                if lf.frame_idx == frame_idx
+                for b in lf.bboxes
+            ]
         else:
             results = list(self.bboxes)
-            if frame_idx is not None:
-                results = [b for b in results if b.frame_idx == frame_idx]
         if category is not None:
             results = [b for b in results if b.category == category]
         if track is not None:
@@ -1895,10 +1760,15 @@ class Labels:
                 if lf.video is video
                 for c in lf.centroids
             ]
+        elif frame_idx is not None:
+            results = [
+                c
+                for lf in self.labeled_frames
+                if lf.frame_idx == frame_idx
+                for c in lf.centroids
+            ]
         else:
             results = list(self.centroids)
-            if frame_idx is not None:
-                results = [c for c in results if c.frame_idx == frame_idx]
         if category is not None:
             results = [c for c in results if c.category == category]
         if track is not None:
@@ -1952,10 +1822,15 @@ class Labels:
                 if lf.video is video
                 for li in lf.label_images
             ]
+        elif frame_idx is not None:
+            results = [
+                li
+                for lf in self.labeled_frames
+                if lf.frame_idx == frame_idx
+                for li in lf.label_images
+            ]
         else:
             results = list(self.label_images)
-            if frame_idx is not None:
-                results = [li for li in results if li.frame_idx == frame_idx]
         if track is not None:
             results = [
                 li
@@ -2210,38 +2085,18 @@ class Labels:
         if video_map is None:
             video_map = {o: n for o, n in zip(old_videos, new_videos)}
 
-        # Update the labeled frames and their nested annotations.
+        # Update the labeled frames and ROI video references.
         for lf in self.labeled_frames:
             if lf.video in video_map:
                 lf.video = video_map[lf.video]
-            for c in lf.centroids:
-                if c.video in video_map:
-                    c.video = video_map[c.video]
-            for b in lf.bboxes:
-                if b.video in video_map:
-                    b.video = video_map[b.video]
-            for m in lf.masks:
-                if m.video in video_map:
-                    m.video = video_map[m.video]
             for r in lf.rois:
                 if r.video in video_map:
                     r.video = video_map[r.video]
-            for li in lf.label_images:
-                if li.video in video_map:
-                    li.video = video_map[li.video]
 
-        # Update undistributed annotations (e.g., static ROIs with frame_idx=None)
-        for ann in (
-            *self._init_centroids,
-            *self._init_bboxes,
-            *self._init_masks,
-            *self._init_rois,
-        ):
-            if ann.video in video_map:
-                ann.video = video_map[ann.video]
-        for li in self._init_label_images:
-            if li.video in video_map:
-                li.video = video_map[li.video]
+        # Update static ROIs
+        for r in self._static_rois:
+            if r.video in video_map:
+                r.video = video_map[r.video]
 
         # Update suggestions with the new videos.
         for sf in self.suggestions:
@@ -3515,15 +3370,15 @@ class Labels:
             *frame.centroids,
             *frame.bboxes,
             *frame.masks,
-            *frame.rois,
         ):
-            if ann.video in video_map:
-                ann.video = video_map[ann.video]
             if ann.track is not None and ann.track in track_map:
                 ann.track = track_map[ann.track]
+        for r in frame.rois:
+            if r.video in video_map:
+                r.video = video_map[r.video]
+            if r.track is not None and r.track in track_map:
+                r.track = track_map[r.track]
         for li in frame.label_images:
-            if li.video in video_map:
-                li.video = video_map[li.video]
             for info in li.objects.values():
                 if info.track is not None and info.track in track_map:
                     info.track = track_map[info.track]

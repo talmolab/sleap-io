@@ -101,8 +101,6 @@ def read_labels(
 
     # Process all image/label pairs
     labeled_frames = []
-    all_rois: list[ROI] = []
-    all_bboxes: list[BoundingBox] = []
     tracks = {}  # Track synthetic tracks by instance order
 
     for image_file in sorted(images_dir.glob("*")):
@@ -114,6 +112,8 @@ def read_labels(
 
             # Parse label file if it exists
             instances: list[Instance] = []
+            rois: list[ROI] = []
+            bboxes: list[BoundingBox] = []
             if label_file.exists():
                 # Get image dimensions - try from video shape first, fallback to
                 # reading image
@@ -134,8 +134,6 @@ def read_labels(
                     video=video,
                     frame_idx=0,
                 )
-                all_rois.extend(rois)
-                all_bboxes.extend(bboxes)
 
                 # Assign tracks to instances based on order
                 for i, instance in enumerate(instances):
@@ -144,8 +142,10 @@ def read_labels(
                         tracks[track_name] = Track(name=track_name)
                     instance.track = tracks[track_name]
 
-            # Create labeled frame
+            # Create labeled frame with annotations attached
             frame = LabeledFrame(video=video, frame_idx=0, instances=instances)
+            frame.rois.extend(rois)
+            frame.bboxes.extend(bboxes)
             labeled_frames.append(frame)
 
     skeletons = [skeleton] if skeleton is not None else []
@@ -154,8 +154,6 @@ def read_labels(
         labeled_frames=labeled_frames,
         skeletons=skeletons,
         tracks=list(tracks.values()),
-        rois=all_rois,
-        bboxes=all_bboxes,
         provenance={"source": str(dataset_path), "split": split},
     )
 
@@ -574,14 +572,16 @@ def _write_bbox_labels(
     # Reverse class_names to get name -> id mapping
     name_to_id = {v: k for k, v in class_names.items()}
 
-    # Group bboxes by video
+    # Group bboxes by video (derive from parent LabeledFrame)
     bboxes_by_video: dict[str, list[BoundingBox]] = {}
-    for bbox in labels.bboxes:
-        if bbox.video is not None:
-            key = str(bbox.video.filename)
+    video_by_key: dict[str, Video] = {}
+    for lf in labels.labeled_frames:
+        if lf.bboxes:
+            key = str(lf.video.filename)
             if key not in bboxes_by_video:
                 bboxes_by_video[key] = []
-            bboxes_by_video[key].append(bbox)
+                video_by_key[key] = lf.video
+            bboxes_by_video[key].extend(lf.bboxes)
 
     video_keys = sorted(bboxes_by_video.keys())
 
@@ -621,7 +621,7 @@ def _write_bbox_labels(
 
         for lf_idx, video_path in enumerate(iterator):
             bbox_list = bboxes_by_video[video_path]
-            video = bbox_list[0].video
+            video = video_by_key[video_path]
 
             # Read image to get shape and save it
             try:
@@ -682,14 +682,16 @@ def _write_roi_labels(
     # Reverse class_names to get name -> id mapping
     name_to_id = {v: k for k, v in class_names.items()}
 
-    # Group ROIs by video
+    # Group ROIs by video (derive from parent LabeledFrame)
     rois_by_video: dict[str, list[ROI]] = {}
-    for roi in labels.rois:
-        if roi.video is not None:
-            key = str(roi.video.filename)
+    video_by_key: dict[str, Video] = {}
+    for lf in labels.labeled_frames:
+        if lf.rois:
+            key = str(lf.video.filename)
             if key not in rois_by_video:
                 rois_by_video[key] = []
-            rois_by_video[key].append(roi)
+                video_by_key[key] = lf.video
+            rois_by_video[key].extend(lf.rois)
 
     video_keys = sorted(rois_by_video.keys())
 
@@ -729,7 +731,7 @@ def _write_roi_labels(
 
         for lf_idx, video_path in enumerate(iterator):
             rois = rois_by_video[video_path]
-            video = rois[0].video
+            video = video_by_key[video_path]
 
             # Read image to get shape and save it
             try:
@@ -896,8 +898,6 @@ def parse_label_file(
                             w_px,
                             h_px,
                             category=category,
-                            video=video,
-                            frame_idx=frame_idx,
                             score=score,
                         )
                     else:
@@ -907,8 +907,6 @@ def parse_label_file(
                             w_px,
                             h_px,
                             category=category,
-                            video=video,
-                            frame_idx=frame_idx,
                         )
                     bboxes.append(bbox)
 
@@ -924,8 +922,6 @@ def parse_label_file(
                     roi = UserROI.from_polygon(
                         coords,
                         category=category,
-                        video=video,
-                        frame_idx=frame_idx,
                     )
                     rois.append(roi)
 

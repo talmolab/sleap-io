@@ -91,5 +91,4 @@ def _feature_to_roi(feature: dict) -> ROI:
         name=props.get("name", ""),
         category=props.get("category", ""),
         source=props.get("source", ""),
-        frame_idx=props.get("frame_idx"),
     )

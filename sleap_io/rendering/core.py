@@ -990,7 +990,7 @@ def render_image(
         from sleap_io.rendering.overlays import draw_centroids as _draw_centroids
 
         render_fidx = fidx_for_callback
-        frame_centroids = [c for c in source.centroids if c.frame_idx == render_fidx]
+        frame_centroids = source.get_centroids(frame_idx=render_fidx)
         if frame_centroids:
             if render_image_data.ndim == 2:
                 render_image_data = np.stack([render_image_data] * 3, axis=-1)
@@ -1367,14 +1367,8 @@ def render_video(
             render_indices = sorted(frame_idx_to_lf.keys())
 
     if not render_indices and isinstance(overlay, list) and overlay:
-        # Derive frame indices from overlay objects (spatial-only rendering)
-        render_indices = sorted(
-            {
-                obj.frame_idx
-                for obj in overlay
-                if getattr(obj, "frame_idx", None) is not None
-            }
-        )
+        # Derive frame indices from overlay list (use list indices as frame indices)
+        render_indices = list(range(len(overlay)))
 
     if not render_indices and _has_video_centroids:
         # Derive frame indices from frames that have centroids
@@ -1472,18 +1466,15 @@ def render_video(
         if _overlay_is_callable:
             return overlay(fidx)
         if _overlay_is_label_image_list:
-            # Return the first LabelImage matching this frame index
-            for obj in overlay:
-                if getattr(obj, "frame_idx", None) in (None, fidx):
-                    return obj
+            # Match by list index (overlays ordered by frame sequence)
+            if fidx < len(overlay):
+                return overlay[fidx]
             return None
         if _overlay_is_list:
-            # Filter objects by frame_idx attribute
-            return [
-                obj
-                for obj in overlay
-                if getattr(obj, "frame_idx", None) in (None, fidx)
-            ]
+            # Match by list index
+            if fidx < len(overlay):
+                return [overlay[fidx]]
+            return []
         return None
 
     def _apply_frame_overlay(image: np.ndarray, fidx: int) -> np.ndarray:
@@ -1517,7 +1508,6 @@ def render_video(
                 kwargs = dict(
                     data=cropped_data,
                     objects=frame_overlay.objects,
-                    frame_idx=frame_overlay.frame_idx,
                 )
                 if isinstance(frame_overlay, PredictedLabelImage):
                     kwargs["score"] = frame_overlay.score

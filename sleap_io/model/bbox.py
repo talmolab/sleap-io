@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.roi import ROI
-    from sleap_io.model.video import Video
 
 
 @attrs.define(eq=False)
@@ -30,7 +29,7 @@ class BoundingBox:
     """A bounding box annotation.
 
     Supports axis-aligned and oriented (rotated) bounding boxes with optional
-    metadata for associating with videos, frames, tracks, and instances.
+    metadata for associating with tracks and instances.
 
     Attributes:
         x1: Left edge x-coordinate (before rotation).
@@ -38,8 +37,6 @@ class BoundingBox:
         x2: Right edge x-coordinate (before rotation).
         y2: Bottom edge y-coordinate (before rotation).
         angle: Rotation angle in radians (0 = axis-aligned).
-        video: Video this bounding box is associated with.
-        frame_idx: Frame index within the video.
         track: Optional tracking identity.
         tracking_score: Confidence of the track identity assignment. ``None``
             if unassigned or manually assigned.
@@ -61,8 +58,6 @@ class BoundingBox:
     x2: float = attrs.field()
     y2: float = attrs.field()
     angle: float = attrs.field(default=0.0)
-    video: "Video | None" = attrs.field(default=None)
-    frame_idx: int | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
     tracking_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
@@ -276,8 +271,6 @@ class BoundingBox:
             name=self.name,
             category=self.category,
             source=self.source,
-            video=self.video,
-            frame_idx=self.frame_idx,
             track=self.track,
             instance=self.instance,
         )

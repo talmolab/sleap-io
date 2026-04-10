@@ -13,7 +13,6 @@ from sleap_io.model.mask import (
     _encode_rle,
     _resize_nearest,
 )
-from sleap_io.model.video import Video
 
 
 def test_encode_rle_all_zeros():
@@ -383,20 +382,15 @@ def test_to_bbox_metadata():
     data = np.zeros((10, 10), dtype=bool)
     data[2:5, 1:4] = True
     track = Track(name="t1")
-    video = Video(filename="test.mp4")
     mask = UserSegmentationMask.from_numpy(
         data,
         track=track,
-        video=video,
-        frame_idx=3,
         category="cell",
         name="obj1",
         source="manual",
     )
     bb = mask.to_bbox()
     assert bb.track is track
-    assert bb.video is video
-    assert bb.frame_idx == 3
     assert bb.category == "cell"
     assert bb.name == "obj1"
     assert bb.source == "manual"

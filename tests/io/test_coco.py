@@ -1591,9 +1591,7 @@ class TestCOCOROIMaskIO:
         from sleap_io.model.roi import UserROI
 
         video = sio.Video.from_filename(["img1.png"])
-        roi1 = UserROI.from_bbox(
-            10.0, 20.0, 50.0, 30.0, category="dog", video=video, frame_idx=0
-        )
+        roi1 = UserROI.from_bbox(10.0, 20.0, 50.0, 30.0, category="dog", video=video)
         roi2 = UserROI.from_bbox(
             100.0,
             200.0,
@@ -1601,10 +1599,11 @@ class TestCOCOROIMaskIO:
             60.0,
             category="cat",
             video=video,
-            frame_idx=0,
         )
 
-        labels = sio.Labels(rois=[roi1, roi2])
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.rois.extend([roi1, roi2])
+        labels = sio.Labels(labeled_frames=[lf])
 
         json_path = tmp_path / "bbox_test.json"
         coco.write_labels(labels, json_path)
@@ -1629,9 +1628,11 @@ class TestCOCOROIMaskIO:
 
         coords = [(10.0, 20.0), (50.0, 20.0), (50.0, 60.0), (10.0, 60.0)]
         video = sio.Video.from_filename(["img1.png"])
-        roi = UserROI.from_polygon(coords, category="region", video=video, frame_idx=0)
+        roi = UserROI.from_polygon(coords, category="region", video=video)
 
-        labels = sio.Labels(rois=[roi])
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.rois.append(roi)
+        labels = sio.Labels(labeled_frames=[lf])
 
         json_path = tmp_path / "polygon_test.json"
         coco.write_labels(labels, json_path)
@@ -1657,11 +1658,10 @@ class TestCOCOROIMaskIO:
         mask_arr[2:5, 3:7] = True
 
         video = sio.Video.from_filename(["img1.png"])
-        seg_mask = UserSegmentationMask.from_numpy(
-            mask_arr, category="cell", video=video, frame_idx=0
-        )
-
-        labels = sio.Labels(masks=[seg_mask])
+        seg_mask = UserSegmentationMask.from_numpy(mask_arr, category="cell")
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.masks.append(seg_mask)
+        labels = sio.Labels(labeled_frames=[lf])
 
         json_path = tmp_path / "mask_test.json"
         coco.write_labels(labels, json_path)
@@ -1691,10 +1691,11 @@ class TestCOCOROIMaskIO:
         mask_arr = np.ones((5, 5), dtype=bool)
         video = sio.Video.from_filename(["img1.png"])
         seg_mask = UserSegmentationMask.from_numpy(
-            mask_arr, category="cell", video=video, frame_idx=0, scale=(0.5, 0.5)
+            mask_arr, category="cell", scale=(0.5, 0.5)
         )
-
-        labels = sio.Labels(masks=[seg_mask])
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.masks.append(seg_mask)
+        labels = sio.Labels(labeled_frames=[lf])
 
         json_path = tmp_path / "mask_scaled.json"
         coco.write_labels(labels, json_path)
@@ -1795,10 +1796,11 @@ class TestCOCOROIMaskIO:
             40.0,
             category="special_class",
             video=video,
-            frame_idx=0,
         )
 
-        labels = sio.Labels(rois=[roi])
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.rois.append(roi)
+        labels = sio.Labels(labeled_frames=[lf])
 
         json_path = tmp_path / "cat_test.json"
         coco.write_labels(labels, json_path)
@@ -2082,8 +2084,6 @@ def test_coco_detection_reads_as_bbox(tmp_path):
     for bbox in labels.bboxes:
         assert isinstance(bbox, UserBoundingBox)
         assert bbox.category == "person"
-        assert bbox.video is not None
-        assert bbox.frame_idx == 0
 
     # Check first bbox coordinates
     x, y, w, h = labels.bboxes[0].xywh
@@ -2156,14 +2156,12 @@ def test_coco_predicted_bbox(tmp_path):
 def test_coco_bbox_roundtrip(tmp_path):
     """Write bboxes to COCO and read back as BoundingBox."""
     video = sio.Video.from_filename(["img1.png"])
-    bbox1 = UserBoundingBox.from_xywh(
-        10, 20, 50, 30, category="dog", video=video, frame_idx=0
-    )
-    bbox2 = PredictedBoundingBox.from_xywh(
-        100, 200, 80, 60, category="cat", video=video, frame_idx=0, score=0.88
-    )
+    bbox1 = UserBoundingBox.from_xywh(10, 20, 50, 30, category="dog")
+    bbox2 = PredictedBoundingBox.from_xywh(100, 200, 80, 60, category="cat", score=0.88)
 
-    labels = sio.Labels(bboxes=[bbox1, bbox2])
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.bboxes.extend([bbox1, bbox2])
+    labels = sio.Labels(labeled_frames=[lf])
 
     json_path = tmp_path / "bbox_rt.json"
     coco.write_labels(labels, json_path)
@@ -2360,9 +2358,9 @@ class TestCOCOPanoptic:
         li1 = labels.label_images[0]
         li2 = labels.label_images[1]
 
-        # Check frame indices (positional, not image_id)
-        assert li1.frame_idx == 0
-        assert li2.frame_idx == 1
+        # Check frame indices (positional, on labeled frames)
+        assert labels.labeled_frames[0].frame_idx == 0
+        assert labels.labeled_frames[1].frame_idx == 1
 
         # Check dimensions
         assert li1.height == 20
@@ -2483,7 +2481,7 @@ class TestCOCOPanoptic:
         assert len(labels.label_images) == 1
         assert labels.label_images[0].n_objects == 1
         # frame_idx should be contiguous (0), not the annotation index (0 with gap)
-        assert labels.label_images[0].frame_idx == 0
+        assert labels.labeled_frames[0].frame_idx == 0
 
     def test_write_coco_panoptic(self, tmp_path):
         """Test writing COCO panoptic from Labels with label_images."""
@@ -2502,7 +2500,10 @@ class TestCOCOPanoptic:
             2: LabelImage.Info(track=track_b, category="background"),
         }
         li = UserLabelImage(data=data, objects=objects)
-        labels = Labels(label_images=[li])
+        video = sio.Video(filename="dummy.mp4", open_backend=False)
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.label_images.append(li)
+        labels = Labels(labeled_frames=[lf])
 
         # Write
         json_path = tmp_path / "output.json"
@@ -2556,7 +2557,10 @@ class TestCOCOPanoptic:
         data[1:4, 1:4] = 1
         objects = {1: LabelImage.Info(category="obj")}
         li = UserLabelImage(data=data, objects=objects)
-        labels = Labels(label_images=[li])
+        video = sio.Video(filename="dummy.mp4", open_backend=False)
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.label_images.append(li)
+        labels = Labels(labeled_frames=[lf])
 
         custom_dir = tmp_path / "my_pngs"
         json_path = tmp_path / "out.json"
@@ -2592,7 +2596,12 @@ class TestCOCOPanoptic:
         }
         li2 = UserLabelImage(data=data2, objects=objects2)
 
-        labels = Labels(label_images=[li1, li2])
+        video = sio.Video(filename="dummy.mp4", open_backend=False)
+        lf1 = sio.LabeledFrame(video=video, frame_idx=0)
+        lf1.label_images.append(li1)
+        lf2 = sio.LabeledFrame(video=video, frame_idx=1)
+        lf2.label_images.append(li2)
+        labels = Labels(labeled_frames=[lf1, lf2])
 
         # Write
         json_path = tmp_path / "roundtrip.json"
@@ -2628,10 +2637,43 @@ class TestCOCOPanoptic:
         # Stuff should have no track
         assert rt2.objects[3].track is None
 
-        # Frame indices preserved
-        assert rt1.frame_idx == 0
-        assert rt2.frame_idx == 1
+        # Frame indices preserved (on labeled frames)
+        assert labels_rt.labeled_frames[0].frame_idx == 0
+        assert labels_rt.labeled_frames[1].frame_idx == 1
 
         # Dimensions preserved
         assert rt1.height == 20
-        assert rt1.width == 25
+
+
+def test_coco_export_roi_only_creates_image(tmp_path):
+    """Export ROIs/masks/bboxes on frames without instances creates image entries."""
+    from sleap_io.model.roi import UserROI
+
+    video = sio.Video.from_filename(["img1.png"])
+
+    # Frame with only ROI (no instances) — forces new image_id creation
+    roi = UserROI.from_bbox(10.0, 20.0, 50.0, 30.0, category="region", video=video)
+    mask_arr = np.zeros((10, 10), dtype=bool)
+    mask_arr[2:5, 3:7] = True
+    mask = UserSegmentationMask.from_numpy(mask_arr, category="cell")
+    bbox = UserBoundingBox.from_xywh(0, 0, 20, 20, category="box")
+
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.rois.append(roi)
+    lf.masks.append(mask)
+    lf.bboxes.append(bbox)
+    labels = sio.Labels(labeled_frames=[lf])
+
+    json_path = tmp_path / "test.json"
+    coco.write_labels(labels, json_path)
+
+    with open(json_path) as f:
+        data = json.load(f)
+
+    # All three annotation types should have created entries
+    assert len(data["annotations"]) == 3
+    # Image entry created for the frame
+    assert len(data["images"]) == 1
+    # Three distinct categories
+    cat_names = {c["name"] for c in data["categories"]}
+    assert cat_names == {"region", "cell", "box"}

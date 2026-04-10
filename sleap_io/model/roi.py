@@ -54,9 +54,8 @@ class ROI:
         name: Optional human-readable name for this ROI.
         category: Optional category label (e.g., class name for detection).
         source: Optional string indicating the source of this annotation.
-        video: Optional `Video` this ROI is associated with.
-        frame_idx: Optional frame index. If `None`, the ROI is static (applies to
-            all frames of the video).
+        video: Optional `Video` this ROI is associated with. Used for static ROIs
+            that are not tied to any specific frame.
         track: Optional `Track` this ROI is associated with.
         tracking_score: Confidence of the track identity assignment. ``None``
             if unassigned or manually assigned.
@@ -85,7 +84,6 @@ class ROI:
     category: str = attrs.field(default="")
     source: str = attrs.field(default="")
     video: "Video | None" = attrs.field(default=None)
-    frame_idx: int | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
     tracking_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
@@ -228,11 +226,6 @@ class ROI:
         return cls(geometry=geom, **kwargs)
 
     @property
-    def is_static(self) -> bool:
-        """Whether this ROI is static (not tied to a specific frame)."""
-        return self.frame_idx is None
-
-    @property
     def is_bbox(self) -> bool:
         """Whether this ROI's geometry is a rectangular bounding box."""
         from shapely.geometry import Polygon
@@ -287,7 +280,6 @@ class ROI:
                 "name": self.name,
                 "category": self.category,
                 "source": self.source,
-                "frame_idx": self.frame_idx,
             },
         }
 
@@ -311,8 +303,6 @@ class ROI:
             name=self.name,
             category=self.category,
             source=self.source,
-            video=self.video,
-            frame_idx=self.frame_idx,
             track=self.track,
             instance=self.instance,
         )
@@ -322,7 +312,7 @@ class ROI:
 
         For ``MultiPolygon`` or ``GeometryCollection`` geometries, creates a
         separate ROI for each component geometry, preserving all metadata
-        (name, category, source, video, frame_idx, track, instance).
+        (name, category, source, video, track, instance).
 
         For single geometries (e.g., ``Polygon``, ``Point``), returns a list
         containing only this ROI.
@@ -342,7 +332,6 @@ class ROI:
                     category=self.category,
                     source=self.source,
                     video=self.video,
-                    frame_idx=self.frame_idx,
                     track=self.track,
                     instance=self.instance,
                     **extra,
