@@ -580,8 +580,8 @@ source, regardless of strategy.
 ...     skeleton=skeleton,
 ... )
 >>> lf1 = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst1])
->>> lf1.bboxes.append(sio.UserBoundingBox(
-...     x1=5, y1=15, x2=55, y2=65, video=video, frame_idx=0,
+>>> lf1.append(sio.UserBoundingBox(
+...     x1=5, y1=15, x2=55, y2=65,
 ... ))
 >>> base = sio.Labels(labeled_frames=[lf1])
 >>> inst2 = sio.PredictedInstance.from_numpy(
@@ -590,8 +590,8 @@ source, regardless of strategy.
 ...     score=0.9,
 ... )
 >>> lf2 = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst2])
->>> lf2.bboxes.append(sio.PredictedBoundingBox(
-...     x1=6, y1=16, x2=56, y2=66, video=video, frame_idx=0, score=0.9,
+>>> lf2.append(sio.PredictedBoundingBox(
+...     x1=6, y1=16, x2=56, y2=66, score=0.9,
 ... ))
 >>> base.merge(sio.Labels(labeled_frames=[lf2]))
 >>> print(len(base[0].bboxes))
