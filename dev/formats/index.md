@@ -641,6 +641,7 @@ Different formats have varying capabilities:
 | Label Studio | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | CSV (.csv) | ✅ | ✅ | ❌ | ✅** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | DeepLabCut | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| [TrackMate](trackmate.md) (.csv) | ✅ | ❌ | ✅******* | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | AlphaTracker | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | LEAP (.mat) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | COCO (.json) | ✅ | ✅ | ❌ | ✅ | ✅*** | ❌ | ✅ | ✅ | ✅ | ❌ |
@@ -655,6 +656,7 @@ Different formats have varying capabilities:
 ****COCO panoptic tracks for "thing" segments only
 *****TIFF tracks via `.meta.json` sidecar
 ******Ultralytics segmentation polygons stored as ROIs
+*******TrackMate auto-detects sibling `.tif`/`.tiff` video files
 
 ## See Also
 
