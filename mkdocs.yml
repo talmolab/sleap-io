@@ -172,5 +172,6 @@ nav:
       - CSV Format: formats/csv.md
       - Analysis HDF5: formats/analysis_h5.md
       - TIFF: formats/tiff.md
+      - TrackMate: formats/trackmate.md
     - CLI: cli.md
     - Full API: reference/
