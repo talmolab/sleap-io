@@ -200,7 +200,7 @@ Source video file path.
 | `labels_path` | string | Original labels file path (optional) |
 
 !!! note "`sleap_io_version` is a provenance stamp, not a format gate"
-    This attribute records the `sleap-io` package version that wrote the file (read from `importlib.metadata.version("sleap-io")` at save time). It is **not** a file-format version — the Analysis HDF5 layout itself is not versioned. Downstream tools should not use this value as a semver gate for structural changes; check the presence of specific datasets or `@preset` instead.
+    This attribute records the `sleap-io` package version that wrote the file (the value of `sleap_io.__version__` at save time). It is **not** a file-format version — the Analysis HDF5 layout itself is not versioned. Downstream tools should not use this value as a semver gate for structural changes; check the presence of specific datasets or `@preset` instead.
 
 ### Dataset Attributes
 
