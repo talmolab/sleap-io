@@ -3654,7 +3654,7 @@
 </table>
 <div class="admonition note">
 <p class="admonition-title"><code>sleap_io_version</code> is a provenance stamp, not a format gate</p>
-<p>This attribute records the <code>sleap-io</code> package version that wrote the file (read from <code>importlib.metadata.version("sleap-io")</code> at save time). It is <strong>not</strong> a file-format version — the Analysis HDF5 layout itself is not versioned. Downstream tools should not use this value as a semver gate for structural changes; check the presence of specific datasets or <code>@preset</code> instead.</p>
+<p>This attribute records the <code>sleap-io</code> package version that wrote the file (the value of <code>sleap_io.__version__</code> at save time). It is <strong>not</strong> a file-format version — the Analysis HDF5 layout itself is not versioned. Downstream tools should not use this value as a semver gate for structural changes; check the presence of specific datasets or <code>@preset</code> instead.</p>
 </div>
 <h3 id="dataset-attributes">Dataset Attributes<a class="headerlink" href="#dataset-attributes" title="Permanent link">&para;</a></h3>
 <p>Each dataset has a <code>dims</code> attribute containing a JSON-encoded list of dimension names:</p>
