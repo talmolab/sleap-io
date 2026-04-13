@@ -174,7 +174,7 @@ inst = centroid.to_instance()
 
 # Convenience accessors on full pose Instances
 xy = pose_instance.centroid_xy        # (x, y) tuple
-c2 = pose_instance.to_centroid()      # shortcut for from_instance(..., method="centroid")
+c2 = pose_instance.to_centroid()      # shortcut for Centroid.from_instance(pose_instance)
 ```
 
 Import TrackMate `*_spots.csv` exports straight into a `Labels` object — either with the explicit loader or by letting `sio.load_file` auto-detect the format from the CSV header:
