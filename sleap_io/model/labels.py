@@ -1569,6 +1569,18 @@ class Labels:
     ) -> list["ROI"]:
         """Query ROIs by video, frame, category, track, or instance.
 
+        Filtering rule:
+            * When a frame-aware filter (``video`` or ``frame_idx``) is set,
+              only ROIs attached to ``LabeledFrame`` instances are searched. Static
+              ROIs are excluded from these results.
+            * Otherwise (no filter, or only ``category``/``track``/
+              ``instance``/``predicted``), the search runs over ``self.rois``
+              — the union of static + frame-bound ROIs.
+
+        To access static (video-level) ROIs directly, use
+        ``Labels.static_rois``. To access only frame-bound ROIs across all
+        frames, use ``Labels.temporal_rois``.
+
         Args:
             video: If specified, only return ROIs for this video (identity
                 comparison).
@@ -1622,6 +1634,13 @@ class Labels:
     ) -> list["SegmentationMask"]:
         """Query segmentation masks by video, frame, category, track, or instance.
 
+        Filtering rule:
+            * When a frame-aware filter (``video`` or ``frame_idx``) is set,
+              only masks attached to ``LabeledFrame`` instances are searched.
+            * Otherwise (no filter, or only ``category``/``track``/
+              ``instance``/``predicted``), the search runs over
+              ``self.masks``.
+
         Args:
             video: If specified, only return masks for this video (identity
                 comparison).
@@ -1674,6 +1693,13 @@ class Labels:
         predicted: bool | None = None,
     ) -> list["BoundingBox"]:
         """Query bounding boxes by video, frame, category, track, or instance.
+
+        Filtering rule:
+            * When a frame-aware filter (``video`` or ``frame_idx``) is set,
+              only bboxes attached to ``LabeledFrame`` instances are searched.
+            * Otherwise (no filter, or only ``category``/``track``/
+              ``instance``/``predicted``), the search runs over
+              ``self.bboxes``.
 
         Args:
             video: If specified, only return bboxes for this video (identity
@@ -1732,6 +1758,13 @@ class Labels:
         predicted: bool | None = None,
     ) -> list["Centroid"]:
         """Query centroids by video, frame, category, track, or instance.
+
+        Filtering rule:
+            * When a frame-aware filter (``video`` or ``frame_idx``) is set,
+              only centroids attached to ``LabeledFrame`` instances are searched.
+            * Otherwise (no filter, or only ``category``/``track``/
+              ``instance``/``predicted``), the search runs over
+              ``self.centroids``.
 
         Args:
             video: If specified, only return centroids for this video (identity
@@ -1794,6 +1827,12 @@ class Labels:
         with that track. When ``category`` is specified, returns LabelImages
         containing an Info with that category. These filters check the
         ``objects`` metadata without decoding pixel data.
+
+        Filtering rule:
+            * When a frame-aware filter (``video`` or ``frame_idx``) is set,
+              only label images attached to ``LabeledFrame`` instances are searched.
+            * Otherwise (no filter, or only ``track``/``category``/
+              ``predicted``), the search runs over ``self.label_images``.
 
         Args:
             video: If specified, only return label images for this video
