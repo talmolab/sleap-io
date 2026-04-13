@@ -11,7 +11,7 @@ The core data structures form a layered hierarchy:
 - **[`SuggestionFrame`](#sleap_io.SuggestionFrame)** is a lightweight pointer to frames suggested for annotation (no instance data).
 - **[`LabelsSet`](#sleap_io.LabelsSet)** manages named collections of `Labels` (e.g., train/val/test splits).
 
-The hierarchy flows as **Labels -> LabeledFrame -> [`Instance`](poses.md)** (or any spatial annotation type). `Labels` also holds shared objects ([videos](video.md), [skeletons](poses.md), [tracks](poses.md), [identities](3d.md#identity), and `static_rois` for video-level ROIs) that are referenced by frames and instances, so each object is stored once and reused throughout the project. Flat read-only views like `labels.centroids`, `labels.bboxes`, `labels.masks`, `labels.label_images`, and `labels.rois` flatten the per-frame annotations across every `LabeledFrame` for convenient iteration.
+The hierarchy flows as **Labels -> LabeledFrame -> [`Instance`](poses.md)** (or any spatial annotation type). `Labels` also holds shared objects ([videos](video.md), [skeletons](poses.md), [tracks](poses.md), [identities](3d.md#identity), and `static_rois` for video-level ROIs) that are referenced by frames and instances, so each object is stored once and reused throughout the project. Flat views like `labels.centroids`, `labels.bboxes`, `labels.masks`, `labels.label_images`, and `labels.rois` flatten the per-frame annotations across every `LabeledFrame` for convenient iteration (`labels.rois` additionally includes `labels.static_rois`). These views return a fresh list on each access, so mutating the returned list does **not** propagate back to the owning `LabeledFrame` — use `lf.append(...)` or edit the per-frame lists directly to modify annotations.
 
 ---
 

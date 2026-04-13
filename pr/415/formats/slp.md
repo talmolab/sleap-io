@@ -913,6 +913,9 @@ Per-centroid `category`, `name`, and `source` strings are stored as vlen string 
 
 The `/centroids/` group is only written when the [`Labels`][sleap_io.Labels] object contains centroids. On read, a missing group defaults to an empty list.
 
+!!! note "Format version"
+    Centroid presence alone does not bump the SLP format version — the `/centroids/` group rides alongside whatever other state drives the file's `format_id` (see [Version History](#version-history) below). A file containing only centroids and pose instances may still be written at format 1.4.
+
 ## Regions of Interest (ROIs)
 
 [`ROI`][sleap_io.ROI]s store vector geometry annotations such as polygons and other shapes. ROI support was introduced in format 1.5.
@@ -1288,7 +1291,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - New [`merge_label_images()`][sleap_io.merge_label_images] copies raw compressed chunks between files (zero decompression for chunked sources)
 - Backward compatible: old files (v1.8-v2.1) remain fully readable; `data_start`/`data_end` fields are unused (set to 0) in chunked format
 
-### Browser-side compatibility (h5wasm / sleap-io.js)
+## Browser-side compatibility (h5wasm / sleap-io.js)
 
 [`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so it stores the `points`, `pred_points`, `instances`, and `frames` datasets as **flat 2D arrays** with the same per-row field layout as the structured dtype. The Python reader in v0.7.0 detects this representation (via shape and dataset attributes) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without requiring a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
 
