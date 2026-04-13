@@ -1142,8 +1142,9 @@ def render_video(
 
             - ``np.ndarray``: 3-D array ``(T, H, W)`` of integer label images
               indexed by frame number, or 2-D ``(H, W)`` for a static overlay.
-            - ``list[SegmentationMask | ROI | BoundingBox]``: Objects are
-              filtered per frame by their ``frame_idx`` attribute.
+            - ``list[SegmentationMask | ROI | BoundingBox]``: Indexed by
+              position — the item at list index ``i`` is applied to frame
+              ``i``. One overlay per frame.
             - ``Callable[[int], np.ndarray]``: Called with the frame index,
               returns an ``(H, W)`` label image for that frame.
         overlay_alpha: Opacity for the annotation overlay (0.0 to 1.0).

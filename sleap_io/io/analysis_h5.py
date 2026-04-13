@@ -73,7 +73,7 @@ list of strings. File-level attributes include:
 
 - ``preset``: str, the preset used ("matlab", "standard", or "custom")
 - ``format``: str, always "analysis" for this format
-- ``sleap_io_version``: str, format version (currently "1.0")
+- ``sleap_io_version``: str, `sleap-io` package version that wrote the file
 
 Example:
     >>> import sleap_io as sio
@@ -104,6 +104,7 @@ from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
+from sleap_io.version import __version__
 
 # =============================================================================
 # Preset Definitions
@@ -812,7 +813,7 @@ def write_labels(
         # File-level attributes (always written for format identification)
         f.attrs["preset"] = preset_name
         f.attrs["format"] = "analysis"
-        f.attrs["sleap_io_version"] = "1.0"
+        f.attrs["sleap_io_version"] = __version__
 
         # Extended metadata for round-trip (as attributes)
         if save_metadata:

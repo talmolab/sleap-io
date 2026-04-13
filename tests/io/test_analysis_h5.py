@@ -303,7 +303,7 @@ class TestWriteLabels:
 
         with h5py.File(h5_path, "r") as f:
             assert f.attrs.get("format") == "analysis"
-            assert f.attrs.get("sleap_io_version") == "1.0"
+            assert f.attrs.get("sleap_io_version") == sio.__version__
             assert "skeleton_name" in f.attrs
             assert "skeleton_symmetries" in f.attrs
             assert "video_backend_metadata" in f.attrs

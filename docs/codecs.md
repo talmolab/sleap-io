@@ -32,7 +32,7 @@ labels = sio.load_file("predictions.slp")
 data = labels.to_dict()
 
 # Convert to NumPy array
-# Shape: (n_frames, n_tracks, n_nodes, 2)
+# Shape: (n_frames, n_tracks, n_nodes, 2); n_frames == len(video) in v0.7.0
 tracks = labels.numpy()
 
 # Convert to pandas DataFrame
@@ -104,6 +104,12 @@ data = labels.to_dict()
                     "score": 0.91
                 }
             ]
+        },
+        {
+            "frame_idx": 12,
+            "video_idx": 0,
+            "instances": [],
+            "is_negative": true
         }
     ],
     "suggestions": [],
@@ -112,6 +118,8 @@ data = labels.to_dict()
 ```
 
 The dictionary uses index-based references (`skeleton_idx`, `video_idx`, `track_idx`) for compactness. All values are JSON-serializable primitives.
+
+Frames explicitly marked as containing no instances (negative training examples) are preserved in v0.7.0 via an `is_negative: true` field on each frame dict — round-tripping through `to_dict()` / `from_dict()` no longer drops them (PR #369).
 
 **Parameters:**
 
@@ -173,6 +181,8 @@ tracks = labels.numpy()
 print(tracks.shape)
 # (n_frames, n_tracks, n_nodes, 2)
 ```
+
+In v0.7.0, `n_frames == len(video)` — the full video duration. Frames past the last labeled frame are NaN-padded along all coordinate axes (PR #368). Code that previously assumed `tracks.shape[0] == last_labeled_frame + 1` may need updating.
 
 **Output array:**
 
