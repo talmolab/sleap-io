@@ -494,6 +494,7 @@ import numpy as np
 labels = sio.load_file("predictions.slp")
 
 # Convert to array — shape: (n_frames, n_tracks, n_nodes, 2)
+# In v0.7.0, n_frames == len(video); frames past the last labeled frame are NaN.
 trx = labels.numpy()
 
 # Apply temporal smoothing along the frame axis (axis=0)

@@ -12,9 +12,12 @@ SLP files can contain:
 - **Suggestions** for frames to label ([`SuggestionFrame`][sleap_io.SuggestionFrame])
 - **Recording sessions** for multi-camera setups ([`RecordingSession`][sleap_io.RecordingSession])
 - **Bounding boxes** for object detection and tracking ([`BoundingBox`][sleap_io.BoundingBox])
+- **Centroids** for point tracking and TrackMate-style spot detection ([`Centroid`][sleap_io.Centroid])
 - **Regions of interest** (ROIs) with vector geometry ([`ROI`][sleap_io.ROI])
 - **Segmentation masks** with run-length encoding ([`SegmentationMask`][sleap_io.SegmentationMask])
 - **Label images** for dense per-pixel instance segmentation ([`LabelImage`][sleap_io.LabelImage])
+
+In v0.7.0 the annotation types ([`ROI`][sleap_io.ROI], [`SegmentationMask`][sleap_io.SegmentationMask], [`BoundingBox`][sleap_io.BoundingBox], [`Centroid`][sleap_io.Centroid], and [`LabelImage`][sleap_io.LabelImage]) are abstract base classes; instances are always one of the `User*` or `Predicted*` subclasses. The on-disk dtype includes an `is_predicted` flag (and a `score` field for predicted variants).
 
 ## HDF5 Layout
 
@@ -50,6 +53,22 @@ file.slp
 │   ├── instance                 # Dataset: int32 instance index
 │   ├── is_predicted             # Dataset: uint8 (0=user, 1=predicted)
 │   ├── score                    # Dataset: float32 confidence score
+│   ├── tracking_score           # Dataset: float32 tracking link confidence
+│   ├── category                 # Dataset: vlen str category labels
+│   ├── name                     # Dataset: vlen str name labels
+│   └── source                   # Dataset: vlen str source labels
+│
+├── /centroids/                  # Group: Columnar centroid storage (v0.7.0+)
+│   ├── x                        # Dataset: float64 x-coordinate
+│   ├── y                        # Dataset: float64 y-coordinate
+│   ├── z                        # Dataset: float64 z-coordinate (NaN for 2D)
+│   ├── video                    # Dataset: int32 video index
+│   ├── frame_idx                # Dataset: int64 frame index
+│   ├── track                    # Dataset: int32 track index
+│   ├── instance                 # Dataset: int32 instance index
+│   ├── is_predicted             # Dataset: uint8 (0=user, 1=predicted)
+│   ├── score                    # Dataset: float32 confidence score
+│   ├── tracking_score           # Dataset: float32 tracking link confidence
 │   ├── category                 # Dataset: vlen str category labels
 │   ├── name                     # Dataset: vlen str name labels
 │   └── source                   # Dataset: vlen str source labels
@@ -827,6 +846,7 @@ Bounding box data is stored as individual datasets within the `/bboxes/` HDF5 gr
 | `instance` | `int32` | Instance index (-1 if none) |
 | `is_predicted` | `uint8` | 0 = UserBoundingBox, 1 = PredictedBoundingBox |
 | `score` | `float32` | Confidence score (NaN for user bboxes) |
+| `tracking_score` | `float32` | Tracking link confidence (NaN if unset) |
 | `category` | vlen `str` | Category label per bounding box |
 | `name` | vlen `str` | Name label per bounding box |
 | `source` | vlen `str` | Source label per bounding box |
@@ -854,6 +874,45 @@ The `/bboxes/` group is only written when the [`Labels`][sleap_io.Labels] object
 
 When reading older files without a `/bboxes` dataset or group, any ROIs with axis-aligned rectangular geometry (`is_bbox = True`) are automatically migrated to [`UserBoundingBox`][sleap_io.UserBoundingBox] objects in `Labels.bboxes`. The migrated ROIs are removed from `Labels.rois`.
 
+## Centroids
+
+[`Centroid`][sleap_io.Centroid] annotations store lightweight 2D or 3D point detections used for point tracking and TrackMate-style spot workflows. Centroid storage was added in v0.7.0 and uses a columnar HDF5 group, mirroring the bounding box layout.
+
+### Columnar Datasets
+
+Centroid data is stored as individual datasets within the `/centroids/` HDF5 group:
+
+| Dataset | Dtype | Description |
+|---------|-------|-------------|
+| `x` | `float64` | x-coordinate in pixels |
+| `y` | `float64` | y-coordinate in pixels |
+| `z` | `float64` | z-coordinate (NaN for 2D centroids) |
+| `video` | `int32` | Video index (-1 if none) |
+| `frame_idx` | `int64` | Frame index (-1 if none) |
+| `track` | `int32` | Track index (-1 if none) |
+| `instance` | `int32` | Instance index (-1 if none) |
+| `is_predicted` | `uint8` | 0 = UserCentroid, 1 = PredictedCentroid |
+| `score` | `float32` | Confidence score (NaN for user centroids) |
+| `tracking_score` | `float32` | Tracking link confidence (NaN if unset) |
+| `category` | vlen `str` | Category label per centroid |
+| `name` | vlen `str` | Name label per centroid |
+| `source` | vlen `str` | Source label (e.g., `"trackmate"`) |
+
+The `z` dataset is always written but stores `NaN` for 2D centroids. This makes the columnar layout uniform between 2D point tracking and 3D triangulated workflows without requiring a separate dtype.
+
+### User vs Predicted
+
+- `is_predicted = 0`: [`UserCentroid`][sleap_io.UserCentroid] -- human-annotated
+- `is_predicted = 1`: [`PredictedCentroid`][sleap_io.PredictedCentroid] -- model- or tracker-detected, `score` contains the detection confidence
+
+### String Metadata
+
+Per-centroid `category`, `name`, and `source` strings are stored as vlen string datasets within the `/centroids/` group. The `source` field is the canonical place for tracker provenance — for example, `sio.load_trackmate(...)` sets `source="trackmate"`.
+
+### Optional Group
+
+The `/centroids/` group is only written when the [`Labels`][sleap_io.Labels] object contains centroids. On read, a missing group defaults to an empty list.
+
 ## Regions of Interest (ROIs)
 
 [`ROI`][sleap_io.ROI]s store vector geometry annotations such as polygons and other shapes. ROI support was introduced in format 1.5.
@@ -877,6 +936,7 @@ roi_dtype = np.dtype([
     ("track", "i4"),            # Track index (-1 if none)
     ("is_predicted", "u1"),     # 0 = UserROI, 1 = PredictedROI (Format 1.9+)
     ("score", "f4"),            # Confidence score (NaN for user ROIs) (Format 1.9+)
+    ("tracking_score", "f4"),   # Tracking link confidence (NaN if unset)
     ("wkb_start", "u8"),       # Start byte offset into /roi_wkb
     ("wkb_end", "u8"),         # End byte offset into /roi_wkb
     ("instance", "i4"),        # Instance index (-1 if none) (Format 1.6+)
@@ -951,8 +1011,13 @@ mask_dtype = np.dtype([
     ("instance", "i4"),         # Instance index (-1 if none) (Format 1.9+)
     ("is_predicted", "u1"),     # 0 = UserSegmentationMask, 1 = Predicted (Format 1.9+)
     ("score", "f4"),            # Confidence score (NaN for user masks) (Format 1.9+)
+    ("tracking_score", "f4"),   # Tracking link confidence (NaN if unset)
     ("rle_start", "u8"),       # Start byte offset into /mask_rle
     ("rle_end", "u8"),         # End byte offset into /mask_rle
+    ("scale_x", "f4"),          # Spatial scale x (1.0 = native res) (Format 2.1+)
+    ("scale_y", "f4"),          # Spatial scale y (1.0 = native res) (Format 2.1+)
+    ("offset_x", "f4"),         # Spatial offset x in pixels (Format 2.1+)
+    ("offset_y", "f4"),         # Spatial offset y in pixels (Format 2.1+)
 ])
 ```
 
@@ -998,6 +1063,10 @@ mask_score_map_index_dtype = np.dtype([
     ("data_end", "u8"),     # End byte offset into /mask_score_maps
     ("height", "u4"),       # Score map height in pixels
     ("width", "u4"),        # Score map width in pixels
+    ("scale_x", "f4"),      # Score map spatial scale x (Format 2.1+)
+    ("scale_y", "f4"),      # Score map spatial scale y (Format 2.1+)
+    ("offset_x", "f4"),     # Score map spatial offset x in pixels (Format 2.1+)
+    ("offset_y", "f4"),     # Score map spatial offset y in pixels (Format 2.1+)
 ])
 ```
 
@@ -1017,6 +1086,10 @@ label_image_score_map_index_dtype = np.dtype([
     ("data_end", "u8"),     # End byte offset into /label_image_score_maps
     ("height", "u4"),       # Score map height in pixels
     ("width", "u4"),        # Score map width in pixels
+    ("scale_x", "f4"),      # Score map spatial scale x (Format 2.1+)
+    ("scale_y", "f4"),      # Score map spatial scale y (Format 2.1+)
+    ("offset_x", "f4"),     # Score map spatial offset x in pixels (Format 2.1+)
+    ("offset_y", "f4"),     # Score map spatial offset y in pixels (Format 2.1+)
 ])
 ```
 
@@ -1056,6 +1129,10 @@ label_image_dtype = np.dtype([
     ("data_end", "u8"),       # End byte offset into /label_image_data
     ("is_predicted", "u1"),   # 0 = UserLabelImage, 1 = Predicted (Format 1.9+)
     ("score", "f4"),          # Confidence score (NaN for user) (Format 1.9+)
+    ("scale_x", "f4"),        # Spatial scale x (1.0 = native res) (Format 2.1+)
+    ("scale_y", "f4"),        # Spatial scale y (1.0 = native res) (Format 2.1+)
+    ("offset_x", "f4"),       # Spatial offset x in pixels (Format 2.1+)
+    ("offset_y", "f4"),       # Spatial offset y in pixels (Format 2.1+)
 ])
 ```
 
@@ -1065,10 +1142,11 @@ Each object within a label image is described by a row in `/label_image_objects`
 
 ```python
 label_image_object_dtype = np.dtype([
-    ("label_id", "i4"),    # Pixel label value in the image data
-    ("track", "i4"),       # Track index (-1 if none)
-    ("instance", "i4"),    # Instance index (-1 if none)
-    ("score", "f4"),       # Per-object confidence score (Format 1.9+)
+    ("label_id", "i4"),       # Pixel label value in the image data
+    ("track", "i4"),          # Track index (-1 if none)
+    ("instance", "i4"),       # Instance index (-1 if none)
+    ("score", "f4"),          # Per-object confidence score (Format 1.9+)
+    ("tracking_score", "f4"), # Tracking link confidence (NaN if unset)
 ])
 ```
 
@@ -1187,6 +1265,16 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - String metadata (`category`, `name`, `source`) stored as vlen string datasets within the group
 - The reader auto-detects whether `/bboxes` is a group (format 2.0+) or a dataset (legacy 1.7--1.9) and handles both transparently
 
+### Format 2.1
+
+**Multi-resolution spatial metadata for dense annotations.**
+
+- Added `scale_x`, `scale_y`, `offset_x`, `offset_y` (`f4`) fields to `mask_dtype`, `label_image_dtype`, `mask_score_map_index_dtype`, and `label_image_score_map_index_dtype`
+- Lets a [`SegmentationMask`][sleap_io.SegmentationMask] or [`LabelImage`][sleap_io.LabelImage] describe pixel data at half resolution, quarter resolution, or any spatial offset/scale relative to the source video
+- A `(scale, offset)` of `((1.0, 1.0), (0.0, 0.0))` means native resolution; e.g., `stride=2` constructors set `scale=(0.5, 0.5)` for half-resolution masks
+- Triggered automatically when any mask or label image has non-trivial spatial transform; otherwise the format remains 1.x or 2.0
+- Backward compatible: older readers ignore the new fields; writers always emit them but set defaults for unset cases
+
 ### Format 2.2 (Current)
 
 **Chunked label image storage and lazy loading.**
@@ -1199,6 +1287,10 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - New [`LabelImageWriter`][sleap_io.LabelImageWriter] enables streaming writes with constant memory
 - New [`merge_label_images()`][sleap_io.merge_label_images] copies raw compressed chunks between files (zero decompression for chunked sources)
 - Backward compatible: old files (v1.8-v2.1) remain fully readable; `data_start`/`data_end` fields are unused (set to 0) in chunked format
+
+### Browser-side compatibility (h5wasm / sleap-io.js)
+
+[`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so it stores the `points`, `pred_points`, `instances`, and `frames` datasets as **flat 2D arrays** with the same per-row field layout as the structured dtype. The Python reader in v0.7.0 detects this representation (via shape and dataset attributes) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without requiring a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
 
 ## API
 

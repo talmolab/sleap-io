@@ -7,11 +7,11 @@
 The core data structures form a layered hierarchy:
 
 - **[`Labels`](#sleap_io.Labels)** is the top-level container: it owns everything in a project.
-- **[`LabeledFrame`](#sleap_io.LabeledFrame)** groups all annotations for one frame of one video.
+- **[`LabeledFrame`](#sleap_io.LabeledFrame)** groups all annotations for one frame of one video — pose [`instances`](poses.md), [`centroids`](regions.md), [`bboxes`](regions.md), [`masks`](regions.md), [`label_images`](regions.md), and [`rois`](regions.md).
 - **[`SuggestionFrame`](#sleap_io.SuggestionFrame)** is a lightweight pointer to frames suggested for annotation (no instance data).
 - **[`LabelsSet`](#sleap_io.LabelsSet)** manages named collections of `Labels` (e.g., train/val/test splits).
 
-The hierarchy flows as **Labels -> LabeledFrame -> [`Instance`](poses.md)**. `Labels` also holds shared objects ([videos](video.md), [skeletons](poses.md), [tracks](poses.md)) that are referenced by frames and instances, so each object is stored once and reused throughout the project.
+The hierarchy flows as **Labels -> LabeledFrame -> [`Instance`](poses.md)** (or any spatial annotation type). `Labels` also holds shared objects ([videos](video.md), [skeletons](poses.md), [tracks](poses.md), [identities](3d.md#identity), and `static_rois` for video-level ROIs) that are referenced by frames and instances, so each object is stored once and reused throughout the project. Flat read-only views like `labels.centroids`, `labels.bboxes`, `labels.masks`, `labels.label_images`, and `labels.rois` flatten the per-frame annotations across every `LabeledFrame` for convenient iteration.
 
 ---
 
@@ -183,8 +183,10 @@ Convert all tracked instances to a NumPy array for numerical analysis:
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
 >>> labels = sio.Labels(labeled_frames=[lf])
 >>> trx = labels.numpy()
->>> print(trx.shape)  # (n_frames, n_tracks, n_nodes, 2)
+>>> print(trx.shape)  # (n_frames, n_tracks, n_nodes, 2); n_frames == len(video) in v0.7.0
 ```
+
+In v0.7.0, the frame dimension equals `len(video)` instead of `last_labeled_frame + 1` (PR #368). Frames past the last labeled frame are NaN-padded. Code that previously sized downstream arrays from this shape may need updating.
 
 !!! note "See also"
 
@@ -221,16 +223,31 @@ new_skeleton = sio.Skeleton(["HEAD", "BODY", "TAIL"])
 labels.replace_skeleton(new_skeleton)
 ```
 
-**Adding spatial annotations** to a frame by appending to its annotation lists:
+**Adding spatial annotations** to a frame by appending to its annotation lists. `LabeledFrame.append()` dispatches by type, routing each annotation into the correct list (`instances`, `centroids`, `bboxes`, `masks`, `label_images`, or `rois`):
 
 ```python
-lf = labels.get(video, 0)  # get or create LabeledFrame for frame 0
-lf.append(sio.UserCentroid(x=100, y=200))
-lf.append(sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60))
-lf.append(mask)
-lf.append(label_image)
-lf.append(roi)
+lf = labels.get_frame(video, frame_idx=0)  # O(1) frame lookup
+lf.append(sio.UserCentroid(x=100, y=200))         # → lf.centroids
+lf.append(sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60))  # → lf.bboxes
+lf.append(mask)                                    # → lf.masks
+lf.append(label_image)                             # → lf.label_images
+lf.append(roi)                                     # → lf.rois
 ```
+
+**Cleaning up unused state** with [`Labels.clean()`](#sleap_io.Labels.clean): removes empty frames, unused tracks, unused skeletons, and orphaned annotations whose track is no longer present. As of v0.7.0, frames that contain any annotation type (centroids, bboxes, masks, label_images, rois) are preserved even if they have no pose instances — only frames with zero annotations of any kind are dropped.
+
+```python
+labels.clean()  # remove empty frames + unused tracks/skeletons + orphan annotations
+```
+
+**Static ROIs** (video-level regions, e.g. arena boundaries) live on `labels.static_rois` instead of inside a `LabeledFrame`. The list is mutable, so you can append to it directly:
+
+```python
+arena = sio.UserROI(geometry=polygon, video=video, category="arena")
+labels.static_rois.append(arena)
+```
+
+**Closing lazy file handles** with `labels.close()`: when a labels file was loaded with `lazy=True` and contains chunked label image data, h5py file handles are kept open for on-demand decompression. Call `close()` to release them when finished.
 
 !!! note "See also"
 
