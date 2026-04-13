@@ -42,24 +42,27 @@ properties. The four geometry types can be converted between each other
 ## Working with annotations in frames
 
 Since annotations are nested in [`LabeledFrame`](labels.md), you add them
-directly to a frame's annotation lists.
+directly to a frame's annotation lists. [`LabeledFrame.append`][sleap_io.LabeledFrame.append] dispatches on the runtime type of the annotation and pushes it onto the correct per-type list — you never have to touch `lf.instances`, `lf.bboxes`, `lf.centroids`, `lf.masks`, `lf.label_images`, or `lf.rois` directly.
 
 ```pycon
+>>> import numpy as np
 >>> import sleap_io as sio
+>>> from shapely.geometry import box
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0)
->>> bbox = sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60)
->>> lf.append(bbox)
->>> centroid = sio.UserCentroid(x=100, y=200)
->>> lf.append(centroid)
+>>> lf.append(sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60))  # → lf.bboxes
+>>> lf.append(sio.UserCentroid(x=100, y=200))                    # → lf.centroids
+>>> lf.append(sio.UserSegmentationMask.from_numpy(np.zeros((8, 8), bool)))  # → lf.masks
+>>> lf.append(sio.UserLabelImage.from_numpy(np.zeros((8, 8), int)))         # → lf.label_images
+>>> lf.append(sio.UserROI(geometry=box(0, 0, 10, 10)))            # → lf.rois
 >>> labels = sio.Labels(labeled_frames=[lf])
->>> print(len(labels.centroids))
->>> print(len(labels.bboxes))
+>>> print(len(labels.centroids), len(labels.bboxes))
+>>> print(len(labels.masks), len(labels.label_images), len(labels.rois))
 
 ```
 
 The `labels.centroids`, `labels.bboxes`, `labels.masks`, `labels.label_images`,
-and `labels.rois` properties return flattened views across all frames.
+and `labels.rois` properties return flattened read-only views across all frames. Static, video-level ROIs (with no frame association) live separately on [`Labels.static_rois`][sleap_io.Labels.static_rois] — see [Static vs. temporal ROIs](#static-vs-temporal-rois) below.
 
 ---
 
@@ -72,6 +75,9 @@ pose skeletons are not needed. `Centroid` is abstract — use [`UserCentroid`][s
 
 Centroids support optional 3D coordinates (`z`), interconversion with
 single-node [`Instance`](poses.md) objects, and the same track/instance metadata as other annotation types.
+
+!!! tip "Importing TrackMate detections"
+    `PredictedCentroid(source="trackmate")` is the canonical representation for TrackMate (ImageJ/Fiji) point tracking results. Load spot exports directly with [`sio.load_trackmate`][sleap_io.load_trackmate] or let [`sio.load_file`][sleap_io.load_file] auto-detect the format from the CSV header. See [Formats → TrackMate](../formats/trackmate.md) for the full schema.
 
 ### Direct construction
 
@@ -169,6 +175,9 @@ Every centroid can carry optional metadata:
 | `name`      | `str`              | Human-readable name                          |
 | `source`    | `str`              | How the centroid was computed (e.g., `"center_of_mass"`) |
 
+!!! tip "Rendering"
+    Centroids compose with pose rendering in [`sio.render_image`][sleap_io.render_image] / [`sio.render_video`][sleap_io.render_video] and are listed in [Rendering → Segmentation Overlays](../rendering.md#segmentation-overlays). For standalone canvases, pair [`sio.draw_bboxes`][sleap_io.draw_bboxes] with `Centroid.to_instance()` or use the pose drawing helpers directly.
+
 ---
 
 ## Bounding boxes
@@ -264,10 +273,14 @@ Every bounding box can carry optional metadata:
 | Field       | Type               | Description                                  |
 | ----------- | ------------------ | -------------------------------------------- |
 | `track`     | [`Track`](poses.md) `\| None`    | Tracking identity across frames              |
+| `tracking_score` | `float \| None` | Confidence of track identity assignment    |
 | `instance`  | [`Instance`](poses.md) `\| None` | Linked pose instance                         |
 | `category`  | `str`              | Class label (e.g., `"mouse"`)                |
 | `name`      | `str`              | Human-readable name                          |
 | `source`    | `str`              | Annotation source identifier                 |
+
+!!! tip "Rendering"
+    Use [`sio.draw_bboxes`][sleap_io.draw_bboxes] to composite bounding boxes onto an image, or pass `bboxes` to [`sio.render_image`][sleap_io.render_image] / [`sio.render_video`][sleap_io.render_video]. See [Rendering → Segmentation Overlays](../rendering.md#segmentation-overlays).
 
 ---
 
@@ -282,6 +295,21 @@ rectangle. `ROI` is abstract — use [`UserROI`][sleap_io.UserROI] or [`Predicte
 ### Static vs. temporal ROIs
 
 ROIs can be **static** (applying to all frames of a video) or **frame-bound** (attached to a specific `LabeledFrame`). Static ROIs are stored in `Labels.static_rois` and have a `video` attribute. Frame-bound ROIs are stored on individual `LabeledFrame.rois` lists.
+
+Adding a static ROI to a dataset is a direct list append:
+
+```pycon
+>>> import sleap_io as sio
+>>> from shapely.geometry import box
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> labels = sio.Labels(videos=[video])
+>>> arena = sio.UserROI(geometry=box(10, 10, 100, 100), video=video)
+>>> labels.static_rois.append(arena)
+>>> print(len(labels.static_rois))
+
+```
+
+Frame-bound ROIs use `LabeledFrame.append(roi)` and participate in the O(1) per-frame accessors (`lf.rois`).
 
 ### From polygon coordinates
 
@@ -395,6 +423,23 @@ predictions. `PredictedROI` adds a `score` field for confidence:
 
 ```
 
+### Metadata fields
+
+Every ROI can carry optional metadata:
+
+| Field       | Type               | Description                                  |
+| ----------- | ------------------ | -------------------------------------------- |
+| `video`     | [`Video`](video.md) `\| None` | Associated video — set for static ROIs, `None` for frame-bound ROIs |
+| `track`     | [`Track`](poses.md) `\| None`    | Tracking identity across frames              |
+| `tracking_score` | `float \| None` | Confidence of track identity assignment    |
+| `instance`  | [`Instance`](poses.md) `\| None` | Linked pose instance                         |
+| `category`  | `str`              | Class label (e.g., `"arena"`)                |
+| `name`      | `str`              | Human-readable name                          |
+| `source`    | `str`              | Annotation source identifier                 |
+
+!!! tip "Rendering"
+    Use [`sio.draw_rois`][sleap_io.draw_rois] to composite ROIs onto an image, or pass them to [`sio.render_image`][sleap_io.render_image]. The ROI stroke/fill colors follow the same palette options as other overlays. See [Rendering → Segmentation Overlays](../rendering.md#segmentation-overlays).
+
 ---
 
 ## Segmentation masks
@@ -499,6 +544,70 @@ and optional `score_map` fields:
 The `score_map` field is an optional dense `float32` array of shape `(H, W)`
 providing pixel-level confidence. It is stored separately in the SLP format
 using zlib compression to avoid bloating files.
+
+### Multi-resolution masks
+
+Segmentation masks stored at lower resolution — e.g., from a model that
+downsamples inputs, or a cropped tile extracted from a larger image — can carry
+spatial metadata so they round-trip losslessly into image-pixel space.
+
+`SegmentationMask.scale` is a `(sx, sy)` scale factor and `offset` is an
+`(x, y)` pixel shift. Together they define the transform
+`image_coord = mask_coord / scale + offset`. Use the `stride=` convenience
+argument to set an isotropic downsample ratio, or pass `offset=` directly:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> half_res = np.zeros((240, 320), dtype=bool)
+>>> half_res[60:120, 80:180] = True
+>>> mask = sio.UserSegmentationMask.from_numpy(half_res, stride=2)
+>>> print(mask.scale)  # (0.5, 0.5) — equivalent to stride=2
+>>> print(mask.bbox)   # bbox is returned in full-image coordinates
+
+```
+
+Crop-space masks (e.g., from a detector that processes `(H, W)` tiles) use the
+`offset=` kwarg — `mask.bbox` then maps back into image-pixel space without any
+extra math on your side:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> crop = np.zeros((50, 50), dtype=bool)
+>>> crop[10:30, 15:40] = True
+>>> mask = sio.UserSegmentationMask.from_numpy(crop, offset=(100.0, 200.0))
+>>> print(mask.offset)
+>>> print(mask.bbox)  # offset + extent → image coordinates
+
+```
+
+Call `mask.resampled(target_height, target_width)` to materialize the mask at a
+new resolution while preserving its spatial metadata for further transforms.
+
+!!! note "Also on `LabelImage`"
+    The same `scale` / `offset` / `resampled()` convention applies to
+    [`LabelImage`](#label-images) — a single `LabelImage` can carry a whole
+    frame's worth of objects at a downsampled resolution, with the object-id
+    metadata mapping back to full-image pixel space via the same transform.
+
+### Metadata fields
+
+Every segmentation mask can carry optional metadata:
+
+| Field            | Type               | Description                                  |
+| ---------------- | ------------------ | -------------------------------------------- |
+| `track`          | [`Track`](poses.md) `\| None`    | Tracking identity across frames              |
+| `tracking_score` | `float \| None`    | Confidence of track identity assignment      |
+| `instance`       | [`Instance`](poses.md) `\| None` | Linked pose instance                         |
+| `scale`          | `tuple[float, float]` | `(sx, sy)` spatial scale (default `(1, 1)`) |
+| `offset`         | `tuple[float, float]` | `(x, y)` pixel offset (default `(0, 0)`)    |
+| `category`       | `str`              | Class label (e.g., `"neuron"`)              |
+| `name`           | `str`              | Human-readable name                          |
+| `source`         | `str`              | Annotation source identifier                 |
+
+!!! tip "Rendering"
+    Use [`sio.draw_masks`][sleap_io.draw_masks] to composite a sequence of segmentation masks onto an image, or include them in [`sio.render_image`][sleap_io.render_image] / [`sio.render_video`][sleap_io.render_video] overlays. See [Rendering → Segmentation Overlays](../rendering.md#segmentation-overlays).
 
 ---
 
@@ -900,6 +1009,9 @@ category string merge into one pixel value per frame:
 ```python
 sio.normalize_label_ids(labels.label_images, by="category")
 ```
+
+!!! tip "Rendering"
+    Use [`sio.draw_label_image`][sleap_io.draw_label_image] to composite a single `LabelImage` onto an arbitrary image, or pass `overlay=label_stack_or_image` to [`sio.render_image`][sleap_io.render_image] / [`sio.render_video`][sleap_io.render_video]. See [Rendering → Segmentation Overlays](../rendering.md#segmentation-overlays) for the full overlay pipeline.
 
 ### Lazy loading
 

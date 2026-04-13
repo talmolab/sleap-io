@@ -797,6 +797,13 @@ sio render --images frames/ --overlay masks.tif -o output.mp4
 
 # Overlay-only with TIFF stack images
 sio render --images frames.tif --overlay masks/ --overlay-outline -o output.mp4
+
+# Color overlay with a specific palette
+sio render -i predictions.slp --overlay masks.tif --overlay-palette tableau10
+
+# Discover palettes and named colors
+sio render --list-palettes
+sio render --list-colors
 ```
 
 ---
@@ -833,22 +840,22 @@ sio render --images frames.tif --overlay masks/ --overlay-outline -o output.mp4
       show_root_heading: true
       heading_level: 3
 
-::: sleap_io.rendering.draw_label_image
+::: sleap_io.draw_label_image
     options:
       show_root_heading: true
       heading_level: 3
 
-::: sleap_io.rendering.draw_masks
+::: sleap_io.draw_masks
     options:
       show_root_heading: true
       heading_level: 3
 
-::: sleap_io.rendering.draw_bboxes
+::: sleap_io.draw_bboxes
     options:
       show_root_heading: true
       heading_level: 3
 
-::: sleap_io.rendering.draw_rois
+::: sleap_io.draw_rois
     options:
       show_root_heading: true
       heading_level: 3

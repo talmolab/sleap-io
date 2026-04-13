@@ -102,6 +102,18 @@ The full list of supported extensions is available via `Video.EXTS`:
 >>> print(sio.Video.EXTS)
 ```
 
+!!! info "Norpix `.seq` extras"
+    The `SeqVideo` backend exposes per-frame timestamps and an auto-computed FPS derived from the timestamp stream (handy when the header FPS is wrong, as is common for high-speed recordings):
+
+    ```python
+    video = sio.load_video("recording.seq")
+    seq = video.backend   # SeqVideo
+    print(seq.fps)                  # auto-computed from timestamps
+    ts = seq.get_timestamps()       # seconds-since-epoch, shape (num_frames,)
+    ```
+
+    `sio show recording.seq` surfaces the Norpix header (codec, bit depth, description, FPS), and `sio reencode recording.seq -o recording.mp4` uses the Python path to transcode.
+
 For media videos, you can choose which reading plugin to use:
 
 ```python

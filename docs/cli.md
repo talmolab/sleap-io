@@ -449,6 +449,12 @@ sio convert labels.slp -o annotations.json --to coco
 
 # Convert COCO to SLEAP
 sio convert annotations.json -o labels.slp --from coco
+
+# Convert TrackMate spot data to SLEAP (auto-detected from headers)
+sio convert spots.csv -o labels.slp
+
+# Explicit TrackMate import (skips content sniffing)
+sio convert spots.csv -o labels.slp --from trackmate
 ```
 
 ### Options
@@ -468,7 +474,7 @@ sio convert annotations.json -o labels.slp --from coco
 
 ### Supported Formats
 
-**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `csv`, `ultralytics`, `leap`
+**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `csv`, `trackmate`, `ultralytics`, `leap`
 
 **Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`, `analysis_h5`
 
@@ -481,9 +487,11 @@ The CLI automatically detects formats from file extensions:
 | `.slp` | SLEAP | SLEAP |
 | `.nwb` | NWB | NWB |
 | `.mat` | LEAP | - |
-| `.csv` | DeepLabCut | CSV |
+| `.csv` | TrackMate or DeepLabCut (auto-detected from headers) | CSV |
 | `.h5` / `.hdf5` | (ambiguous) | Analysis HDF5 |
 | Directory with `data.yaml` | Ultralytics | Ultralytics |
+
+For `.csv` inputs, the CLI first sniffs the file header: TrackMate spots exports are detected via their `LABEL,ID,TRACK_ID,...` schema, otherwise DeepLabCut multi-index headers are matched, and everything else falls back to the generic `csv` reader. Pass `--from trackmate` or `--from dlc` to bypass sniffing.
 
 **Ambiguous extensions** (`.json`, `.h5`) require explicit `--from`:
 
@@ -1739,6 +1747,8 @@ sio render <input> --lf <index> [-o <output>] [options]
 
 **Image mode**: Renders a single frame to a PNG image. Use `--lf` or `--frame`.
 
+**Overlay-only mode**: Render segmentation overlays on external images without a labels file. Pass `--images` with a TIFF stack or directory of TIFFs plus `--overlay` to drop straight into rendering, bypassing the labels requirement. See [Segmentation Overlays](#segmentation-overlays) below.
+
 ### Basic Usage
 
 ```bash
@@ -1760,6 +1770,12 @@ sio render predictions.slp --lf 0               # -> predictions.lf=0.png
 # Render without source video (solid background)
 sio render predictions.slp --background black
 sio render predictions.slp --background "#333"
+
+# Overlay a segmentation mask on rendered poses
+sio render predictions.slp --overlay masks.tif --overlay-alpha 0.4
+
+# Overlay-only mode: render masks on images without a labels file
+sio render --images frames/ --overlay masks.tif -o output.mp4
 ```
 
 ### Options Reference
@@ -1768,9 +1784,11 @@ sio render predictions.slp --background "#333"
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `-i, --input` | (required) | Input labels file (can also pass as positional argument) |
+| `-i, --input` | (required in video/image mode) | Input labels file (can also pass as positional argument). Not required when `--images` + `--overlay` are used (overlay-only mode). |
 | `-o, --output` | auto | Output path. Default: `{input}.viz.mp4` for video, `{input}.lf={N}.png` for image |
 | `--background` | video | Background mode: `video` (load frames) or a color (e.g., `black`, `#333`) |
+| `--images` | none | Image source for overlay-only mode (no labels file needed): TIFF stack or directory of TIFFs |
+| `--images-stack` / `--no-images-stack` | auto | Force 3-D TIFF interpretation: `--images-stack` treats the file as a frame stack, `--no-images-stack` as a single image. Default auto-detects based on last dim (3 or 4 → single image, otherwise → stack). |
 
 #### Frame Selection Options
 
@@ -1805,6 +1823,26 @@ sio render predictions.slp --background "#333"
 | `--alpha` | 1.0 | Pose overlay transparency (0.0-1.0) |
 | `--no-nodes` | false | Hide node markers |
 | `--no-edges` | false | Hide skeleton edges |
+
+#### Overlay Options
+
+See [Segmentation Overlays](#segmentation-overlays) for end-to-end examples.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--overlay` | none | Segmentation overlay: TIFF file (2-D label image or 3-D stack) or directory of TIFF label images |
+| `--overlay-alpha` | 0.3 | Overlay opacity (0.0–1.0) |
+| `--overlay-palette` | distinct | Color palette for overlay labels |
+| `--overlay-outline` / `--no-overlay-outline` | off | Draw outlines around segmented regions |
+| `--overlay-outline-width` | 1 | Outline width in pixels |
+| `--overlay-outline-color` | (darkened fill) | Outline color (e.g., `white`, `#ff0000`, `255,0,0`) |
+
+#### Discovery Options
+
+| Option | Description |
+|--------|-------------|
+| `--list-colors` | Print available named colors and exit |
+| `--list-palettes` | Print available color palettes and exit |
 
 #### Crop Options (Single Image Only)
 
@@ -1981,6 +2019,38 @@ sio render predictions.slp --no-nodes
 # Show only nodes (no skeleton edges)
 sio render predictions.slp --no-edges
 ```
+
+### Segmentation Overlays
+
+`sio render` can composite segmentation masks over poses or over bare images. Overlays accept a TIFF stack (one frame per plane) or a directory of per-frame TIFF label images, and each integer label is colored via `--overlay-palette`.
+
+```bash
+# Segmentation overlay from a TIFF stack on top of pose predictions
+sio render predictions.slp --overlay masks.tif --overlay-alpha 0.4
+
+# Overlay from a directory of per-frame TIFFs
+sio render predictions.slp --overlay masks/
+
+# Single-frame PNG with overlay and outlines
+sio render predictions.slp --lf 0 --overlay masks.tif \
+    --overlay-outline --overlay-outline-color white
+
+# Overlay-only mode: no labels file, just images + masks
+sio render --images frames/ --overlay masks.tif -o output.mp4
+
+# Overlay-only with a TIFF stack of images
+sio render --images frames.tif --overlay masks/ --overlay-outline -o output.mp4
+
+# Tweak outline thickness and palette
+sio render predictions.slp --overlay masks.tif \
+    --overlay-palette tableau10 \
+    --overlay-outline --overlay-outline-width 2
+```
+
+!!! tip "Discovering palettes"
+    Use `sio render --list-palettes` to print all supported palette names (for both pose and overlay coloring) or `sio render --list-colors` for the named-color table used by `--background`, `--overlay-outline-color`, and similar options.
+
+See [Rendering → Segmentation Overlays](rendering.md#segmentation-overlays) for Python API equivalents.
 
 ### Multi-Video Labels
 
@@ -2168,6 +2238,7 @@ This creates:
 - **HDF5Video** (embedded videos in `.slp` files): Reencoded using Python path
 - **ImageVideo** (image sequences): Skipped (cannot be reencoded to video)
 - **TiffVideo** (TIFF stacks): Skipped (cannot be reencoded to video)
+- **SeqVideo** (Norpix `.seq` files): Reencoded using the Python path (falls back when ffmpeg cannot open the source)
 
 This is particularly useful for:
 

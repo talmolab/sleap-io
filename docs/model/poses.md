@@ -178,6 +178,29 @@ Create an instance with no visible points (all coordinates are unset):
     [`LabeledFrame`](labels.md#labeled-frames) and [`Labels`](labels.md#labels).
     See the [Labels & Frames](labels.md) page for the full picture.
 
+### Centroid integration
+
+A pose `Instance` can be summarized as a single point without losing its metadata. [`Instance.centroid_xy`][sleap_io.Instance.centroid_xy] returns the `(x, y)` of the visible landmarks, and [`Instance.to_centroid()`][sleap_io.Instance.to_centroid] produces a full [`UserCentroid`][sleap_io.UserCentroid] (or [`PredictedCentroid`][sleap_io.PredictedCentroid] for a `PredictedInstance`) carrying the same track, category, and confidence metadata.
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 20], [30, 40], [50, 60]]),
+...     skeleton=skeleton,
+... )
+>>> print(inst.centroid_xy)       # (mean_x, mean_y) of the visible points
+>>> c = inst.to_centroid()
+>>> print(type(c).__name__, c.xy)
+
+```
+
+Centroids can be turned back into single-node instances with
+[`Centroid.to_instance`][sleap_io.Centroid.to_instance], so the two
+representations are fully interchangeable. See
+[Regions → Centroids](regions.md#centroids) for the full data model.
+
 ---
 
 ## Predicted instances
@@ -233,6 +256,9 @@ as belonging to the same individual.
     `Track` objects are compared by **identity** (not by name). Two different
     `Track("mouse")` objects are considered distinct: this allows multiple
     tracks with the same display name if needed.
+
+!!! tip "Track vs. Identity"
+    `Track` is a **per-video** temporal trajectory — it links instances in consecutive frames of the same recording and disappears when the tracker loses its target. [`Identity`](3d.md#identity) is a **cross-session** persistent label for the same animal across recordings, sessions, and multi-view setups. In multi-view workflows, multiple per-camera `Track`s typically map to a single `Identity` through [`InstanceGroup.identity`](3d.md#instance-group).
 
 ---
 
