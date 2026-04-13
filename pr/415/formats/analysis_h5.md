@@ -4,7 +4,7 @@ The SLEAP Analysis HDF5 format is a portable format for exporting pose tracking 
 
 !!! warning "Shape change in v0.7.0"
 
-    The frame dimension of every array in this file is now `n_frames == len(video)`, not `last_labeled_frame + 1` as in v0.6.x. Frames past the last labeled frame are filled with `NaN` for pose coordinates and `False` for track occupancy. Code that sized downstream arrays from the exported shape may need to account for the new longer arrays. See [Migration Notes](https://github.com/talmolab/sleap-io/blob/main/CHANGELOG.md#migration-notes) (PR #368).
+    The frame dimension of every array in this file is now `n_frames == len(video)`, not `last_labeled_frame + 1` as in v0.6.x. Frames past the last labeled frame are filled with `NaN` for pose coordinates and `False` for track occupancy. Code that sized downstream arrays from the exported shape (e.g. `array.shape[0] == last_labeled_frame + 1`) may need to be updated to account for the new longer arrays (PR #368).
 
 ## Overview
 
