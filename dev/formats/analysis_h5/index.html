@@ -3282,6 +3282,10 @@
 <div class="md-source-file"><a href="../analysis_h5.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="analysis-hdf5-format">Analysis HDF5 Format<a class="headerlink" href="#analysis-hdf5-format" title="Permanent link">&para;</a></h1>
 <p>The SLEAP Analysis HDF5 format is a portable format for exporting pose tracking predictions as dense numpy arrays. This format is designed for easy loading in MATLAB and Python analysis pipelines.</p>
+<div class="admonition warning">
+<p class="admonition-title">Shape change in v0.7.0</p>
+<p>The frame dimension of every array in this file is now <code>n_frames == len(video)</code>, not <code>last_labeled_frame + 1</code> as in v0.6.x. Frames past the last labeled frame are filled with <code>NaN</code> for pose coordinates and <code>False</code> for track occupancy. Code that sized downstream arrays from the exported shape (e.g. <code>array.shape[0] == last_labeled_frame + 1</code>) may need to be updated to account for the new longer arrays (PR #368).</p>
+</div>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>Analysis HDF5 files contain:</p>
 <ul>
@@ -3313,7 +3317,7 @@
 <a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>├── video_path                # Dataset: Source video path
 <a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│
 <a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>├── @format                   # Attribute: &quot;analysis&quot; (format identifier)
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>├── @sleap_io_version         # Attribute: Format version (e.g., &quot;1.0&quot;)
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>├── @sleap_io_version         # Attribute: sleap-io package version
 <a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>├── @preset                   # Attribute: Axis ordering preset
 <a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>├── @provenance               # Attribute: Source file provenance (JSON)
 <a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>├── @skeleton_name            # Attribute: Skeleton name
@@ -3361,6 +3365,7 @@
 </tr>
 </tbody>
 </table>
+<p>In v0.7.0, <code>n_frames == len(video)</code> — the full video duration, not the number of labeled frames.</p>
 <p><strong>MATLAB usage:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">data</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nb">h5read</span><span class="p">(</span><span class="s">&#39;analysis.h5&#39;</span><span class="p">,</span><span class="w"> </span><span class="s">&#39;/tracks&#39;</span><span class="p">);</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c">% Access frame 10, track 1, node 3: data(1, :, 3, 10) -&gt; [x, y]</span>
@@ -3613,7 +3618,7 @@
 <tr>
 <td><code>sleap_io_version</code></td>
 <td>string</td>
-<td>Format version (e.g., <code>"1.0"</code>)</td>
+<td>sleap-io package version that wrote the file</td>
 </tr>
 <tr>
 <td><code>preset</code></td>
@@ -3647,6 +3652,10 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title"><code>sleap_io_version</code> is a provenance stamp, not a format gate</p>
+<p>This attribute records the <code>sleap-io</code> package version that wrote the file (the value of <code>sleap_io.__version__</code> at save time). It is <strong>not</strong> a file-format version — the Analysis HDF5 layout itself is not versioned. Downstream tools should not use this value as a semver gate for structural changes; check the presence of specific datasets or <code>@preset</code> instead.</p>
+</div>
 <h3 id="dataset-attributes">Dataset Attributes<a class="headerlink" href="#dataset-attributes" title="Permanent link">&para;</a></h3>
 <p>Each dataset has a <code>dims</code> attribute containing a JSON-encoded list of dimension names:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;tracks&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;dims&#39;</span><span class="p">]</span>
@@ -3662,7 +3671,7 @@
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Keep only tracks present in &gt;50% of frames</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_analysis_h5</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;filtered.h5&quot;</span><span class="p">,</span> <span class="n">min_occupancy</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
 </code></pre></div>
-<p>Occupancy is calculated as: <code>frames_with_track / total_frames</code></p>
+<p>Occupancy is calculated as: <code>frames_with_track / total_frames</code>, where <code>total_frames == len(video)</code> in v0.7.0. If your dataset has many unlabeled frames at the end of the video, the occupancy denominator will be larger than in v0.6.x and <code>min_occupancy</code> thresholds may need to be lowered correspondingly.</p>
 <h2 id="custom-axis-ordering">Custom Axis Ordering<a class="headerlink" href="#custom-axis-ordering" title="Permanent link">&para;</a></h2>
 <p>For advanced use cases, you can specify explicit dimension positions:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_analysis_h5</span><span class="p">(</span>

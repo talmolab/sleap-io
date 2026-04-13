@@ -3323,7 +3323,7 @@
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">data</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Convert to NumPy array</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Shape: (n_frames, n_tracks, n_nodes, 2)</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Shape: (n_frames, n_tracks, n_nodes, 2); n_frames == len(video) in v0.7.0</span>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">tracks</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
 <a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Convert to pandas DataFrame</span>
@@ -3383,13 +3383,20 @@
 <a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>                    <span class="s2">&quot;score&quot;</span><span class="p">:</span> <span class="mf">0.91</span>
 <a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>                <span class="p">}</span>
 <a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>            <span class="p">]</span>
-<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a>        <span class="p">}</span>
-<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a>    <span class="p">],</span>
-<a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>    <span class="s2">&quot;suggestions&quot;</span><span class="p">:</span> <span class="p">[],</span>
-<a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>    <span class="s2">&quot;provenance&quot;</span><span class="p">:</span> <span class="p">{}</span>
-<a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="p">}</span>
+<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a>        <span class="p">},</span>
+<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a>        <span class="p">{</span>
+<a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>            <span class="s2">&quot;frame_idx&quot;</span><span class="p">:</span> <span class="mi">12</span><span class="p">,</span>
+<a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>            <span class="s2">&quot;video_idx&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a>            <span class="s2">&quot;instances&quot;</span><span class="p">:</span> <span class="p">[],</span>
+<a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a>            <span class="s2">&quot;is_negative&quot;</span><span class="p">:</span> <span class="n">true</span>
+<a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a>        <span class="p">}</span>
+<a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a>    <span class="p">],</span>
+<a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a>    <span class="s2">&quot;suggestions&quot;</span><span class="p">:</span> <span class="p">[],</span>
+<a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a>    <span class="s2">&quot;provenance&quot;</span><span class="p">:</span> <span class="p">{}</span>
+<a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a><span class="p">}</span>
 </code></pre></div>
 <p>The dictionary uses index-based references (<code>skeleton_idx</code>, <code>video_idx</code>, <code>track_idx</code>) for compactness. All values are JSON-serializable primitives.</p>
+<p>Frames explicitly marked as containing no instances (negative training examples) are preserved in v0.7.0 via an <code>is_negative: true</code> field on each frame dict — round-tripping through <code>to_dict()</code> / <code>from_dict()</code> no longer drops them (PR #369).</p>
 <p><strong>Parameters:</strong></p>
 <ul>
 <li><code>video</code>: Filter to a specific video (by object or index)</li>
@@ -3438,6 +3445,7 @@
 <a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">tracks</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
 <a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># (n_frames, n_tracks, n_nodes, 2)</span>
 </code></pre></div>
+<p>In v0.7.0, <code>n_frames == len(video)</code> — the full video duration. Frames past the last labeled frame are NaN-padded along all coordinate axes (PR #368). Code that previously assumed <code>tracks.shape[0] == last_labeled_frame + 1</code> may need updating.</p>
 <p><strong>Output array:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Shape: (2, 2, 2, 2)
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>       (n_frames=2, n_tracks=2, n_nodes=2, coords=2)
