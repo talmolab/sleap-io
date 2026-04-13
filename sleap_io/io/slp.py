@@ -5411,7 +5411,7 @@ def _write_labels_lazy(
 
     # Write annotations from lazy store (per-frame dicts + undistributed)
     # Build annotation lists with routing contexts from the lazy store keys
-    def _collect_from_lazy(by_frame, undistributed):
+    def _collect_from_lazy(by_frame, undistributed, videos):
         """Collect annotations and contexts from lazy store dicts."""
         anns = []
         ctxs = []
@@ -5421,23 +5421,35 @@ def _write_labels_lazy(
                 ctxs.append((vid_idx, fidx))
         for ann in undistributed:
             anns.append(ann)
-            ctxs.append((-1, -1))
+            ann_video = getattr(ann, "video", None)
+            if ann_video is not None:
+                try:
+                    vid_idx = videos.index(ann_video)
+                except ValueError:
+                    vid_idx = -1
+            else:
+                vid_idx = -1
+            ctxs.append((vid_idx, -1))
         return anns, ctxs
 
     all_centroids, centroid_ctxs = _collect_from_lazy(
-        lazy_store._centroid_by_frame, lazy_store._undistributed_centroids
+        lazy_store._centroid_by_frame,
+        lazy_store._undistributed_centroids,
+        labels.videos,
     )
     all_bboxes, bbox_ctxs = _collect_from_lazy(
-        lazy_store._bbox_by_frame, lazy_store._undistributed_bboxes
+        lazy_store._bbox_by_frame, lazy_store._undistributed_bboxes, labels.videos
     )
     all_masks, mask_ctxs = _collect_from_lazy(
-        lazy_store._mask_by_frame, lazy_store._undistributed_masks
+        lazy_store._mask_by_frame, lazy_store._undistributed_masks, labels.videos
     )
     all_rois, roi_ctxs = _collect_from_lazy(
-        lazy_store._roi_by_frame, lazy_store._undistributed_rois
+        lazy_store._roi_by_frame, lazy_store._undistributed_rois, labels.videos
     )
     all_label_images, li_ctxs = _collect_from_lazy(
-        lazy_store._label_image_by_frame, lazy_store._undistributed_label_images
+        lazy_store._label_image_by_frame,
+        lazy_store._undistributed_label_images,
+        labels.videos,
     )
     write_rois(labels_path, all_rois, labels.videos, labels.tracks, contexts=roi_ctxs)
     write_masks(

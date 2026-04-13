@@ -690,6 +690,26 @@ def test_negative_frames_materialize(tmp_path):
     assert len(eager_labels.negative_frames) == 1
 
 
+def test_lazy_write_preserves_static_roi_video(tmp_path):
+    """Lazy round-trip must preserve video association on static ROIs."""
+    video = Video(filename="v.mp4")
+    roi = UserROI.from_bbox(0, 0, 100, 100, video=video, category="arena")
+    labels = Labels(videos=[video], rois=[roi])
+
+    p1 = tmp_path / "a.slp"
+    p2 = tmp_path / "b.slp"
+    save_file(labels, p1)
+
+    lazy = load_slp(p1, lazy=True)
+    save_file(lazy, p2)
+
+    reread = load_slp(p2)
+    assert len(reread.static_rois) == 1
+    assert reread.static_rois[0].video is not None
+    assert reread.static_rois[0].video.filename == "v.mp4"
+    assert reread.static_rois[0].category == "arena"
+
+
 def test_write_sessions(slp_multiview, tmp_path):
     labels = read_labels(slp_multiview)
     sessions = labels.sessions
