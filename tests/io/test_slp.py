@@ -710,6 +710,26 @@ def test_lazy_write_preserves_static_roi_video(tmp_path):
     assert reread.static_rois[0].category == "arena"
 
 
+def test_lazy_write_static_roi_without_video(tmp_path):
+    """Lazy round-trip must handle ROIs with no video association (fallback)."""
+    video = Video(filename="v.mp4")
+    anchored = UserROI.from_bbox(0, 0, 10, 10, video=video, category="anchored")
+    orphan = UserROI.from_bbox(20, 20, 30, 30, video=None, category="orphan")
+    labels = Labels(videos=[video], rois=[anchored, orphan])
+
+    p1 = tmp_path / "a.slp"
+    p2 = tmp_path / "b.slp"
+    save_file(labels, p1)
+
+    lazy = load_slp(p1, lazy=True)
+    save_file(lazy, p2)
+
+    reread = load_slp(p2)
+    by_category = {r.category: r for r in reread.static_rois}
+    assert by_category["anchored"].video is reread.videos[0]
+    assert by_category["orphan"].video is None
+
+
 def test_lazy_write_preserves_static_roi_video_multi(tmp_path):
     """Lazy round-trip must pick the correct video index for multi-video labels."""
     video_a = Video(filename="a.mp4")

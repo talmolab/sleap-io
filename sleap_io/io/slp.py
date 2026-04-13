@@ -5421,13 +5421,9 @@ def _write_labels_lazy(
                 ctxs.append((vid_idx, fidx))
         for ann in undistributed:
             anns.append(ann)
-            ann_video = getattr(ann, "video", None)
-            if ann_video is not None:
-                try:
-                    vid_idx = videos.index(ann_video)
-                except ValueError:
-                    vid_idx = -1
-            else:
+            try:
+                vid_idx = videos.index(getattr(ann, "video", None))
+            except ValueError:
                 vid_idx = -1
             ctxs.append((vid_idx, -1))
         return anns, ctxs
