@@ -100,19 +100,30 @@ label_images = sio.PredictedLabelImage.from_stack(
 sio.save_label_images("cellpose_masks.tif", label_images)
 
 # Or save as SLP (preserves tracks, categories, and provenance)
-labeled_frames = [
-    sio.LabeledFrame(video=video, frame_idx=i, label_images=[li])
-    for i, li in enumerate(label_images)
-]
+labeled_frames = []
+for i, li in enumerate(label_images):
+    lf = sio.LabeledFrame(video=video, frame_idx=i)
+    lf.append(li)  # dispatches to lf.label_images
+    labeled_frames.append(lf)
 labels = sio.Labels(labeled_frames=labeled_frames, videos=[video])
 labels.provenance["segmentation_model"] = "cellpose"
 labels.provenance["cellpose_diameter"] = 25
 labels.save("cellpose_masks.slp")
 ```
 
+`lf.append(li)` is the idiomatic way to attach a `LabelImage` to a frame — it routes the annotation onto `lf.label_images` via the type-dispatched [`LabeledFrame.append`][sleap_io.LabeledFrame.append]. Constructing `LabeledFrame(..., label_images=[li])` directly is still supported.
+
 The `from_stack()` method ensures that the same `Track` object is shared across
 frames for a given label ID, which is essential for consistent tracking and
 downstream analysis.
+
+!!! tip "TIFF → SLP follow-ups"
+    - [`sio.normalize_label_ids`][sleap_io.normalize_label_ids] rewrites per-frame label IDs so they are globally consistent across a stack — essential when upstream segmentation assigns different IDs in different frames (e.g., Cellpose without tracking). See [Regions → Normalizing label IDs](../model/regions.md#normalizing-label-ids).
+    - [`sio.merge_label_images`][sleap_io.merge_label_images] concatenates multiple chunked SLP files (e.g., parallel batch segmentation shards) via zero-decompression HDF5 chunk copies. See [Examples → Parallel segmentation pipeline](../examples.md#parallel-segmentation-pipeline).
+    - [`sio.LabelImageWriter`][sleap_io.LabelImageWriter] streams `LabelImage` frames one at a time into SLP with constant memory — ideal for TIFF-stack pipelines that don't fit in memory. See [Regions → Streaming writes](../model/regions.md#streaming-writes).
+
+!!! note "See also"
+    [Formats → COCO Panoptic segmentation](index.md#coco-panoptic-segmentation) — the COCO Panoptic reader/writer uses the same `LabelImage` model, so the same post-processing helpers apply.
 
 ## API
 

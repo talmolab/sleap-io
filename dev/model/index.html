@@ -3133,7 +3133,24 @@
     }
     class InstanceGroup:::threed {
         +instance_by_camera
+        +Instance3D instance_3d
+        +Identity identity
+    }
+    class Identity:::threed {
+        +str name
+        +str color
+    }
+    class Instance3D:::threed {
         +ndarray points
+        +Skeleton skeleton
+    }
+    class PredictedInstance3D:::threed {
+        +ndarray point_scores
+    }
+
+    class LabelImageWriter:::labels {
+        +str filename
+        +add()
     }
 
     class ROI:::regions {
@@ -3213,6 +3230,11 @@
     FrameGroup "1" *-- "0..*" InstanceGroup
     InstanceGroup --&gt; Instance
     InstanceGroup --&gt; Camera
+    InstanceGroup --&gt; Instance3D
+    InstanceGroup --&gt; Identity
+    Instance3D --&gt; Skeleton : uses
+    Instance3D &lt;|-- PredictedInstance3D
+    Labels --&gt; Identity
 
     Centroid &lt;|-- UserCentroid
     Centroid &lt;|-- PredictedCentroid
@@ -3225,6 +3247,8 @@
     LabelImage &lt;|-- UserLabelImage
     LabelImage &lt;|-- PredictedLabelImage
     LabelImage --&gt; SegmentationMask : to_masks()
+    LabelImage --&gt; BoundingBox : to_bboxes()
+    LabelImageWriter --&gt; LabelImage : streams
     LabeledFrame --&gt; Centroid
     LabeledFrame --&gt; BoundingBox
     LabeledFrame --&gt; ROI
@@ -3332,6 +3356,21 @@
 <td>Same animal matched across cameras, with optional 3D points</td>
 </tr>
 <tr>
+<td><a href="3d/#identity"><code>Identity</code></a></td>
+<td><a href="3d/">3D</a></td>
+<td>Cross-session persistent animal identity (distinct from per-video <code>Track</code>)</td>
+</tr>
+<tr>
+<td><a href="3d/#instance3d"><code>Instance3D</code></a></td>
+<td><a href="3d/">3D</a></td>
+<td>Structured triangulated 3D keypoint storage</td>
+</tr>
+<tr>
+<td><a href="3d/#instance3d"><code>PredictedInstance3D</code></a></td>
+<td><a href="3d/">3D</a></td>
+<td>Model-predicted 3D keypoints with per-point scores</td>
+</tr>
+<tr>
 <td><a href="regions/"><code>Centroid</code></a></td>
 <td><a href="regions/">Regions</a></td>
 <td>Abstract base centroid point annotation</td>
@@ -3405,6 +3444,11 @@
 <td><a href="regions/"><code>LabelImage</code></a></td>
 <td><a href="regions/">Regions</a></td>
 <td>Dense integer label image for instance segmentation</td>
+</tr>
+<tr>
+<td><a href="regions/#streaming-writes"><code>LabelImageWriter</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Streaming writer for chunked label image SLP files</td>
 </tr>
 </tbody>
 </table>

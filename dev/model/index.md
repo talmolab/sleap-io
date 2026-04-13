@@ -96,7 +96,24 @@ classDiagram
     }
     class InstanceGroup:::threed {
         +instance_by_camera
+        +Instance3D instance_3d
+        +Identity identity
+    }
+    class Identity:::threed {
+        +str name
+        +str color
+    }
+    class Instance3D:::threed {
         +ndarray points
+        +Skeleton skeleton
+    }
+    class PredictedInstance3D:::threed {
+        +ndarray point_scores
+    }
+
+    class LabelImageWriter:::labels {
+        +str filename
+        +add()
     }
 
     class ROI:::regions {
@@ -176,6 +193,11 @@ classDiagram
     FrameGroup "1" *-- "0..*" InstanceGroup
     InstanceGroup --> Instance
     InstanceGroup --> Camera
+    InstanceGroup --> Instance3D
+    InstanceGroup --> Identity
+    Instance3D --> Skeleton : uses
+    Instance3D <|-- PredictedInstance3D
+    Labels --> Identity
 
     Centroid <|-- UserCentroid
     Centroid <|-- PredictedCentroid
@@ -188,6 +210,8 @@ classDiagram
     LabelImage <|-- UserLabelImage
     LabelImage <|-- PredictedLabelImage
     LabelImage --> SegmentationMask : to_masks()
+    LabelImage --> BoundingBox : to_bboxes()
+    LabelImageWriter --> LabelImage : streams
     LabeledFrame --> Centroid
     LabeledFrame --> BoundingBox
     LabeledFrame --> ROI
@@ -222,6 +246,9 @@ classDiagram
 | [`RecordingSession`](3d.md) | [3D](3d.md) | Multi-camera recording linking cameras to videos |
 | [`FrameGroup`](3d.md) | [3D](3d.md) | Matched labeled frames across views at one time point |
 | [`InstanceGroup`](3d.md) | [3D](3d.md) | Same animal matched across cameras, with optional 3D points |
+| [`Identity`](3d.md#identity) | [3D](3d.md) | Cross-session persistent animal identity (distinct from per-video `Track`) |
+| [`Instance3D`](3d.md#instance3d) | [3D](3d.md) | Structured triangulated 3D keypoint storage |
+| [`PredictedInstance3D`](3d.md#instance3d) | [3D](3d.md) | Model-predicted 3D keypoints with per-point scores |
 | [`Centroid`](regions.md) | [Regions](regions.md) | Abstract base centroid point annotation |
 | [`UserCentroid`](regions.md) | [Regions](regions.md) | Human-annotated centroid |
 | [`PredictedCentroid`](regions.md) | [Regions](regions.md) | Model-predicted centroid with score |
@@ -237,6 +264,7 @@ classDiagram
 | [`UserLabelImage`](regions.md) | [Regions](regions.md) | Human-annotated label image |
 | [`PredictedLabelImage`](regions.md) | [Regions](regions.md) | Model-predicted label image with score |
 | [`LabelImage`](regions.md) | [Regions](regions.md) | Dense integer label image for instance segmentation |
+| [`LabelImageWriter`](regions.md#streaming-writes) | [Regions](regions.md) | Streaming writer for chunked label image SLP files |
 
 !!! tip "Hands-on examples"
 
