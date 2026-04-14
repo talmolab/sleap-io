@@ -490,15 +490,14 @@ def read_labels(
                             )
                         bboxes.append(bbox_obj)
 
-        # Create labeled frame with annotations attached directly
-        if instances or image_id in image_annotations:
-            labeled_frame = LabeledFrame(
-                video=video, frame_idx=frame_idx, instances=instances
-            )
-            labeled_frame.rois.extend(rois)
-            labeled_frame.masks.extend(masks)
-            labeled_frame.bboxes.extend(bboxes)
-            labeled_frames.append(labeled_frame)
+        # Always create a labeled frame so unannotated images are preserved
+        labeled_frame = LabeledFrame(
+            video=video, frame_idx=frame_idx, instances=instances
+        )
+        labeled_frame.rois.extend(rois)
+        labeled_frame.masks.extend(masks)
+        labeled_frame.bboxes.extend(bboxes)
+        labeled_frames.append(labeled_frame)
 
         # Reset per-frame annotation lists
         rois = []
