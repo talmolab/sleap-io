@@ -169,19 +169,18 @@ def load_dlc(
         else:
             instances = _parse_single_animal_row(row, skeleton)
 
-        if instances:
-            # Get the index of this image within its video
-            sorted_video_paths = sorted(
-                video_image_paths[video_name], key=lambda p: frame_map[p]
+        # Get the index of this image within its video
+        sorted_video_paths = sorted(
+            video_image_paths[video_name], key=lambda p: frame_map[p]
+        )
+        video_frame_idx = sorted_video_paths.index(img_path)
+        labeled_frames.append(
+            LabeledFrame(
+                video=videos[video_name],
+                frame_idx=video_frame_idx,
+                instances=instances,
             )
-            video_frame_idx = sorted_video_paths.index(img_path)
-            labeled_frames.append(
-                LabeledFrame(
-                    video=videos[video_name],
-                    frame_idx=video_frame_idx,
-                    instances=instances,
-                )
-            )
+        )
 
     unique_videos = list(videos.values())
 
