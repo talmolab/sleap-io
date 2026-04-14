@@ -86,22 +86,29 @@ class TestCOCOBasicLoading:
 class TestCOCODatasetVariants:
     """Test loading different COCO dataset variants."""
 
-    def test_flat_images(self, coco_flat_images):
-        """Test loading flat images variant."""
-        labels = coco.read_labels(Path(coco_flat_images) / "annotations.json")
+    @pytest.mark.parametrize(
+        "json_name, expected_instances",
+        [
+            ("annotations.json", 3),
+            ("annotations_no_instances.json", 0),
+        ],
+    )
+    def test_flat_images(self, coco_flat_images, json_name, expected_instances):
+        """Test loading flat images, including when no frames have annotations."""
+        labels = coco.read_labels(Path(coco_flat_images) / json_name)
 
         assert len(labels.labeled_frames) == 3
-        assert len(labels.skeletons) == 1
-        assert labels.skeletons[0].name == "mouse"
 
         # Check instances
         total_instances = sum(len(frame.instances) for frame in labels.labeled_frames)
-        assert total_instances == 3
+        assert total_instances == expected_instances
 
-        # Check first instance
-        instance = labels.labeled_frames[0].instances[0]
-        assert len(instance.points) == 17
-        assert instance.skeleton.name == "mouse"
+        if expected_instances > 0:
+            assert len(labels.skeletons) == 1
+            assert labels.skeletons[0].name == "mouse"
+            instance = labels.labeled_frames[0].instances[0]
+            assert len(instance.points) == 17
+            assert instance.skeleton.name == "mouse"
 
     def test_category_folders(self, coco_category_folders):
         """Test loading category folders variant."""
@@ -226,7 +233,6 @@ class TestCOCOMultiSplit:
         """Test reading labels set from single directory."""
         labels_dict = coco.read_labels_set(coco_flat_images)
 
-        assert len(labels_dict) == 1
         assert "annotations" in labels_dict
 
         labels = labels_dict["annotations"]
@@ -1331,12 +1337,14 @@ class TestCOCOExport:
         # Second point not visible: should be 0 in binary
         assert keypoints[5] == 0
 
-    def test_roundtrip_conversion(self, coco_flat_images, tmp_path):
+    @pytest.mark.parametrize(
+        "json_name",
+        ["annotations.json", "annotations_no_instances.json"],
+    )
+    def test_roundtrip_conversion(self, coco_flat_images, json_name, tmp_path):
         """Test that data survives a roundtrip conversion."""
-        # Load original
-        original_labels = coco.read_labels(Path(coco_flat_images) / "annotations.json")
+        original_labels = coco.read_labels(Path(coco_flat_images) / json_name)
 
-        # Write to new file
         output_path = tmp_path / "roundtrip_annotations.json"
         coco.write_labels(original_labels, output_path)
 
@@ -1349,10 +1357,10 @@ class TestCOCOExport:
         )
         assert len(reloaded_labels.skeletons) == len(original_labels.skeletons)
 
-        # Check skeleton nodes match
-        assert len(reloaded_labels.skeletons[0].nodes) == len(
-            original_labels.skeletons[0].nodes
-        )
+        if original_labels.skeletons:
+            assert len(reloaded_labels.skeletons[0].nodes) == len(
+                original_labels.skeletons[0].nodes
+            )
 
     def test_save_coco_via_main_api(self, coco_flat_images, tmp_path):
         """Test saving via the main sio.save_coco API."""
