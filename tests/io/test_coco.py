@@ -1369,10 +1369,10 @@ class TestCOCOExport:
         )
         assert len(reloaded_labels.skeletons) == len(original_labels.skeletons)
 
-        if original_labels.skeletons:
-            assert len(reloaded_labels.skeletons[0].nodes) == len(
-                original_labels.skeletons[0].nodes
-            )
+        # Check skeleton nodes match
+        assert len(reloaded_labels.skeletons[0].nodes) == len(
+            original_labels.skeletons[0].nodes
+        )
 
     def test_save_coco_via_main_api(self, coco_flat_images, tmp_path):
         """Test saving via the main sio.save_coco API."""
