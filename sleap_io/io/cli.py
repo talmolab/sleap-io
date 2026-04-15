@@ -102,6 +102,7 @@ INPUT_FORMATS = [
     "jabs",
     "dlc",
     "csv",
+    "trackmate",
     "ultralytics",
     "leap",
 ]
@@ -124,7 +125,6 @@ EXTENSION_TO_FORMAT = {
     ".slp": "slp",
     ".nwb": "nwb",
     ".mat": "leap",
-    ".csv": "dlc",
 }
 
 # Output extension to format mapping
@@ -1746,6 +1746,16 @@ def _infer_input_format(path: Path) -> str | None:
             return "ultralytics"
         return None
 
+    # CSV requires content-based detection (trackmate vs dlc vs generic)
+    if suffix == ".csv":
+        from sleap_io.io import dlc, trackmate
+
+        if trackmate.is_trackmate_file(str(path)):
+            return "trackmate"
+        elif dlc.is_dlc_file(str(path)):
+            return "dlc"
+        return "csv"
+
     # Check unambiguous extensions
     if suffix in EXTENSION_TO_FORMAT:
         return EXTENSION_TO_FORMAT[suffix]
@@ -1870,7 +1880,8 @@ def convert(
     but can be explicitly specified using --from and --to.
 
     [bold]Supported input formats:[/]
-    slp, nwb, coco, labelstudio, alphatracker, jabs, dlc, ultralytics, leap
+    slp, nwb, coco, labelstudio, alphatracker, jabs, dlc, csv,
+    trackmate, ultralytics, leap
 
     [bold]Supported output formats:[/]
     slp, nwb, coco, labelstudio, jabs, ultralytics, csv, analysis_h5

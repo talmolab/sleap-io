@@ -60,7 +60,7 @@ labels = sio.load_file("predictions.slp")
 labels.save("predictions.nwb")
 
 # Convert to NumPy arrays
-trx = labels.numpy()  # (n_frames, n_tracks, n_nodes, 2)
+trx = labels.numpy()  # (n_frames, n_tracks, n_nodes, 2); n_frames == len(video)
 
 # Merge annotations from multiple sources
 base = sio.load_file("manual_annotations.slp")

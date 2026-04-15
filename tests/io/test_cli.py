@@ -1766,6 +1766,91 @@ def test_infer_input_format_unknown_extension(tmp_path):
     assert result is None
 
 
+def test_infer_input_format_trackmate_csv(tmp_path):
+    """Test _infer_input_format detects TrackMate CSV from content."""
+    from sleap_io.io.cli import _infer_input_format
+
+    spots = tmp_path / "data_spots.csv"
+    spots.write_text(
+        "LABEL,ID,TRACK_ID,QUALITY,POSITION_X,POSITION_Y,POSITION_Z,"
+        "POSITION_T,FRAME,RADIUS,VISIBILITY\n"
+        "Label,Spot ID,Track ID,Quality,X,Y,Z,T,Frame,Radius,Visibility\n"
+        "Label,Spot ID,Track ID,Quality,X,Y,Z,T,Frame,R,Visibility\n"
+        ",,,(quality),(pixel),(pixel),(pixel),(frame),,(pixel),\n"
+        "ID0,0,0,5.0,10.0,20.0,0.0,0.0,0,11.5,1\n"
+    )
+    assert _infer_input_format(spots) == "trackmate"
+
+
+def test_infer_input_format_dlc_csv(tmp_path):
+    """Test _infer_input_format detects DLC CSV from content."""
+    from sleap_io.io.cli import _infer_input_format
+
+    dlc_file = tmp_path / "data.csv"
+    dlc_file.write_text(
+        "scorer,DLC_resnet50,DLC_resnet50,DLC_resnet50\n"
+        "bodyparts,nose,nose,nose\n"
+        "coords,x,y,likelihood\n"
+        "0,100.0,200.0,0.99\n"
+    )
+    assert _infer_input_format(dlc_file) == "dlc"
+
+
+def test_infer_input_format_generic_csv(tmp_path):
+    """Test _infer_input_format falls back to generic CSV."""
+    from sleap_io.io.cli import _infer_input_format
+
+    csv_file = tmp_path / "data.csv"
+    csv_file.write_text("frame,x,y\n0,10.0,20.0\n")
+    assert _infer_input_format(csv_file) == "csv"
+
+
+def test_convert_trackmate_to_csv(tmp_path):
+    """Test converting a TrackMate CSV to SLEAP CSV via auto-detection."""
+    spots = tmp_path / "data_spots.csv"
+    spots.write_text(
+        "LABEL,ID,TRACK_ID,QUALITY,POSITION_X,POSITION_Y,POSITION_Z,"
+        "POSITION_T,FRAME,RADIUS,VISIBILITY\n"
+        "Label,Spot ID,Track ID,Quality,X,Y,Z,T,Frame,Radius,Visibility\n"
+        "Label,Spot ID,Track ID,Quality,X,Y,Z,T,Frame,R,Visibility\n"
+        ",,,(quality),(pixel),(pixel),(pixel),(frame),,(pixel),\n"
+        "ID0,0,0,5.0,10.0,20.0,0.0,0.0,0,11.5,1\n"
+        "ID1,1,0,4.0,12.0,22.0,0.0,1.0,1,11.5,1\n"
+    )
+    output = tmp_path / "output.csv"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["convert", str(spots), "-o", str(output), "--from", "trackmate"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "trackmate" in result.output.lower()
+    assert output.exists()
+
+
+def test_convert_trackmate_explicit_from(tmp_path):
+    """Test converting a TrackMate CSV with explicit --from trackmate."""
+    spots = tmp_path / "data_spots.csv"
+    spots.write_text(
+        "LABEL,ID,TRACK_ID,QUALITY,POSITION_X,POSITION_Y,POSITION_Z,"
+        "POSITION_T,FRAME,RADIUS,VISIBILITY\n"
+        "Label,Spot ID,Track ID,Quality,X,Y,Z,T,Frame,Radius,Visibility\n"
+        "Label,Spot ID,Track ID,Quality,X,Y,Z,T,Frame,R,Visibility\n"
+        ",,,(quality),(pixel),(pixel),(pixel),(frame),,(pixel),\n"
+        "ID0,0,0,5.0,10.0,20.0,0.0,0.0,0,11.5,1\n"
+    )
+    output = tmp_path / "output.csv"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["convert", str(spots), "-o", str(output), "--from", "trackmate"],
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+
 def test_infer_output_format_directory(tmp_path):
     """Test _infer_output_format returns ultralytics for directories."""
     from sleap_io.io.cli import _infer_output_format

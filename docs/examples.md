@@ -105,6 +105,230 @@ assert xy_score == 3  # x, y, and confidence score
 !!! note "See also"
     [`Labels.numpy`](model/labels.md#sleap_io.Labels.numpy): Full documentation of array conversion options
 
+## Annotation types
+
+Each new v0.7.0 annotation type (bounding boxes, centroids, identities, and 3-D instances) has a `User*` variant for ground-truth annotations and a `Predicted*` variant carrying confidence scores. All of them live inside [`LabeledFrame`][sleap_io.LabeledFrame] and are appended with the same type-dispatching [`LabeledFrame.append`][sleap_io.LabeledFrame.append].
+
+### Bounding box detections
+
+Create, inspect, and convert `BoundingBox` annotations for detection and tracking workflows.
+
+```python title="bbox_basics.py" linenums="1"
+import sleap_io as sio
+
+# Construct from corners or from top-left + size
+bbox = sio.UserBoundingBox(x1=10, y1=20, x2=100, y2=200, category="mouse")
+bbox = sio.UserBoundingBox.from_xywh(10, 20, 90, 180)  # same box
+
+# Query geometric properties
+bbox.xyxy         # (10.0, 20.0, 100.0, 200.0)
+bbox.xywh         # (10.0, 20.0, 90.0, 180.0)
+bbox.area         # 16200.0
+bbox.centroid_xy  # (55.0, 110.0)
+
+# Predictions carry a score (and optional tracking_score)
+pred_bbox = sio.PredictedBoundingBox(
+    x1=10, y1=20, x2=100, y2=200, score=0.95, tracking_score=0.88,
+)
+
+# Convert to related annotation types
+roi = bbox.to_roi()
+mask = bbox.to_mask(height=480, width=640)
+```
+
+Attach a box to a frame and save it into SLP (format v2.0+) — bboxes also round-trip through COCO detection, Ultralytics detection, GeoJSON, and JABS when the dataset carries the metadata those formats require.
+
+```python title="bbox_save.py" linenums="1"
+import sleap_io as sio
+
+video = sio.Video.from_filename("clip.mp4", open=False)
+lf = sio.LabeledFrame(video=video, frame_idx=0)
+lf.append(sio.UserBoundingBox(x1=10, y1=20, x2=100, y2=200, category="mouse"))
+
+labels = sio.Labels(labeled_frames=[lf], videos=[video])
+labels.save("boxes.slp")
+```
+
+!!! note "See also"
+    - [Regions: Bounding boxes](model/regions.md#bounding-boxes) — full API and metadata fields
+    - [Formats: COCO](formats/index.md#coco-format-json) and [Ultralytics](formats/index.md#ultralytics-yolo-format) for detection round-trips
+
+### Centroid tracking and TrackMate import
+
+`Centroid` annotations are lightweight `(x, y)` points used by TrackMate, SORT, ByteTrack, and similar trackers. They interconvert with full pose [`Instance`][sleap_io.Instance] objects.
+
+```python title="centroid_basics.py" linenums="1"
+import sleap_io as sio
+
+track = sio.Track(name="mouse_A")
+
+# User and predicted variants
+c = sio.UserCentroid(x=100.5, y=200.3, track=track)
+p = sio.PredictedCentroid(x=50.0, y=60.0, score=0.95, source="trackmate")
+
+# Convert a pose Instance into a single-point centroid
+centroid = sio.Centroid.from_instance(pose_instance, method="center_of_mass")
+
+# And back: produces a single-node Instance on CENTROID_SKELETON
+inst = centroid.to_instance()
+
+# Convenience accessors on full pose Instances
+xy = pose_instance.centroid_xy        # (x, y) tuple
+c2 = pose_instance.to_centroid()      # shortcut for Centroid.from_instance(pose_instance)
+```
+
+Import TrackMate `*_spots.csv` exports straight into a `Labels` object — either with the explicit loader or by letting `sio.load_file` auto-detect the format from the CSV header:
+
+```python title="load_trackmate.py" linenums="1"
+import sleap_io as sio
+
+# Explicit loader (use when you also want to pass edges or other options)
+labels = sio.load_trackmate("spots.csv", video="experiment.tif")
+
+# Auto-detect from CSV headers (falls back to DLC and generic CSV readers)
+labels = sio.load_file("spots.csv")
+
+print(len(labels.centroids), "centroid detections")
+```
+
+!!! note "See also"
+    - [Regions: Centroids](model/regions.md#centroids) — full API
+    - [Formats: TrackMate](formats/trackmate.md) — spots/edges/tracks CSV layout
+
+### Cross-session identity and 3-D instances
+
+[`Identity`][sleap_io.Identity] identifies the same animal across multiple recording sessions, distinct from per-video [`Track`][sleap_io.Track]. [`Instance3D`][sleap_io.Instance3D] / [`PredictedInstance3D`][sleap_io.PredictedInstance3D] carry structured triangulated keypoints, and [`InstanceGroup`][sleap_io.InstanceGroup] ties multi-view 2-D instances together with their 3-D reconstruction.
+
+```python title="identity_and_3d.py" linenums="1"
+import numpy as np
+import sleap_io as sio
+
+skel = sio.Skeleton(nodes=["head", "tail"], edges=[("head", "tail")])
+
+# Persistent per-animal identity (color is free-form and optional)
+mouse_a = sio.Identity(name="mouse_A", color="#e6194b")
+
+# 3-D keypoint storage, aligned to a skeleton
+pts = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+inst_3d = sio.Instance3D(points=pts, skeleton=skel)
+pred_3d = sio.PredictedInstance3D(
+    points=pts, skeleton=skel, point_scores=np.array([0.9, 0.8]),
+)
+
+# Group per-camera 2-D detections with the reconstructed 3-D instance
+cam1 = sio.Camera(name="cam1")
+cam2 = sio.Camera(name="cam2")
+inst_2d_cam1 = sio.Instance.from_numpy(np.zeros((2, 2)), skeleton=skel)
+inst_2d_cam2 = sio.Instance.from_numpy(np.zeros((2, 2)), skeleton=skel)
+group = sio.InstanceGroup(
+    instance_by_camera={cam1: inst_2d_cam1, cam2: inst_2d_cam2},
+    instance_3d=inst_3d,
+    identity=mouse_a,
+)
+
+# Identities and recording sessions hang off Labels directly
+labels = sio.Labels(identities=[mouse_a])
+```
+
+Identities and `Instance3D` both persist into SLP format v1.9+, so round-tripping between sleap-io and sleap-io.js / luc3d is lossless.
+
+!!! note "See also"
+    [3D model](model/3d.md): `Camera`, `CameraGroup`, `RecordingSession`, `FrameGroup`, `InstanceGroup`, `Identity`, `Instance3D`.
+
+### Reading and writing GeoJSON ROIs
+
+ROIs are serializable to the `movement`-compatible GeoJSON format used by Shapely, GeoPandas, QGIS, and QuPath. Each ROI also implements the Python [`__geo_interface__`](https://gist.github.com/sgillies/2217756) protocol so it plugs straight into any `geopandas.GeoDataFrame`.
+
+```python title="geojson_rois.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("labels.slp")
+
+# Dump every ROI (static and frame-level) to GeoJSON
+sio.save_geojson(labels.rois, "regions.geojson")
+
+# Load an externally drawn region set
+rois = sio.load_geojson("regions.geojson")
+first = rois[0]
+first.__geo_interface__   # standard GeoJSON Feature dict
+
+# Universal loader auto-detects the .geojson extension
+labels = sio.load_file("regions.geojson")
+```
+
+!!! note "See also"
+    - [Formats: GeoJSON](formats/index.md#geojson-format-geojson) — schema and movement-library interop
+    - [Regions: Static vs. temporal ROIs](model/regions.md#static-vs-temporal-rois)
+
+### Adding annotations to frames (type dispatch)
+
+`LabeledFrame.append()` routes each annotation to the correct per-type list based on its runtime type. The same method handles every annotation kind — you never have to touch `lf.bboxes`, `lf.centroids`, etc. by hand for appends.
+
+```python title="frame_append_dispatch.py" linenums="1"
+import numpy as np
+import sleap_io as sio
+from shapely.geometry import box
+
+skel = sio.Skeleton(nodes=["head"], edges=[])
+video = sio.Video.from_filename("clip.mp4", open=False)
+lf = sio.LabeledFrame(video=video, frame_idx=0)
+
+# Each append() routes by type:
+lf.append(sio.Instance.from_numpy(np.zeros((1, 2)), skeleton=skel))  # → lf.instances
+lf.append(sio.UserBoundingBox(x1=0, y1=0, x2=10, y2=10))             # → lf.bboxes
+lf.append(sio.UserCentroid(x=5, y=5))                                # → lf.centroids
+lf.append(sio.UserSegmentationMask.from_numpy(np.zeros((8, 8), bool)))  # → lf.masks
+lf.append(sio.UserLabelImage.from_numpy(np.zeros((8, 8), int)))      # → lf.label_images
+lf.append(sio.UserROI(geometry=box(0, 0, 10, 10)))                   # → lf.rois
+
+# Per-frame accessors are plain lists you can iterate or index:
+print(len(lf.instances), len(lf.bboxes), len(lf.centroids))
+print(len(lf.masks), len(lf.label_images), len(lf.rois))
+
+# Flat read-only views across the whole Labels object
+labels = sio.Labels(labeled_frames=[lf], videos=[video])
+labels.bboxes      # every bbox across every frame
+labels.centroids   # every centroid across every frame
+labels.static_rois # video-level ROIs (separate from frame-level lf.rois)
+```
+
+!!! note "See also"
+    [Regions → Working with annotations in frames](model/regions.md#working-with-annotations-in-frames) for more context on the flat-vs-nested views.
+
+### Fast O(1) frame and track lookups
+
+[`Labels.get_frame`][sleap_io.Labels.get_frame] and [`Labels.get_track_annotations`][sleap_io.Labels.get_track_annotations] replace O(n) linear scans with O(1) dictionary lookups backed by lazy indices. Use them when iterating over large datasets or cross-referencing by frame / track.
+
+```python title="fast_lookups.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+video = labels.videos[0]
+track = labels.tracks[0]
+
+# O(1) frame lookup (returns None if the frame is missing)
+lf = labels.get_frame(video, frame_idx=42)
+if lf is not None:
+    print(len(lf.instances), "instances on frame 42")
+
+# O(1) per-track annotation view (sorted by frame_idx)
+annotations = labels.get_track_annotations(video, track)
+for ann in annotations[:5]:
+    print(ann.frame_idx, type(ann).__name__)
+
+# Existing convenience methods now use the same indices internally
+labels.find(video, frame_idx=42)                    # O(1)
+labels.get_centroids(video=video, frame_idx=0)      # O(1)
+labels.get_bboxes(video=video, frame_idx=0)         # O(1)
+
+# If you mutate labels.labeled_frames in place, force a rebuild
+labels.labeled_frames.append(sio.LabeledFrame(video=video, frame_idx=99))
+labels.reindex()
+```
+
+!!! tip "When to call `reindex()`"
+    The indices rebuild automatically when you use the public `Labels` APIs. You only need `reindex()` after mutating `labels.labeled_frames` or the annotation lists in place (which bypasses the invalidation hooks).
+
 ## Format conversion
 
 ### Load and save in different formats
@@ -494,6 +718,7 @@ import numpy as np
 labels = sio.load_file("predictions.slp")
 
 # Convert to array — shape: (n_frames, n_tracks, n_nodes, 2)
+# In v0.7.0, n_frames == len(video); frames past the last labeled frame are NaN.
 trx = labels.numpy()
 
 # Apply temporal smoothing along the frame axis (axis=0)
@@ -698,6 +923,27 @@ last_frame = video[-1]
 !!! note "See also"
     - [`sio.load_video`](formats/#sleap_io.load_video): Video loading function
     - [`Video`](model/video.md#sleap_io.Video): Video class documentation
+
+### Norpix `.seq` video
+
+Load Norpix StreamPix `.seq` files the same way as any other video. The Norpix backend exposes per-frame timestamps and an auto-computed FPS derived from the timestamp stream, which is handy for high-speed behavioral recordings where the header FPS is often wrong.
+
+```python title="read_seq.py" linenums="1"
+import sleap_io as sio
+
+video = sio.load_video("recording.seq")
+frame = video[0]
+
+# Inspect backend-specific metadata
+seq = video.backend
+print(seq.fps)              # auto-computed from per-frame timestamps
+print(seq.get_timestamps()[0])  # seconds-since-epoch of the first frame
+```
+
+Supported codecs: raw mono, raw RGB, JPEG, and PNG. The `sio show` CLI prints Norpix-specific header info (codec, bit depth, description, FPS), and `sio reencode recording.seq -o recording.mp4` converts to MP4 via the Python path.
+
+!!! note "See also"
+    [Video backends](model/video.md#backends) — how `SeqVideo` fits alongside `MediaVideo`, `HDF5Video`, `ImageVideo`, and `TiffVideo`.
 
 ### Re-encode video
 
@@ -1012,6 +1258,45 @@ print(f"Merged: {len(merged.label_images)} total frames")
     - [Merging: Label images](merging.md#merging-label-images): Full merge documentation
     - [`merge_label_images`](model/regions.md#sleap_io.merge_label_images): API reference
 
+### Parallel segmentation pipeline
+
+Combine the streaming writer and the zero-decompression merger to build a parallel batch segmentation pipeline. Each worker streams its own shard with [`LabelImageWriter`][sleap_io.LabelImageWriter], and a final [`merge_label_images`][sleap_io.merge_label_images] call concatenates the shards without decompressing a single pixel.
+
+```python title="parallel_segmentation.py" linenums="1"
+import sleap_io as sio
+
+def run_shard(video_path: str, frame_range: range, shard_path: str) -> None:
+    """Segment a frame range and stream the results to one SLP shard."""
+    video = sio.load_video(video_path)
+    with sio.LabelImageWriter(shard_path, video=video) as writer:
+        for frame_idx in frame_range:
+            mask = run_segmentation(video[frame_idx])   # (H, W) int32
+            li = sio.PredictedLabelImage.from_numpy(
+                mask, source="cellpose:nuclei", score=1.0,
+            )
+            writer.add(li)
+
+# Launch one worker per shard (e.g., with multiprocessing, joblib, or a job
+# scheduler) so every worker streams to its own file.
+run_shard("microscopy.tif", range(0, 500), "shard_0.slp")
+run_shard("microscopy.tif", range(500, 1000), "shard_1.slp")
+run_shard("microscopy.tif", range(1000, 1500), "shard_2.slp")
+
+# Concatenate the shards into the final dataset in O(shards), without
+# decompressing any pixel chunks.
+merged = sio.merge_label_images(
+    ["shard_0.slp", "shard_1.slp", "shard_2.slp"],
+    "all_frames.slp",
+)
+print(f"Merged: {len(merged.label_images)} frames")
+```
+
+!!! tip "Why this is fast"
+    Workers run in parallel and produce contiguous SLP shards that each hold only
+    one frame's worth of compressed data in memory at a time. `merge_label_images`
+    then copies compressed HDF5 chunks byte-for-byte between files — no
+    decompression, no conflict resolution, no Python-level object reconstruction.
+
 ## Rendering
 
 Create videos and images with pose overlays for visualization and publication.
@@ -1035,6 +1320,50 @@ sio.render_image(labels[0], "frame.png")
 sio render -i predictions.slp -o output.mp4
 sio render -i predictions.slp --preset preview
 sio render -i predictions.slp --lf 0  # Single frame
+```
+
+### Segmentation overlay rendering
+
+Render pose predictions on top of a segmentation mask (or render masks on bare images, no labels file needed). The overlay pipeline accepts 2-D label images, 3-D label stacks, or a directory of per-frame TIFFs.
+
+```python title="segmentation_overlay.py" linenums="1"
+import numpy as np
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+lf = labels[0]
+
+# Overlay a (H, W) integer label image on a single labeled frame
+label_mask = np.load("frame0_mask.npy")  # (H, W) int
+img = sio.render_image(
+    lf,
+    overlay=label_mask,
+    overlay_alpha=0.4,
+    overlay_outline=True,
+)
+
+# Overlay-only mode (no poses) — renders masks on an arbitrary image
+frame = sio.load_video("clip.mp4")[0]
+masked = sio.render_image(image=frame, overlay=label_mask)
+
+# Video rendering with a 3-D label stack (one mask per frame)
+stack = np.load("masks_stack.npy")  # (T, H, W) int
+sio.render_video(labels, "overlay.mp4", overlay=stack)
+
+# Standalone draw_* helpers compose overlays manually onto any image
+canvas = frame.copy()
+sio.draw_label_image(canvas, label_mask, alpha=0.4, outline=True)
+sio.draw_bboxes(canvas, lf.bboxes)
+sio.draw_masks(canvas, [m for m in lf.masks])
+sio.draw_rois(canvas, lf.rois, fill_alpha=0.3)
+```
+
+```bash title="CLI"
+# Overlay segmentation on rendered poses
+sio render predictions.slp --overlay masks.tif --overlay-alpha 0.4
+
+# Overlay-only mode: no labels file needed
+sio render --images frames/ --overlay masks.tif -o output.mp4
 ```
 
 !!! note "See also"

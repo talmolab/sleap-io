@@ -690,6 +690,71 @@ def test_negative_frames_materialize(tmp_path):
     assert len(eager_labels.negative_frames) == 1
 
 
+def test_lazy_write_preserves_static_roi_video(tmp_path):
+    """Lazy round-trip must preserve video association on static ROIs."""
+    video = Video(filename="v.mp4")
+    roi = UserROI.from_bbox(0, 0, 100, 100, video=video, category="arena")
+    labels = Labels(videos=[video], rois=[roi])
+
+    p1 = tmp_path / "a.slp"
+    p2 = tmp_path / "b.slp"
+    save_file(labels, p1)
+
+    lazy = load_slp(p1, lazy=True)
+    save_file(lazy, p2)
+
+    reread = load_slp(p2)
+    assert len(reread.static_rois) == 1
+    assert reread.static_rois[0].video is not None
+    assert reread.static_rois[0].video.filename == "v.mp4"
+    assert reread.static_rois[0].category == "arena"
+
+
+def test_lazy_write_static_roi_without_video(tmp_path):
+    """Lazy round-trip must handle ROIs with no video association (fallback)."""
+    video = Video(filename="v.mp4")
+    anchored = UserROI.from_bbox(0, 0, 10, 10, video=video, category="anchored")
+    orphan = UserROI.from_bbox(20, 20, 30, 30, video=None, category="orphan")
+    labels = Labels(videos=[video], rois=[anchored, orphan])
+
+    p1 = tmp_path / "a.slp"
+    p2 = tmp_path / "b.slp"
+    save_file(labels, p1)
+
+    lazy = load_slp(p1, lazy=True)
+    save_file(lazy, p2)
+
+    reread = load_slp(p2)
+    by_category = {r.category: r for r in reread.static_rois}
+    assert by_category["anchored"].video is reread.videos[0]
+    assert by_category["orphan"].video is None
+
+
+def test_lazy_write_preserves_static_roi_video_multi(tmp_path):
+    """Lazy round-trip must pick the correct video index for multi-video labels."""
+    video_a = Video(filename="a.mp4")
+    video_b = Video(filename="b.mp4")
+    video_c = Video(filename="c.mp4")
+    roi_b = UserROI.from_bbox(0, 0, 50, 50, video=video_b, category="arena_b")
+    roi_c = UserROI.from_bbox(10, 10, 60, 60, video=video_c, category="arena_c")
+    labels = Labels(videos=[video_a, video_b, video_c], rois=[roi_b, roi_c])
+
+    p1 = tmp_path / "a.slp"
+    p2 = tmp_path / "b.slp"
+    save_file(labels, p1)
+
+    lazy = load_slp(p1, lazy=True)
+    save_file(lazy, p2)
+
+    reread = load_slp(p2)
+    assert len(reread.static_rois) == 2
+    by_category = {r.category: r for r in reread.static_rois}
+    assert by_category["arena_b"].video is reread.videos[1]
+    assert by_category["arena_b"].video.filename == "b.mp4"
+    assert by_category["arena_c"].video is reread.videos[2]
+    assert by_category["arena_c"].video.filename == "c.mp4"
+
+
 def test_write_sessions(slp_multiview, tmp_path):
     labels = read_labels(slp_multiview)
     sessions = labels.sessions

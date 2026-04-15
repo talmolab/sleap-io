@@ -2,6 +2,10 @@
 
 The SLEAP Analysis HDF5 format is a portable format for exporting pose tracking predictions as dense numpy arrays. This format is designed for easy loading in MATLAB and Python analysis pipelines.
 
+!!! warning "Shape change in v0.7.0"
+
+    The frame dimension of every array in this file is now `n_frames == len(video)`, not `last_labeled_frame + 1` as in v0.6.x. Frames past the last labeled frame are filled with `NaN` for pose coordinates and `False` for track occupancy. Code that sized downstream arrays from the exported shape (e.g. `array.shape[0] == last_labeled_frame + 1`) may need to be updated to account for the new longer arrays (PR #368).
+
 ## Overview
 
 Analysis HDF5 files contain:
@@ -36,7 +40,7 @@ analysis.h5
 ├── video_path                # Dataset: Source video path
 │
 ├── @format                   # Attribute: "analysis" (format identifier)
-├── @sleap_io_version         # Attribute: Format version (e.g., "1.0")
+├── @sleap_io_version         # Attribute: sleap-io package version
 ├── @preset                   # Attribute: Axis ordering preset
 ├── @provenance               # Attribute: Source file provenance (JSON)
 ├── @skeleton_name            # Attribute: Skeleton name
@@ -60,6 +64,8 @@ Optimized for MATLAB's column-major memory layout. Compatible with SLEAP's origi
 | `point_scores` | `(n_tracks, n_nodes, n_frames)` | `["track", "node", "frame"]` |
 | `instance_scores` | `(n_tracks, n_frames)` | `["track", "frame"]` |
 | `tracking_scores` | `(n_tracks, n_frames)` | `["track", "frame"]` |
+
+In v0.7.0, `n_frames == len(video)` — the full video duration, not the number of labeled frames.
 
 **MATLAB usage:**
 
@@ -185,13 +191,16 @@ Source video file path.
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `format` | string | Always `"analysis"` |
-| `sleap_io_version` | string | Format version (e.g., `"1.0"`) |
+| `sleap_io_version` | string | sleap-io package version that wrote the file |
 | `preset` | string | Axis ordering: `"matlab"`, `"standard"`, or `"custom"` |
 | `provenance` | JSON string | Source file and creation metadata |
 | `skeleton_name` | string | Skeleton name |
 | `skeleton_edges` | JSON string | Edge list as `[[src, dst], ...]` |
 | `skeleton_symmetries` | JSON string | Symmetry pairs as `[["left", "right"], ...]` |
 | `labels_path` | string | Original labels file path (optional) |
+
+!!! note "`sleap_io_version` is a provenance stamp, not a format gate"
+    This attribute records the `sleap-io` package version that wrote the file (the value of `sleap_io.__version__` at save time). It is **not** a file-format version — the Analysis HDF5 layout itself is not versioned. Downstream tools should not use this value as a semver gate for structural changes; check the presence of specific datasets or `@preset` instead.
 
 ### Dataset Attributes
 
@@ -216,7 +225,7 @@ sio.save_analysis_h5(labels, "all.h5", min_occupancy=0.0)
 sio.save_analysis_h5(labels, "filtered.h5", min_occupancy=0.5)
 ```
 
-Occupancy is calculated as: `frames_with_track / total_frames`
+Occupancy is calculated as: `frames_with_track / total_frames`, where `total_frames == len(video)` in v0.7.0. If your dataset has many unlabeled frames at the end of the video, the occupancy denominator will be larger than in v0.6.x and `min_occupancy` thresholds may need to be lowered correspondingly.
 
 ## Custom Axis Ordering
 
