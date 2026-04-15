@@ -87,13 +87,19 @@ class TestCOCODatasetVariants:
     """Test loading different COCO dataset variants."""
 
     @pytest.mark.parametrize(
-        "json_name, expected_instances",
+        "json_name, expected_total_instances, expected_second_frame_instances",
         [
-            ("annotations.json", 3),
-            ("annotations_no_instances.json", 0),
+            ("annotations.json", 3, 1),
+            ("annotations_negative_frame.json", 2, 0),
         ],
     )
-    def test_flat_images(self, coco_flat_images, json_name, expected_instances):
+    def test_flat_images(
+        self,
+        coco_flat_images,
+        json_name,
+        expected_total_instances,
+        expected_second_frame_instances,
+    ):
         """Test loading flat images, including when no frames have annotations."""
         labels = coco.read_labels(Path(coco_flat_images) / json_name)
 
@@ -101,14 +107,20 @@ class TestCOCODatasetVariants:
 
         # Check instances
         total_instances = sum(len(frame.instances) for frame in labels.labeled_frames)
-        assert total_instances == expected_instances
+        assert total_instances == expected_total_instances
 
-        if expected_instances > 0:
-            assert len(labels.skeletons) == 1
-            assert labels.skeletons[0].name == "mouse"
-            instance = labels.labeled_frames[0].instances[0]
-            assert len(instance.points) == 17
-            assert instance.skeleton.name == "mouse"
+        # Check first frame instance structure
+        instance = labels.labeled_frames[0].instances[0]
+        assert len(instance.points) == 17
+        assert instance.skeleton.name == "mouse"
+
+        # Check second frame instance count
+        frame_instances = labels.labeled_frames[1].instances
+        assert len(frame_instances) == expected_second_frame_instances
+
+        # Check skeletons
+        assert len(labels.skeletons) == 1
+        assert labels.skeletons[0].name == "mouse"
 
     def test_category_folders(self, coco_category_folders):
         """Test loading category folders variant."""
@@ -1339,7 +1351,7 @@ class TestCOCOExport:
 
     @pytest.mark.parametrize(
         "json_name",
-        ["annotations.json", "annotations_no_instances.json"],
+        ["annotations.json", "annotations_negative_frame.json"],
     )
     def test_roundtrip_conversion(self, coco_flat_images, json_name, tmp_path):
         """Test that data survives a roundtrip conversion."""

@@ -17,6 +17,10 @@ def coco_flat_images():
     - Uses standard COCO keypoint format with 17 keypoints
     - Uses ternary visibility encoding (0/1/2)
     - Has simple sequential image naming (image_001.jpg, etc.)
+    - Has 2 variants of COCO annotations: 
+      - annotations.json with fully annotated images
+      - annotations_negative_frame.json with image_002.jpg as 
+        negative sample (0 instances)
     """
     return "tests/data/coco/flat_images"
 
