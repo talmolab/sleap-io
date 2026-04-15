@@ -608,18 +608,10 @@ def read_label_images(
 
     if layout == "TCYX":
         # OME/ImageJ declared both T and C. Use the series array which
-        # reshapes pages into a coherent (T, C, H, W) block.
+        # reshapes pages into a coherent (T, C, H, W) block. tifffile drops
+        # size-1 axes, so a degenerate T=1 surfaces as layout="CYX" above
+        # and doesn't reach here.
         series = _read_series()
-        if series.ndim == 3:
-            # Single-frame TCYX degenerates to CYX.
-            pages_data = [series[c].astype(np.int32) for c in range(series.shape[0])]
-            return _read_single_class_stack(
-                pages_data,
-                categories,
-                sidecar,
-                sidecar_scale,
-                sidecar_offset,
-            )
         if series.ndim != 4:
             raise ValueError(
                 f"Expected 4D (T,C,H,W) series for TCYX, got shape {series.shape}"

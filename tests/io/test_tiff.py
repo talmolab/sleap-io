@@ -8,7 +8,14 @@ import numpy as np
 import pytest
 import tifffile
 
-from sleap_io.io.tiff import read_label_images, write_label_images
+from sleap_io.io.tiff import (
+    _categories_list_from_sidecar,
+    _infer_label_ids_from_pages,
+    _normalize_axes,
+    _warn_ambiguous_pages,
+    read_label_images,
+    write_label_images,
+)
 from sleap_io.model.instance import Track
 from sleap_io.model.label_image import LabelImage, UserLabelImage
 
@@ -606,6 +613,115 @@ def test_3d_single_page_still_rejected(tmp_path):
 
     with pytest.raises(ValueError, match="2D"):
         read_label_images(tiff_path, pages_as="time")
+
+
+def test_normalize_axes_empty_and_none_return_unknown():
+    """Empty/None axes strings are treated as unknown."""
+    assert _normalize_axes("") == "unknown"
+    assert _normalize_axes(None) == "unknown"
+
+
+def test_normalize_axes_placeholder_chars_return_unknown():
+    """Placeholder tifffile axes (I/Q/S) normalize to unknown."""
+    assert _normalize_axes("IYX") == "unknown"
+    assert _normalize_axes("QYX") == "unknown"
+    assert _normalize_axes("YXS") == "unknown"
+    # Non-standard label with no placeholder and no T/C also unknown.
+    assert _normalize_axes("XY") == "unknown"
+
+
+def test_normalize_axes_known_layouts():
+    """Known axis strings map to the expected layout."""
+    assert _normalize_axes("YX") == "YX"
+    assert _normalize_axes("TYX") == "TYX"
+    assert _normalize_axes("ZYX") == "TYX"
+    assert _normalize_axes("CYX") == "CYX"
+    assert _normalize_axes("TCYX") == "TCYX"
+    assert _normalize_axes("tcyx") == "TCYX"  # case-insensitive
+
+
+def test_warn_ambiguous_pages_singlepage_is_silent(tmp_path):
+    """The warning helper is a no-op for single-page files."""
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _warn_ambiguous_pages(tmp_path / "x.tif", 1, "uint8")
+
+
+def test_categories_list_from_sidecar_none_and_empty():
+    """Sidecar=None or no objects key returns None."""
+    assert _categories_list_from_sidecar(None, 3) is None
+    assert _categories_list_from_sidecar({}, 3) is None
+    assert _categories_list_from_sidecar({"objects": {}}, 3) is None
+
+
+def test_categories_list_from_sidecar_blank_categories_return_none():
+    """Sidecar with objects but no non-empty categories returns None."""
+    sidecar = {"objects": {"1": {"track": "a"}, "2": {"track": "b"}}}
+    # Only track names, no categories → treated as "no category data".
+    assert _categories_list_from_sidecar(sidecar, 2) is None
+
+
+def test_infer_label_ids_rejects_collisions():
+    """Per-page ID detection returns None when pages share a non-zero value."""
+    p0 = np.zeros((4, 4), dtype=np.int32)
+    p1 = np.zeros((4, 4), dtype=np.int32)
+    p0[0, 0] = 5
+    p1[1, 1] = 5  # same value as page 0 → collision
+    assert _infer_label_ids_from_pages([p0, p1]) is None
+
+
+def test_tcyx_degenerate_to_cyx(tmp_path):
+    """An ImageJ TCYX hyperstack with T=1 is surfaced as CYX by tifffile."""
+    # T=1, C=3: tifffile drops the size-1 T axis so axes comes back as 'CYX'.
+    data = np.zeros((1, 3, 8, 8), dtype=np.uint8)
+    data[0, 0, 0:2, :] = 1
+    data[0, 1, 3:5, :] = 1
+    data[0, 2, 6:8, :] = 1
+    tiff_path = tmp_path / "tcyx_degen.tif"
+    tifffile.imwrite(str(tiff_path), data, imagej=True, metadata={"axes": "TCYX"})
+    result = read_label_images(tiff_path, categories=["a", "b", "c"])
+    assert len(result) == 1
+    assert result[0].objects[1].category == "a"
+    assert set(np.unique(result[0].data).tolist()) == {0, 1, 2, 3}
+
+
+def test_tcyx_sidecar_categories(tmp_path):
+    """TCYX path reads per-class categories from sidecar when not passed."""
+    T, C, H, W = 2, 3, 8, 8
+    data = np.zeros((T, C, H, W), dtype=np.uint8)
+    for t in range(T):
+        data[t, 0, 0:2, :] = 1
+        data[t, 1, 3:5, :] = 1
+        data[t, 2, 6:8, :] = 1
+    tiff_path = tmp_path / "tcyx_sidecar.tif"
+    tifffile.imwrite(str(tiff_path), data, imagej=True, metadata={"axes": "TCYX"})
+    sidecar = {
+        "format": "sleap-io-label-image-meta",
+        "version": 3,
+        "objects": {
+            "1": {"category": "a"},
+            "2": {"category": "b"},
+            "3": {"category": "c"},
+        },
+    }
+    with open(str(tiff_path) + ".meta.json", "w") as f:
+        json.dump(sidecar, f)
+
+    result = read_label_images(tiff_path)  # no categories passed → pulls from sidecar
+    assert len(result) == T
+    assert result[0].objects[1].category == "a"
+    assert result[0].objects[3].category == "c"
+
+
+def test_fallback_unknown_dtype_in_warning(tmp_path):
+    """Warning message includes the dtype of the first page."""
+    pages = _make_class_pages()
+    tiff_path = tmp_path / "amb.tif"
+    _write_plain_multipage(tiff_path, pages)
+    with pytest.warns(UserWarning, match="dtype="):
+        read_label_images(tiff_path)
 
 
 class warnings_as_errors:
