@@ -1177,18 +1177,32 @@ class TestRenderImage:
         assert isinstance(rendered, np.ndarray)
         # Should have some reasonable size based on keypoints
 
-    def test_render_image_labeled_frame_no_skeleton_error(self):
-        """Test render_image with LabeledFrame that has no instances."""
+    def test_render_image_labeled_frame_without_instances(self):
+        """``render_image(source=lf)`` works when the LabeledFrame has no instances.
+
+        Before this was fixed, a bare ``LabeledFrame`` without instances raised
+        ``ValueError("LabeledFrame has no instances with skeleton")``, forcing
+        segmentation-only workflows to pass ``source=None, image=lf.image``.
+        The LabeledFrame source now falls through to empty pose-rendering state
+        (mirroring the centroid-only path in the ``Labels`` branch).
+        """
         from sleap_io.model.labeled_frame import LabeledFrame
         from sleap_io.model.video import Video
         from sleap_io.rendering import render_image
 
-        # Create empty labeled frame
         video = Video(filename="dummy.mp4")
         lf = LabeledFrame(video=video, frame_idx=0, instances=[])
 
-        with pytest.raises(ValueError, match="no instances with skeleton"):
-            render_image(lf, image=np.zeros((100, 100, 3), dtype=np.uint8))
+        # With an explicit image — should render the image as-is.
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        rendered = render_image(lf, image=img)
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.shape == (100, 100, 3)
+
+        # With a solid-color background — should render a blank frame.
+        rendered_bg = render_image(lf, background="black")
+        assert isinstance(rendered_bg, np.ndarray)
+        assert rendered_bg.ndim == 3 and rendered_bg.shape[-1] == 3
 
     def test_render_image_video_unavailable_with_background(self, labels_predictions):
         """Test frame size estimation from keypoints when video unavailable."""
@@ -2704,6 +2718,99 @@ def test_render_image_overlay_with_scale():
 
     result = render_image(image=img, overlay=labels, overlay_alpha=0.4, scale=0.5)
     assert result.shape == (50, 50, 3)
+
+
+def test_render_image_labeled_frame_source_with_label_image_overlay():
+    """``source=lf`` + LabelImage overlay works when lf has no instances.
+
+    Regression: previously raised ``ValueError("LabeledFrame has no instances
+    with skeleton")``, forcing callers to pass ``source=None, image=lf.image``
+    for segmentation-only frames.
+    """
+    from sleap_io.model.label_image import LabelImage, UserLabelImage
+    from sleap_io.model.labeled_frame import LabeledFrame
+    from sleap_io.model.video import Video
+
+    data = np.zeros((60, 60), dtype=np.int32)
+    data[10:25, 10:25] = 1
+    data[35:50, 35:50] = 2
+    li = UserLabelImage(
+        data=data,
+        objects={1: LabelImage.Info(category="a"), 2: LabelImage.Info(category="b")},
+    )
+    lf = LabeledFrame(video=Video(filename="dummy.mp4"), frame_idx=0)
+    lf.label_images.append(li)
+
+    # Pass an explicit image so we control the canvas size.
+    base = np.zeros((60, 60, 3), dtype=np.uint8)
+    result = render_image(source=lf, image=base, overlay=li, overlay_alpha=0.45)
+    assert result.shape == (60, 60, 3)
+    # Labeled regions are visible on the black background.
+    assert result[15, 15].any()
+    assert result[40, 40].any()
+    # The two labels take different colors.
+    assert not np.array_equal(result[15, 15], result[40, 40])
+
+
+def test_render_image_labeled_frame_source_with_mask_overlay():
+    """``source=lf`` + SegmentationMask overlay works with no instances."""
+    from sleap_io.model.labeled_frame import LabeledFrame
+    from sleap_io.model.video import Video
+
+    binary = np.zeros((50, 50), dtype=bool)
+    binary[10:30, 10:30] = True
+    mask = UserSegmentationMask.from_numpy(binary)
+    lf = LabeledFrame(video=Video(filename="dummy.mp4"), frame_idx=0)
+    lf.masks.append(mask)
+
+    base = np.zeros((50, 50, 3), dtype=np.uint8)
+    result = render_image(source=lf, image=base, overlay=[mask], overlay_alpha=0.5)
+    assert result.shape == (50, 50, 3)
+    assert result[20, 20].any()
+
+
+def test_render_image_labeled_frame_source_with_roi_overlay():
+    """``source=lf`` + ROI overlay works with no instances."""
+    from sleap_io.model.labeled_frame import LabeledFrame
+    from sleap_io.model.video import Video
+
+    roi = UserROI(geometry=box(20, 20, 60, 60))
+    lf = LabeledFrame(video=Video(filename="dummy.mp4"), frame_idx=0)
+    lf.rois.append(roi)
+
+    result = render_image(
+        source=lf, overlay=[roi], overlay_alpha=0.3, background="black"
+    )
+    # Rendered at the default size (64x64) since no video and no instances.
+    assert result.ndim == 3 and result.shape[-1] == 3
+
+
+def test_render_image_labeled_frame_source_with_bbox_overlay():
+    """``source=lf`` + BoundingBox overlay works with no instances."""
+    from sleap_io.model.labeled_frame import LabeledFrame
+    from sleap_io.model.video import Video
+
+    bbox = UserBoundingBox(x1=30, y1=30, x2=70, y2=70)
+    lf = LabeledFrame(video=Video(filename="dummy.mp4"), frame_idx=0)
+    lf.bboxes.append(bbox)
+
+    result = render_image(
+        source=lf, overlay=[bbox], overlay_alpha=0.3, background="black"
+    )
+    assert result.ndim == 3 and result.shape[-1] == 3
+
+
+def test_render_image_labeled_frame_with_instances_still_uses_skeleton(
+    labels_predictions,
+):
+    """LabeledFrame with instances still goes through the skeleton-aware path.
+
+    Verifies the fix did not break the classic pose-rendering code path.
+    """
+    lf = labels_predictions.labeled_frames[0]
+    assert len(lf.instances) > 0  # sanity
+    result = render_image(source=lf, background="black")
+    assert result.ndim == 3 and result.shape[-1] == 3
 
 
 def test_render_image_source_none_requires_image():
