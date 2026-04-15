@@ -195,12 +195,7 @@ class Labels:
         """
         # Drop our reference; do not forcibly close. See `close()` for the
         # explicit-close variant.
-        try:
-            self._label_image_file = None
-        except AttributeError:
-            # Can fire during interpreter teardown on partially-constructed
-            # attrs instances; nothing to release.
-            pass
+        self._label_image_file = None
 
     @property
     def is_lazy(self) -> bool:
