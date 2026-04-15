@@ -5053,6 +5053,141 @@ def test_label_image_instance_lazy_materialize(tmp_path):
     assert materialized.label_images[0].objects[1]._instance_idx == -1
 
 
+# -- LabelImage lifetime regression tests --
+# These guard against a class of bugs where the HDF5 file backing lazy
+# LabelImage.data is closed while LabelImage objects still reference it.
+
+
+def _make_slp_with_label_image(tmp_path, path_name="lazy.slp"):
+    """Helper: write a small labels.slp with one LabelImage and return path."""
+    video = Video(filename="test.mp4")
+    data = np.zeros((8, 8), dtype=np.int32)
+    data[2:5, 2:5] = 1
+    data[5:7, 5:7] = 2
+    li = UserLabelImage(
+        data=data,
+        objects={
+            1: LabelImage.Info(category="cell"),
+            2: LabelImage.Info(category="cell"),
+        },
+    )
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.label_images.append(li)
+    labels = Labels(labeled_frames=[lf], videos=[video])
+    path = str(tmp_path / path_name)
+    save_slp(labels, path)
+    return path, data
+
+
+def test_label_image_data_survives_anonymous_labels_gc(tmp_path):
+    """``sio.load_slp(...)[0].label_images[0].data`` works.
+
+    Regression: the anonymous ``Labels`` returned by ``load_slp`` is GC'd at
+    the end of the expression. Before the fix, ``Labels.__del__`` forcibly
+    closed the HDF5 file, invalidating the lazy loader's Dataset references
+    and raising ``RuntimeError: Unable to synchronously get dataspace``.
+    """
+    import gc
+
+    path, expected = _make_slp_with_label_image(tmp_path)
+
+    li = load_slp(path)[0].label_images[0]
+    # Force any deferred cleanup of the anonymous Labels object.
+    gc.collect()
+
+    # Lazy load should succeed.
+    np.testing.assert_array_equal(li.data, expected)
+
+
+def test_label_image_data_survives_function_return(tmp_path):
+    """LabelImage returned from a function outlives the function's local Labels."""
+    import gc
+
+    path, expected = _make_slp_with_label_image(tmp_path)
+
+    def get_li(p):
+        labels = load_slp(p)
+        return labels[0].label_images[0]
+
+    li = get_li(path)
+    gc.collect()
+    np.testing.assert_array_equal(li.data, expected)
+
+
+def test_multiple_labels_open_simultaneously(tmp_path):
+    """Loading the same file into two Labels and accessing both works."""
+    path, expected = _make_slp_with_label_image(tmp_path)
+
+    labels_a = load_slp(path)
+    labels_b = load_slp(path)
+    li_a = labels_a[0].label_images[0]
+    li_b = labels_b[0].label_images[0]
+
+    np.testing.assert_array_equal(li_a.data, expected)
+    np.testing.assert_array_equal(li_b.data, expected)
+
+
+def test_dropping_one_labels_does_not_break_another(tmp_path):
+    """Dropping one Labels ref while another still holds its own file is OK."""
+    import gc
+
+    path, expected = _make_slp_with_label_image(tmp_path)
+
+    labels_a = load_slp(path)
+    labels_b = load_slp(path)
+    li_b = labels_b[0].label_images[0]
+
+    # Drop labels_a and force GC. This must not close labels_b's file.
+    del labels_a
+    gc.collect()
+
+    np.testing.assert_array_equal(li_b.data, expected)
+
+
+def test_label_image_survives_labels_dropped_after_li_held(tmp_path):
+    """Holding a LabelImage after dropping its owning Labels still allows reads."""
+    import gc
+
+    path, expected = _make_slp_with_label_image(tmp_path)
+
+    labels = load_slp(path)
+    li = labels[0].label_images[0]
+    del labels
+    gc.collect()
+
+    np.testing.assert_array_equal(li.data, expected)
+
+
+def test_explicit_labels_close_still_invalidates_label_image(tmp_path):
+    """Explicit ``labels.close()`` forcibly closes the file.
+
+    Users who explicitly call ``close()`` opt in to forcibly releasing the
+    file handle; subsequent lazy reads on LabelImage objects from the same
+    Labels must fail (this is the price of the explicit-close contract).
+    """
+    path, _ = _make_slp_with_label_image(tmp_path)
+
+    labels = load_slp(path)
+    li = labels[0].label_images[0]
+    labels.close()
+
+    with pytest.raises(RuntimeError):
+        _ = li.data
+
+
+def test_iterate_label_images_after_anonymous_load(tmp_path):
+    """List-comprehension pattern over anonymous Labels also works."""
+    import gc
+
+    path, expected = _make_slp_with_label_image(tmp_path)
+
+    datas = [li.data for li in load_slp(path)[0].label_images]
+    gc.collect()
+
+    assert len(datas) == 1
+    np.testing.assert_array_equal(datas[0], expected)
+
+
 # -- h5wasm compatibility tests --
 
 

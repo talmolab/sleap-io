@@ -164,7 +164,16 @@ class Labels:
             object.__setattr__(self, key, value)
 
     def close(self) -> None:
-        """Close open file handles held for lazy label image data."""
+        """Close open file handles held for lazy label image data.
+
+        This forcibly closes the HDF5 file. Any ``LabelImage`` objects from
+        this ``Labels`` whose ``.data`` has not yet been materialized will
+        fail on subsequent ``.data`` access. For normal cleanup, prefer
+        letting garbage collection release the handle: ``Labels.__del__``
+        drops the reference without forcibly closing, so ``LabelImage``
+        objects that outlive this ``Labels`` keep working via HDF5's own
+        reference counting on dataset identifiers.
+        """
         if self._label_image_file is not None:
             try:
                 self._label_image_file.close()
@@ -173,8 +182,25 @@ class Labels:
             self._label_image_file = None
 
     def __del__(self) -> None:
-        """Release resources on garbage collection."""
-        self.close()
+        """Release our reference to the lazy label-image file on GC.
+
+        We intentionally do NOT call ``close()`` here. Forcibly closing the
+        HDF5 file on GC breaks ``LabelImage`` objects that outlive this
+        ``Labels`` — e.g. ``li = sio.load_slp("x.slp")[0].label_images[0]``,
+        where the anonymous ``Labels`` is GC'd after the expression finishes
+        but ``li`` is still held. By merely dropping our Python reference,
+        the HDF5 file stays open (h5py's C-level refcount holds it open
+        while ``Dataset`` identifiers captured by lazy loaders are alive)
+        and closes cleanly once the last consumer is also released.
+        """
+        # Drop our reference; do not forcibly close. See `close()` for the
+        # explicit-close variant.
+        try:
+            self._label_image_file = None
+        except AttributeError:
+            # Can fire during interpreter teardown on partially-constructed
+            # attrs instances; nothing to release.
+            pass
 
     @property
     def is_lazy(self) -> bool:
