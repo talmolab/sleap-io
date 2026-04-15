@@ -1203,7 +1203,8 @@ def load_label_images(
     path: str | Path,
     video: Video | None = None,
     tracks: dict | None = None,
-    categories: dict[int, str] | None = None,
+    categories: list[str] | dict[int, str] | None = None,
+    pages_as: str = "auto",
 ) -> list[LabelImage]:
     """Load label images from TIFF file(s) or directory.
 
@@ -1212,8 +1213,22 @@ def load_label_images(
             of per-frame TIFFs.
         video: Video to associate with all frames.
         tracks: Global ``{label_id: Track}`` mapping. If ``None``, auto-creates
-            one Track per unique ID found across all frames.
-        categories: Global ``{label_id: category}`` mapping.
+            one Track per unique ID found across all frames. Ignored for
+            class-stacked layouts.
+        categories: Category strings.
+
+            - ``dict[int, str]`` keyed by label ID (time mode).
+            - ``list[str]`` positional, one per class (class mode).
+            - ``None`` to read from sidecar if present.
+
+        pages_as: How to interpret multi-page TIFFs.
+
+            - ``"auto"`` (default): consult sidecar ``"axes"``, then TIFF
+              metadata (OME-XML / ImageJ hyperstack). Falls back to
+              ``"time"`` for plain multi-page files with a one-time warning.
+            - ``"time"``: force each page to be one frame.
+            - ``"classes"``: force pages to be per-class binary masks for a
+              single frame (N pages -> 1 ``LabelImage`` with label IDs 1..N).
 
     Returns:
         List of ``LabelImage``, one per frame, sorted by frame index.
@@ -1221,7 +1236,11 @@ def load_label_images(
     from sleap_io.io import tiff
 
     return tiff.read_label_images(
-        path, video=video, tracks=tracks, categories=categories
+        path,
+        video=video,
+        tracks=tracks,
+        categories=categories,
+        pages_as=pages_as,
     )
 
 
