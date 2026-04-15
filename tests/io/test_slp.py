@@ -5181,11 +5181,11 @@ def test_iterate_label_images_after_anonymous_load(tmp_path):
 
     path, expected = _make_slp_with_label_image(tmp_path)
 
-    datas = [li.data for li in load_slp(path)[0].label_images]
+    data_arrays = [li.data for li in load_slp(path)[0].label_images]
     gc.collect()
 
-    assert len(datas) == 1
-    np.testing.assert_array_equal(datas[0], expected)
+    assert len(data_arrays) == 1
+    np.testing.assert_array_equal(data_arrays[0], expected)
 
 
 # -- h5wasm compatibility tests --
