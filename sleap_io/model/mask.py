@@ -229,8 +229,15 @@ class SegmentationMask:
     ) -> "SegmentationMask":
         """Create a SegmentationMask from a 2D numpy array.
 
+        A ``SegmentationMask`` is binary by design (one object per mask). If a
+        multi-class or multi-instance integer array is passed in, the internal
+        RLE cast would silently drop all class/instance distinctions. This
+        method rejects such inputs with a pointed error instead.
+
         Args:
-            mask: A 2D boolean or uint8 numpy array of shape (height, width).
+            mask: A 2D boolean or ``{0, 1}`` integer array of shape
+                ``(height, width)``. Inputs with more than one distinct
+                non-zero value are rejected.
             stride: Convenience for setting isotropic scale. If provided, sets
                 ``scale = (1/stride, 1/stride)``. Overrides ``scale`` in kwargs.
             **kwargs: Additional keyword arguments passed to the constructor
@@ -238,11 +245,34 @@ class SegmentationMask:
 
         Returns:
             A `SegmentationMask` with RLE-encoded data.
+
+        Raises:
+            ValueError: If ``mask`` contains more than one distinct non-zero
+                value. Use ``LabelImage.from_numpy`` (to keep all classes in
+                one dense array) or ``LabelImage.from_binary_masks`` (to
+                split per-class binaries) for multi-class inputs.
         """
+        arr = np.asarray(mask)
+        if arr.dtype != bool:
+            nonzero = arr[arr != 0]
+            if nonzero.size > 0:
+                uniques = np.unique(nonzero)
+                if uniques.size > 1:
+                    preview = sorted(uniques.tolist())[:5]
+                    raise ValueError(
+                        f"SegmentationMask is binary (one object per mask) but "
+                        f"got an array with {uniques.size} distinct non-zero "
+                        f"values (e.g. {preview}). Use "
+                        f"sleap_io.UserLabelImage.from_numpy(array) to keep all "
+                        f"classes in one dense array, or "
+                        f"sleap_io.UserLabelImage.from_binary_masks([...]) to "
+                        f"split per-class binaries. To opt in to binarization "
+                        f"explicitly, pass array.astype(bool)."
+                    )
         if stride is not None:
             kwargs["scale"] = (1.0 / stride, 1.0 / stride)
-        height, width = mask.shape
-        rle_counts = _encode_rle(mask)
+        height, width = arr.shape
+        rle_counts = _encode_rle(arr)
         return cls(rle_counts=rle_counts, height=height, width=width, **kwargs)
 
     @property

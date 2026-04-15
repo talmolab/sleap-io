@@ -84,6 +84,42 @@ def test_segmentation_mask_from_numpy():
     assert mask.name == "test"
 
 
+def test_from_numpy_rejects_multi_class_array():
+    """Multi-class int input raises rather than silently binarizing."""
+    arr = np.array([[5, 5, 0], [0, 17, 99]], dtype=np.int32)
+    with pytest.raises(ValueError, match="binary"):
+        UserSegmentationMask.from_numpy(arr)
+
+
+def test_from_numpy_rejects_multi_instance_array():
+    """Multi-instance int input (e.g., Cellpose output) is rejected."""
+    arr = np.array([[0, 1, 2], [3, 0, 2], [1, 0, 3]], dtype=np.int32)
+    with pytest.raises(ValueError, match="LabelImage"):
+        UserSegmentationMask.from_numpy(arr)
+
+
+def test_from_numpy_accepts_binary_uint8():
+    """Integer arrays with only values {0, 1} are still valid binary masks."""
+    arr = np.array([[0, 1, 0], [1, 1, 0]], dtype=np.uint8)
+    mask = UserSegmentationMask.from_numpy(arr)
+    assert mask.area == 3
+
+
+def test_from_numpy_accepts_binary_int32():
+    """int32 with only {0, 1} still works (nonzero is the one foreground class)."""
+    arr = np.array([[0, 1, 0], [1, 0, 1]], dtype=np.int32)
+    mask = UserSegmentationMask.from_numpy(arr)
+    assert mask.area == 3
+
+
+def test_from_numpy_explicit_binarization():
+    """User opts into binarization by casting to bool first."""
+    arr = np.array([[5, 17, 0], [99, 0, 5]], dtype=np.int32)
+    # Opt-in: explicit cast to bool bypasses the guard.
+    mask = UserSegmentationMask.from_numpy(arr.astype(bool))
+    assert mask.area == 4
+
+
 def test_segmentation_mask_data():
     original = np.zeros((10, 10), dtype=bool)
     original[3:7, 2:8] = True
