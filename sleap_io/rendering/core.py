@@ -870,11 +870,17 @@ def render_image(
     elif isinstance(source, LabeledFrame):
         lf = source
         instances = list(lf.instances)
-        skeleton = instances[0].skeleton if instances else None
-        if skeleton is None:
-            raise ValueError("LabeledFrame has no instances with skeleton")
-        edge_inds = skeleton.edge_inds
-        node_names = [n.name for n in skeleton.nodes]
+        if instances:
+            skeleton = instances[0].skeleton
+            edge_inds = skeleton.edge_inds
+            node_names = [n.name for n in skeleton.nodes]
+        else:
+            # No instances — segmentation/overlay-only mode. Fall through with
+            # empty pose-rendering state so the video frame and any overlay
+            # (masks, label images, ROIs, bboxes) still render. Mirrors the
+            # centroid-only path in the `Labels` branch above.
+            edge_inds = []
+            node_names = []
         fidx_for_callback = lf.frame_idx
         track_indices = None
         n_tracks = 0
