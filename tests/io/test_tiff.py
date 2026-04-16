@@ -5,9 +5,17 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import pytest
 import tifffile
 
-from sleap_io.io.tiff import read_label_images, write_label_images
+from sleap_io.io.tiff import (
+    _categories_list_from_sidecar,
+    _infer_label_ids_from_pages,
+    _normalize_axes,
+    _warn_ambiguous_pages,
+    read_label_images,
+    write_label_images,
+)
 from sleap_io.model.instance import Track
 from sleap_io.model.label_image import LabelImage, UserLabelImage
 
@@ -47,7 +55,7 @@ def test_read_multipage_tiff(tmp_path):
         for frame in frames:
             tw.write(frame)
 
-    result = read_label_images(tiff_path)
+    result = read_label_images(tiff_path, pages_as="time")
 
     assert len(result) == 3
     for i, li in enumerate(result):
@@ -79,7 +87,7 @@ def test_auto_track_creation(tmp_path):
         tw.write(frame0)
         tw.write(frame1)
 
-    result = read_label_images(tiff_path)
+    result = read_label_images(tiff_path, pages_as="time")
 
     assert len(result) == 2
 
@@ -123,7 +131,8 @@ def test_sidecar_roundtrip(tmp_path):
     with open(sidecar_path) as f:
         sidecar = json.load(f)
     assert sidecar["format"] == "sleap-io-label-image-meta"
-    assert sidecar["version"] == 1
+    assert sidecar["version"] == 3
+    assert sidecar["axes"] == "YX"
     assert sidecar["objects"]["1"]["track"] == "cell_042"
     assert sidecar["objects"]["1"]["category"] == "neuron"
     assert sidecar["objects"]["3"]["track"] == "cell_017"
@@ -305,3 +314,428 @@ def test_tiff_sidecar_v1_compat(tmp_path):
     assert len(result) == 1
     assert result[0].scale == (1.0, 1.0)
     assert result[0].offset == (0.0, 0.0)
+
+
+def _write_plain_multipage(path, pages):
+    """Write a list of 2D arrays as a plain multi-page TIFF (no metadata)."""
+    with tifffile.TiffWriter(str(path)) as tw:
+        for p in pages:
+            tw.write(p)
+
+
+def _make_class_pages(h: int = 8, w: int = 8):
+    """Three disjoint binary masks representing three classes."""
+    p0 = np.zeros((h, w), dtype=np.uint8)
+    p1 = np.zeros((h, w), dtype=np.uint8)
+    p2 = np.zeros((h, w), dtype=np.uint8)
+    p0[0:2, :] = 1
+    p1[3:5, :] = 1
+    p2[6:8, :] = 1
+    return [p0, p1, p2]
+
+
+def test_pages_as_classes_explicit(tmp_path):
+    """pages_as='classes' composites pages into one LabelImage with label IDs 1..N."""
+    pages = _make_class_pages()
+    tiff_path = tmp_path / "classes.tif"
+    _write_plain_multipage(tiff_path, pages)
+
+    result = read_label_images(
+        tiff_path,
+        categories=["nuclei", "glia", "debris"],
+        pages_as="classes",
+    )
+
+    assert len(result) == 1
+    li = result[0]
+    assert set(np.unique(li.data).tolist()) == {0, 1, 2, 3}
+    assert li.objects[1].category == "nuclei"
+    assert li.objects[2].category == "glia"
+    assert li.objects[3].category == "debris"
+
+
+def test_pages_as_time_explicit_overrides_metadata(tmp_path):
+    """pages_as='time' forces time even if metadata says otherwise."""
+    pages = _make_class_pages()
+    tiff_path = tmp_path / "classes.tif"
+    _write_plain_multipage(tiff_path, pages)
+    # Sidecar tries to flag as classes...
+    sidecar = {
+        "format": "sleap-io-label-image-meta",
+        "version": 3,
+        "axes": "CYX",
+        "objects": {},
+    }
+    with open(str(tiff_path) + ".meta.json", "w") as f:
+        json.dump(sidecar, f)
+
+    # ...but user forces time mode.
+    result = read_label_images(tiff_path, pages_as="time")
+    assert len(result) == 3
+
+
+def test_sidecar_axes_routes_to_classes(tmp_path):
+    """Sidecar 'axes': 'CYX' triggers class-stack loading."""
+    pages = _make_class_pages()
+    tiff_path = tmp_path / "classes.tif"
+    _write_plain_multipage(tiff_path, pages)
+    sidecar = {
+        "format": "sleap-io-label-image-meta",
+        "version": 3,
+        "axes": "CYX",
+        "objects": {
+            "1": {"category": "nuclei"},
+            "2": {"category": "glia"},
+            "3": {"category": "debris"},
+        },
+    }
+    with open(str(tiff_path) + ".meta.json", "w") as f:
+        json.dump(sidecar, f)
+
+    result = read_label_images(tiff_path)
+
+    assert len(result) == 1
+    assert result[0].objects[1].category == "nuclei"
+    assert result[0].objects[2].category == "glia"
+    assert result[0].objects[3].category == "debris"
+
+
+def test_imagej_hyperstack_cyx_auto(tmp_path):
+    """ImageJ hyperstack with channels metadata auto-routes to classes."""
+    # ImageJ hyperstack layout: shape (channels, H, W) with imagej=True.
+    pages = _make_class_pages()
+    stack = np.stack(pages, axis=0)  # (C, H, W)
+    tiff_path = tmp_path / "ij_cyx.tif"
+    tifffile.imwrite(str(tiff_path), stack, imagej=True, metadata={"axes": "CYX"})
+
+    result = read_label_images(tiff_path, categories=["nuclei", "glia", "debris"])
+    assert len(result) == 1
+    assert set(np.unique(result[0].data).tolist()) == {0, 1, 2, 3}
+    assert result[0].objects[1].category == "nuclei"
+
+
+def test_imagej_hyperstack_tyx_auto(tmp_path):
+    """ImageJ hyperstack with time metadata routes to time (multi-frame)."""
+    frames = [_make_label_array(8, 8, 2) for _ in range(4)]
+    stack = np.stack(frames, axis=0).astype(np.uint16)
+    tiff_path = tmp_path / "ij_tyx.tif"
+    tifffile.imwrite(str(tiff_path), stack, imagej=True, metadata={"axes": "TYX"})
+
+    result = read_label_images(tiff_path)
+    assert len(result) == 4
+
+
+def test_ambiguous_multipage_warns(tmp_path):
+    """Plain multi-page TIFF with no metadata emits a UserWarning."""
+    pages = _make_class_pages()
+    tiff_path = tmp_path / "ambiguous.tif"
+    _write_plain_multipage(tiff_path, pages)
+
+    with pytest.warns(UserWarning, match="pages are time"):
+        result = read_label_images(tiff_path)
+    # Behavior is unchanged: still returns N frames.
+    assert len(result) == 3
+
+
+def test_ambiguous_singlepage_no_warning(tmp_path):
+    """Single-page TIFF is unambiguous; no warning even without metadata."""
+    data = _make_label_array(8, 8, 2)
+    tiff_path = tmp_path / "single.tif"
+    tifffile.imwrite(str(tiff_path), data)
+
+    with warnings_as_errors():
+        read_label_images(tiff_path)
+
+
+def test_pages_as_invalid_raises(tmp_path):
+    """Unknown pages_as value raises ValueError."""
+    pages = _make_class_pages()
+    tiff_path = tmp_path / "x.tif"
+    _write_plain_multipage(tiff_path, pages)
+
+    with pytest.raises(ValueError, match="pages_as"):
+        read_label_images(tiff_path, pages_as="frames")
+
+
+def test_categories_dict_class_mode(tmp_path):
+    """Categories as dict[int,str] also works in class mode."""
+    pages = _make_class_pages()
+    tiff_path = tmp_path / "classes.tif"
+    _write_plain_multipage(tiff_path, pages)
+
+    result = read_label_images(
+        tiff_path,
+        categories={1: "nuclei", 2: "glia", 3: "debris"},
+        pages_as="classes",
+    )
+    assert result[0].objects[1].category == "nuclei"
+    assert result[0].objects[3].category == "debris"
+
+
+def test_directory_pages_as_classes(tmp_path):
+    """Directory of per-class TIFFs treated as one frame with classes."""
+    pages = _make_class_pages()
+    class_dir = tmp_path / "classes"
+    class_dir.mkdir()
+    for i, p in enumerate(pages):
+        tifffile.imwrite(str(class_dir / f"{i:03d}.tif"), p)
+
+    result = read_label_images(
+        class_dir,
+        categories=["a", "b", "c"],
+        pages_as="classes",
+    )
+    assert len(result) == 1
+    assert result[0].objects[1].category == "a"
+
+
+def test_tcyx_splits_into_per_frame_class_stacks(tmp_path):
+    """ImageJ TCYX hyperstack produces one LabelImage per time point."""
+    T, C, H, W = 2, 3, 8, 8
+    data = np.zeros((T, C, H, W), dtype=np.uint8)
+    for t in range(T):
+        data[t, 0, 0:2, :] = 1
+        data[t, 1, 3:5, :] = 1
+        data[t, 2, 6:8, :] = 1
+    tiff_path = tmp_path / "tcyx.tif"
+    tifffile.imwrite(str(tiff_path), data, imagej=True, metadata={"axes": "TCYX"})
+
+    result = read_label_images(tiff_path, categories=["a", "b", "c"])
+    assert len(result) == T
+    for li in result:
+        assert set(np.unique(li.data).tolist()) == {0, 1, 2, 3}
+        assert li.objects[1].category == "a"
+        assert li.objects[3].category == "c"
+
+
+def test_class_pages_preserve_distinct_ids(tmp_path):
+    """Pages stamped with distinct integer IDs (e.g. COCO 5/17/99) round-trip.
+
+    When each per-class page has a single unique non-zero value and the
+    values differ across pages, those values are preserved as label IDs
+    rather than being renumbered positionally.
+    """
+    h, w = 8, 8
+    p0 = np.zeros((h, w), dtype=np.uint8)
+    p1 = np.zeros((h, w), dtype=np.uint8)
+    p2 = np.zeros((h, w), dtype=np.uint8)
+    p0[0:2, :] = 5
+    p1[3:5, :] = 17
+    p2[6:8, :] = 99
+
+    tiff_path = tmp_path / "coco_ids.tif"
+    _write_plain_multipage(tiff_path, [p0, p1, p2])
+
+    result = read_label_images(
+        tiff_path,
+        categories=["car", "cat", "backpack"],
+        pages_as="classes",
+    )
+
+    li = result[0]
+    assert set(np.unique(li.data).tolist()) == {0, 5, 17, 99}
+    assert li.objects[5].category == "car"
+    assert li.objects[17].category == "cat"
+    assert li.objects[99].category == "backpack"
+
+
+def test_class_pages_binary_fall_back_to_positional(tmp_path):
+    """Purely binary pages (all values in {0,1}) fall back to positional IDs."""
+    pages = _make_class_pages()  # each page has only {0, 1}
+    tiff_path = tmp_path / "binary.tif"
+    _write_plain_multipage(tiff_path, pages)
+
+    result = read_label_images(
+        tiff_path, pages_as="classes", categories=["a", "b", "c"]
+    )
+    li = result[0]
+    assert set(np.unique(li.data).tolist()) == {0, 1, 2, 3}
+
+
+def test_class_pages_mixed_values_fall_back_to_positional(tmp_path):
+    """A page with multiple distinct nonzero values disables ID preservation."""
+    h, w = 8, 8
+    p0 = np.zeros((h, w), dtype=np.uint8)
+    p1 = np.zeros((h, w), dtype=np.uint8)
+    p0[0:2, :] = 5
+    p0[0, 0] = 7  # page 0 has two nonzero values -> ambiguous
+    p1[3:5, :] = 17
+
+    tiff_path = tmp_path / "mixed.tif"
+    _write_plain_multipage(tiff_path, [p0, p1])
+
+    result = read_label_images(tiff_path, pages_as="classes")
+    # Fall back: positional IDs 1..N; original values are cast to bool.
+    assert set(np.unique(result[0].data).tolist()) == {0, 1, 2}
+
+
+def test_empty_directory_returns_empty_list(tmp_path):
+    """Directory with no TIFFs returns an empty list."""
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    assert read_label_images(empty_dir) == []
+
+
+def test_directory_rejects_3d_file(tmp_path):
+    """A 3D TIFF inside a directory raises ValueError."""
+    arr = np.zeros((3, 8, 8), dtype=np.uint8)
+    d = tmp_path / "d"
+    d.mkdir()
+    tifffile.imwrite(str(d / "bad.tif"), arr)
+    with pytest.raises(ValueError, match="2D"):
+        read_label_images(d)
+
+
+def test_ome_cyx_metadata(tmp_path):
+    """OME-TIFF with CYX axes auto-routes to class mode."""
+    pages = _make_class_pages()
+    stack = np.stack(pages, axis=0)
+    tiff_path = tmp_path / "ome_cyx.ome.tif"
+    tifffile.imwrite(str(tiff_path), stack, ome=True, metadata={"axes": "CYX"})
+
+    result = read_label_images(tiff_path, categories=["a", "b", "c"])
+    assert len(result) == 1
+    assert result[0].objects[1].category == "a"
+
+
+def test_write_empty_label_images_is_noop(tmp_path):
+    """write_label_images on an empty list does nothing and doesn't error."""
+    out = tmp_path / "noop.tif"
+    write_label_images(out, [])
+    assert not out.exists()
+
+
+def test_3d_single_page_still_rejected(tmp_path):
+    """A single 3D page (not multi-page) still raises ValueError."""
+    arr = np.zeros((3, 8, 8), dtype=np.uint8)
+    tiff_path = tmp_path / "3d.tif"
+    tifffile.imwrite(str(tiff_path), arr)  # writes as 1 page of shape (3,8,8)
+
+    with pytest.raises(ValueError, match="2D"):
+        read_label_images(tiff_path, pages_as="time")
+
+
+def test_normalize_axes_empty_and_none_return_unknown():
+    """Empty/None axes strings are treated as unknown."""
+    assert _normalize_axes("") == "unknown"
+    assert _normalize_axes(None) == "unknown"
+
+
+def test_normalize_axes_placeholder_chars_return_unknown():
+    """Placeholder tifffile axes (I/Q/S) normalize to unknown."""
+    assert _normalize_axes("IYX") == "unknown"
+    assert _normalize_axes("QYX") == "unknown"
+    assert _normalize_axes("YXS") == "unknown"
+    # Non-standard label with no placeholder and no T/C also unknown.
+    assert _normalize_axes("XY") == "unknown"
+
+
+def test_normalize_axes_known_layouts():
+    """Known axis strings map to the expected layout."""
+    assert _normalize_axes("YX") == "YX"
+    assert _normalize_axes("TYX") == "TYX"
+    assert _normalize_axes("ZYX") == "TYX"
+    assert _normalize_axes("CYX") == "CYX"
+    assert _normalize_axes("TCYX") == "TCYX"
+    assert _normalize_axes("tcyx") == "TCYX"  # case-insensitive
+
+
+def test_warn_ambiguous_pages_singlepage_is_silent(tmp_path):
+    """The warning helper is a no-op for single-page files."""
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _warn_ambiguous_pages(tmp_path / "x.tif", 1, "uint8")
+
+
+def test_categories_list_from_sidecar_none_and_empty():
+    """Sidecar=None or no objects key returns None."""
+    assert _categories_list_from_sidecar(None, 3) is None
+    assert _categories_list_from_sidecar({}, 3) is None
+    assert _categories_list_from_sidecar({"objects": {}}, 3) is None
+
+
+def test_categories_list_from_sidecar_blank_categories_return_none():
+    """Sidecar with objects but no non-empty categories returns None."""
+    sidecar = {"objects": {"1": {"track": "a"}, "2": {"track": "b"}}}
+    # Only track names, no categories → treated as "no category data".
+    assert _categories_list_from_sidecar(sidecar, 2) is None
+
+
+def test_infer_label_ids_rejects_collisions():
+    """Per-page ID detection returns None when pages share a non-zero value."""
+    p0 = np.zeros((4, 4), dtype=np.int32)
+    p1 = np.zeros((4, 4), dtype=np.int32)
+    p0[0, 0] = 5
+    p1[1, 1] = 5  # same value as page 0 → collision
+    assert _infer_label_ids_from_pages([p0, p1]) is None
+
+
+def test_tcyx_degenerate_to_cyx(tmp_path):
+    """An ImageJ TCYX hyperstack with T=1 is surfaced as CYX by tifffile."""
+    # T=1, C=3: tifffile drops the size-1 T axis so axes comes back as 'CYX'.
+    data = np.zeros((1, 3, 8, 8), dtype=np.uint8)
+    data[0, 0, 0:2, :] = 1
+    data[0, 1, 3:5, :] = 1
+    data[0, 2, 6:8, :] = 1
+    tiff_path = tmp_path / "tcyx_degen.tif"
+    tifffile.imwrite(str(tiff_path), data, imagej=True, metadata={"axes": "TCYX"})
+    result = read_label_images(tiff_path, categories=["a", "b", "c"])
+    assert len(result) == 1
+    assert result[0].objects[1].category == "a"
+    assert set(np.unique(result[0].data).tolist()) == {0, 1, 2, 3}
+
+
+def test_tcyx_sidecar_categories(tmp_path):
+    """TCYX path reads per-class categories from sidecar when not passed."""
+    T, C, H, W = 2, 3, 8, 8
+    data = np.zeros((T, C, H, W), dtype=np.uint8)
+    for t in range(T):
+        data[t, 0, 0:2, :] = 1
+        data[t, 1, 3:5, :] = 1
+        data[t, 2, 6:8, :] = 1
+    tiff_path = tmp_path / "tcyx_sidecar.tif"
+    tifffile.imwrite(str(tiff_path), data, imagej=True, metadata={"axes": "TCYX"})
+    sidecar = {
+        "format": "sleap-io-label-image-meta",
+        "version": 3,
+        "objects": {
+            "1": {"category": "a"},
+            "2": {"category": "b"},
+            "3": {"category": "c"},
+        },
+    }
+    with open(str(tiff_path) + ".meta.json", "w") as f:
+        json.dump(sidecar, f)
+
+    result = read_label_images(tiff_path)  # no categories passed → pulls from sidecar
+    assert len(result) == T
+    assert result[0].objects[1].category == "a"
+    assert result[0].objects[3].category == "c"
+
+
+def test_fallback_unknown_dtype_in_warning(tmp_path):
+    """Warning message includes the dtype of the first page."""
+    pages = _make_class_pages()
+    tiff_path = tmp_path / "amb.tif"
+    _write_plain_multipage(tiff_path, pages)
+    with pytest.warns(UserWarning, match="dtype="):
+        read_label_images(tiff_path)
+
+
+class warnings_as_errors:
+    """Context manager that turns warnings into errors for scoped assertions."""
+
+    def __enter__(self):
+        """Enter scope; escalate warnings to errors."""
+        import warnings
+
+        self._ctx = warnings.catch_warnings()
+        self._ctx.__enter__()
+        warnings.simplefilter("error")
+        return self
+
+    def __exit__(self, *args):
+        """Exit scope; restore prior warning filters."""
+        return self._ctx.__exit__(*args)
