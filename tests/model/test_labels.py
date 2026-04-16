@@ -5806,8 +5806,14 @@ def test_labels_close_handles_exception():
     assert labels._label_image_file is None
 
 
-def test_labels_del_calls_close():
-    """Labels.__del__() calls close()."""
+def test_labels_del_drops_reference_without_force_close():
+    """Labels.__del__() drops the file reference but does NOT forcibly close.
+
+    Forcibly closing on GC would invalidate LabelImage lazy loaders whose
+    h5py Dataset references rely on the file staying open. By just dropping
+    the reference, h5py's own C-level refcounting keeps the file open as
+    long as any Dataset (held by a LabelImage closure) still uses it.
+    """
     labels = Labels()
 
     class FakeFile:
@@ -5820,7 +5826,10 @@ def test_labels_del_calls_close():
     fake = FakeFile()
     labels._label_image_file = fake
     labels.__del__()
-    assert fake.closed
+    # Reference is dropped
+    assert labels._label_image_file is None
+    # But the file was NOT forcibly closed
+    assert not fake.closed
 
 
 def test_labels_get_centroids():
