@@ -247,6 +247,25 @@ def _infer_tiff_axes(path: Path) -> tuple[str, int, bool]:
         return "unknown", n_pages, False
 
 
+def _pages_could_be_class_stack(frames: list[np.ndarray]) -> bool:
+    """Check whether pages plausibly form a class stack (one class per page).
+
+    A class-stack interpretation requires each page to be either a binary
+    mask (values in {0, v} for some non-negative v) or the all-zeros
+    background. If any page contains two or more distinct positive
+    integer labels, it cannot be a single class's mask — so the
+    class-stack interpretation is ruled out and the pages-as-time
+    fallback is the only sensible reading.
+    """
+    for frame in frames:
+        positive = frame[frame > 0]
+        if positive.size == 0:
+            continue
+        if np.unique(positive).size > 1:
+            return False
+    return True
+
+
 def _warn_ambiguous_pages(path: Path, n_pages: int, dtype_name: str) -> None:
     """Emit a warning when falling back to pages-as-time with no metadata.
 
@@ -575,18 +594,23 @@ def read_label_images(
 
     # --- Dispatch on layout ---------------------------------------------
     if layout in ("YX", "TYX"):
-        # Warn when we're falling back on an ambiguous plain multi-page.
+        frames_data = _iter_pages()
+
+        # Warn when we're falling back on an ambiguous plain multi-page,
+        # but only if the pages could plausibly be a binary class stack.
+        # Multi-valued integer pages rule out the class-stack reading, so
+        # the fallback is the only sensible interpretation and suggesting
+        # pages_as='classes' would be misleading.
         used_fallback = (
             pages_as == "auto" and sidecar_axes is None and tiff_axes == "unknown"
         )
-        if used_fallback:
+        if used_fallback and _pages_could_be_class_stack(frames_data):
             dtype_name = "unknown"
             with tifffile.TiffFile(str(path)) as tif:
                 if tif.pages:
                     dtype_name = str(tif.pages[0].dtype)
             _warn_ambiguous_pages(path, n_pages, dtype_name)
 
-        frames_data = _iter_pages()
         return _read_pages_as_time(
             frames_data,
             tracks,

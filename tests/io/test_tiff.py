@@ -12,6 +12,7 @@ from sleap_io.io.tiff import (
     _categories_list_from_sidecar,
     _infer_label_ids_from_pages,
     _normalize_axes,
+    _pages_could_be_class_stack,
     _warn_ambiguous_pages,
     read_label_images,
     write_label_images,
@@ -445,6 +446,45 @@ def test_ambiguous_singlepage_no_warning(tmp_path):
 
     with warnings_as_errors():
         read_label_images(tiff_path)
+
+
+def test_ambiguous_multipage_multivalued_no_warning(tmp_path):
+    """Multi-page TIFF with multi-valued pages rules out class-stack reading."""
+    frames = [_make_label_array(8, 8, n_objects=3) for _ in range(4)]
+    tiff_path = tmp_path / "multivalued.tif"
+    _write_plain_multipage(tiff_path, frames)
+
+    with warnings_as_errors():
+        result = read_label_images(tiff_path)
+    assert len(result) == 4
+
+
+def test_pages_could_be_class_stack_all_binary():
+    """All-binary pages (disjoint single-class masks) could be a class stack."""
+    assert _pages_could_be_class_stack(_make_class_pages()) is True
+
+
+def test_pages_could_be_class_stack_all_zero():
+    """All-zero pages are trivially class-stack-compatible."""
+    assert _pages_could_be_class_stack([np.zeros((4, 4), dtype=np.int32)] * 3) is True
+
+
+def test_pages_could_be_class_stack_stamped_ids():
+    """Each page binary but stamped with its own ID is still class-stack-compatible."""
+    pages = [
+        np.where(np.arange(16).reshape(4, 4) < 8, i + 1, 0).astype(np.int32)
+        for i in range(3)
+    ]
+    assert _pages_could_be_class_stack(pages) is True
+
+
+def test_pages_could_be_class_stack_multivalued_ruled_out():
+    """Any page with two distinct positive labels rules out class-stack."""
+    pages = [
+        np.zeros((4, 4), dtype=np.int32),
+        np.array([[0, 1, 0, 0], [0, 1, 0, 2], [0, 0, 2, 0], [0, 0, 0, 0]]),
+    ]
+    assert _pages_could_be_class_stack(pages) is False
 
 
 def test_pages_as_invalid_raises(tmp_path):
