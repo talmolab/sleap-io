@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0  # Fetch all history for diff computation
 
       - name: Setup UV
-        uses: astral-sh/setup-uv@v8
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
 
