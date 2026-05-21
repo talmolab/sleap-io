@@ -13,7 +13,7 @@ from sleap_io import (
     Video,
     load_slp,
 )
-from sleap_io.codecs.numpy import from_numpy, to_numpy
+from sleap_io.codecs.numpy import from_numpy, to_analysis_arrays, to_numpy
 
 
 def test_to_numpy_basic(slp_typical):
@@ -890,3 +890,285 @@ def test_to_numpy_lazy_spans_full_video(slp_real_data):
 
     arr = to_numpy(labels)
     assert arr.shape[0] == video_length
+
+
+# =============================================================================
+# to_analysis_arrays
+# =============================================================================
+
+
+def test_to_analysis_arrays_untracked_multi():
+    """Untracked multi-animal project keeps every instance (issue #430)."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="test.mp4")
+
+    lfs = []
+    for f in range(3):
+        i1 = Instance.from_numpy(
+            np.array([[10.0 + f, 20.0 + f], [30.0 + f, 40.0 + f]]), skeleton=skeleton
+        )
+        i2 = Instance.from_numpy(
+            np.array([[100.0 + f, 200.0 + f], [300.0 + f, 400.0 + f]]),
+            skeleton=skeleton,
+        )
+        lfs.append(LabeledFrame(video=video, frame_idx=f, instances=[i1, i2]))
+    labels = Labels(labeled_frames=lfs)
+
+    occupancy, locations, point_scores, instance_scores, tracking_scores, names, ff = (
+        to_analysis_arrays(labels)
+    )
+
+    # Both instances survive in distinct slots (was 1 slot before the fix).
+    assert occupancy.shape == (3, 2)
+    assert locations.shape == (3, 2, 2, 2)
+    assert names == ["track_0", "track_1"]
+    assert ff == 0
+    assert np.all(occupancy == 1)
+    np.testing.assert_array_equal(locations[0, 0], [[10.0, 20.0], [30.0, 40.0]])
+    np.testing.assert_array_equal(locations[0, 1], [[100.0, 200.0], [300.0, 400.0]])
+    # User instances carry no scores.
+    assert np.all(np.isnan(point_scores))
+    assert np.all(np.isnan(instance_scores))
+    assert np.all(np.isnan(tracking_scores))
+
+
+def test_to_analysis_arrays_untracked_single():
+    """Single-instance untracked project still exports one track slot."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="test.mp4")
+
+    lfs = [
+        LabeledFrame(
+            video=video,
+            frame_idx=f,
+            instances=[
+                Instance.from_numpy(
+                    np.array([[float(f), float(f)], [float(f), float(f)]]),
+                    skeleton=skeleton,
+                )
+            ],
+        )
+        for f in range(3)
+    ]
+    labels = Labels(labeled_frames=lfs)
+
+    occupancy, locations, _, _, _, names, _ = to_analysis_arrays(labels)
+
+    assert occupancy.shape == (3, 1)
+    assert locations.shape == (3, 1, 2, 2)
+    assert names == ["track_0"]
+
+
+def test_to_analysis_arrays_tracked():
+    """Tracked project slots instances by track and keeps real names/scores."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="test.mp4")
+    track1 = Track("animal1")
+    track2 = Track("animal2")
+
+    lfs = []
+    for f in range(3):
+        i1 = PredictedInstance.from_numpy(
+            points_data=np.array([[1.0 + f, 1.0 + f], [2.0 + f, 2.0 + f]]),
+            skeleton=skeleton,
+            point_scores=np.array([0.9, 0.8]),
+            score=0.95,
+            track=track1,
+            tracking_score=0.7,
+        )
+        i2 = PredictedInstance.from_numpy(
+            points_data=np.array([[5.0 + f, 5.0 + f], [6.0 + f, 6.0 + f]]),
+            skeleton=skeleton,
+            point_scores=np.array([0.6, 0.5]),
+            score=0.85,
+            track=track2,
+            tracking_score=0.4,
+        )
+        lfs.append(LabeledFrame(video=video, frame_idx=f, instances=[i1, i2]))
+    labels = Labels(labeled_frames=lfs, tracks=[track1, track2])
+
+    occupancy, locations, point_scores, instance_scores, tracking_scores, names, _ = (
+        to_analysis_arrays(labels)
+    )
+
+    assert names == ["animal1", "animal2"]
+    assert occupancy.shape == (3, 2)
+    np.testing.assert_array_equal(locations[0, 0], [[1.0, 1.0], [2.0, 2.0]])
+    np.testing.assert_array_equal(locations[0, 1], [[5.0, 5.0], [6.0, 6.0]])
+    np.testing.assert_array_equal(point_scores[0, 0], [0.9, 0.8])
+    assert instance_scores[0, 0] == pytest.approx(0.95)
+    assert instance_scores[0, 1] == pytest.approx(0.85)
+    assert tracking_scores[0, 0] == pytest.approx(0.7)
+
+
+def test_to_analysis_arrays_tracked_drops_untracked_instance():
+    """An untracked instance in a tracked project is dropped, not slot-0'd."""
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+    track1 = Track("animal1")
+    track2 = Track("animal2")
+
+    tracked1 = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 1.0]]), skeleton=skeleton, score=0.9, track=track1
+    )
+    tracked2 = PredictedInstance.from_numpy(
+        points_data=np.array([[2.0, 2.0]]), skeleton=skeleton, score=0.9, track=track2
+    )
+    stray = PredictedInstance.from_numpy(
+        points_data=np.array([[9.0, 9.0]]), skeleton=skeleton, score=0.9, track=None
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[tracked1, tracked2, stray])
+    labels = Labels(labeled_frames=[lf], tracks=[track1, track2])
+
+    occupancy, locations, _, _, _, names, _ = to_analysis_arrays(labels)
+
+    assert names == ["animal1", "animal2"]
+    assert occupancy.shape == (1, 2)
+    # Track 0 keeps its own instance; the stray instance is not slotted here.
+    np.testing.assert_array_equal(locations[0, 0], [[1.0, 1.0]])
+    np.testing.assert_array_equal(locations[0, 1], [[2.0, 2.0]])
+    assert not np.any(locations == 9.0)
+
+
+def test_to_analysis_arrays_min_occupancy_untracked():
+    """min_occupancy filtering renumbers synthesized track names without gaps."""
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    lfs = []
+    for f in range(10):
+        # Frame 0 has 3 instances; all others have 1 -> slots 1 and 2 are sparse.
+        n = 3 if f == 0 else 1
+        instances = [
+            Instance.from_numpy(np.array([[float(k), float(f)]]), skeleton=skeleton)
+            for k in range(n)
+        ]
+        lfs.append(LabeledFrame(video=video, frame_idx=f, instances=instances))
+    labels = Labels(labeled_frames=lfs)
+
+    # Without filtering: 3 slots.
+    occ_all, _, _, _, _, names_all, _ = to_analysis_arrays(labels)
+    assert occ_all.shape[1] == 3
+    assert names_all == ["track_0", "track_1", "track_2"]
+
+    # With filtering: only the dense slot 0 survives, renumbered with no gaps.
+    occ, _, _, _, _, names, _ = to_analysis_arrays(labels, min_occupancy=0.5)
+    assert occ.shape[1] == 1
+    assert names == ["track_0"]
+
+
+def test_to_analysis_arrays_variable_instance_count():
+    """n_tracks is sized to the largest per-frame instance count."""
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    lf0 = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[1.0, 1.0]]), skeleton=skeleton)],
+    )
+    lf1 = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[
+            Instance.from_numpy(np.array([[float(k), 2.0]]), skeleton=skeleton)
+            for k in range(3)
+        ],
+    )
+    labels = Labels(labeled_frames=[lf0, lf1])
+
+    occupancy, _, _, _, _, names, _ = to_analysis_arrays(labels)
+
+    assert occupancy.shape[1] == 3
+    assert names == ["track_0", "track_1", "track_2"]
+    # Frame 0 occupies only the first slot.
+    np.testing.assert_array_equal(occupancy[0], [1, 0, 0])
+    np.testing.assert_array_equal(occupancy[1], [1, 1, 1])
+
+
+def test_to_analysis_arrays_all_frames_toggle():
+    """all_frames controls whether output starts at frame 0 or first label."""
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    lfs = [
+        LabeledFrame(
+            video=video,
+            frame_idx=f,
+            instances=[Instance.from_numpy(np.array([[1.0, 1.0]]), skeleton=skeleton)],
+        )
+        for f in (5, 6, 7)
+    ]
+    labels = Labels(labeled_frames=lfs)
+
+    occ_all, _, _, _, _, _, ff_all = to_analysis_arrays(labels, all_frames=True)
+    assert ff_all == 0
+    assert occ_all.shape[0] == 8
+
+    occ_some, _, _, _, _, _, ff_some = to_analysis_arrays(labels, all_frames=False)
+    assert ff_some == 5
+    assert occ_some.shape[0] == 3
+
+
+def test_to_analysis_arrays_no_labeled_frames():
+    """A video with no labeled frames raises ValueError."""
+    video = Video(filename="test.mp4")
+    labels = Labels(videos=[video], skeletons=[Skeleton(["pt"])])
+
+    with pytest.raises(ValueError, match="No labeled frames"):
+        to_analysis_arrays(labels)
+
+
+def test_to_analysis_arrays_video_index():
+    """A video may be selected by integer index."""
+    skeleton = Skeleton(["pt"])
+    video0 = Video(filename="v0.mp4")
+    video1 = Video(filename="v1.mp4")
+
+    lf0 = LabeledFrame(
+        video=video0,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[1.0, 1.0]]), skeleton=skeleton)],
+    )
+    lf1 = LabeledFrame(
+        video=video1,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[2.0, 2.0]]), skeleton=skeleton)],
+    )
+    labels = Labels(labeled_frames=[lf0, lf1])
+
+    _, locations, _, _, _, _, _ = to_analysis_arrays(labels, video=1)
+    np.testing.assert_array_equal(locations[0, 0], [[2.0, 2.0]])
+
+
+def test_to_analysis_arrays_extra_instances_dropped():
+    """Instances beyond the global per-frame max are dropped, not crashed on.
+
+    Per-frame dedup can leave more instances than `max(n_user, n_predicted)`
+    when user and predicted instances are unrelated, so the track-slot guard
+    must drop the overflow instead of writing out of bounds.
+    """
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    user1 = Instance.from_numpy(np.array([[1.0, 1.0]]), skeleton=skeleton)
+    user2 = Instance.from_numpy(np.array([[2.0, 2.0]]), skeleton=skeleton)
+    # Predicted instances unrelated to the user instances (no from_predicted
+    # link, no shared track) so dedup keeps them all.
+    pred1 = PredictedInstance.from_numpy(
+        points_data=np.array([[3.0, 3.0]]), skeleton=skeleton, score=0.9
+    )
+    pred2 = PredictedInstance.from_numpy(
+        points_data=np.array([[4.0, 4.0]]), skeleton=skeleton, score=0.9
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[user1, user2, pred1, pred2])
+    labels = Labels(labeled_frames=[lf])
+
+    # n_instances = max(2 user, 2 predicted) = 2, so only 2 slots exist.
+    occupancy, locations, _, _, _, names, _ = to_analysis_arrays(labels)
+
+    assert occupancy.shape[1] == 2
+    assert names == ["track_0", "track_1"]
+    # User instances are slotted first; the extra predicted ones are dropped.
+    np.testing.assert_array_equal(locations[0, 0], [[1.0, 1.0]])
+    np.testing.assert_array_equal(locations[0, 1], [[2.0, 2.0]])
