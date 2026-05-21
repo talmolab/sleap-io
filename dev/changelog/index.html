@@ -384,6 +384,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v070" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.7.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v065" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -696,17 +707,6 @@
     <span class="md-ellipsis">
       
         v0.1.1
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v010" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.0
       
     </span>
   </a>
@@ -3366,6 +3366,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v070" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.7.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v065" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3684,17 +3695,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v010" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.0
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -3714,6 +3714,783 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v070"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.7.0">v0.7.0</a><a class="headerlink" href="#v070" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.7.0 Release Notes</h1>
+<h2>Summary</h2>
+<p>sleap-io v0.7.0 reframes the library around a single, unified <strong>annotation architecture</strong>: pose <code>Instance</code>s are now just one of <em>six</em> first-class annotation types — alongside <code>BoundingBox</code>, <code>LabelImage</code>, <code>SegmentationMask</code>, <code>ROI</code>, and <code>Centroid</code> — all nested inside <code>LabeledFrame</code>. Every annotation type follows the same shape: an abstract base class with <code>User*</code> and <code>Predicted*</code> variants that carry confidence scores, a consistent <code>tracking_score</code> field on anything trackable, and O(1) per-frame access. Annotations no longer carry their own <code>video</code>/<code>frame_idx</code>; they derive context from their parent frame (the way <code>Instance</code> always has). Together these changes make sleap-io equally first-class for keypoint pose, detection, segmentation, and tracking workflows, with a backward-compatible SLP format that round-trips all of it.</p>
+<p><strong>Highlights:</strong></p>
+<ul>
+<li><strong>Unified annotation architecture</strong> — abstract <code>BoundingBox</code>/<code>LabelImage</code>/<code>SegmentationMask</code>/<code>ROI</code>/<code>Centroid</code> bases with <code>User*</code>/<code>Predicted*</code> variants, all nested under <code>LabeledFrame</code>, with O(1) frame and track lookups</li>
+<li><strong>First-class instance segmentation</strong> — <code>LabelImage</code> type with streaming write, lazy read, multi-resolution metadata, batch constructors, and segmentation overlay rendering for Cellpose / StarDist / Mask R-CNN / SAM workflows</li>
+<li><strong>First-class detection</strong> — <code>BoundingBox</code> type with <code>x1/y1/x2/y2</code> representation, full I/O across SLP/COCO/Ultralytics/GeoJSON/JABS, and rotated-box rendering</li>
+<li><strong>3D pose</strong> — <code>Identity</code>, <code>Instance3D</code>, and <code>PredictedInstance3D</code> for cross-session multi-camera workflows; round-trips with sleap-io.js and luc3d</li>
+<li><strong>New formats</strong> — Norpix <code>.seq</code> video, TrackMate CSV reader, h5wasm/sleap-io.js SLP, GeoJSON ROI I/O</li>
+<li><strong>Tracking-friendly</strong> — uniform <code>tracking_score</code> on every trackable type, <code>Centroid</code> for detection-only trackers</li>
+<li><strong>Performance</strong> — O(1) frame/track indices, chunked SLP v2.2 label-image storage (43× faster writes), zero-decompression label-image merge</li>
+</ul>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.7.0 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;
+
+# Upgrade existing project dependency
+uv lock --upgrade-package sleap-io &amp;&amp; uv sync"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.7.0 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing project dependency</span>
+uv lock --upgrade-package sleap-io <span class="pl-k">&amp;&amp;</span> uv sync</pre></div>
+<p>See <a href="https://io.sleap.ai/install/" rel="nofollow">installation docs</a> for more options.</p>
+<hr>
+<h2>Breaking Changes</h2>
+<p>v0.7.0 is a major release with intentional API breakage to unify the annotation model. Migrations are mechanical — the table below covers every break.</p>
+<h3>Annotation type construction is now via <code>User*</code> / <code>Predicted*</code> subclasses (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4167721203" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/381" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/381/hovercard" href="https://github.com/talmolab/sleap-io/pull/381">#381</a>)</h3>
+<p><code>BoundingBox</code>, <code>SegmentationMask</code>, <code>ROI</code>, and <code>LabelImage</code> are now <strong>abstract base classes</strong>. Direct instantiation raises <code>TypeError</code> — instead, use the <code>User*</code> (ground-truth) or <code>Predicted*</code> (model-output, with <code>score</code>) variant:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Before (0.6.x)
+bbox = sio.BoundingBox(x_center=50, y_center=40, width=100, height=80)
+mask = sio.SegmentationMask.from_numpy(arr)
+
+# After (0.7.0)
+bbox = sio.UserBoundingBox(x1=0, y1=0, x2=100, y2=80, category=&quot;mouse&quot;)
+pred = sio.PredictedBoundingBox.from_xyxy(0, 0, 100, 80, score=0.92)
+mask = sio.UserSegmentationMask.from_numpy(arr, category=&quot;cell&quot;)
+pred_mask = sio.PredictedSegmentationMask.from_numpy(arr, score=0.95, score_map=heatmap)"><pre><span class="pl-c"># Before (0.6.x)</span>
+<span class="pl-s1">bbox</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">BoundingBox</span>(<span class="pl-s1">x_center</span><span class="pl-c1">=</span><span class="pl-c1">50</span>, <span class="pl-s1">y_center</span><span class="pl-c1">=</span><span class="pl-c1">40</span>, <span class="pl-s1">width</span><span class="pl-c1">=</span><span class="pl-c1">100</span>, <span class="pl-s1">height</span><span class="pl-c1">=</span><span class="pl-c1">80</span>)
+<span class="pl-s1">mask</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">SegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">arr</span>)
+
+<span class="pl-c"># After (0.7.0)</span>
+<span class="pl-s1">bbox</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserBoundingBox</span>(<span class="pl-s1">x1</span><span class="pl-c1">=</span><span class="pl-c1">0</span>, <span class="pl-s1">y1</span><span class="pl-c1">=</span><span class="pl-c1">0</span>, <span class="pl-s1">x2</span><span class="pl-c1">=</span><span class="pl-c1">100</span>, <span class="pl-s1">y2</span><span class="pl-c1">=</span><span class="pl-c1">80</span>, <span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"mouse"</span>)
+<span class="pl-s1">pred</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">PredictedBoundingBox</span>.<span class="pl-c1">from_xyxy</span>(<span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">100</span>, <span class="pl-c1">80</span>, <span class="pl-s1">score</span><span class="pl-c1">=</span><span class="pl-c1">0.92</span>)
+<span class="pl-s1">mask</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserSegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">arr</span>, <span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"cell"</span>)
+<span class="pl-s1">pred_mask</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">PredictedSegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">arr</span>, <span class="pl-s1">score</span><span class="pl-c1">=</span><span class="pl-c1">0.95</span>, <span class="pl-s1">score_map</span><span class="pl-c1">=</span><span class="pl-s1">heatmap</span>)</pre></div>
+<h3><code>BoundingBox</code> is now <code>x1/y1/x2/y2</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4167721203" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/381" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/381/hovercard" href="https://github.com/talmolab/sleap-io/pull/381">#381</a>)</h3>
+<p>The constructor signature changed from <code>(x_center, y_center, width, height)</code> to <code>(x1, y1, x2, y2)</code>. The old fields remain as read-only computed properties.</p>
+<h3>Annotations no longer carry <code>video</code>/<code>frame_idx</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4234121368" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/411" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/411/hovercard" href="https://github.com/talmolab/sleap-io/pull/411">#411</a>)</h3>
+<p><code>Centroid</code>, <code>BoundingBox</code>, <code>SegmentationMask</code>, and <code>LabelImage</code> lose the <code>video=</code> and <code>frame_idx=</code> constructor kwargs entirely (<code>ROI</code> keeps <code>video</code> for static arena ROIs but loses <code>frame_idx</code>). Annotations now derive their spatial-temporal context from the <code>LabeledFrame</code> they live in, exactly the way <code>Instance</code> always has — eliminating an entire class of metadata-sync bugs.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Before
+c = sio.UserCentroid(x=10, y=20, video=video, frame_idx=5)
+labels.add_centroid(c)
+
+# After
+lf = sio.LabeledFrame(video=video, frame_idx=5)
+lf.append(sio.UserCentroid(x=10, y=20))                     # → lf.centroids
+lf.append(sio.UserBoundingBox.from_xywh(0, 0, 50, 50))      # → lf.bboxes
+lf.append(sio.PredictedSegmentationMask.from_numpy(arr, score=0.9))
+labels = sio.Labels(labeled_frames=[lf])
+
+# Static ROIs (no parent frame) still go on Labels directly
+roi = sio.UserROI.from_bbox(0, 0, 640, 480, video=video, category=&quot;arena&quot;)
+labels = sio.Labels(rois=[roi])"><pre><span class="pl-c"># Before</span>
+<span class="pl-s1">c</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserCentroid</span>(<span class="pl-s1">x</span><span class="pl-c1">=</span><span class="pl-c1">10</span>, <span class="pl-s1">y</span><span class="pl-c1">=</span><span class="pl-c1">20</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">5</span>)
+<span class="pl-s1">labels</span>.<span class="pl-c1">add_centroid</span>(<span class="pl-s1">c</span>)
+
+<span class="pl-c"># After</span>
+<span class="pl-s1">lf</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">LabeledFrame</span>(<span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">5</span>)
+<span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">UserCentroid</span>(<span class="pl-s1">x</span><span class="pl-c1">=</span><span class="pl-c1">10</span>, <span class="pl-s1">y</span><span class="pl-c1">=</span><span class="pl-c1">20</span>))                     <span class="pl-c"># → lf.centroids</span>
+<span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">UserBoundingBox</span>.<span class="pl-c1">from_xywh</span>(<span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">50</span>, <span class="pl-c1">50</span>))      <span class="pl-c"># → lf.bboxes</span>
+<span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">PredictedSegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">arr</span>, <span class="pl-s1">score</span><span class="pl-c1">=</span><span class="pl-c1">0.9</span>))
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Labels</span>(<span class="pl-s1">labeled_frames</span><span class="pl-c1">=</span>[<span class="pl-s1">lf</span>])
+
+<span class="pl-c"># Static ROIs (no parent frame) still go on Labels directly</span>
+<span class="pl-s1">roi</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserROI</span>.<span class="pl-c1">from_bbox</span>(<span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">640</span>, <span class="pl-c1">480</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"arena"</span>)
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Labels</span>(<span class="pl-s1">rois</span><span class="pl-c1">=</span>[<span class="pl-s1">roi</span>])</pre></div>
+<p><code>Labels.add_centroid()</code>, <code>add_bbox()</code>, <code>add_mask()</code>, <code>add_label_image()</code>, <code>add_roi()</code> are removed in favor of <code>LabeledFrame.append()</code>. <code>ROI.is_static</code> is removed (a static ROI is now any ROI with no parent frame).</p>
+<h3><code>Labels.centroids/.bboxes/.masks/.label_images/.rois</code> are now read-only properties (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4215500639" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/402" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/402/hovercard" href="https://github.com/talmolab/sleap-io/pull/402">#402</a>)</h3>
+<p>These are now flattened views derived from each <code>LabeledFrame</code>. Mutate via <code>lf.append(ann)</code> (frame-bound annotations) or <code>Labels(rois=[...])</code> (static ROIs). Code that did <code>labels.centroids.append(c)</code> or <code>labels.bboxes = [...]</code> must be updated.</p>
+<h3><code>Labels.numpy()</code> and <code>save_analysis_h5()</code> shape change (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4061004704" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/368" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/368/hovercard" href="https://github.com/talmolab/sleap-io/pull/368">#368</a>)</h3>
+<p>These now return arrays sized to the <strong>full video length</strong> instead of <code>last_labeled_frame + 1</code>. A 1100-frame video with the last prediction at frame 990 used to produce a 991-row array; it now produces 1100 rows with all-NaN trailing frames. Downstream code that sized arrays from <code>arr.shape[0]</code>, sliced to <code>last_labeled_frame</code>, or assumed the array ended at the last prediction will need to either use <code>len(video)</code> directly or trim explicitly.</p>
+<h3><code>ROI.centroid</code> renamed to <code>ROI.centroid_xy</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4214126348" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/395" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/395/hovercard" href="https://github.com/talmolab/sleap-io/pull/395">#395</a>)</h3>
+<p>For consistency with <code>BoundingBox.centroid_xy</code> and <code>Instance.centroid_xy</code>. Update reads of <code>roi.centroid</code>.</p>
+<h3><code>ROI.from_bbox()</code> and <code>ROI.from_xyxy()</code> deprecated (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4167721203" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/381" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/381/hovercard" href="https://github.com/talmolab/sleap-io/pull/381">#381</a>)</h3>
+<p>Use <code>BoundingBox.from_xywh()</code> / <code>BoundingBox.from_xyxy()</code> for new code. The old class methods still work but emit <code>DeprecationWarning</code>.</p>
+<h3>Other field/return-shape changes</h3>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROI.annotation_type</code>, <code>ROI.score</code></td>
+<td>Removed — use <code>category</code> and <code>Predicted*</code> variant scores instead</td>
+</tr>
+<tr>
+<td><code>SegmentationMask.annotation_type</code>, <code>SegmentationMask.score</code></td>
+<td>Removed — same migration</td>
+</tr>
+<tr>
+<td><code>get_rois()</code>, <code>get_masks()</code></td>
+<td><code>annotation_type=</code> filter removed; filter by <code>category=</code></td>
+</tr>
+<tr>
+<td><code>get_rois()</code>, <code>get_masks()</code>, <code>get_label_images()</code></td>
+<td>New <code>predicted=True/False</code> filter</td>
+</tr>
+<tr>
+<td><code>parse_label_file()</code> (ultralytics)</td>
+<td>Returns <code>(instances, rois, bboxes)</code> 3-tuple instead of 2-tuple</td>
+</tr>
+<tr>
+<td><code>ROI(geometry=...)</code> validation</td>
+<td>Sharpened: invalid geometries raise <code>TypeError</code> at construction (was deferred)</td>
+</tr>
+<tr>
+<td><code>_rasterize_geometry(Point, h, w)</code></td>
+<td>Raises <code>TypeError</code> (was returning empty mask silently)</td>
+</tr>
+<tr>
+<td><code>UserSegmentationMask.from_numpy(multi_class_arr)</code></td>
+<td>Raises <code>ValueError</code> pointing to <code>LabelImage.from_numpy</code> (was silently binarizing)</td>
+</tr>
+<tr>
+<td><code>Labels.get_frame()</code>, <code>get_track_annotations()</code></td>
+<td>Raise on lazy <code>Labels</code>; materialize first</td>
+</tr>
+<tr>
+<td><code>sio convert *.csv</code></td>
+<td>CSV files are now content-sniffed (TrackMate vs. DLC) instead of always-DLC</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>New Features</h2>
+<h3>Unified annotation architecture (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4167721203" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/381" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/381/hovercard" href="https://github.com/talmolab/sleap-io/pull/381">#381</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4215500639" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/402" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/402/hovercard" href="https://github.com/talmolab/sleap-io/pull/402">#402</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4234121368" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/411" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/411/hovercard" href="https://github.com/talmolab/sleap-io/pull/411">#411</a>)</h3>
+<p><code>BoundingBox</code>, <code>SegmentationMask</code>, <code>ROI</code>, <code>LabelImage</code>, <code>Centroid</code>, and <code>Instance</code> now share a single design:</p>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Pattern</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Abstract base</td>
+<td><code>BoundingBox</code>, <code>SegmentationMask</code>, <code>ROI</code>, <code>LabelImage</code>, <code>Centroid</code> are <code>ABC</code>s</td>
+</tr>
+<tr>
+<td>Variants</td>
+<td><code>User*</code> (ground truth) and <code>Predicted*</code> (model output, with <code>score</code>)</td>
+</tr>
+<tr>
+<td>Score maps</td>
+<td><code>Predicted*</code> masks/label-images can carry an optional dense <code>score_map</code></td>
+</tr>
+<tr>
+<td>Tracking</td>
+<td>All trackable types carry <code>track</code> and `tracking_score: float</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>Columnar HDF5 storage in SLP (format v2.0+); <code>User*</code>/<code>Predicted*</code> distinguished by an <code>is_predicted</code> column</td>
+</tr>
+<tr>
+<td>Frame context</td>
+<td><code>video</code>/<code>frame_idx</code> derived from parent <code>LabeledFrame</code></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+lf = sio.LabeledFrame(video=video, frame_idx=5)
+lf.append(sio.UserBoundingBox.from_xywh(10, 10, 50, 50, category=&quot;mouse&quot;))
+lf.append(sio.PredictedSegmentationMask.from_numpy(arr, score=0.92))
+lf.append(sio.PredictedCentroid(x=42, y=37, score=0.88, tracking_score=0.7))
+lf.append(sio.UserInstance(...))
+labels = sio.Labels(labeled_frames=[lf])
+
+labels.get_bboxes(category=&quot;mouse&quot;)
+labels.get_masks(predicted=True)         # only model predictions
+labels.get_track_annotations(video, track)  # all annotation types, sorted by frame"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-s1">lf</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">LabeledFrame</span>(<span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">5</span>)
+<span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">UserBoundingBox</span>.<span class="pl-c1">from_xywh</span>(<span class="pl-c1">10</span>, <span class="pl-c1">10</span>, <span class="pl-c1">50</span>, <span class="pl-c1">50</span>, <span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"mouse"</span>))
+<span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">PredictedSegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">arr</span>, <span class="pl-s1">score</span><span class="pl-c1">=</span><span class="pl-c1">0.92</span>))
+<span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">PredictedCentroid</span>(<span class="pl-s1">x</span><span class="pl-c1">=</span><span class="pl-c1">42</span>, <span class="pl-s1">y</span><span class="pl-c1">=</span><span class="pl-c1">37</span>, <span class="pl-s1">score</span><span class="pl-c1">=</span><span class="pl-c1">0.88</span>, <span class="pl-s1">tracking_score</span><span class="pl-c1">=</span><span class="pl-c1">0.7</span>))
+<span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">UserInstance</span>(...))
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Labels</span>(<span class="pl-s1">labeled_frames</span><span class="pl-c1">=</span>[<span class="pl-s1">lf</span>])
+
+<span class="pl-s1">labels</span>.<span class="pl-c1">get_bboxes</span>(<span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"mouse"</span>)
+<span class="pl-s1">labels</span>.<span class="pl-c1">get_masks</span>(<span class="pl-s1">predicted</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)         <span class="pl-c"># only model predictions</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">get_track_annotations</span>(<span class="pl-s1">video</span>, <span class="pl-s1">track</span>)  <span class="pl-c"># all annotation types, sorted by frame</span></pre></div>
+<h3>O(1) frame and track indices (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4215959444" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/403" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/403/hovercard" href="https://github.com/talmolab/sleap-io/pull/403">#403</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4218826539" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/405" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/405/hovercard" href="https://github.com/talmolab/sleap-io/pull/405">#405</a>)</h3>
+<p>Lazy-built dict indices replace O(n) linear scans across <code>Labels</code>. <code>get_frame(video, frame_idx)</code> returns a <code>LabeledFrame</code> instantly; <code>get_track_annotations(video, track)</code> returns every annotation of a track sorted by frame_idx. <code>find()</code>, <code>get_centroids()</code>, <code>get_bboxes()</code>, <code>get_masks()</code>, <code>get_label_images()</code>, and <code>get_rois()</code> automatically use the index when both <code>video</code> and <code>frame_idx</code> are provided. Rendering also benefits — per-frame centroid and track lookups now run in O(1).</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="lf = labels.get_frame(video, frame_idx=42)               # O(1)
+anns = labels.get_track_annotations(video, track)         # O(1), sorted
+labels.get_centroids(video=v, frame_idx=42)              # O(1) fast path"><pre><span class="pl-s1">lf</span> <span class="pl-c1">=</span> <span class="pl-s1">labels</span>.<span class="pl-c1">get_frame</span>(<span class="pl-s1">video</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">42</span>)               <span class="pl-c"># O(1)</span>
+<span class="pl-s1">anns</span> <span class="pl-c1">=</span> <span class="pl-s1">labels</span>.<span class="pl-c1">get_track_annotations</span>(<span class="pl-s1">video</span>, <span class="pl-s1">track</span>)         <span class="pl-c"># O(1), sorted</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">get_centroids</span>(<span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">v</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">42</span>)              <span class="pl-c"># O(1) fast path</span></pre></div>
+<h3>First-class <code>BoundingBox</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4078134750" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/373" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/373/hovercard" href="https://github.com/talmolab/sleap-io/pull/373">#373</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4167721203" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/381" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/381/hovercard" href="https://github.com/talmolab/sleap-io/pull/381">#381</a>)</h3>
+<p><code>BoundingBox</code>, <code>UserBoundingBox</code>, and <code>PredictedBoundingBox</code> for detection and tracking workflows. Full I/O across SLP (format v1.7 → v2.0 columnar), COCO, Ultralytics, GeoJSON, and JABS. Rotated boxes, fill, and score-text rendering.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="bbox = sio.UserBoundingBox.from_xywh(10, 20, 90, 60, category=&quot;mouse&quot;)
+pred = sio.PredictedBoundingBox.from_xyxy(0, 0, 100, 80, score=0.92)
+labels = sio.Labels(bboxes=[bbox, pred])
+labels.get_bboxes(category=&quot;mouse&quot;)"><pre><span class="pl-s1">bbox</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserBoundingBox</span>.<span class="pl-c1">from_xywh</span>(<span class="pl-c1">10</span>, <span class="pl-c1">20</span>, <span class="pl-c1">90</span>, <span class="pl-c1">60</span>, <span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"mouse"</span>)
+<span class="pl-s1">pred</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">PredictedBoundingBox</span>.<span class="pl-c1">from_xyxy</span>(<span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">100</span>, <span class="pl-c1">80</span>, <span class="pl-s1">score</span><span class="pl-c1">=</span><span class="pl-c1">0.92</span>)
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Labels</span>(<span class="pl-s1">bboxes</span><span class="pl-c1">=</span>[<span class="pl-s1">bbox</span>, <span class="pl-s1">pred</span>])
+<span class="pl-s1">labels</span>.<span class="pl-c1">get_bboxes</span>(<span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"mouse"</span>)</pre></div>
+<h3>First-class <code>LabelImage</code> for instance segmentation (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4116267384" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/377" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/377/hovercard" href="https://github.com/talmolab/sleap-io/pull/377">#377</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4209739518" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/389" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/389/hovercard" href="https://github.com/talmolab/sleap-io/pull/389">#389</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4210253667" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/390" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/390/hovercard" href="https://github.com/talmolab/sleap-io/pull/390">#390</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4213151548" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/392" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/392/hovercard" href="https://github.com/talmolab/sleap-io/pull/392">#392</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4213494085" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/393" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/393/hovercard" href="https://github.com/talmolab/sleap-io/pull/393">#393</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4214126348" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/395" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/395/hovercard" href="https://github.com/talmolab/sleap-io/pull/395">#395</a>)</h3>
+<p>A dense integer-array annotation type where each pixel value encodes which object occupies that pixel — matching the standard output of Cellpose, StarDist, Mask R-CNN, and SAM. Includes track-centric query API, <code>↔ SegmentationMask</code> conversion, lazy-loaded SLP storage, TIFF I/O with <code>.meta.json</code> sidecars, and COCO panoptic format support.</p>
+<p><strong>Batch construction:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# From (T, H, W) stack — Cellpose/StarDist style
+label_images = sio.PredictedLabelImage.from_stack(
+    masks, video=video, source=&quot;cellpose&quot;, create_tracks=True, score=1.0,
+)
+
+# From per-object binary masks — SAM/Mask R-CNN style
+li = sio.PredictedLabelImage.from_binary_masks(
+    sam_masks,                        # (N, H, W) bool
+    label_ids=[5, 10],                # pin pixel values for cross-frame consistency
+    tracks=[t1, t2],
+    scores=[0.95, 0.87],              # per-object → Info.score
+    score=0.9,                        # image-level
+    video=video, frame_idx=0,
+)
+
+# Globally normalize label IDs across frames so each track has a stable pixel value
+track_map = sio.normalize_label_ids(labels.label_images, by=&quot;track&quot;)"><pre><span class="pl-c"># From (T, H, W) stack — Cellpose/StarDist style</span>
+<span class="pl-s1">label_images</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">PredictedLabelImage</span>.<span class="pl-c1">from_stack</span>(
+    <span class="pl-s1">masks</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">source</span><span class="pl-c1">=</span><span class="pl-s">"cellpose"</span>, <span class="pl-s1">create_tracks</span><span class="pl-c1">=</span><span class="pl-c1">True</span>, <span class="pl-s1">score</span><span class="pl-c1">=</span><span class="pl-c1">1.0</span>,
+)
+
+<span class="pl-c"># From per-object binary masks — SAM/Mask R-CNN style</span>
+<span class="pl-s1">li</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">PredictedLabelImage</span>.<span class="pl-c1">from_binary_masks</span>(
+    <span class="pl-s1">sam_masks</span>,                        <span class="pl-c"># (N, H, W) bool</span>
+    <span class="pl-s1">label_ids</span><span class="pl-c1">=</span>[<span class="pl-c1">5</span>, <span class="pl-c1">10</span>],                <span class="pl-c"># pin pixel values for cross-frame consistency</span>
+    <span class="pl-s1">tracks</span><span class="pl-c1">=</span>[<span class="pl-s1">t1</span>, <span class="pl-s1">t2</span>],
+    <span class="pl-s1">scores</span><span class="pl-c1">=</span>[<span class="pl-c1">0.95</span>, <span class="pl-c1">0.87</span>],              <span class="pl-c"># per-object → Info.score</span>
+    <span class="pl-s1">score</span><span class="pl-c1">=</span><span class="pl-c1">0.9</span>,                        <span class="pl-c"># image-level</span>
+    <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">0</span>,
+)
+
+<span class="pl-c"># Globally normalize label IDs across frames so each track has a stable pixel value</span>
+<span class="pl-s1">track_map</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">normalize_label_ids</span>(<span class="pl-s1">labels</span>.<span class="pl-c1">label_images</span>, <span class="pl-s1">by</span><span class="pl-c1">=</span><span class="pl-s">"track"</span>)</pre></div>
+<p><strong>Streaming + lazy + merge for large datasets:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Constant-memory streaming write — viable for 1000+ frame microscopy stacks
+with sio.LabelImageWriter(&quot;output.slp&quot;, video=video) as writer:
+    for frame_idx, mask in enumerate(cellpose_generator()):
+        li = sio.PredictedLabelImage.from_numpy(mask, video=video, frame_idx=frame_idx)
+        writer.add(li)
+
+# Zero-decompression raw-chunk merge across SLP files
+sio.merge_label_images([&quot;chunk_0.slp&quot;, &quot;chunk_1.slp&quot;], &quot;merged.slp&quot;)"><pre><span class="pl-c"># Constant-memory streaming write — viable for 1000+ frame microscopy stacks</span>
+<span class="pl-k">with</span> <span class="pl-s1">sio</span>.<span class="pl-c1">LabelImageWriter</span>(<span class="pl-s">"output.slp"</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>) <span class="pl-k">as</span> <span class="pl-s1">writer</span>:
+    <span class="pl-k">for</span> <span class="pl-s1">frame_idx</span>, <span class="pl-s1">mask</span> <span class="pl-c1">in</span> <span class="pl-en">enumerate</span>(<span class="pl-en">cellpose_generator</span>()):
+        <span class="pl-s1">li</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">PredictedLabelImage</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">mask</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-s1">frame_idx</span>)
+        <span class="pl-s1">writer</span>.<span class="pl-c1">add</span>(<span class="pl-s1">li</span>)
+
+<span class="pl-c"># Zero-decompression raw-chunk merge across SLP files</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">merge_label_images</span>([<span class="pl-s">"chunk_0.slp"</span>, <span class="pl-s">"chunk_1.slp"</span>], <span class="pl-s">"merged.slp"</span>)</pre></div>
+<p>SLP format v2.2 stores label images as a chunked <code>(T, H, W)</code> int32 dataset with <code>write_direct_chunk</code> (43× faster writes). Old format files (v1.8–v2.1) remain fully readable.</p>
+<p><strong>Bbox extraction:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="bboxes = label_image.to_bboxes()           # single-pass O(H*W); ~9ms for 500 objects on 512x512
+for bb in bboxes:
+    print(bb.xyxy, bb.track, bb.category, bb.centroid_xy)
+
+bb = mask.to_bbox()                        # SegmentationMask → BoundingBox"><pre><span class="pl-s1">bboxes</span> <span class="pl-c1">=</span> <span class="pl-s1">label_image</span>.<span class="pl-c1">to_bboxes</span>()           <span class="pl-c"># single-pass O(H*W); ~9ms for 500 objects on 512x512</span>
+<span class="pl-k">for</span> <span class="pl-s1">bb</span> <span class="pl-c1">in</span> <span class="pl-s1">bboxes</span>:
+    <span class="pl-en">print</span>(<span class="pl-s1">bb</span>.<span class="pl-c1">xyxy</span>, <span class="pl-s1">bb</span>.<span class="pl-c1">track</span>, <span class="pl-s1">bb</span>.<span class="pl-c1">category</span>, <span class="pl-s1">bb</span>.<span class="pl-c1">centroid_xy</span>)
+
+<span class="pl-s1">bb</span> <span class="pl-c1">=</span> <span class="pl-s1">mask</span>.<span class="pl-c1">to_bbox</span>()                        <span class="pl-c"># SegmentationMask → BoundingBox</span></pre></div>
+<h3>Multi-resolution dense annotations (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4208641026" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/385" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/385/hovercard" href="https://github.com/talmolab/sleap-io/pull/385">#385</a>)</h3>
+<p><code>SegmentationMask</code> and <code>LabelImage</code> get <code>scale</code> and <code>offset</code> spatial metadata so dense annotations can express their coordinate relationship to the video frame (half-resolution segmentation, cropped masks at an offset, etc.). Predicted variants get independent <code>score_map_scale</code>/<code>score_map_offset</code>. Rendering, COCO export, and TIFF sidecar (v2) all auto-resample.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="mask = sio.UserSegmentationMask.from_numpy(half_res_data, scale=(0.5, 0.5))
+mask = sio.UserSegmentationMask.from_numpy(data, stride=2)              # convenience
+mask = sio.UserSegmentationMask.from_numpy(crop_data, offset=(100.0, 50.0))
+full_res = mask.resampled(target_height=480, target_width=640)"><pre><span class="pl-s1">mask</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserSegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">half_res_data</span>, <span class="pl-s1">scale</span><span class="pl-c1">=</span>(<span class="pl-c1">0.5</span>, <span class="pl-c1">0.5</span>))
+<span class="pl-s1">mask</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserSegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">data</span>, <span class="pl-s1">stride</span><span class="pl-c1">=</span><span class="pl-c1">2</span>)              <span class="pl-c"># convenience</span>
+<span class="pl-s1">mask</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserSegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">crop_data</span>, <span class="pl-s1">offset</span><span class="pl-c1">=</span>(<span class="pl-c1">100.0</span>, <span class="pl-c1">50.0</span>))
+<span class="pl-s1">full_res</span> <span class="pl-c1">=</span> <span class="pl-s1">mask</span>.<span class="pl-c1">resampled</span>(<span class="pl-s1">target_height</span><span class="pl-c1">=</span><span class="pl-c1">480</span>, <span class="pl-s1">target_width</span><span class="pl-c1">=</span><span class="pl-c1">640</span>)</pre></div>
+<h3><code>Centroid</code> data model with uniform <code>tracking_score</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4214563474" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/397" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/397/hovercard" href="https://github.com/talmolab/sleap-io/pull/397">#397</a>)</h3>
+<p><code>Centroid</code>, <code>UserCentroid</code>, and <code>PredictedCentroid</code> for lightweight 2D/3D point detections — natively used by detection-only trackers (e.g., TrackMate spot workflows). Backfills a consistent <code>tracking_score: float | None</code> field onto every trackable type (<code>BoundingBox</code>, <code>SegmentationMask</code>, <code>ROI</code>, <code>LabelImage.Info</code>).</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="c = sio.UserCentroid(x=100.5, y=200.3, z=1.0, track=track, tracking_score=0.8)
+inst = c.to_instance()                       # single-node Instance
+c = sio.Centroid.from_instance(pose, method=&quot;center_of_mass&quot;)
+xy = pose.centroid_xy                        # (x, y) tuple or None
+labels.get_centroids(video=vid, frame_idx=0)"><pre><span class="pl-s1">c</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserCentroid</span>(<span class="pl-s1">x</span><span class="pl-c1">=</span><span class="pl-c1">100.5</span>, <span class="pl-s1">y</span><span class="pl-c1">=</span><span class="pl-c1">200.3</span>, <span class="pl-s1">z</span><span class="pl-c1">=</span><span class="pl-c1">1.0</span>, <span class="pl-s1">track</span><span class="pl-c1">=</span><span class="pl-s1">track</span>, <span class="pl-s1">tracking_score</span><span class="pl-c1">=</span><span class="pl-c1">0.8</span>)
+<span class="pl-s1">inst</span> <span class="pl-c1">=</span> <span class="pl-s1">c</span>.<span class="pl-c1">to_instance</span>()                       <span class="pl-c"># single-node Instance</span>
+<span class="pl-s1">c</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Centroid</span>.<span class="pl-c1">from_instance</span>(<span class="pl-s1">pose</span>, <span class="pl-s1">method</span><span class="pl-c1">=</span><span class="pl-s">"center_of_mass"</span>)
+<span class="pl-s1">xy</span> <span class="pl-c1">=</span> <span class="pl-s1">pose</span>.<span class="pl-c1">centroid_xy</span>                        <span class="pl-c"># (x, y) tuple or None</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">get_centroids</span>(<span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">vid</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">0</span>)</pre></div>
+<h3>3D data structures (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4174784209" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/382" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/382/hovercard" href="https://github.com/talmolab/sleap-io/pull/382">#382</a>)</h3>
+<p><code>Identity</code> (a cross-session animal identity, distinct from per-video <code>Track</code>), <code>Instance3D</code>, and <code>PredictedInstance3D</code> with per-keypoint confidence scores. <code>InstanceGroup</code> gains <code>instance_3d</code> and <code>identity</code> fields; <code>Labels</code> gains <code>identities</code>. SLP format v1.9 (only emitted when identities are present, fully backward compatible) lets 3D data round-trip between sleap-io, <a href="https://github.com/talmolab/sleap-io.js">sleap-io.js</a>, and luc3d without conversion.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="mouse_a = sio.Identity(name=&quot;mouse_A&quot;, color=&quot;#e6194b&quot;)
+inst_3d = sio.Instance3D(points=[[1, 2, 3], [4, 5, 6]], skeleton=skeleton)
+group = sio.InstanceGroup(
+    instance_by_camera={cam1: inst_2d_cam1, cam2: inst_2d_cam2},
+    instance_3d=inst_3d,
+    identity=mouse_a,
+)
+labels = sio.Labels(identities=[mouse_a], sessions=[session])"><pre><span class="pl-s1">mouse_a</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Identity</span>(<span class="pl-s1">name</span><span class="pl-c1">=</span><span class="pl-s">"mouse_A"</span>, <span class="pl-s1">color</span><span class="pl-c1">=</span><span class="pl-s">"#e6194b"</span>)
+<span class="pl-s1">inst_3d</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Instance3D</span>(<span class="pl-s1">points</span><span class="pl-c1">=</span>[[<span class="pl-c1">1</span>, <span class="pl-c1">2</span>, <span class="pl-c1">3</span>], [<span class="pl-c1">4</span>, <span class="pl-c1">5</span>, <span class="pl-c1">6</span>]], <span class="pl-s1">skeleton</span><span class="pl-c1">=</span><span class="pl-s1">skeleton</span>)
+<span class="pl-s1">group</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">InstanceGroup</span>(
+    <span class="pl-s1">instance_by_camera</span><span class="pl-c1">=</span>{<span class="pl-s1">cam1</span>: <span class="pl-s1">inst_2d_cam1</span>, <span class="pl-s1">cam2</span>: <span class="pl-s1">inst_2d_cam2</span>},
+    <span class="pl-s1">instance_3d</span><span class="pl-c1">=</span><span class="pl-s1">inst_3d</span>,
+    <span class="pl-s1">identity</span><span class="pl-c1">=</span><span class="pl-s1">mouse_a</span>,
+)
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Labels</span>(<span class="pl-s1">identities</span><span class="pl-c1">=</span>[<span class="pl-s1">mouse_a</span>], <span class="pl-s1">sessions</span><span class="pl-c1">=</span>[<span class="pl-s1">session</span>])</pre></div>
+<h3>Segmentation overlay rendering (API + CLI) (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4078569097" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/374" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/374/hovercard" href="https://github.com/talmolab/sleap-io/pull/374">#374</a>)</h3>
+<p>Composite integer label images, <code>SegmentationMask</code>, <code>ROI</code>, and <code>BoundingBox</code> onto rendered frames — alongside pose predictions or standalone (no labels file required).</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="img = sio.render_image(image=frame, overlay=label_mask, overlay_alpha=0.4)
+img = sio.render_image(lf, overlay=label_mask, overlay_outline=True)
+sio.render_video(labels, &quot;out.mp4&quot;, overlay=lambda idx: load_mask(idx))
+sio.draw_label_image(image, labels, alpha=0.4, outline=True)"><pre><span class="pl-s1">img</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">render_image</span>(<span class="pl-s1">image</span><span class="pl-c1">=</span><span class="pl-s1">frame</span>, <span class="pl-s1">overlay</span><span class="pl-c1">=</span><span class="pl-s1">label_mask</span>, <span class="pl-s1">overlay_alpha</span><span class="pl-c1">=</span><span class="pl-c1">0.4</span>)
+<span class="pl-s1">img</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">render_image</span>(<span class="pl-s1">lf</span>, <span class="pl-s1">overlay</span><span class="pl-c1">=</span><span class="pl-s1">label_mask</span>, <span class="pl-s1">overlay_outline</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)
+<span class="pl-s1">sio</span>.<span class="pl-c1">render_video</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"out.mp4"</span>, <span class="pl-s1">overlay</span><span class="pl-c1">=</span><span class="pl-k">lambda</span> <span class="pl-s1">idx</span>: <span class="pl-en">load_mask</span>(<span class="pl-s1">idx</span>))
+<span class="pl-s1">sio</span>.<span class="pl-c1">draw_label_image</span>(<span class="pl-s1">image</span>, <span class="pl-s1">labels</span>, <span class="pl-s1">alpha</span><span class="pl-c1">=</span><span class="pl-c1">0.4</span>, <span class="pl-s1">outline</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)</pre></div>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio render predictions.slp --overlay masks.tif --overlay-alpha 0.4
+sio render --images frames/ --overlay masks.tif -o output.mp4"><pre>sio render predictions.slp --overlay masks.tif --overlay-alpha 0.4
+sio render --images frames/ --overlay masks.tif -o output.mp4</pre></div>
+<h3>ROI: multi-geometry, indexed lookup, GeoJSON I/O (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4055198725" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/366" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/366/hovercard" href="https://github.com/talmolab/sleap-io/pull/366">#366</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4057080311" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/367" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/367/hovercard" href="https://github.com/talmolab/sleap-io/pull/367">#367</a>)</h3>
+<p>ROI gets <code>from_multi_polygon()</code>, <code>explode()</code>, persisted <code>instance</code> field (lazy-resolved on read), skia-based overlays for all Shapely geometry types, and O(1) <code>(video, frame_idx)</code> index. New <code>sio.load_geojson()</code> / <code>sio.save_geojson()</code> functions — interoperable with <a href="https://github.com/neuroinformatics-unit/movement">movement</a>, Shapely, GeoPandas, QGIS, QuPath. No new dependencies.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="roi = sio.ROI.from_multi_polygon([
+    [(0, 0), (10, 0), (10, 10), (0, 10)],
+    [(20, 20), (30, 20), (30, 30), (20, 30)],
+])
+individual = roi.explode()
+
+sio.save_geojson(rois, &quot;rois.geojson&quot;)
+loaded = sio.load_geojson(&quot;rois.geojson&quot;)
+labels = sio.load_file(&quot;rois.geojson&quot;)          # auto-detected
+roi.__geo_interface__                            # GeoJSON Feature dict"><pre><span class="pl-s1">roi</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">ROI</span>.<span class="pl-c1">from_multi_polygon</span>([
+    [(<span class="pl-c1">0</span>, <span class="pl-c1">0</span>), (<span class="pl-c1">10</span>, <span class="pl-c1">0</span>), (<span class="pl-c1">10</span>, <span class="pl-c1">10</span>), (<span class="pl-c1">0</span>, <span class="pl-c1">10</span>)],
+    [(<span class="pl-c1">20</span>, <span class="pl-c1">20</span>), (<span class="pl-c1">30</span>, <span class="pl-c1">20</span>), (<span class="pl-c1">30</span>, <span class="pl-c1">30</span>), (<span class="pl-c1">20</span>, <span class="pl-c1">30</span>)],
+])
+<span class="pl-s1">individual</span> <span class="pl-c1">=</span> <span class="pl-s1">roi</span>.<span class="pl-c1">explode</span>()
+
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_geojson</span>(<span class="pl-s1">rois</span>, <span class="pl-s">"rois.geojson"</span>)
+<span class="pl-s1">loaded</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_geojson</span>(<span class="pl-s">"rois.geojson"</span>)
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"rois.geojson"</span>)          <span class="pl-c"># auto-detected</span>
+<span class="pl-s1">roi</span>.<span class="pl-c1">__geo_interface__</span>                            <span class="pl-c"># GeoJSON Feature dict</span></pre></div>
+<h3>New format support</h3>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>PR</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Norpix <code>.seq</code> video</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4123853898" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/380" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/380/hovercard" href="https://github.com/talmolab/sleap-io/pull/380">#380</a></td>
+<td>StreamPix files; auto-FPS from per-frame timestamps; works with <code>sio show</code>/<code>sio reencode</code></td>
+</tr>
+<tr>
+<td>TrackMate CSV</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4214762553" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/399" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/399/hovercard" href="https://github.com/talmolab/sleap-io/pull/399">#399</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4239719803" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/412" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/412/hovercard" href="https://github.com/talmolab/sleap-io/pull/412">#412</a></td>
+<td><code>read_trackmate_csv()</code> imports spots as <code>PredictedCentroid</code>, auto-detects sibling <code>_edges.csv</code> and <code>.tif</code>; <code>sio convert</code> content-sniffs CSVs</td>
+</tr>
+<tr>
+<td>sleap-io.js / h5wasm SLP</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4118284751" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/378" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/378/hovercard" href="https://github.com/talmolab/sleap-io/pull/378">#378</a></td>
+<td>Transparent read of flat-2D-array SLP files written by the JS port</td>
+</tr>
+<tr>
+<td>GeoJSON ROIs</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4057080311" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/367" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/367/hovercard" href="https://github.com/talmolab/sleap-io/pull/367">#367</a></td>
+<td>See above</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="video = sio.load_video(&quot;recording.seq&quot;)
+labels = sio.load_trackmate(&quot;experiment_spots.csv&quot;, video=&quot;experiment.tif&quot;)
+labels = sio.load_slp(&quot;from_browser.slp&quot;)        # h5wasm-written → auto-converted"><pre><span class="pl-s1">video</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_video</span>(<span class="pl-s">"recording.seq"</span>)
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_trackmate</span>(<span class="pl-s">"experiment_spots.csv"</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s">"experiment.tif"</span>)
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"from_browser.slp"</span>)        <span class="pl-c"># h5wasm-written → auto-converted</span></pre></div>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio convert experiment_spots.csv -o experiment.slp     # auto-detected as trackmate
+sio reencode recording.seq -o recording.mp4"><pre>sio convert experiment_spots.csv -o experiment.slp     <span class="pl-c"><span class="pl-c">#</span> auto-detected as trackmate</span>
+sio reencode recording.seq -o recording.mp4</pre></div>
+<h3>Strategy-aware annotation merging (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4220263191" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/408" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/408/hovercard" href="https://github.com/talmolab/sleap-io/pull/408">#408</a>)</h3>
+<p><code>Labels.merge()</code> strategies (<code>auto</code>, <code>update_tracks</code>, <code>replace_predictions</code>, <code>keep_*</code>) now correctly apply to <em>all</em> annotation modalities, not just instances. <code>auto</code> and <code>update_tracks</code> use spatial centroid-distance matching for centroids, bboxes, ROIs, masks, and label images.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="labels_a.merge(labels_b, frame_strategy=&quot;auto&quot;)    # spatial matching for all modalities"><pre><span class="pl-s1">labels_a</span>.<span class="pl-c1">merge</span>(<span class="pl-s1">labels_b</span>, <span class="pl-s1">frame_strategy</span><span class="pl-c1">=</span><span class="pl-s">"auto"</span>)    <span class="pl-c"># spatial matching for all modalities</span></pre></div>
+<h3><code>LabeledFrame.append()</code> dispatcher</h3>
+<p>Routes annotations to the correct list based on type — <code>Instance</code>, <code>Centroid</code>, <code>BoundingBox</code>, <code>SegmentationMask</code>, <code>LabelImage</code>, or <code>ROI</code>.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="lf.append(sio.UserCentroid(x=10, y=20))
+lf.append(sio.UserBoundingBox.from_xywh(0, 0, 50, 50))
+lf.append(sio.PredictedSegmentationMask.from_numpy(arr, score=0.9))"><pre><span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">UserCentroid</span>(<span class="pl-s1">x</span><span class="pl-c1">=</span><span class="pl-c1">10</span>, <span class="pl-s1">y</span><span class="pl-c1">=</span><span class="pl-c1">20</span>))
+<span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">UserBoundingBox</span>.<span class="pl-c1">from_xywh</span>(<span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">50</span>, <span class="pl-c1">50</span>))
+<span class="pl-s1">lf</span>.<span class="pl-c1">append</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">PredictedSegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">arr</span>, <span class="pl-s1">score</span><span class="pl-c1">=</span><span class="pl-c1">0.9</span>))</pre></div>
+<hr>
+<h2>Bug Fixes</h2>
+<h3>Lazy-load correctness</h3>
+<ul>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4270336543" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/419" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/419/hovercard" href="https://github.com/talmolab/sleap-io/pull/419">#419</a></strong> <code>Labels.__del__</code> no longer forcibly closes the HDF5 file on GC, so <code>sio.load_slp("x.slp")[0].label_images[0].data</code> works (the file stays open via h5py refcount as long as a lazy <code>LabelImage</code> needs it). Explicit <code>Labels.close()</code> is unchanged. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4254732479" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/414" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/414/hovercard" href="https://github.com/talmolab/sleap-io/pull/414">#414</a></strong> <code>_write_labels_lazy</code> no longer drops the video association on static ROIs during a lazy read → lazy write round-trip. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4220193675" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/407" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/407/hovercard" href="https://github.com/talmolab/sleap-io/pull/407">#407</a></strong> Three index/lazy correctness bugs: <code>_merge_annotations()</code> no longer mutates source labels by reference, <code>_add_annotation()</code>/<code>remove_predictions(clean=False)</code> no longer leave stale indices, and <code>get_frame</code>/<code>get_track_annotations</code> raise on lazy labels instead of returning silently-wrong results. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4215303258" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/401" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/401/hovercard" href="https://github.com/talmolab/sleap-io/pull/401">#401</a></strong> <code>Labels.copy()</code> no longer drops centroids on the lazy path; <code>Labels.replace_videos()</code> now updates video references on <code>label_images</code>. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4208826194" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/386" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/386/hovercard" href="https://github.com/talmolab/sleap-io/pull/386">#386</a></strong> <code>Labels.materialize()</code> no longer loses label-image-to-instance associations across lazy round-trips (<code>LabelImage.Info</code> now carries <code>_instance_idx</code>). (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<h3>Segmentation / TIFF I/O</h3>
+<ul>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4270970872" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/421" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/421/hovercard" href="https://github.com/talmolab/sleap-io/pull/421">#421</a></strong> <code>load_label_images</code> no longer assumes multi-page TIFFs are time-stacks; auto-detects axis layout from OME-XML/ImageJ metadata, with <code>pages_as='auto'|'time'|'classes'</code> override. <code>UserSegmentationMask.from_numpy</code> raises <code>ValueError</code> on multi-class input instead of silently binarizing. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4279142076" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/422" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/422/hovercard" href="https://github.com/talmolab/sleap-io/pull/422">#422</a></strong> TIFF "ambiguous multi-page" warning is now gated on whether a class-stack reading is even possible (every page has at most one positive value), so multi-valued integer-label time-series load silently. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4270464796" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/420" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/420/hovercard" href="https://github.com/talmolab/sleap-io/pull/420">#420</a></strong> <code>render_image(source=lf)</code> works on segmentation-only <code>LabeledFrames</code> (no <code>Instance</code> required). (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4209380591" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/387" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/387/hovercard" href="https://github.com/talmolab/sleap-io/pull/387">#387</a></strong> <code>LabelImage.from_numpy</code> no longer auto-creates tracks (opt in via <code>create_tracks=True</code>); <code>Video.exists()</code> and <code>Video.is_open</code> handle directory-based <code>ImageVideo</code>; <code>render_video</code> works on labels with only spatial annotations. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4077453608" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/372" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/372/hovercard" href="https://github.com/talmolab/sleap-io/pull/372">#372</a></strong> <code>Labels._roi_index</code>/<code>_mask_index</code> caches removed (returned stale results after in-place mutations); fixed <code>AttributeError</code> on <code>MultiPolygon</code> ROI Ultralytics export and added <code>UserWarning</code> when polygon holes are dropped. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<h3>Merge / clean</h3>
+<ul>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4220263191" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/408" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/408/hovercard" href="https://github.com/talmolab/sleap-io/pull/408">#408</a></strong> Annotation merge now respects strategy (see "New Features"). (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4218826539" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/405" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/405/hovercard" href="https://github.com/talmolab/sleap-io/pull/405">#405</a></strong> Nested annotations have their <code>.video</code>/<code>.track</code> references correctly remapped on cross-<code>Labels</code> frame copy; <code>clean()</code> removes annotations whose tracks were pruned. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4215082737" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/400" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/400/hovercard" href="https://github.com/talmolab/sleap-io/pull/400">#400</a></strong> <code>merge_label_images()</code> no longer crashes on <code>ImageVideo</code>-backed SLPs (filename normalized to a tuple). (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<h3>Format-specific</h3>
+<ul>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4077328612" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/371" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/371/hovercard" href="https://github.com/talmolab/sleap-io/pull/371">#371</a></strong> JABS-NWB conversion: writer auto-detects predictions format; edge-less skeletons no longer crash on save; JABS static objects (corners, food hopper, lixit) load as proper <code>ROI</code> <code>MultiPoint</code>/<code>Point</code> geometries with per-point scores preserved. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4065208041" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/369" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/369/hovercard" href="https://github.com/talmolab/sleap-io/pull/369">#369</a></strong> Negative frames (frames marked as having no instances — important as background examples) are preserved through lazy round-trips and the dict codec. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<h3>Output shape</h3>
+<ul>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4061004704" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/368" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/368/hovercard" href="https://github.com/talmolab/sleap-io/pull/368">#368</a></strong> <code>Labels.numpy()</code>, <code>save_analysis_h5()</code>, and the lazy numpy codec extend to <code>len(video)</code> instead of truncating at <code>last_labeled_frame + 1</code>. <strong>Breaking output shape change</strong> — see Breaking Changes. (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+</ul>
+<h3>Dependency</h3>
+<ul>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4121785757" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/379" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/379/hovercard" href="https://github.com/talmolab/sleap-io/pull/379">#379</a></strong> Removed the <code>skia-python&lt;=138.0</code> upper pin (3.13 wheels are now upstream). (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<hr>
+<h2>API Changes</h2>
+<h3>New symbols</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Name</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Class</td>
+<td><code>UserBoundingBox</code>, <code>PredictedBoundingBox</code></td>
+<td>Detection annotations</td>
+</tr>
+<tr>
+<td>Class</td>
+<td><code>UserSegmentationMask</code>, <code>PredictedSegmentationMask</code></td>
+<td>Raster mask annotations</td>
+</tr>
+<tr>
+<td>Class</td>
+<td><code>UserROI</code>, <code>PredictedROI</code></td>
+<td>Vector geometry annotations</td>
+</tr>
+<tr>
+<td>Class</td>
+<td><code>LabelImage</code>, <code>UserLabelImage</code>, <code>PredictedLabelImage</code></td>
+<td>Dense integer instance segmentation</td>
+</tr>
+<tr>
+<td>Class</td>
+<td><code>Centroid</code>, <code>UserCentroid</code>, <code>PredictedCentroid</code></td>
+<td>Lightweight 2D/3D point annotations</td>
+</tr>
+<tr>
+<td>Class</td>
+<td><code>Identity</code>, <code>Instance3D</code>, <code>PredictedInstance3D</code></td>
+<td>3D pose data structures</td>
+</tr>
+<tr>
+<td>Class</td>
+<td><code>LabelImageWriter</code></td>
+<td>Constant-memory streaming SLP writer for label images</td>
+</tr>
+<tr>
+<td>Class</td>
+<td><code>SeqVideo</code></td>
+<td>Norpix .seq video backend</td>
+</tr>
+<tr>
+<td>Function</td>
+<td><code>sio.load_geojson()</code>, <code>sio.save_geojson()</code></td>
+<td>GeoJSON ROI I/O</td>
+</tr>
+<tr>
+<td>Function</td>
+<td><code>sio.load_trackmate()</code></td>
+<td>TrackMate CSV reader</td>
+</tr>
+<tr>
+<td>Function</td>
+<td><code>sio.merge_label_images()</code></td>
+<td>Zero-decompression label-image merge</td>
+</tr>
+<tr>
+<td>Function</td>
+<td><code>sio.normalize_label_ids()</code></td>
+<td>LUT-based pixel-value remapping</td>
+</tr>
+<tr>
+<td>Function</td>
+<td><code>sio.draw_label_image()</code></td>
+<td>Vectorized LUT label-image overlay</td>
+</tr>
+<tr>
+<td>Method</td>
+<td><code>LabeledFrame.append()</code></td>
+<td>Type-dispatching annotation insertion</td>
+</tr>
+<tr>
+<td>Method</td>
+<td><code>Labels.get_frame()</code></td>
+<td>O(1) frame lookup</td>
+</tr>
+<tr>
+<td>Method</td>
+<td><code>Labels.get_track_annotations()</code></td>
+<td>O(1) track annotation lookup</td>
+</tr>
+<tr>
+<td>Method</td>
+<td><code>LabelImage.from_stack()</code>, <code>.from_binary_masks()</code>, <code>.to_bboxes()</code></td>
+<td>Batch constructors + bbox extraction</td>
+</tr>
+<tr>
+<td>Method</td>
+<td><code>SegmentationMask.to_bbox()</code></td>
+<td>Mask → BoundingBox</td>
+</tr>
+<tr>
+<td>Property</td>
+<td><code>Instance.centroid_xy</code>, <code>BoundingBox.centroid_xy</code>, <code>ROI.centroid_xy</code></td>
+<td>Uniform <code>(x, y)</code> accessors</td>
+</tr>
+<tr>
+<td>Property</td>
+<td><code>Labels.identities</code></td>
+<td>List of cross-session animal identities</td>
+</tr>
+</tbody>
+</table>
+<h3>New parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>New parameters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LabeledFrame()</code></td>
+<td><code>centroids</code>, <code>bboxes</code>, <code>masks</code>, <code>label_images</code></td>
+</tr>
+<tr>
+<td><code>Labels()</code></td>
+<td><code>identities</code>, <code>centroids</code> (already had bboxes/masks/rois/label_images)</td>
+</tr>
+<tr>
+<td><code>Predicted*</code> annotation constructors</td>
+<td><code>score</code>, optional <code>score_map</code> (masks/label-images)</td>
+</tr>
+<tr>
+<td><code>*</code> annotation constructors (<code>Centroid</code>, <code>BoundingBox</code>, <code>SegmentationMask</code>, <code>ROI</code>, <code>LabelImage.Info</code>)</td>
+<td>`tracking_score: float</td>
+</tr>
+<tr>
+<td><code>SegmentationMask</code>, <code>LabelImage</code></td>
+<td><code>scale</code>, <code>offset</code> (and <code>score_map_scale</code>, <code>score_map_offset</code> on Predicted variants)</td>
+</tr>
+<tr>
+<td><code>LabelImage.from_binary_masks()</code></td>
+<td><code>label_ids</code>, <code>tracks</code>, <code>categories</code>, <code>names</code>, <code>scores</code></td>
+</tr>
+<tr>
+<td><code>get_rois()</code>, <code>get_masks()</code>, <code>get_label_images()</code></td>
+<td>`predicted: bool</td>
+</tr>
+<tr>
+<td><code>load_label_images()</code></td>
+<td>`pages_as='auto'</td>
+</tr>
+</tbody>
+</table>
+<h3>Removed / renamed</h3>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BoundingBox(x_center, y_center, width, height)</code></td>
+<td>Constructor changed to <code>x1/y1/x2/y2</code>; old fields kept as read-only properties</td>
+</tr>
+<tr>
+<td><code>BoundingBox(...)</code>, <code>SegmentationMask(...)</code>, <code>ROI(...)</code>, <code>LabelImage(...)</code></td>
+<td>Now abstract — use <code>User*</code> / <code>Predicted*</code></td>
+</tr>
+<tr>
+<td><code>*.video</code>, <code>*.frame_idx</code> (annotation objects)</td>
+<td>Removed; derived from parent <code>LabeledFrame</code> (<code>ROI.video</code> retained for static ROIs)</td>
+</tr>
+<tr>
+<td><code>Labels.add_centroid()</code>, <code>add_bbox()</code>, <code>add_mask()</code>, <code>add_label_image()</code>, <code>add_roi()</code></td>
+<td>Removed; use <code>lf.append(ann)</code></td>
+</tr>
+<tr>
+<td><code>Labels.centroids/.bboxes/.masks/.label_images/.rois</code></td>
+<td>Now read-only flattened views</td>
+</tr>
+<tr>
+<td><code>ROI.is_static</code></td>
+<td>Removed — a static ROI is any ROI with no parent frame</td>
+</tr>
+<tr>
+<td><code>ROI.annotation_type</code>, <code>ROI.score</code></td>
+<td>Removed</td>
+</tr>
+<tr>
+<td><code>SegmentationMask.annotation_type</code>, <code>SegmentationMask.score</code></td>
+<td>Removed</td>
+</tr>
+<tr>
+<td><code>ROI.centroid</code></td>
+<td>Renamed to <code>ROI.centroid_xy</code></td>
+</tr>
+<tr>
+<td><code>ROI.from_bbox()</code>, <code>ROI.from_xyxy()</code></td>
+<td>Deprecated; use <code>BoundingBox.from_xywh/from_xyxy</code></td>
+</tr>
+<tr>
+<td><code>parse_label_file()</code> (ultralytics)</td>
+<td>Returns 3-tuple <code>(instances, rois, bboxes)</code></td>
+</tr>
+<tr>
+<td><code>Labels._roi_index</code>, <code>_mask_index</code></td>
+<td>Removed (caches were stale-prone)</td>
+</tr>
+</tbody>
+</table>
+<h3>SLP format versions</h3>
+<p>v0.7.0 introduces several format bumps. <strong>All bumps are emit-only:</strong> new sleap-io reads every old format unchanged, and old sleap-io reads new files when the new datasets are absent. Bumps only happen when the new feature is actually used.</p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Introduced</th>
+<th>What's new</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1.6</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4055198725" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/366" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/366/hovercard" href="https://github.com/talmolab/sleap-io/pull/366">#366</a></td>
+<td>ROI <code>instance_idx</code> column</td>
+</tr>
+<tr>
+<td>1.7</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4078134750" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/373" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/373/hovercard" href="https://github.com/talmolab/sleap-io/pull/373">#373</a></td>
+<td>First-class bounding boxes</td>
+</tr>
+<tr>
+<td>1.8</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4116267384" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/377" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/377/hovercard" href="https://github.com/talmolab/sleap-io/pull/377">#377</a></td>
+<td>First-class label images</td>
+</tr>
+<tr>
+<td>1.9</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4174784209" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/382" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/382/hovercard" href="https://github.com/talmolab/sleap-io/pull/382">#382</a></td>
+<td>Cross-session identities</td>
+</tr>
+<tr>
+<td>2.0</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4167721203" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/381" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/381/hovercard" href="https://github.com/talmolab/sleap-io/pull/381">#381</a></td>
+<td>Columnar bbox storage; <code>is_predicted</code>/<code>score</code> columns</td>
+</tr>
+<tr>
+<td>2.1</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4208641026" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/385" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/385/hovercard" href="https://github.com/talmolab/sleap-io/pull/385">#385</a></td>
+<td>Dense annotation <code>scale</code>/<code>offset</code></td>
+</tr>
+<tr>
+<td>2.2</td>
+<td><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4210253667" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/390" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/390/hovercard" href="https://github.com/talmolab/sleap-io/pull/390">#390</a></td>
+<td>Chunked <code>(T, H, W)</code> int32 label-image dataset</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>Documentation</h2>
+<ul>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4036151737" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/362" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/362/hovercard" href="https://github.com/talmolab/sleap-io/pull/362">#362</a></strong> Refreshed README — features section linking to docs, modernized <code>uvx</code>/<code>uv</code> install, new CLI/Python examples (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4071398247" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/370" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/370/hovercard" href="https://github.com/talmolab/sleap-io/pull/370">#370</a></strong> Corrected JABS acronym in formats docs (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gbeane/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gbeane">@gbeane</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4112991102" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/375" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/375/hovercard" href="https://github.com/talmolab/sleap-io/pull/375">#375</a></strong> Replaced <code>docs/model.md</code> with six focused subpages (<code>index</code>, <code>poses</code>, <code>labels</code>, <code>video</code>, <code>3d</code>, <code>regions</code>); 41 <code>pycon</code> blocks executed at build time as real REPL sessions (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4228807583" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/409" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/409/hovercard" href="https://github.com/talmolab/sleap-io/pull/409">#409</a></strong> Annotation architecture documentation: <code>Centroid</code> types, "Working with annotations in frames", "Fast lookups", merge examples; fixed several broken pycon examples (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4256026549" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/415" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/415/hovercard" href="https://github.com/talmolab/sleap-io/pull/415">#415</a></strong> v0.7.0 reference-correctness pass: broken <code>labels.get(...)</code> snippet, outdated <code>render_video</code> overlay docstring, <code>analysis-h5 sleap_io_version</code> stamp; brought <code>docs/formats/slp.md</code> back in sync with on-disk schema; warnings on every page where the <code>numpy()</code> shape change matters (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4258069118" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/416" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/416/hovercard" href="https://github.com/talmolab/sleap-io/pull/416">#416</a></strong> v0.7.0 feature coverage: <code>sio render --overlay*</code> flags, TrackMate convert, segmentation overlays, multi-resolution masks, live <code>Identity</code>/<code>Instance3D</code> examples, Centroid integration on <code>Instance</code>, Track-vs-Identity tip, TIFF→SLP recipe (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4036151737" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/362" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/362/hovercard" href="https://github.com/talmolab/sleap-io/pull/362">#362</a>: docs: Refresh README to reflect current capabilities (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4055074247" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/365" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/365/hovercard" href="https://github.com/talmolab/sleap-io/pull/365">#365</a>: fix: Address ROI/SegmentationMask data model and I/O limitations (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4055198725" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/366" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/366/hovercard" href="https://github.com/talmolab/sleap-io/pull/366">#366</a>: feat: ROI instance serialization, multi-geometry, rendering, and indexed lookup (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4057080311" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/367" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/367/hovercard" href="https://github.com/talmolab/sleap-io/pull/367">#367</a>: feat: Add GeoJSON I/O for ROIs (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4061004704" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/368" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/368/hovercard" href="https://github.com/talmolab/sleap-io/pull/368">#368</a>: fix: Extend numpy output to full video length across all code paths (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4065208041" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/369" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/369/hovercard" href="https://github.com/talmolab/sleap-io/pull/369">#369</a>: fix: Preserve negative frames in lazy loading and dict codec (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4071398247" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/370" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/370/hovercard" href="https://github.com/talmolab/sleap-io/pull/370">#370</a>: docs: Correct JABS acronym (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gbeane/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gbeane">@gbeane</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4077328612" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/371" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/371/hovercard" href="https://github.com/talmolab/sleap-io/pull/371">#371</a>: fix: JABS-NWB conversion bugs and static objects as ROIs (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4077453608" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/372" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/372/hovercard" href="https://github.com/talmolab/sleap-io/pull/372">#372</a>: fix: ROI lookup cache removal, Ultralytics MultiPolygon crash, and hole warning (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4078134750" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/373" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/373/hovercard" href="https://github.com/talmolab/sleap-io/pull/373">#373</a>: feat: First-class BoundingBox type with full I/O support (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4078569097" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/374" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/374/hovercard" href="https://github.com/talmolab/sleap-io/pull/374">#374</a>: feat: Segmentation overlay rendering (API + CLI) (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4112991102" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/375" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/375/hovercard" href="https://github.com/talmolab/sleap-io/pull/375">#375</a>: docs: Reorganize data model docs into focused subpages (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4116267384" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/377" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/377/hovercard" href="https://github.com/talmolab/sleap-io/pull/377">#377</a>: feat: First-class LabelImage type for instance segmentation (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4118284751" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/378" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/378/hovercard" href="https://github.com/talmolab/sleap-io/pull/378">#378</a>: feat: Support reading SLP files written by h5wasm (sleap-io.js) (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4121785757" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/379" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/379/hovercard" href="https://github.com/talmolab/sleap-io/pull/379">#379</a>: chore: Remove skia-python&lt;=138.0 version pin (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4123853898" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/380" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/380/hovercard" href="https://github.com/talmolab/sleap-io/pull/380">#380</a>: feat: Add Norpix .seq video file format support (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4167721203" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/381" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/381/hovercard" href="https://github.com/talmolab/sleap-io/pull/381">#381</a>: feat: Predicted variants, abstract base classes, BoundingBox x1y1x2y2, columnar bbox storage (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4174784209" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/382" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/382/hovercard" href="https://github.com/talmolab/sleap-io/pull/382">#382</a>: feat: 3D data structure standardization with sleap-io.js and luc3d (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/ericleonardis/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/ericleonardis">@ericleonardis</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4208641026" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/385" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/385/hovercard" href="https://github.com/talmolab/sleap-io/pull/385">#385</a>: feat: Dense annotation scale/offset metadata for multi-resolution support (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4208826194" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/386" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/386/hovercard" href="https://github.com/talmolab/sleap-io/pull/386">#386</a>: fix: Use _instance_idx for LabelImage.Info instance resolution in lazy mode (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4209380591" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/387" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/387/hovercard" href="https://github.com/talmolab/sleap-io/pull/387">#387</a>: fix: Label image, video, and rendering fixes for segmentation workflows (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4209739518" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/389" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/389/hovercard" href="https://github.com/talmolab/sleap-io/pull/389">#389</a>: feat: LabelImage.from_stack() and segmentation UX improvements (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4210253667" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/390" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/390/hovercard" href="https://github.com/talmolab/sleap-io/pull/390">#390</a>: feat: Streaming write, lazy read, and merge for label images (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4213151548" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/392" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/392/hovercard" href="https://github.com/talmolab/sleap-io/pull/392">#392</a>: feat: Add LabelImage.from_binary_masks() for per-object mask arrays (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4213494085" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/393" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/393/hovercard" href="https://github.com/talmolab/sleap-io/pull/393">#393</a>: feat: Add label_ids param and normalize_label_ids utility (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4214126348" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/395" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/395/hovercard" href="https://github.com/talmolab/sleap-io/pull/395">#395</a>: feat: Add bounding box extraction from LabelImage and SegmentationMask (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4214563474" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/397" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/397/hovercard" href="https://github.com/talmolab/sleap-io/pull/397">#397</a>: feat: Add Centroid data model with tracking_score backfill (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4214762553" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/399" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/399/hovercard" href="https://github.com/talmolab/sleap-io/pull/399">#399</a>: feat: Add TrackMate CSV reader (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4215082737" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/400" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/400/hovercard" href="https://github.com/talmolab/sleap-io/pull/400">#400</a>: fix: Handle ImageVideo list filenames in merge_label_images (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4215303258" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/401" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/401/hovercard" href="https://github.com/talmolab/sleap-io/pull/401">#401</a>: fix: Add missing centroids in lazy copy and label_images in replace_videos (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4215500639" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/402" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/402/hovercard" href="https://github.com/talmolab/sleap-io/pull/402">#402</a>: feat: Nest annotations in LabeledFrame (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4215959444" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/403" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/403/hovercard" href="https://github.com/talmolab/sleap-io/pull/403">#403</a>: feat: Add frame and track indices for O(1) lookups (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4218826539" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/405" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/405/hovercard" href="https://github.com/talmolab/sleap-io/pull/405">#405</a>: fix: Fix annotation handling in merge/clean + optimize rendering (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4220193675" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/407" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/407/hovercard" href="https://github.com/talmolab/sleap-io/pull/407">#407</a>: fix: Index staleness, lazy guards, and source corruption in merge (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4220263191" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/408" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/408/hovercard" href="https://github.com/talmolab/sleap-io/pull/408">#408</a>: fix: Make annotation merging strategy-aware (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4228807583" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/409" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/409/hovercard" href="https://github.com/talmolab/sleap-io/pull/409">#409</a>: docs: Update documentation for annotation architecture (PRs 401-408) (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4234121368" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/411" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/411/hovercard" href="https://github.com/talmolab/sleap-io/pull/411">#411</a>: fix: Remove video/frame_idx from annotation objects (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4239719803" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/412" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/412/hovercard" href="https://github.com/talmolab/sleap-io/pull/412">#412</a>: fix: Add TrackMate CLI convert support and format documentation (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4254732479" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/414" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/414/hovercard" href="https://github.com/talmolab/sleap-io/pull/414">#414</a>: fix(slp): preserve static ROI video association on lazy round-trip (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4256026549" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/415" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/415/hovercard" href="https://github.com/talmolab/sleap-io/pull/415">#415</a>: docs(v0.7.0): fix broken refs, schema drift, and silent shape change (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4258069118" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/416" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/416/hovercard" href="https://github.com/talmolab/sleap-io/pull/416">#416</a>: docs(v0.7.0): v0.7.0 feature coverage across cli, examples, and model (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4270336543" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/419" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/419/hovercard" href="https://github.com/talmolab/sleap-io/pull/419">#419</a>: fix: Preserve LabelImage lazy reads across Labels GC (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4270464796" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/420" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/420/hovercard" href="https://github.com/talmolab/sleap-io/pull/420">#420</a>: fix: Allow render_image(source=lf) for segmentation-only LabeledFrames (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4270970872" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/421" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/421/hovercard" href="https://github.com/talmolab/sleap-io/pull/421">#421</a>: fix: disambiguate TIFF page axes and guard SegmentationMask from silent binarization (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4279142076" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/422" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/422/hovercard" href="https://github.com/talmolab/sleap-io/pull/422">#422</a>: fix(io/tiff): suppress ambiguous-pages warning when pages are multi-valued (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.6.5...v0.7.0"><tt>v0.6.5...v0.7.0</tt></a></p>
 <h2 id="v065"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.6.5">v0.6.5</a><a class="headerlink" href="#v065" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.6.5 Release Notes</h1>
 <h2>Summary</h2>
@@ -8580,75 +9357,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Bump to v0.1.1 by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2307031086" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/93" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/93/hovercard" href="https://github.com/talmolab/sleap-io/pull/93">#93</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.0...v0.1.1"><tt>v0.1.0...v0.1.1</tt></a></p>
-<h2 id="v010"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.0">v0.1.0</a><a class="headerlink" href="#v010" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>
-<p>Add skeleton utilities by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2241856606" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/76" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/76/hovercard" href="https://github.com/talmolab/sleap-io/pull/76">#76</a></p>
-<ul>
-<li><code>Skeleton.add_node</code>: Add a node by name or object.</li>
-<li><code>Skeleton.add_edge</code>: Add an edge by lists of names or objects.</li>
-<li><code>Skeleton.add_symmetry</code>: Add a symmetry edge by lists of names or objects.</li>
-</ul>
-</li>
-<li>
-<p>Update CI and versions by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2241860763" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/77" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/77/hovercard" href="https://github.com/talmolab/sleap-io/pull/77">#77</a></p>
-<ul>
-<li>Update dependency ranges (see below)</li>
-<li>Update action workflow versions</li>
-<li>Enable M1 mac runners</li>
-<li>Expand python version range to 3.7-3.12
-<ul>
-<li>Note: Python 3.7 is no longer tested in CI due to lack of conda-forge compatability.</li>
-</ul>
-</li>
-<li>Enable pure conda-forge dependency setup</li>
-</ul>
-</li>
-<li>
-<p>Bump to v0.1.0 by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2241885597" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/78" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/78/hovercard" href="https://github.com/talmolab/sleap-io/pull/78">#78</a></p>
-</li>
-<li>
-<p>Fix multi-skeleton loading by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2241886018" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/79" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/79/hovercard" href="https://github.com/talmolab/sleap-io/pull/79">#79</a></p>
-<ul>
-<li>Fixes <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2052918627" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/71" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/71/hovercard" href="https://github.com/talmolab/sleap-io/issues/71">#71</a>.</li>
-</ul>
-</li>
-<li>
-<p>Add high level APIs by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2241895096" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/80" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/80/hovercard" href="https://github.com/talmolab/sleap-io/pull/80">#80</a></p>
-<ul>
-<li>Add <code>load_video</code> and <code>load_file</code> high level APIs (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1812923942" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/48" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/48/hovercard" href="https://github.com/talmolab/sleap-io/issues/48">#48</a>)</li>
-</ul>
-</li>
-<li>
-<p>Labels QOL enhancements by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2241993752" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/81" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/81/hovercard" href="https://github.com/talmolab/sleap-io/pull/81">#81</a></p>
-<ul>
-<li><code>LabeledFrame.remove_predictions</code>: Remove predicted instances from a labeled frame.</li>
-<li><code>LabeledFrame.remove_empty_instances</code>: Remove instances with no visible points from a labeled frame.</li>
-<li><code>Labels.save</code>: Instance-level convenience wrapper for <code>sio.save_file</code>.</li>
-<li><code>Labels.clean</code>: Remove unused or empty frames, instances, videos, skeletons and tracks.</li>
-<li><code>Labels.remove_predictions</code>: Remove predicted instances from all labeled frames (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2000103269" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/69" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/69/hovercard" href="https://github.com/talmolab/sleap-io/issues/69">#69</a>).</li>
-<li><code>Labels.__getitem__</code>: Now supports lists, slices, numpy arrays, tuples of <code>(Video, frame_idx)</code> and <code>Video</code>.</li>
-</ul>
-</li>
-<li>
-<p>Video QOL enhancements by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2242009440" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/82" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/82/hovercard" href="https://github.com/talmolab/sleap-io/pull/82">#82</a></p>
-<ul>
-<li><code>Video.is_open</code>: Checks if the video exists and the backend is set.</li>
-<li><code>Video.open</code>: Opens or restarts the backend for reading.</li>
-<li><code>Video.close</code>: Closes the backend for reading.</li>
-<li><code>Video.exists</code>: Check if the filename for the video exists.</li>
-<li><code>Video.replace_filename</code>: Replace the filename and restart the backend.</li>
-</ul>
-</li>
-</ul>
-<h2>Notes on dependency pins</h2>
-<ul>
-<li><code>ffmpeg &lt; 6.1</code> due to <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2034795180" data-permission-text="Title is private" data-url="https://github.com/imageio/imageio-ffmpeg/issues/99" data-hovercard-type="issue" data-hovercard-url="/imageio/imageio-ffmpeg/issues/99/hovercard" href="https://github.com/imageio/imageio-ffmpeg/issues/99">imageio/imageio-ffmpeg#99</a></li>
-<li><code>h5py &gt;= 3.8.0</code> due to <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1294523315" data-permission-text="Title is private" data-url="https://github.com/h5py/h5py/issues/2118" data-hovercard-type="issue" data-hovercard-url="/h5py/h5py/issues/2118/hovercard" href="https://github.com/h5py/h5py/issues/2118">h5py/h5py#2118</a></li>
-<li><code>python &gt;= 3.8</code> due to <code>h5py &gt;= 3.8.0</code> (we still support <code>python==3.7</code> via pip but this is not longer in CI)</li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.14...v0.1.0"><tt>v0.0.14...v0.1.0</tt></a></p>
 
 
 
