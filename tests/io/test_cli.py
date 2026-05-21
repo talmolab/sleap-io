@@ -4455,6 +4455,267 @@ def test_render_crop_video(centered_pair, tmp_path):
     assert output_path.exists()
 
 
+def test_render_trails_video(centered_pair, tmp_path):
+    """Test render video with motion trails."""
+    runner = CliRunner()
+    output_path = tmp_path / "trails.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--trails",
+            "--trail-length",
+            "5",
+            "--start",
+            "0",
+            "--end",
+            "5",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+    assert output_path.exists()
+
+
+def test_render_trails_image(centered_pair, tmp_path):
+    """Test render single image with motion trails."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "50",
+            "--trails",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_trails_node_list(centered_pair, tmp_path):
+    """Test render with comma-separated trail nodes."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail_nodes.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--trails",
+            "--trail-node",
+            "head,thorax",
+            "--start",
+            "0",
+            "--end",
+            "4",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_trails_no_fade(centered_pair, tmp_path):
+    """Test render with motion trails and fading disabled."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail_nofade.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "50",
+            "--trails",
+            "--no-trail-fade",
+            "--trail-width",
+            "3.0",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_trails_color_and_alpha(centered_pair, tmp_path):
+    """Test render with a uniform trail color and global trail alpha."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail_styled.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "50",
+            "--trails",
+            "--trail-color",
+            "255,128,0",
+            "--trail-alpha",
+            "0.6",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_trails_color_named(centered_pair, tmp_path):
+    """Test render with a named trail color."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail_named.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "50",
+            "--trails",
+            "--trail-color",
+            "white",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_parse_trail_color():
+    """_parse_trail_color handles RGB, named colors, and invalid input."""
+    from sleap_io.io.cli import _parse_trail_color
+
+    # Valid forms.
+    assert _parse_trail_color(None) is None
+    assert _parse_trail_color("255,128,0") == (255, 128, 0)
+    assert _parse_trail_color("white") == "white"
+    assert _parse_trail_color("#ff0000") == "#ff0000"
+
+    # Non-integer RGB component.
+    with pytest.raises(Exception) as exc_info:
+        _parse_trail_color("1,2,bad")
+    assert "Invalid --trail-color" in str(exc_info.value)
+
+    # Wrong number of RGB values.
+    with pytest.raises(Exception) as exc_info:
+        _parse_trail_color("255,0")
+    assert "RGB needs 3 values" in str(exc_info.value)
+
+
+def test_render_no_progress(centered_pair, tmp_path):
+    """Test render video with the progress bar disabled."""
+    runner = CliRunner()
+    output_path = tmp_path / "no_progress.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--no-progress",
+            "--start",
+            "0",
+            "--end",
+            "5",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_parse_trail_node():
+    """_parse_trail_node handles single names, lists, and empty input."""
+    from sleap_io.io.cli import _parse_trail_node
+
+    # Single targets pass through as strings.
+    assert _parse_trail_node("centroid") == "centroid"
+    assert _parse_trail_node("head") == "head"
+    # Comma-separated names become a list; whitespace and blanks are dropped.
+    assert _parse_trail_node("head,thorax") == ["head", "thorax"]
+    assert _parse_trail_node("head, ,thorax") == ["head", "thorax"]
+    # A single name with a trailing comma collapses back to a string.
+    assert _parse_trail_node("head,") == "head"
+
+    # Empty or all-blank input is rejected.
+    with pytest.raises(Exception) as exc_info:
+        _parse_trail_node(" , ")
+    assert "Invalid --trail-node" in str(exc_info.value)
+    with pytest.raises(Exception) as exc_info:
+        _parse_trail_node("")
+    assert "Invalid --trail-node" in str(exc_info.value)
+
+
+def test_render_trail_length_invalid(centered_pair, tmp_path):
+    """--trail-length below 1 is rejected by the CLI."""
+    runner = CliRunner()
+    output_path = tmp_path / "bad_length.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--trails",
+            "--trail-length",
+            "0",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert not output_path.exists()
+
+
+def test_render_trail_alpha_invalid(centered_pair, tmp_path):
+    """--trail-alpha outside [0, 1] is rejected by the CLI."""
+    runner = CliRunner()
+    output_path = tmp_path / "bad_alpha.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--trails",
+            "--trail-alpha",
+            "1.5",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert not output_path.exists()
+
+
 def test_render_crop_invalid_format():
     """Test error with invalid crop format."""
     from sleap_io.io.cli import _parse_crop_string

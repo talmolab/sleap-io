@@ -73,6 +73,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "draw_masks",
             "draw_bboxes",
             "draw_label_image",
+            "draw_trails",
         ],
         # Model classes from sleap_io.model.*
         "model.camera": [

@@ -704,3 +704,135 @@ def draw_centroids(
         image[:] = result
         return image
     return result.copy()
+
+
+def draw_trails(
+    image: np.ndarray,
+    trails: list[np.ndarray],
+    color: tuple[int, int, int] = (0, 255, 0),
+    colors: list[tuple[int, int, int]] | None = None,
+    line_width: float = 2.0,
+    alpha_fade: bool = True,
+    alpha: float = 1.0,
+    offset: tuple[float, float] = (0.0, 0.0),
+) -> np.ndarray:
+    """Draw motion trails as fading polylines on an image.
+
+    Each trail is a polyline tracing a node or centroid position across past
+    frames. Segments are drawn individually so opacity can fade from faint
+    (oldest) to opaque (newest).
+
+    All segments are rasterized into a separate transparent buffer with the
+    ``kSrc`` blend mode, so overlapping joints (and crossing trails) take the
+    newest segment's alpha instead of accumulating it. That buffer is then
+    composited onto the image in a single pass, touching only the pixels the
+    trails actually cover.
+
+    Args:
+        image: Image array of shape ``(H, W, 3)`` uint8. Modified in-place when
+            possible and returned.
+        trails: List of trails, where each trail is an ``(N, 2)`` float array of
+            ``(x, y)`` coordinates ordered oldest to newest. Non-finite rows
+            (NaN) break the polyline so missing detections leave gaps.
+        color: RGB color tuple used when ``colors`` is ``None``.
+        colors: Per-trail RGB color tuples. If provided, must have the same
+            length as ``trails``. Overrides ``color``.
+        line_width: Width of the trail line in pixels.
+        alpha_fade: If ``True``, fade opacity from faint at the oldest segment to
+            fully opaque at the newest. If ``False``, all segments use ``alpha``.
+        alpha: Global opacity multiplier (0.0 to 1.0).
+        offset: ``(ox, oy)`` offset subtracted from coordinates (used for
+            cropped images).
+
+    Returns:
+        The image array with trails drawn.
+
+    Raises:
+        ValueError: If ``colors`` is provided and its length does not match
+            ``trails``.
+    """
+    if not trails:
+        return image
+
+    if colors is not None and len(colors) != len(trails):
+        raise ValueError(
+            f"colors has length {len(colors)} but there are {len(trails)} "
+            "trails; they must be the same length."
+        )
+
+    import skia
+
+    ox, oy = offset
+
+    # Ensure RGB so trail pixels can be composited back.
+    if image.ndim == 2:
+        image = np.stack([image] * 3, axis=-1)
+    elif image.ndim == 3 and image.shape[2] == 1:
+        image = np.concatenate([image] * 3, axis=-1)
+
+    # Rasterize the trails into a separate transparent RGBA buffer. Drawing into
+    # a dedicated buffer (rather than the frame) lets the kSrc blend mode below
+    # replace overlapping joints instead of accumulating their alpha.
+    h, w = image.shape[:2]
+    trail_rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    surface = skia.Surface(trail_rgba, colorType=skia.kRGBA_8888_ColorType)
+    canvas = surface.getCanvas()
+
+    for i, trail in enumerate(trails):
+        c = colors[i] if colors is not None else color
+        n_points = len(trail)
+        if n_points < 2:
+            # A single point has no segment to draw.
+            continue
+
+        # Each segment gets its own paint so opacity can fade per segment
+        # (a single skia.Path supports only one Paint).
+        n_segments = n_points - 1
+        for k in range(n_segments):
+            x0, y0 = trail[k]
+            x1, y1 = trail[k + 1]
+            if not (
+                np.isfinite(x0)
+                and np.isfinite(y0)
+                and np.isfinite(x1)
+                and np.isfinite(y1)
+            ):
+                # Skip segments touching a missing (NaN) position.
+                continue
+
+            if alpha_fade:
+                # Newest segment (k = n_segments - 1) is fully opaque; oldest
+                # stays faintly visible rather than fully transparent.
+                seg_frac = max((k + 1) / n_segments, 0.05)
+            else:
+                seg_frac = 1.0
+            seg_alpha = max(0, min(255, int(seg_frac * alpha * 255)))
+
+            paint = skia.Paint(
+                Color=skia.Color(c[0], c[1], c[2], seg_alpha),
+                AntiAlias=True,
+                Style=skia.Paint.kStroke_Style,
+                StrokeWidth=float(line_width),
+                StrokeCap=skia.Paint.kRound_Cap,
+                BlendMode=skia.BlendMode.kSrc,
+            )
+            canvas.drawLine(
+                float(x0) - ox,
+                float(y0) - oy,
+                float(x1) - ox,
+                float(y1) - oy,
+                paint,
+            )
+
+    surface.flushAndSubmit()
+
+    # Composite only the pixels the trails actually covered (typically a small
+    # fraction of the frame). The buffer is unpremultiplied, so each covered
+    # pixel blends once as ``out = dst * (1 - a) + src * a``.
+    ys, xs = np.nonzero(trail_rgba[:, :, 3])
+    if len(ys):
+        a = trail_rgba[ys, xs, 3, None].astype(np.float32) / 255.0
+        src = trail_rgba[ys, xs, :3].astype(np.float32)
+        dst = image[ys, xs].astype(np.float32)
+        image[ys, xs] = (dst * (1.0 - a) + src * a).astype(np.uint8)
+    return image

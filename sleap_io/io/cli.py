@@ -236,6 +236,75 @@ def _get_package_version(package: str) -> str:
         return "not installed"
 
 
+def _parse_trail_color(
+    color_str: str | None,
+) -> tuple[int, int, int] | str | None:
+    """Parse a trail color string from the CLI.
+
+    Args:
+        color_str: Color string. Can be a comma-separated RGB triple
+            (``"255,128,0"``), a named color, a hex string, or None.
+
+    Returns:
+        An RGB tuple for comma-separated input, the stripped string for a name
+        or hex spec, or None if ``color_str`` is None.
+
+    Raises:
+        click.ClickException: If a comma-separated value is not a valid RGB
+            triple.
+    """
+    if color_str is None:
+        return None
+
+    if "," in color_str:
+        try:
+            parts = [int(p.strip()) for p in color_str.split(",")]
+        except ValueError:
+            raise click.ClickException(
+                f"Invalid --trail-color: '{color_str}'. Use a name, hex, or 'r,g,b'."
+            )
+        if len(parts) != 3:
+            raise click.ClickException(
+                f"Invalid --trail-color: '{color_str}'. RGB needs 3 values."
+            )
+        return (parts[0], parts[1], parts[2])
+
+    return color_str.strip()
+
+
+def _parse_trail_node(node_str: str) -> str | list[str]:
+    """Parse the ``--trail-node`` value from the CLI.
+
+    Args:
+        node_str: Trail node specification. Either a single target
+            (``"centroid"`` or a node name) or a comma-separated list of node
+            names.
+
+    Returns:
+        A single string for one target, or a list of strings for a
+        comma-separated list of node names.
+
+    Raises:
+        click.ClickException: If the value is empty or contains no names.
+    """
+    if "," in node_str:
+        names = [s.strip() for s in node_str.split(",") if s.strip()]
+        if not names:
+            raise click.ClickException(
+                f"Invalid --trail-node: '{node_str}'. Provide a node name, "
+                "'centroid', or a comma-separated list of node names."
+            )
+        return names[0] if len(names) == 1 else names
+
+    name = node_str.strip()
+    if not name:
+        raise click.ClickException(
+            "Invalid --trail-node: value is empty. Provide a node name, "
+            "'centroid', or a comma-separated list of node names."
+        )
+    return name
+
+
 def _parse_crop_string(
     crop_str: str | None,
 ) -> tuple | None:
@@ -3225,6 +3294,13 @@ def filenames(
     show_default=True,
     help="H.264 encoding speed/compression trade-off.",
 )
+@click.option(
+    "--progress/--no-progress",
+    "show_progress",
+    default=True,
+    show_default=True,
+    help="Show a progress bar during video rendering.",
+)
 # Appearance options
 @click.option(
     "--color-by",
@@ -3285,6 +3361,61 @@ def filenames(
     is_flag=True,
     default=False,
     help="Hide centroid markers. Default: show centroids.",
+)
+# Trail options
+@click.option(
+    "--trails",
+    "show_trails",
+    is_flag=True,
+    default=False,
+    help="Draw motion trails of node/centroid trajectories over past frames.",
+)
+@click.option(
+    "--trail-length",
+    "trail_length",
+    type=click.IntRange(min=1),
+    default=10,
+    show_default=True,
+    help="Number of past frames included in each trail.",
+)
+@click.option(
+    "--trail-node",
+    "trail_node_str",
+    type=str,
+    default="centroid",
+    show_default=True,
+    help="Trail target: 'centroid', a node name, or comma-separated node names.",
+)
+@click.option(
+    "--trail-width",
+    "trail_width",
+    type=float,
+    default=2.0,
+    show_default=True,
+    help="Trail line width in pixels.",
+)
+@click.option(
+    "--trail-fade/--no-trail-fade",
+    "trail_alpha_fade",
+    default=True,
+    show_default=True,
+    help="Fade trails from faint (oldest) to opaque (newest).",
+)
+@click.option(
+    "--trail-alpha",
+    "trail_alpha",
+    type=click.FloatRange(0.0, 1.0),
+    default=1.0,
+    show_default=True,
+    help="Global trail opacity (0.0-1.0).",
+)
+@click.option(
+    "--trail-color",
+    "trail_color_str",
+    type=str,
+    default=None,
+    help="Uniform trail color (e.g., 'white', '#ff0000', '255,0,0'). "
+    "Default: match pose colors.",
 )
 # Crop options
 @click.option(
@@ -3395,6 +3526,7 @@ def render(
     fps: float | None,
     crf: int,
     x264_preset: str,
+    show_progress: bool,
     color_by: str,
     palette: str,
     marker_shape: str,
@@ -3404,6 +3536,13 @@ def render(
     no_nodes: bool,
     no_edges: bool,
     no_centroids: bool,
+    show_trails: bool,
+    trail_length: int,
+    trail_node_str: str,
+    trail_width: float,
+    trail_alpha_fade: bool,
+    trail_alpha: float,
+    trail_color_str: str | None,
     crop_str: str | None,
     background: str,
     images_path: Path | None,
@@ -3454,6 +3593,12 @@ def render(
         $ sio render predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75  # Normalized
 
         $ sio render predictions.slp -o cropped.mp4 --crop 100,100,300,300
+
+        [bold]Motion trails:[/]
+
+        $ sio render predictions.slp -o output.mp4 --trails --trail-length 10
+
+        $ sio render predictions.slp --trails --trail-node head,thorax
 
         [bold]Background (when video unavailable):[/]
 
@@ -3630,6 +3775,23 @@ def render(
         overlay_outline_color=overlay_outline_color,
     )
 
+    # Parse trail node specification (comma-separated names -> list).
+    trail_node = _parse_trail_node(trail_node_str)
+
+    # Parse trail color: comma-separated RGB -> tuple, else pass through as a
+    # color spec (named color, hex, etc.) resolved by the renderer.
+    trail_color = _parse_trail_color(trail_color_str)
+
+    trail_kwargs = dict(
+        show_trails=show_trails,
+        trail_length=trail_length,
+        trail_node=trail_node,
+        trail_width=trail_width,
+        trail_alpha_fade=trail_alpha_fade,
+        trail_alpha=trail_alpha,
+        trail_color=trail_color,
+    )
+
     try:
         if single_image_mode:
             # Single image rendering
@@ -3660,6 +3822,7 @@ def render(
                     show_centroids=not no_centroids,
                     background=background,
                     **overlay_kwargs,
+                    **trail_kwargs,
                 )
             else:
                 # Render by video + frame_idx
@@ -3688,6 +3851,7 @@ def render(
                     show_centroids=not no_centroids,
                     background=background,
                     **overlay_kwargs,
+                    **trail_kwargs,
                 )
         else:
             # Video rendering
@@ -3714,9 +3878,10 @@ def render(
                 start=start_frame_idx,
                 end=end_frame_idx,
                 include_unlabeled=effective_all_frames,
-                show_progress=True,
+                show_progress=show_progress,
                 background=background,
                 **overlay_kwargs,
+                **trail_kwargs,
             )
     except Exception as e:
         raise click.ClickException(f"Failed to render: {e}")
