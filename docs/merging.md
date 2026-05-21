@@ -469,6 +469,18 @@ base.merge(other, frame="keep_both")
 base.merge(other, frame="update_tracks")
 ```
 
+### Negative (background) frames {#negative-frames}
+
+The `is_negative` marker (a frame explicitly labeled as a background/negative training
+example) is preserved across all frame strategies. If either the base or the incoming
+frame is marked negative, the merged frame stays negative — the marker is never silently
+dropped.
+
+The one exception: if the merge produces a real **user pose**, the negative marker is
+cleared (a frame with a labeled animal is not a background frame) and the merge records
+a `negative_flag_conflict` in `MergeResult.conflicts`. Predicted instances do not clear
+the marker, so the predict → merge-back workflow keeps negative frames negative.
+
 ---
 
 ## Step 5: Instance matching {#instance-matching}

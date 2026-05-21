@@ -3315,6 +3315,109 @@ def test_labels_merge_frame_strategies():
     )  # Should keep original
 
 
+def test_labels_merge_preserves_is_negative_colliding():
+    """Merging a negative frame onto a colliding empty frame keeps the flag."""
+    skel = Skeleton(["A"])
+    video = Video(filename="test.mp4")
+
+    base = Labels(
+        videos=[video],
+        skeletons=[skel],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0)],
+    )
+    incoming = Labels(
+        videos=[video],
+        skeletons=[skel],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, is_negative=True)],
+    )
+
+    base.merge(incoming)
+
+    assert base.labeled_frames[0].is_negative is True
+
+
+def test_labels_merge_preserves_is_negative_noncolliding():
+    """Merging a negative frame with no collision keeps the flag on the new frame."""
+    skel = Skeleton(["A"])
+    video = Video(filename="test.mp4")
+
+    base = Labels(
+        videos=[video],
+        skeletons=[skel],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=5)],
+    )
+    incoming = Labels(
+        videos=[video],
+        skeletons=[skel],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, is_negative=True)],
+    )
+
+    base.merge(incoming)
+
+    new_frame = [lf for lf in base.labeled_frames if lf.frame_idx == 0][0]
+    assert new_frame.is_negative is True
+
+
+def test_labels_merge_is_negative_user_pose_conflict():
+    """A user pose cancels the negative flag and records a merge conflict."""
+    skel = Skeleton(["A"])
+    video = Video(filename="test.mp4")
+
+    base = Labels(
+        videos=[video],
+        skeletons=[skel],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, is_negative=True)],
+    )
+    incoming = Labels(
+        videos=[video],
+        skeletons=[skel],
+        labeled_frames=[
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[Instance([[10, 10]], skeleton=skel)],
+            )
+        ],
+    )
+
+    result = base.merge(incoming)
+
+    assert base.labeled_frames[0].is_negative is False
+    negative_conflicts = [
+        c for c in result.conflicts if c.conflict_type == "negative_flag_conflict"
+    ]
+    assert len(negative_conflicts) == 1
+    assert negative_conflicts[0].resolution == "dropped_for_user_pose"
+
+
+def test_labels_merge_is_negative_roundtrip(tmp_path):
+    """Negative flag survives a save_slp -> load_slp -> merge round-trip."""
+    skel = Skeleton(["A"])
+    video = Video(filename="test.mp4")
+
+    base = Labels(
+        videos=[video],
+        skeletons=[skel],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0)],
+    )
+    incoming = Labels(
+        videos=[video],
+        skeletons=[skel],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, is_negative=True)],
+    )
+
+    base_path = tmp_path / "base.slp"
+    incoming_path = tmp_path / "incoming.slp"
+    save_slp(base, base_path)
+    save_slp(incoming, incoming_path)
+
+    base_loaded = load_slp(base_path)
+    incoming_loaded = load_slp(incoming_path)
+    base_loaded.merge(incoming_loaded)
+
+    assert base_loaded.labeled_frames[0].is_negative is True
+
+
 def test_labels_merge_suggestions():
     """Test merging of suggestions."""
     video = Video(filename="test.mp4")
