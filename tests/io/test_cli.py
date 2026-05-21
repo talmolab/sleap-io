@@ -4455,6 +4455,106 @@ def test_render_crop_video(centered_pair, tmp_path):
     assert output_path.exists()
 
 
+def test_render_trails_video(centered_pair, tmp_path):
+    """Test render video with motion trails."""
+    runner = CliRunner()
+    output_path = tmp_path / "trails.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--trails",
+            "--trail-length",
+            "5",
+            "--start",
+            "0",
+            "--end",
+            "5",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+    assert output_path.exists()
+
+
+def test_render_trails_image(centered_pair, tmp_path):
+    """Test render single image with motion trails."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "50",
+            "--trails",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_trails_node_list(centered_pair, tmp_path):
+    """Test render with comma-separated trail nodes."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail_nodes.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--trails",
+            "--trail-node",
+            "head,thorax",
+            "--start",
+            "0",
+            "--end",
+            "4",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_trails_no_fade(centered_pair, tmp_path):
+    """Test render with motion trails and fading disabled."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail_nofade.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "50",
+            "--trails",
+            "--no-trail-fade",
+            "--trail-width",
+            "3.0",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
 def test_render_crop_invalid_format():
     """Test error with invalid crop format."""
     from sleap_io.io.cli import _parse_crop_string

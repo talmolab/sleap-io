@@ -20,6 +20,7 @@ from sleap_io.rendering.overlays import (
     draw_label_image,
     draw_masks,
     draw_rois,
+    draw_trails,
 )
 
 # Skip all tests if skia-python is not installed
@@ -3520,3 +3521,483 @@ def test_render_video_centroids_no_track():
         labels, background="black", show_progress=False, frame_inds=[0]
     )
     assert len(frames) == 1
+
+
+# ============================================================================
+# Motion trail tests
+# ============================================================================
+
+
+def _make_trail_labels(n_frames=12, n_video_frames=None):
+    """Build synthetic tracked Labels with two tracks moving on straight lines.
+
+    Args:
+        n_frames: Number of labeled frames to create (frame indices 0..n-1).
+        n_video_frames: If set, attaches video shape metadata with this many
+            frames (enables ``include_unlabeled`` rendering).
+
+    Returns:
+        A `Labels` object with two single-edge tracks moving rightward.
+    """
+    skel = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = sio.Video(filename="trail_test.mp4", open_backend=False)
+    if n_video_frames is not None:
+        video.backend_metadata["shape"] = (n_video_frames, 200, 200, 3)
+    tracks = [sio.Track("t0"), sio.Track("t1")]
+    lfs = []
+    for fi in range(n_frames):
+        insts = []
+        for ti, tr in enumerate(tracks):
+            x = 20.0 + fi * 10.0 + ti * 5.0
+            y = 50.0 + ti * 60.0
+            insts.append(
+                sio.Instance(
+                    points={"a": [x, y], "b": [x + 8, y + 8]},
+                    skeleton=skel,
+                    track=tr,
+                )
+            )
+        lfs.append(sio.LabeledFrame(video=video, frame_idx=fi, instances=insts))
+    return sio.Labels(
+        labeled_frames=lfs, videos=[video], skeletons=[skel], tracks=tracks
+    )
+
+
+class TestDrawTrails:
+    """Tests for the draw_trails overlay function."""
+
+    def test_draw_trails_basic(self):
+        """draw_trails draws a polyline and returns the modified image."""
+        image = np.zeros((50, 100, 3), dtype=np.uint8)
+        trail = np.array([[float(x), 25.0] for x in range(10, 91, 10)])
+        result = draw_trails(image, [trail], color=(255, 0, 0), line_width=3.0)
+        assert result.shape == (50, 100, 3)
+        assert result.dtype == np.uint8
+        assert result.sum() > 0
+
+    def test_draw_trails_empty(self):
+        """draw_trails with no trails returns the image unchanged."""
+        image = np.full((20, 20, 3), 7, dtype=np.uint8)
+        result = draw_trails(image, [])
+        assert np.array_equal(result, np.full((20, 20, 3), 7, dtype=np.uint8))
+
+    def test_draw_trails_nan_gap(self):
+        """A NaN point breaks the polyline, leaving a gap."""
+        image = np.zeros((50, 100, 3), dtype=np.uint8)
+        trail = np.array(
+            [
+                [10.0, 25.0],
+                [30.0, 25.0],
+                [np.nan, np.nan],
+                [70.0, 25.0],
+                [90.0, 25.0],
+            ]
+        )
+        result = draw_trails(image, [trail], color=(255, 255, 255), line_width=3.0)
+        # Segment within [10, 30] is drawn.
+        assert result[25, 20].sum() > 0
+        # Segment spanning the NaN gap [30, 70] is not drawn.
+        assert result[25, 50].sum() == 0
+        # Segment within [70, 90] is drawn.
+        assert result[25, 80].sum() > 0
+
+    def test_draw_trails_alpha_fade(self):
+        """alpha_fade makes the oldest segment fainter than the newest."""
+        trail = np.array([[float(x), 25.0] for x in range(10, 91, 10)])
+
+        img_fade = np.zeros((50, 100, 3), dtype=np.uint8)
+        draw_trails(
+            img_fade, [trail], color=(255, 255, 255), line_width=3.0, alpha_fade=True
+        )
+        img_solid = np.zeros((50, 100, 3), dtype=np.uint8)
+        draw_trails(
+            img_solid,
+            [trail],
+            color=(255, 255, 255),
+            line_width=3.0,
+            alpha_fade=False,
+        )
+
+        left_fade = img_fade[22:28, 12:20].mean()
+        right_fade = img_fade[22:28, 80:88].mean()
+        # Oldest (left) segment is fainter than newest (right) under fade.
+        assert left_fade < right_fade
+        # Without fade, the oldest segment is brighter than the faded one.
+        left_solid = img_solid[22:28, 12:20].mean()
+        assert left_solid > left_fade
+
+    def test_draw_trails_per_trail_colors(self):
+        """Per-trail colors are applied independently."""
+        image = np.zeros((80, 100, 3), dtype=np.uint8)
+        trail0 = np.array([[10.0, 20.0], [90.0, 20.0]])
+        trail1 = np.array([[10.0, 60.0], [90.0, 60.0]])
+        result = draw_trails(
+            image,
+            [trail0, trail1],
+            colors=[(255, 0, 0), (0, 0, 255)],
+            line_width=3.0,
+            alpha_fade=False,
+        )
+        # First trail is red.
+        assert result[20, 50, 0] > 100 and result[20, 50, 2] < 50
+        # Second trail is blue.
+        assert result[60, 50, 2] > 100 and result[60, 50, 0] < 50
+
+    def test_draw_trails_offset(self):
+        """The offset argument shifts trail coordinates (for cropped images)."""
+        trail = np.array([[50.0, 25.0], [70.0, 25.0]])
+
+        img_no_offset = np.zeros((50, 100, 3), dtype=np.uint8)
+        draw_trails(img_no_offset, [trail], color=(255, 255, 255), line_width=3.0)
+        img_offset = np.zeros((50, 100, 3), dtype=np.uint8)
+        draw_trails(
+            img_offset,
+            [trail],
+            color=(255, 255, 255),
+            line_width=3.0,
+            offset=(50.0, 0.0),
+        )
+        # Without offset the trail is around x=60.
+        assert img_no_offset[25, 60].sum() > 0
+        # With offset=(50, 0) it shifts to around x=10.
+        assert img_offset[25, 10].sum() > 0
+        assert img_offset[25, 60].sum() == 0
+
+    def test_draw_trails_grayscale_input(self):
+        """A grayscale image is promoted to RGB."""
+        image = np.zeros((40, 60), dtype=np.uint8)
+        trail = np.array([[10.0, 20.0], [50.0, 20.0]])
+        result = draw_trails(image, [trail], color=(255, 0, 0), line_width=3.0)
+        assert result.ndim == 3
+        assert result.shape == (40, 60, 3)
+        assert result.sum() > 0
+
+    def test_draw_trails_single_point(self):
+        """A single-point trail has no segment and draws nothing."""
+        image = np.zeros((40, 60, 3), dtype=np.uint8)
+        trail = np.array([[30.0, 20.0]])
+        result = draw_trails(image, [trail], color=(255, 255, 255))
+        assert result.sum() == 0
+
+
+class TestTrailHelpers:
+    """Tests for _resolve_trail_node and _compute_trails."""
+
+    def test_resolve_trail_node_centroid(self):
+        """The string 'centroid' resolves to a single centroid target."""
+        from sleap_io.rendering.core import _resolve_trail_node
+
+        skel = _make_trail_labels(n_frames=1).skeletons[0]
+        assert _resolve_trail_node("centroid", skel) == [None]
+        # Case-insensitive.
+        assert _resolve_trail_node("Centroid", skel) == [None]
+
+    def test_resolve_trail_node_name(self):
+        """A node name resolves to that node's index."""
+        from sleap_io.rendering.core import _resolve_trail_node
+
+        skel = _make_trail_labels(n_frames=1).skeletons[0]
+        assert _resolve_trail_node("a", skel) == [0]
+        assert _resolve_trail_node("b", skel) == [1]
+
+    def test_resolve_trail_node_list(self):
+        """A list of node names resolves to one target per node."""
+        from sleap_io.rendering.core import _resolve_trail_node
+
+        skel = _make_trail_labels(n_frames=1).skeletons[0]
+        assert _resolve_trail_node(["a", "b"], skel) == [0, 1]
+
+    def test_resolve_trail_node_unknown(self):
+        """An unknown node name raises ValueError."""
+        from sleap_io.rendering.core import _resolve_trail_node
+
+        skel = _make_trail_labels(n_frames=1).skeletons[0]
+        with pytest.raises(ValueError, match="Unknown trail_node"):
+            _resolve_trail_node("nonexistent", skel)
+
+    def test_compute_trails_basic(self):
+        """_compute_trails produces one polyline per track."""
+        from sleap_io.rendering.core import _compute_trails
+
+        labels = _make_trail_labels(n_frames=8)
+        frame_idx_to_lf = {lf.frame_idx: lf for lf in labels.labeled_frames}
+        track_idx_map = {id(t): i for i, t in enumerate(labels.tracks)}
+        palette = [(255, 0, 0), (0, 255, 0)]
+        trails, colors = _compute_trails(
+            fidx=7,
+            frame_idx_to_lf=frame_idx_to_lf,
+            trail_length=4,
+            trail_targets=[None],
+            track_idx_map=track_idx_map,
+            palette_colors=palette,
+            has_tracks=True,
+        )
+        assert len(trails) == 2  # One per track.
+        assert all(t.shape == (5, 2) for t in trails)  # trail_length + 1.
+        assert len(colors) == 2
+        assert set(colors) == {(255, 0, 0), (0, 255, 0)}
+
+    def test_compute_trails_node_list(self):
+        """_compute_trails produces one polyline per (track, node) pair."""
+        from sleap_io.rendering.core import _compute_trails
+
+        labels = _make_trail_labels(n_frames=8)
+        frame_idx_to_lf = {lf.frame_idx: lf for lf in labels.labeled_frames}
+        track_idx_map = {id(t): i for i, t in enumerate(labels.tracks)}
+        trails, _ = _compute_trails(
+            fidx=7,
+            frame_idx_to_lf=frame_idx_to_lf,
+            trail_length=4,
+            trail_targets=[0, 1],
+            track_idx_map=track_idx_map,
+            palette_colors=[(255, 0, 0), (0, 255, 0)],
+            has_tracks=True,
+        )
+        # 2 tracks x 2 nodes.
+        assert len(trails) == 4
+
+    def test_compute_trails_missing_frame_nan(self):
+        """Missing frames leave NaN rows in the trail."""
+        from sleap_io.rendering.core import _compute_trails
+
+        labels = _make_trail_labels(n_frames=8)
+        frame_idx_to_lf = {lf.frame_idx: lf for lf in labels.labeled_frames}
+        del frame_idx_to_lf[3]
+        track_idx_map = {id(t): i for i, t in enumerate(labels.tracks)}
+        trails, _ = _compute_trails(
+            fidx=5,
+            frame_idx_to_lf=frame_idx_to_lf,
+            trail_length=5,
+            trail_targets=[None],
+            track_idx_map=track_idx_map,
+            palette_colors=[(255, 0, 0), (0, 255, 0)],
+            has_tracks=True,
+        )
+        # Frame range is [0, 5]; frame 3 is at row index 3.
+        assert all(np.isnan(t[3]).all() for t in trails)
+        assert all(np.isfinite(t[5]).all() for t in trails)
+
+    def test_compute_trails_untracked(self):
+        """Untracked data keys trails by instance index."""
+        from sleap_io.rendering.core import _compute_trails
+
+        labels = _make_trail_labels(n_frames=6)
+        frame_idx_to_lf = {lf.frame_idx: lf for lf in labels.labeled_frames}
+        trails, colors = _compute_trails(
+            fidx=5,
+            frame_idx_to_lf=frame_idx_to_lf,
+            trail_length=4,
+            trail_targets=[None],
+            track_idx_map={},
+            palette_colors=[(10, 10, 10), (20, 20, 20)],
+            has_tracks=False,
+        )
+        # One trail per instance position index.
+        assert len(trails) == 2
+
+    def test_compute_trails_skips_untracked_instance(self):
+        """In tracked data, an instance with no track is skipped."""
+        from sleap_io.rendering.core import _compute_trails
+
+        labels = _make_trail_labels(n_frames=5)
+        skel = labels.skeletons[0]
+        # Add an instance with no track assignment.
+        labels.labeled_frames[2].instances.append(
+            sio.Instance(
+                points={"a": [5.0, 5.0], "b": [9.0, 9.0]},
+                skeleton=skel,
+                track=None,
+            )
+        )
+        frame_idx_to_lf = {lf.frame_idx: lf for lf in labels.labeled_frames}
+        track_idx_map = {id(t): i for i, t in enumerate(labels.tracks)}
+        trails, _ = _compute_trails(
+            fidx=4,
+            frame_idx_to_lf=frame_idx_to_lf,
+            trail_length=4,
+            trail_targets=[None],
+            track_idx_map=track_idx_map,
+            palette_colors=[(1, 1, 1), (2, 2, 2)],
+            has_tracks=True,
+        )
+        # Only the two tracked instances yield trails.
+        assert len(trails) == 2
+
+    def test_compute_trails_drops_all_nan_trail(self):
+        """A trail that is entirely NaN (never-visible node) is dropped."""
+        from sleap_io.rendering.core import _compute_trails
+
+        skel = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+        video = sio.Video(filename="x.mp4", open_backend=False)
+        track = sio.Track("t0")
+        lfs = []
+        for fi in range(5):
+            inst = sio.Instance(
+                points={"a": [10.0 + fi, 20.0], "b": [np.nan, np.nan]},
+                skeleton=skel,
+                track=track,
+            )
+            lfs.append(sio.LabeledFrame(video=video, frame_idx=fi, instances=[inst]))
+        labels = sio.Labels(
+            labeled_frames=lfs, videos=[video], skeletons=[skel], tracks=[track]
+        )
+        frame_idx_to_lf = {lf.frame_idx: lf for lf in labels.labeled_frames}
+        trails, _ = _compute_trails(
+            fidx=4,
+            frame_idx_to_lf=frame_idx_to_lf,
+            trail_length=4,
+            trail_targets=[0, 1],
+            track_idx_map={id(track): 0},
+            palette_colors=[(1, 1, 1)],
+            has_tracks=True,
+        )
+        # Node "a" yields a trail; node "b" is all-NaN and dropped.
+        assert len(trails) == 1
+
+
+class TestRenderImageTrails:
+    """Tests for show_trails in render_image."""
+
+    def test_render_image_show_trails_centroid(self, labels_predictions):
+        """show_trails with centroid target changes the rendered output."""
+        without = render_image(labels_predictions, lf_ind=50, show_trails=False)
+        with_trails = render_image(
+            labels_predictions, lf_ind=50, show_trails=True, trail_length=20
+        )
+        assert with_trails.shape == without.shape
+        assert not np.array_equal(with_trails, without)
+
+    def test_render_image_show_trails_node(self, labels_predictions):
+        """show_trails accepts a node name as the trail target."""
+        node_name = labels_predictions.skeletons[0].node_names[0]
+        rendered = render_image(
+            labels_predictions,
+            lf_ind=50,
+            show_trails=True,
+            trail_node=node_name,
+            trail_length=15,
+        )
+        assert rendered.ndim == 3
+
+    def test_render_image_show_trails_node_list(self, labels_predictions):
+        """show_trails accepts a list of node names."""
+        node_names = labels_predictions.skeletons[0].node_names[:2]
+        rendered = render_image(
+            labels_predictions,
+            lf_ind=50,
+            show_trails=True,
+            trail_node=node_names,
+            trail_length=15,
+        )
+        assert rendered.ndim == 3
+
+    def test_render_image_show_trails_unknown_node(self, labels_predictions):
+        """An unknown trail_node raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown trail_node"):
+            render_image(
+                labels_predictions,
+                lf_ind=50,
+                show_trails=True,
+                trail_node="not_a_real_node",
+            )
+
+    def test_render_image_show_trails_labeled_frame_source_noop(
+        self, labels_predictions
+    ):
+        """show_trails on a LabeledFrame source is skipped without error."""
+        lf = labels_predictions.labeled_frames[50]
+        rendered = render_image(lf, show_trails=True, trail_length=10)
+        assert rendered.ndim == 3
+
+    def test_render_image_show_trails_with_crop(self, labels_predictions):
+        """show_trails works together with cropping."""
+        rendered = render_image(
+            labels_predictions,
+            lf_ind=50,
+            show_trails=True,
+            trail_length=15,
+            crop=(50, 50, 250, 250),
+        )
+        assert rendered.shape == (200, 200, 3)
+
+    def test_render_image_show_trails_first_frame(self, labels_predictions):
+        """show_trails on the first frame (no history) does not error."""
+        rendered = render_image(
+            labels_predictions, lf_ind=0, show_trails=True, trail_length=20
+        )
+        assert rendered.ndim == 3
+
+
+class TestRenderVideoTrails:
+    """Tests for show_trails in render_video."""
+
+    def test_render_video_show_trails(self, labels_predictions):
+        """render_video with show_trails returns rendered frames."""
+        frame_inds = [lf.frame_idx for lf in labels_predictions.labeled_frames[:5]]
+        frames = render_video(
+            labels_predictions,
+            frame_inds=frame_inds,
+            show_trails=True,
+            trail_length=10,
+            show_progress=False,
+        )
+        assert len(frames) == 5
+        assert all(f.ndim == 3 for f in frames)
+
+    def test_render_video_show_trails_save(self, labels_predictions, tmp_path):
+        """render_video with show_trails writes a video file."""
+        output_path = tmp_path / "trails.mp4"
+        frame_inds = [lf.frame_idx for lf in labels_predictions.labeled_frames[:5]]
+        render_video(
+            labels_predictions,
+            output_path,
+            frame_inds=frame_inds,
+            show_trails=True,
+            trail_length=10,
+            show_progress=False,
+        )
+        assert output_path.exists()
+
+    def test_render_video_show_trails_node(self, labels_predictions):
+        """render_video trails accept a node name."""
+        node_name = labels_predictions.skeletons[0].node_names[0]
+        frame_inds = [lf.frame_idx for lf in labels_predictions.labeled_frames[:4]]
+        frames = render_video(
+            labels_predictions,
+            frame_inds=frame_inds,
+            show_trails=True,
+            trail_node=node_name,
+            trail_length=8,
+            show_progress=False,
+        )
+        assert len(frames) == 4
+
+    def test_render_video_show_trails_list_source(self, labels_predictions):
+        """render_video trails work for a list[LabeledFrame] source."""
+        lfs = labels_predictions.labeled_frames[40:55]
+        frames = render_video(
+            lfs,
+            show_trails=True,
+            trail_length=8,
+            show_progress=False,
+        )
+        assert len(frames) == len(lfs)
+
+    def test_render_video_show_trails_include_unlabeled(self):
+        """render_video draws trails on unlabeled frames without error.
+
+        With a short trail and labeled frames only at 0-7, later frames have an
+        empty trail window, exercising the no-trails fast path too.
+        """
+        labels = _make_trail_labels(n_frames=8, n_video_frames=16)
+        frames = render_video(
+            labels,
+            background="black",
+            show_trails=True,
+            trail_length=3,
+            include_unlabeled=True,
+            start=0,
+            end=16,
+            show_progress=False,
+        )
+        assert len(frames) == 16

@@ -27,6 +27,7 @@ from sleap_io.rendering.overlays import (
     draw_label_image,
     draw_masks,
     draw_rois,
+    draw_trails,
 )
 
 __all__ = [
@@ -42,4 +43,5 @@ __all__ = [
     "draw_masks",
     "draw_bboxes",
     "draw_label_image",
+    "draw_trails",
 ]

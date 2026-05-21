@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from sleap_io.model.labels import Labels
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.roi import ROI
+    from sleap_io.model.skeleton import Skeleton
     from sleap_io.model.video import Video
 
 # Preset configurations
@@ -161,6 +162,129 @@ def _apply_crop(
         shifted_points.append(shifted)
 
     return cropped, shifted_points, scale
+
+
+def _resolve_trail_node(
+    trail_node: str | list[str],
+    skeleton: "Skeleton",
+) -> list[int | None]:
+    """Resolve a ``trail_node`` specification to a list of trail targets.
+
+    Args:
+        trail_node: Trail target specification. One of:
+
+            - ``"centroid"``: trail the instance centroid.
+            - A node name string: trail that node.
+            - A list of node name strings: trail each node separately.
+        skeleton: Skeleton used to resolve node names to indices.
+
+    Returns:
+        List of targets, one per requested node. Each target is ``None``
+        (centroid) or an integer node index.
+
+    Raises:
+        ValueError: If a node name is not present in the skeleton.
+    """
+    names = [trail_node] if isinstance(trail_node, str) else list(trail_node)
+
+    targets: list[int | None] = []
+    for name in names:
+        if isinstance(name, str) and name.lower() == "centroid":
+            targets.append(None)
+            continue
+        try:
+            targets.append(skeleton.index(name))
+        except (KeyError, IndexError):
+            raise ValueError(
+                f"Unknown trail_node {name!r}; skeleton nodes: {skeleton.node_names}"
+            )
+    return targets
+
+
+def _compute_trails(
+    fidx: int,
+    frame_idx_to_lf: dict[int, "LabeledFrame"],
+    trail_length: int,
+    trail_targets: list[int | None],
+    track_idx_map: dict[int, int],
+    palette_colors: list[tuple[int, int, int]],
+    has_tracks: bool,
+) -> tuple[list[np.ndarray], list[tuple[int, int, int]]]:
+    """Compute motion-trail polylines ending at a given frame.
+
+    Args:
+        fidx: Current frame index (the trail ends here).
+        frame_idx_to_lf: Mapping from frame index to LabeledFrame.
+        trail_length: Number of past frames behind the current frame. The trail
+            spans frames ``[fidx - trail_length, fidx]`` inclusive.
+        trail_targets: List of targets from `_resolve_trail_node`. Each is
+            ``None`` (centroid) or an integer node index.
+        track_idx_map: Mapping from ``id(track)`` to track index, used to key
+            trails by track and to assign colors.
+        palette_colors: Color palette indexed by track index (tracked data) or
+            instance index (untracked data).
+        has_tracks: Whether the data has track assignments. When ``False``,
+            trails are keyed by instance position index instead of track.
+
+    Returns:
+        Tuple of ``(trails, colors)`` where ``trails`` is a list of ``(M, 2)``
+        float arrays (``M = trail_length + 1``, oldest to newest, NaN for
+        missing positions) and ``colors`` is the parallel list of RGB tuples.
+    """
+    frame_range = range(fidx - trail_length, fidx + 1)
+    n_points = trail_length + 1
+
+    # Map from (key index, target index) -> (M, 2) array of positions, where
+    # key index is the track index (tracked) or instance index (untracked).
+    trail_data: dict[tuple[int, int], np.ndarray] = {}
+
+    for j, f in enumerate(frame_range):
+        lf = frame_idx_to_lf.get(f)
+        if lf is None:
+            continue
+        for inst_idx, inst in enumerate(lf.instances):
+            if has_tracks:
+                if inst.track is None:
+                    continue
+                key_idx = track_idx_map.get(id(inst.track))
+                if key_idx is None:
+                    continue
+            else:
+                key_idx = inst_idx
+
+            pts = None  # Lazily computed instance.numpy() when a node is needed.
+            for t_idx, target in enumerate(trail_targets):
+                if target is None:
+                    xy = inst.centroid_xy
+                    coord = (
+                        (float(xy[0]), float(xy[1]))
+                        if xy is not None
+                        else (np.nan, np.nan)
+                    )
+                else:
+                    if pts is None:
+                        pts = inst.numpy()
+                    if target < len(pts):
+                        coord = (float(pts[target][0]), float(pts[target][1]))
+                    else:
+                        coord = (np.nan, np.nan)
+
+                dkey = (key_idx, t_idx)
+                arr = trail_data.get(dkey)
+                if arr is None:
+                    arr = np.full((n_points, 2), np.nan, dtype=np.float64)
+                    trail_data[dkey] = arr
+                arr[j] = coord
+
+    trails: list[np.ndarray] = []
+    colors: list[tuple[int, int, int]] = []
+    for (key_idx, _), arr in trail_data.items():
+        if not np.isfinite(arr).any():
+            continue
+        trails.append(arr)
+        colors.append(palette_colors[key_idx % len(palette_colors)])
+
+    return trails, colors
 
 
 def _prepare_frame_rgba(frame: np.ndarray) -> np.ndarray:
@@ -659,6 +783,12 @@ def render_image(
     show_centroids: bool = True,
     centroid_marker_size: float = 5.0,
     scale: float = 1.0,
+    # Motion trails
+    show_trails: bool = False,
+    trail_length: int = 10,
+    trail_node: str | list[str] = "centroid",
+    trail_width: float = 2.0,
+    trail_alpha_fade: bool = True,
     # Background control
     background: Literal["video"] | ColorSpec = "video",
     # Callbacks
@@ -714,6 +844,16 @@ def render_image(
             ``Labels.centroids``. Centroids are colored by track.
         centroid_marker_size: Radius of centroid markers in pixels.
         scale: Output scale factor. Applied after cropping.
+        show_trails: Whether to draw motion trails tracing node or centroid
+            positions over past frames. Only takes effect when ``source`` is a
+            ``Labels`` object (trails need temporal context); ignored otherwise.
+        trail_length: Number of past frames behind the current frame to include
+            in each trail.
+        trail_node: Which point to trail. One of ``"centroid"`` (default), a
+            node name, or a list of node names (one trail per node).
+        trail_width: Trail line width in pixels.
+        trail_alpha_fade: If ``True``, fade trails from faint (oldest) to opaque
+            (newest).
         background: Background control. Can be:
             - ``"video"``: Load video frame (default). Raises error if unavailable.
             - Any color spec: Use solid color background, skip video loading entirely.
@@ -991,6 +1131,39 @@ def render_image(
             outline_color=overlay_outline_color,
         )
 
+    # Draw motion trails behind the poses and centroids. Trails need temporal
+    # context, so they are only drawn when the source is a Labels object.
+    if show_trails and isinstance(source, Labels) and trail_length > 0 and instances:
+        from sleap_io.rendering.overlays import draw_trails as _draw_trails
+
+        trail_targets = _resolve_trail_node(trail_node, skeleton)
+        frame_idx_to_lf = {lframe.frame_idx: lframe for lframe in source.find(lf.video)}
+        n_trail_colors = max(n_tracks if has_tracks else len(instances), 1)
+        trail_palette = get_palette(palette, n_trail_colors)
+        trails, trail_colors = _compute_trails(
+            fidx=fidx_for_callback,
+            frame_idx_to_lf=frame_idx_to_lf,
+            trail_length=trail_length,
+            trail_targets=trail_targets,
+            track_idx_map=img_track_idx_map,
+            palette_colors=trail_palette,
+            has_tracks=has_tracks,
+        )
+        if trails:
+            if render_image_data.ndim == 2:
+                render_image_data = np.stack([render_image_data] * 3, axis=-1)
+            # trail_width is NOT pre-scaled: the trail is drawn here, then the
+            # whole image is upscaled once by `scale` inside render_frame, so
+            # the final width matches pose edges (line_width * scale).
+            render_image_data = _draw_trails(
+                render_image_data,
+                trails,
+                colors=trail_colors,
+                line_width=trail_width,
+                alpha_fade=trail_alpha_fade,
+                offset=crop_offset,
+            )
+
     # Draw centroids on the image.
     if show_centroids and isinstance(source, Labels) and source.centroids:
         from sleap_io.rendering.overlays import draw_centroids as _draw_centroids
@@ -1116,6 +1289,12 @@ def render_video(
     show_edges: bool = True,
     show_centroids: bool = True,
     centroid_marker_size: float = 5.0,
+    # Motion trails
+    show_trails: bool = False,
+    trail_length: int = 10,
+    trail_node: str | list[str] = "centroid",
+    trail_width: float = 2.0,
+    trail_alpha_fade: bool = True,
     # Video encoding
     fps: float | None = None,
     codec: str = "libx264",
@@ -1179,6 +1358,15 @@ def render_video(
         show_centroids: Whether to draw centroid markers from
             ``Labels.centroids``. Centroids are colored by track.
         centroid_marker_size: Radius of centroid markers in pixels.
+        show_trails: Whether to draw motion trails tracing node or centroid
+            positions over past frames.
+        trail_length: Number of past frames behind each frame to include in the
+            trail.
+        trail_node: Which point to trail. One of ``"centroid"`` (default), a
+            node name, or a list of node names (one trail per node).
+        trail_width: Trail line width in pixels.
+        trail_alpha_fade: If ``True``, fade trails from faint (oldest) to opaque
+            (newest).
         fps: Output frame rate (default: source video fps).
         codec: Video codec for encoding.
         crf: Constant rate factor for quality (2-32, lower=better). Default 25.
@@ -1447,6 +1635,27 @@ def render_video(
     if _has_video_centroids and labels is not None:
         _centroid_palette = get_palette(palette, max(len(labels.tracks), 1))
 
+    # Set up motion trails (drawn behind poses).
+    _do_trails = show_trails and trail_length > 0
+    _trail_targets: list[int | None] = []
+    _trail_palette: list[tuple[int, int, int]] = []
+    if _do_trails:
+        if skeleton is not None:
+            _trail_targets = _resolve_trail_node(trail_node, skeleton)
+        elif isinstance(trail_node, str) and trail_node.lower() == "centroid":
+            _trail_targets = [None]
+        else:
+            # Node-name trails need a skeleton; skip trails without one.
+            _do_trails = False
+        if _do_trails:
+            if has_tracks:
+                n_trail_colors = max(n_tracks, 1)
+            else:
+                n_trail_colors = max(
+                    (len(lf.instances) for lf in labeled_frames), default=1
+                )
+            _trail_palette = get_palette(palette, max(n_trail_colors, 1))
+
     # Pre-process overlay: determine type for per-frame dispatch
     _overlay_is_3d = (
         overlay is not None and isinstance(overlay, np.ndarray) and overlay.ndim == 3
@@ -1575,6 +1784,43 @@ def render_video(
         )
         return image
 
+    def _draw_frame_trails(
+        image: np.ndarray, fidx: int, crop_off: tuple[float, float] = (0.0, 0.0)
+    ) -> np.ndarray:
+        """Draw motion trails for a single frame onto the image."""
+        if not _do_trails:
+            return image
+
+        trails, trail_colors = _compute_trails(
+            fidx=fidx,
+            frame_idx_to_lf=frame_idx_to_lf,
+            trail_length=trail_length,
+            trail_targets=_trail_targets,
+            track_idx_map=_track_idx_map,
+            palette_colors=_trail_palette,
+            has_tracks=has_tracks,
+        )
+        if not trails:
+            return image
+
+        from sleap_io.rendering.overlays import draw_trails
+
+        # Ensure RGB.
+        if image.ndim == 2:
+            image = np.stack([image] * 3, axis=-1)
+
+        # trail_width is NOT pre-scaled: the trail is drawn here, then the whole
+        # image is upscaled once by `scale` inside render_frame, so the final
+        # width matches pose edges (line_width * scale).
+        return draw_trails(
+            image,
+            trails,
+            colors=trail_colors,
+            line_width=trail_width,
+            alpha_fade=trail_alpha_fade,
+            offset=crop_off,
+        )
+
     # Only accumulate frames if returning as list (no save_path)
     rendered_frames: list[np.ndarray] = []
     total_frames = len(render_indices)
@@ -1636,6 +1882,11 @@ def render_video(
                     else (0.0, 0.0)
                 )
                 render_image_data = _draw_frame_centroids(
+                    render_image_data, fidx, crop_off
+                )
+
+                # Draw motion trails
+                render_image_data = _draw_frame_trails(
                     render_image_data, fidx, crop_off
                 )
 
@@ -1730,6 +1981,9 @@ def render_video(
                 else (0.0, 0.0)
             )
             render_image_data = _draw_frame_centroids(render_image_data, fidx, crop_off)
+
+            # Draw motion trails
+            render_image_data = _draw_frame_trails(render_image_data, fidx, crop_off)
 
             # Render frame
             rendered = render_frame(

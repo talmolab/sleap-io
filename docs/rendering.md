@@ -348,6 +348,46 @@ img = sio.render_image(lf, show_nodes=True, show_edges=False)
 
 ![toggle nodes only](assets/rendering/toggle_nodes_only.png)
 
+### Motion trails
+
+Motion trails draw the trajectory of a node or centroid over the last
+`trail_length` frames, so you can see how each animal moved through the
+rendered output. Trails are drawn behind the poses and colored to match them
+(by track when tracks are present, otherwise by instance).
+
+```python
+sio.render_video(
+    labels,
+    save_path="output.mp4",
+    show_trails=True,        # enable trail drawing
+    trail_length=10,         # number of past frames to trace
+    trail_node="centroid",   # node name, list of node names, or "centroid"
+    trail_width=2.0,         # trail line width in pixels
+    trail_alpha_fade=True,   # fade from faint (oldest) to opaque (newest)
+)
+```
+
+`trail_node` accepts:
+
+- `"centroid"` (default): trail the mean of each instance's visible nodes.
+- A node name (e.g. `"head"`): trail that single node.
+- A list of node names (e.g. `["head", "thorax"]`): draw one trail per node.
+
+Trails need temporal context, so they are only drawn for videos or for
+`render_image` when the source is a `Labels` object (so past frames are
+available). They are silently skipped for a single `LabeledFrame` or a list of
+instances.
+
+```python
+# Trails also work on a single rendered frame from a Labels object.
+img = sio.render_image(labels, lf_ind=100, show_trails=True, trail_length=20)
+```
+
+!!! note
+    For untracked data, trails are matched by instance index across frames,
+    which can jump between animals if the per-frame ordering changes. Trails
+    are most reliable on tracked data.
+
 ---
 
 ## Scaling and Cropping
@@ -782,6 +822,12 @@ sio render -i predictions.slp --lf 0 -o frame.png
 sio render -i predictions.slp -o styled.mp4 \
     --color-by track --palette tableau10 --marker-shape diamond
 
+# Motion trails
+sio render -i predictions.slp -o output.mp4 --trails --trail-length 10
+
+# Trails for specific nodes
+sio render -i predictions.slp -o output.mp4 --trails --trail-node head,thorax
+
 # Segmentation overlay from TIFF stack
 sio render -i predictions.slp --overlay masks.tif --overlay-alpha 0.4
 
@@ -856,6 +902,11 @@ sio render --list-colors
       heading_level: 3
 
 ::: sleap_io.draw_rois
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.draw_trails
     options:
       show_root_heading: true
       heading_level: 3

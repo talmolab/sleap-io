@@ -3286,6 +3286,45 @@ def filenames(
     default=False,
     help="Hide centroid markers. Default: show centroids.",
 )
+# Trail options
+@click.option(
+    "--trails",
+    "show_trails",
+    is_flag=True,
+    default=False,
+    help="Draw motion trails of node/centroid trajectories over past frames.",
+)
+@click.option(
+    "--trail-length",
+    "trail_length",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Number of past frames included in each trail.",
+)
+@click.option(
+    "--trail-node",
+    "trail_node_str",
+    type=str,
+    default="centroid",
+    show_default=True,
+    help="Trail target: 'centroid', a node name, or comma-separated node names.",
+)
+@click.option(
+    "--trail-width",
+    "trail_width",
+    type=float,
+    default=2.0,
+    show_default=True,
+    help="Trail line width in pixels.",
+)
+@click.option(
+    "--trail-fade/--no-trail-fade",
+    "trail_alpha_fade",
+    default=True,
+    show_default=True,
+    help="Fade trails from faint (oldest) to opaque (newest).",
+)
 # Crop options
 @click.option(
     "--crop",
@@ -3404,6 +3443,11 @@ def render(
     no_nodes: bool,
     no_edges: bool,
     no_centroids: bool,
+    show_trails: bool,
+    trail_length: int,
+    trail_node_str: str,
+    trail_width: float,
+    trail_alpha_fade: bool,
     crop_str: str | None,
     background: str,
     images_path: Path | None,
@@ -3454,6 +3498,12 @@ def render(
         $ sio render predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75  # Normalized
 
         $ sio render predictions.slp -o cropped.mp4 --crop 100,100,300,300
+
+        [bold]Motion trails:[/]
+
+        $ sio render predictions.slp -o output.mp4 --trails --trail-length 10
+
+        $ sio render predictions.slp --trails --trail-node head,thorax
 
         [bold]Background (when video unavailable):[/]
 
@@ -3630,6 +3680,22 @@ def render(
         overlay_outline_color=overlay_outline_color,
     )
 
+    # Parse trail node specification (comma-separated names -> list).
+    if "," in trail_node_str:
+        trail_node: str | list[str] = [
+            s.strip() for s in trail_node_str.split(",") if s.strip()
+        ]
+    else:
+        trail_node = trail_node_str.strip()
+
+    trail_kwargs = dict(
+        show_trails=show_trails,
+        trail_length=trail_length,
+        trail_node=trail_node,
+        trail_width=trail_width,
+        trail_alpha_fade=trail_alpha_fade,
+    )
+
     try:
         if single_image_mode:
             # Single image rendering
@@ -3660,6 +3726,7 @@ def render(
                     show_centroids=not no_centroids,
                     background=background,
                     **overlay_kwargs,
+                    **trail_kwargs,
                 )
             else:
                 # Render by video + frame_idx
@@ -3688,6 +3755,7 @@ def render(
                     show_centroids=not no_centroids,
                     background=background,
                     **overlay_kwargs,
+                    **trail_kwargs,
                 )
         else:
             # Video rendering
@@ -3717,6 +3785,7 @@ def render(
                 show_progress=True,
                 background=background,
                 **overlay_kwargs,
+                **trail_kwargs,
             )
     except Exception as e:
         raise click.ClickException(f"Failed to render: {e}")
