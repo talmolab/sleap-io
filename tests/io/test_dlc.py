@@ -32,7 +32,9 @@ def test_load_maudlc_testdata(dlc_fixture, request):
     assert len(labels.skeletons) == 1
     assert len(labels.skeleton.nodes) == 5  # A, B, C, D, E
     assert len(labels.tracks) == 3  # Animal1, Animal2, single
-    assert len(labels.labeled_frames) == 3  # 3 labeled frames
+    assert (
+        len(labels.labeled_frames) == 4
+    )  # 4 labeled frames (including negative frame)
 
     # Check skeleton nodes
     node_names = [node.name for node in labels.skeleton.nodes]
@@ -47,8 +49,10 @@ def test_load_maudlc_testdata(dlc_fixture, request):
     assert len(labels.labeled_frames[0].instances) == 2  # Frame 0: 2 instances
     assert labels.labeled_frames[1].frame_idx == 1
     assert len(labels.labeled_frames[1].instances) == 3  # Frame 1: 3 instances
-    assert labels.labeled_frames[2].frame_idx == 3
-    assert len(labels.labeled_frames[2].instances) == 2  # Frame 3: 2 instances
+    assert labels.labeled_frames[2].frame_idx == 2
+    assert len(labels.labeled_frames[2].instances) == 0  # Frame 2: 0 instances
+    assert labels.labeled_frames[3].frame_idx == 3
+    assert len(labels.labeled_frames[3].instances) == 2  # Frame 3: 2 instances
 
 
 @pytest.mark.parametrize(
@@ -65,7 +69,9 @@ def test_load_madlc_testdata(dlc_fixture, request):
     assert isinstance(labels, sio.Labels)
     assert len(labels.skeletons) == 1
     assert len(labels.skeleton.nodes) == 3  # A, B, C
-    assert len(labels.labeled_frames) == 3  # 3 labeled frames
+    assert (
+        len(labels.labeled_frames) == 4
+    )  # 4 labeled frames (including negative frame)
 
     # Check skeleton nodes
     node_names = [node.name for node in labels.skeleton.nodes]
@@ -76,8 +82,10 @@ def test_load_madlc_testdata(dlc_fixture, request):
     assert len(labels.labeled_frames[0].instances) == 2  # Frame 0: 2 instances
     assert labels.labeled_frames[1].frame_idx == 1
     assert len(labels.labeled_frames[1].instances) == 2  # Frame 1: 2 instances
-    assert labels.labeled_frames[2].frame_idx == 3
-    assert len(labels.labeled_frames[2].instances) == 1  # Frame 3: 1 instance
+    assert labels.labeled_frames[2].frame_idx == 2
+    assert len(labels.labeled_frames[2].instances) == 0  # Frame 2: 0 instances
+    assert labels.labeled_frames[3].frame_idx == 3
+    assert len(labels.labeled_frames[3].instances) == 1  # Frame 3: 1 instance
 
 
 @pytest.mark.parametrize(
@@ -95,15 +103,19 @@ def test_load_sadlc_testdata(dlc_fixture, request):
     assert len(labels.skeletons) == 1
     assert len(labels.skeleton.nodes) == 3  # A, B, C
     assert len(labels.tracks) == 0  # No tracks for single animal
-    assert len(labels.labeled_frames) == 3  # 3 labeled frames
+    assert (
+        len(labels.labeled_frames) == 4
+    )  # 4 labeled frames (including negative frame)
 
     # Check skeleton nodes
     node_names = [node.name for node in labels.skeleton.nodes]
     assert set(node_names) == {"A", "B", "C"}
 
-    # Check frame structure - 1 instance per frame
-    for labeled_frame in labels.labeled_frames:
-        assert len(labeled_frame.instances) == 1
+    # Check frame structure - 1 instance in annotated frames; 0 in unannotated
+    annotated = [lf for lf in labels.labeled_frames if lf.instances]
+    assert all(len(lf.instances) == 1 for lf in annotated)
+    unannotated = [lf for lf in labels.labeled_frames if not lf.instances]
+    assert len(unannotated) == 1
 
 
 def test_load_multiple_datasets(
@@ -288,9 +300,9 @@ def test_single_video_per_folder(dlc_testdata):
     for lf in labels.labeled_frames:
         assert lf.video is video
 
-    # Frame indices should be correct (0, 1, 3 based on the test data)
+    # Frame indices should be correct (0, 1, 2, 3 based on the test data)
     frame_indices = sorted([lf.frame_idx for lf in labels.labeled_frames])
-    assert frame_indices == [0, 1, 3]
+    assert frame_indices == [0, 1, 2, 3]
 
 
 def test_dlc_with_nested_path_structure(tmp_path):

@@ -12,8 +12,8 @@ def dlc_maudlc_testdata():
     - Has 3 tracks: "Animal1", "Animal2", "single"
     - Has 5 bodyparts: A, B, C (multi-animal) + D, E (unique bodyparts)
     - Uses DLC's hierarchical CSV format with scorer/individuals/bodyparts/coords
-    - Contains 3 labeled frames out of 4 image files (img000-img003.png)
-    - Frame 0: 2 instances, Frame 1: 3 instances, Frame 2: 2 instances
+    - Contains 4 labeled frames for 4 image files (img000-img003.png)
+    - Number of instances: Frame 0: 2, Frame 1: 3, Frame 2: 0, Frame 3: 2
     - Many points have NaN coordinates (missing annotations)
     """
     return "tests/data/dlc/labeled-data/video/maudlc_testdata.csv"
@@ -27,8 +27,8 @@ def dlc_madlc_testdata():
     - Contains labeled data for multi-animal pose estimation
     - Has 3 bodyparts: A, B, C
     - Uses DLC's hierarchical CSV format with scorer/individuals/bodyparts/coords
-    - Contains 3 labeled frames out of 4 image files (img000-img003.png)
-    - Frame 0: 2 instances, Frame 1: 2 instances, Frame 2: 1 instance
+    - Contains 4 labeled frames for 4 image files (img000-img003.png)
+    - Number of instances: Frame 0: 2, Frame 1: 2, Frame 2: 0, Frame 3: 1
     - Some points have NaN coordinates (missing annotations)
     """
     return "tests/data/dlc/labeled-data/video/madlc_testdata.csv"
@@ -67,8 +67,8 @@ def dlc_testdata():
     - Has 3 bodyparts: A, B, C
     - Has simpler structure without individual tracking
     - Uses DLC's hierarchical CSV format with scorer/bodyparts/coords headers
-    - Contains 3 labeled frames out of 4 image files (img000-img003.png)
-    - 1 instance per frame
+    - Contains 4 labeled frames for 4 image files (img000-img003.png)
+    - 1 instance per annotated frame, 1 unannotated frame (img002.png)
     - Some points have NaN coordinates (missing annotations)
     """
     return "tests/data/dlc/labeled-data/video/dlc_testdata.csv"

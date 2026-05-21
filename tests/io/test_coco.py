@@ -86,22 +86,41 @@ class TestCOCOBasicLoading:
 class TestCOCODatasetVariants:
     """Test loading different COCO dataset variants."""
 
-    def test_flat_images(self, coco_flat_images):
-        """Test loading flat images variant."""
-        labels = coco.read_labels(Path(coco_flat_images) / "annotations.json")
+    @pytest.mark.parametrize(
+        "json_name, expected_total_instances, expected_second_frame_instances",
+        [
+            ("annotations.json", 3, 1),
+            ("annotations_negative_frame.json", 2, 0),
+        ],
+    )
+    def test_flat_images(
+        self,
+        coco_flat_images,
+        json_name,
+        expected_total_instances,
+        expected_second_frame_instances,
+    ):
+        """Test loading flat images, including when no frames have annotations."""
+        labels = coco.read_labels(Path(coco_flat_images) / json_name)
 
         assert len(labels.labeled_frames) == 3
-        assert len(labels.skeletons) == 1
-        assert labels.skeletons[0].name == "mouse"
 
         # Check instances
         total_instances = sum(len(frame.instances) for frame in labels.labeled_frames)
-        assert total_instances == 3
+        assert total_instances == expected_total_instances
 
-        # Check first instance
+        # Check first frame instance structure
         instance = labels.labeled_frames[0].instances[0]
         assert len(instance.points) == 17
         assert instance.skeleton.name == "mouse"
+
+        # Check second frame instance count
+        frame_instances = labels.labeled_frames[1].instances
+        assert len(frame_instances) == expected_second_frame_instances
+
+        # Check skeletons
+        assert len(labels.skeletons) == 1
+        assert labels.skeletons[0].name == "mouse"
 
     def test_category_folders(self, coco_category_folders):
         """Test loading category folders variant."""
@@ -226,7 +245,6 @@ class TestCOCOMultiSplit:
         """Test reading labels set from single directory."""
         labels_dict = coco.read_labels_set(coco_flat_images)
 
-        assert len(labels_dict) == 1
         assert "annotations" in labels_dict
 
         labels = labels_dict["annotations"]
@@ -1331,12 +1349,14 @@ class TestCOCOExport:
         # Second point not visible: should be 0 in binary
         assert keypoints[5] == 0
 
-    def test_roundtrip_conversion(self, coco_flat_images, tmp_path):
+    @pytest.mark.parametrize(
+        "json_name",
+        ["annotations.json", "annotations_negative_frame.json"],
+    )
+    def test_roundtrip_conversion(self, coco_flat_images, json_name, tmp_path):
         """Test that data survives a roundtrip conversion."""
-        # Load original
-        original_labels = coco.read_labels(Path(coco_flat_images) / "annotations.json")
+        original_labels = coco.read_labels(Path(coco_flat_images) / json_name)
 
-        # Write to new file
         output_path = tmp_path / "roundtrip_annotations.json"
         coco.write_labels(original_labels, output_path)
 
