@@ -3225,6 +3225,13 @@ def filenames(
     show_default=True,
     help="H.264 encoding speed/compression trade-off.",
 )
+@click.option(
+    "--progress/--no-progress",
+    "show_progress",
+    default=True,
+    show_default=True,
+    help="Show a progress bar during video rendering.",
+)
 # Appearance options
 @click.option(
     "--color-by",
@@ -3324,6 +3331,22 @@ def filenames(
     default=True,
     show_default=True,
     help="Fade trails from faint (oldest) to opaque (newest).",
+)
+@click.option(
+    "--trail-alpha",
+    "trail_alpha",
+    type=float,
+    default=1.0,
+    show_default=True,
+    help="Global trail opacity (0.0-1.0).",
+)
+@click.option(
+    "--trail-color",
+    "trail_color_str",
+    type=str,
+    default=None,
+    help="Uniform trail color (e.g., 'white', '#ff0000', '255,0,0'). "
+    "Default: match pose colors.",
 )
 # Crop options
 @click.option(
@@ -3434,6 +3457,7 @@ def render(
     fps: float | None,
     crf: int,
     x264_preset: str,
+    show_progress: bool,
     color_by: str,
     palette: str,
     marker_shape: str,
@@ -3448,6 +3472,8 @@ def render(
     trail_node_str: str,
     trail_width: float,
     trail_alpha_fade: bool,
+    trail_alpha: float,
+    trail_color_str: str | None,
     crop_str: str | None,
     background: str,
     images_path: Path | None,
@@ -3688,12 +3714,29 @@ def render(
     else:
         trail_node = trail_node_str.strip()
 
+    # Parse trail color: comma-separated RGB -> tuple, else pass through as a
+    # color spec (named color, hex, etc.) resolved by the renderer.
+    trail_color: tuple[int, int, int] | str | None = None
+    if trail_color_str is not None:
+        if "," in trail_color_str:
+            try:
+                trail_color = tuple(int(p.strip()) for p in trail_color_str.split(","))
+            except ValueError:
+                raise click.ClickException(
+                    f"Invalid --trail-color: '{trail_color_str}'. "
+                    "Use a name, hex, or 'r,g,b'."
+                )
+        else:
+            trail_color = trail_color_str.strip()
+
     trail_kwargs = dict(
         show_trails=show_trails,
         trail_length=trail_length,
         trail_node=trail_node,
         trail_width=trail_width,
         trail_alpha_fade=trail_alpha_fade,
+        trail_alpha=trail_alpha,
+        trail_color=trail_color,
     )
 
     try:
@@ -3782,7 +3825,7 @@ def render(
                 start=start_frame_idx,
                 end=end_frame_idx,
                 include_unlabeled=effective_all_frames,
-                show_progress=True,
+                show_progress=show_progress,
                 background=background,
                 **overlay_kwargs,
                 **trail_kwargs,

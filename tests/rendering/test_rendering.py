@@ -3643,6 +3643,32 @@ class TestDrawTrails:
         # Second trail is blue.
         assert result[60, 50, 2] > 100 and result[60, 50, 0] < 50
 
+    def test_draw_trails_global_alpha(self):
+        """A lower global alpha blends the trail more faintly into the image."""
+        trail = np.array([[10.0, 25.0], [90.0, 25.0]])
+
+        img_opaque = np.zeros((50, 100, 3), dtype=np.uint8)
+        draw_trails(
+            img_opaque,
+            [trail],
+            color=(255, 255, 255),
+            line_width=3.0,
+            alpha_fade=False,
+            alpha=1.0,
+        )
+        img_faint = np.zeros((50, 100, 3), dtype=np.uint8)
+        draw_trails(
+            img_faint,
+            [trail],
+            color=(255, 255, 255),
+            line_width=3.0,
+            alpha_fade=False,
+            alpha=0.3,
+        )
+        # The faint trail is dimmer than the opaque one.
+        assert img_faint[25, 50].mean() < img_opaque[25, 50].mean()
+        assert img_faint[25, 50].sum() > 0
+
     def test_draw_trails_offset(self):
         """The offset argument shifts trail coordinates (for cropped images)."""
         trail = np.array([[50.0, 25.0], [70.0, 25.0]])
@@ -3867,6 +3893,34 @@ class TestRenderImageTrails:
         assert with_trails.shape == without.shape
         assert not np.array_equal(with_trails, without)
 
+    def test_render_image_show_trails_color(self, labels_predictions):
+        """A uniform trail_color produces a different render than palette colors."""
+        palette_colored = render_image(
+            labels_predictions, lf_ind=50, show_trails=True, trail_length=20
+        )
+        uniform = render_image(
+            labels_predictions,
+            lf_ind=50,
+            show_trails=True,
+            trail_length=20,
+            trail_color="white",
+        )
+        assert not np.array_equal(palette_colored, uniform)
+
+    def test_render_image_show_trails_alpha(self, labels_predictions):
+        """trail_alpha changes the rendered output."""
+        opaque = render_image(
+            labels_predictions, lf_ind=50, show_trails=True, trail_length=20
+        )
+        faint = render_image(
+            labels_predictions,
+            lf_ind=50,
+            show_trails=True,
+            trail_length=20,
+            trail_alpha=0.25,
+        )
+        assert not np.array_equal(opaque, faint)
+
     def test_render_image_show_trails_node(self, labels_predictions):
         """show_trails accepts a node name as the trail target."""
         node_name = labels_predictions.skeletons[0].node_names[0]
@@ -3982,6 +4036,28 @@ class TestRenderVideoTrails:
             show_progress=False,
         )
         assert len(frames) == len(lfs)
+
+    def test_render_video_show_trails_color_and_alpha(self, labels_predictions):
+        """render_video accepts a uniform trail_color and trail_alpha."""
+        frame_inds = [lf.frame_idx for lf in labels_predictions.labeled_frames[:5]]
+        default = render_video(
+            labels_predictions,
+            frame_inds=frame_inds,
+            show_trails=True,
+            trail_length=10,
+            show_progress=False,
+        )
+        styled = render_video(
+            labels_predictions,
+            frame_inds=frame_inds,
+            show_trails=True,
+            trail_length=10,
+            trail_color=(255, 255, 255),
+            trail_alpha=0.4,
+            show_progress=False,
+        )
+        assert len(styled) == 5
+        assert not np.array_equal(default[-1], styled[-1])
 
     def test_render_video_show_trails_include_unlabeled(self):
         """render_video draws trails on unlabeled frames without error.

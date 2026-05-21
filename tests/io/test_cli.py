@@ -4555,6 +4555,104 @@ def test_render_trails_no_fade(centered_pair, tmp_path):
     assert output_path.exists()
 
 
+def test_render_trails_color_and_alpha(centered_pair, tmp_path):
+    """Test render with a uniform trail color and global trail alpha."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail_styled.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "50",
+            "--trails",
+            "--trail-color",
+            "255,128,0",
+            "--trail-alpha",
+            "0.6",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_trails_color_named(centered_pair, tmp_path):
+    """Test render with a named trail color."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail_named.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "50",
+            "--trails",
+            "--trail-color",
+            "white",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_trails_color_invalid(centered_pair, tmp_path):
+    """An invalid --trail-color RGB string is reported clearly."""
+    runner = CliRunner()
+    output_path = tmp_path / "trail_bad.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "50",
+            "--trails",
+            "--trail-color",
+            "1,2,bad",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Invalid --trail-color" in result.output
+
+
+def test_render_no_progress(centered_pair, tmp_path):
+    """Test render video with the progress bar disabled."""
+    runner = CliRunner()
+    output_path = tmp_path / "no_progress.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--no-progress",
+            "--start",
+            "0",
+            "--end",
+            "5",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
 def test_render_crop_invalid_format():
     """Test error with invalid crop format."""
     from sleap_io.io.cli import _parse_crop_string

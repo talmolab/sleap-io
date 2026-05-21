@@ -789,6 +789,8 @@ def render_image(
     trail_node: str | list[str] = "centroid",
     trail_width: float = 2.0,
     trail_alpha_fade: bool = True,
+    trail_alpha: float = 1.0,
+    trail_color: ColorSpec | None = None,
     # Background control
     background: Literal["video"] | ColorSpec = "video",
     # Callbacks
@@ -854,6 +856,11 @@ def render_image(
         trail_width: Trail line width in pixels.
         trail_alpha_fade: If ``True``, fade trails from faint (oldest) to opaque
             (newest).
+        trail_alpha: Global opacity multiplier for trails (0.0 to 1.0). Combines
+            with ``trail_alpha_fade``.
+        trail_color: Uniform color for all trails. If ``None`` (default), trails
+            are colored to match the poses (by track or instance). Accepts any
+            color spec (RGB tuple, named color, hex, or palette index).
         background: Background control. Can be:
             - ``"video"``: Load video frame (default). Raises error if unavailable.
             - Any color spec: Use solid color background, skip video loading entirely.
@@ -1152,16 +1159,23 @@ def render_image(
         if trails:
             if render_image_data.ndim == 2:
                 render_image_data = np.stack([render_image_data] * 3, axis=-1)
+            # A uniform trail_color overrides the per-track palette colors.
+            trail_draw_kwargs: dict = {}
+            if trail_color is not None:
+                trail_draw_kwargs["color"] = resolve_color(trail_color)
+            else:
+                trail_draw_kwargs["colors"] = trail_colors
             # trail_width is NOT pre-scaled: the trail is drawn here, then the
             # whole image is upscaled once by `scale` inside render_frame, so
             # the final width matches pose edges (line_width * scale).
             render_image_data = _draw_trails(
                 render_image_data,
                 trails,
-                colors=trail_colors,
                 line_width=trail_width,
                 alpha_fade=trail_alpha_fade,
+                alpha=trail_alpha,
                 offset=crop_offset,
+                **trail_draw_kwargs,
             )
 
     # Draw centroids on the image.
@@ -1295,6 +1309,8 @@ def render_video(
     trail_node: str | list[str] = "centroid",
     trail_width: float = 2.0,
     trail_alpha_fade: bool = True,
+    trail_alpha: float = 1.0,
+    trail_color: ColorSpec | None = None,
     # Video encoding
     fps: float | None = None,
     codec: str = "libx264",
@@ -1367,6 +1383,11 @@ def render_video(
         trail_width: Trail line width in pixels.
         trail_alpha_fade: If ``True``, fade trails from faint (oldest) to opaque
             (newest).
+        trail_alpha: Global opacity multiplier for trails (0.0 to 1.0). Combines
+            with ``trail_alpha_fade``.
+        trail_color: Uniform color for all trails. If ``None`` (default), trails
+            are colored to match the poses (by track or instance). Accepts any
+            color spec (RGB tuple, named color, hex, or palette index).
         fps: Output frame rate (default: source video fps).
         codec: Video codec for encoding.
         crf: Constant rate factor for quality (2-32, lower=better). Default 25.
@@ -1655,6 +1676,10 @@ def render_video(
                     (len(lf.instances) for lf in labeled_frames), default=1
                 )
             _trail_palette = get_palette(palette, max(n_trail_colors, 1))
+    # A uniform trail_color overrides the per-track palette colors.
+    _trail_color_resolved = (
+        resolve_color(trail_color) if trail_color is not None else None
+    )
 
     # Pre-process overlay: determine type for per-frame dispatch
     _overlay_is_3d = (
@@ -1809,16 +1834,23 @@ def render_video(
         if image.ndim == 2:
             image = np.stack([image] * 3, axis=-1)
 
+        # A uniform trail_color overrides the per-track palette colors.
+        if _trail_color_resolved is not None:
+            color_kwargs: dict = {"color": _trail_color_resolved}
+        else:
+            color_kwargs = {"colors": trail_colors}
+
         # trail_width is NOT pre-scaled: the trail is drawn here, then the whole
         # image is upscaled once by `scale` inside render_frame, so the final
         # width matches pose edges (line_width * scale).
         return draw_trails(
             image,
             trails,
-            colors=trail_colors,
             line_width=trail_width,
             alpha_fade=trail_alpha_fade,
+            alpha=trail_alpha,
             offset=crop_off,
+            **color_kwargs,
         )
 
     # Only accumulate frames if returning as list (no save_path)

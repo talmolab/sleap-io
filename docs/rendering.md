@@ -364,6 +364,8 @@ sio.render_video(
     trail_node="centroid",   # node name, list of node names, or "centroid"
     trail_width=2.0,         # trail line width in pixels
     trail_alpha_fade=True,   # fade from faint (oldest) to opaque (newest)
+    trail_alpha=1.0,         # global trail opacity
+    trail_color=None,        # uniform color, or None to match pose colors
 )
 ```
 
@@ -372,6 +374,24 @@ sio.render_video(
 - `"centroid"` (default): trail the mean of each instance's visible nodes.
 - A node name (e.g. `"head"`): trail that single node.
 - A list of node names (e.g. `["head", "thorax"]`): draw one trail per node.
+
+By default trails are colored to match the poses (by track when tracks are
+present, otherwise by instance). Pass `trail_color` to override this with a
+single uniform color for all trails — it accepts any color spec (RGB tuple,
+named color, hex, or palette index). `trail_alpha` scales the overall opacity
+and combines with `trail_alpha_fade`.
+
+```python
+# Faint white trails, uniform color, no fade.
+sio.render_video(
+    labels,
+    save_path="output.mp4",
+    show_trails=True,
+    trail_color="white",
+    trail_alpha=0.5,
+    trail_alpha_fade=False,
+)
+```
 
 Trails need temporal context, so they are only drawn for videos or for
 `render_image` when the source is a `Labels` object (so past frames are
@@ -827,6 +847,13 @@ sio render -i predictions.slp -o output.mp4 --trails --trail-length 10
 
 # Trails for specific nodes
 sio render -i predictions.slp -o output.mp4 --trails --trail-node head,thorax
+
+# Styled trails (uniform color, faint, no fade)
+sio render -i predictions.slp -o output.mp4 --trails \
+    --trail-color white --trail-alpha 0.5 --no-trail-fade
+
+# Disable the progress bar
+sio render -i predictions.slp -o output.mp4 --no-progress
 
 # Segmentation overlay from TIFF stack
 sio render -i predictions.slp --overlay masks.tif --overlay-alpha 0.4
