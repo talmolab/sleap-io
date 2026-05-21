@@ -3563,6 +3563,15 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Projects without track assignments</p>
+<p>When the source project has no <code>Track</code> assignments, <code>n_tracks</code> is sized to
+the largest number of instances found in any single frame, so every
+instance is exported (a multi-animal project is no longer collapsed to one
+instance per frame). Synthetic names <code>track_0 ... track_{n-1}</code> are used. The
+per-slot assignment is arbitrary across frames since no track identity
+exists — consistent with <code>to_numpy(untracked=True)</code>.</p>
+</div>
 <h3 id="node_names"><code>node_names</code><a class="headerlink" href="#node_names" title="Permanent link">&para;</a></h3>
 <p>Array of skeleton node/keypoint names.</p>
 <table>

@@ -167,6 +167,14 @@ Array of track name strings.
 | Dtype | Variable-length string |
 | Length | `n_tracks` |
 
+!!! note "Projects without track assignments"
+    When the source project has no `Track` assignments, `n_tracks` is sized to
+    the largest number of instances found in any single frame, so every
+    instance is exported (a multi-animal project is no longer collapsed to one
+    instance per frame). Synthetic names `track_0 ... track_{n-1}` are used. The
+    per-slot assignment is arbitrary across frames since no track identity
+    exists — consistent with `to_numpy(untracked=True)`.
+
 ### `node_names`
 
 Array of skeleton node/keypoint names.
