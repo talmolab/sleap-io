@@ -1645,3 +1645,112 @@ def test_merge_annotations_auto_many_to_one():
     xs = {c.x for c in lf1.centroids}
     assert xs == {11.0, 10.0}
     assert all(not c.is_predicted for c in lf1.centroids)
+
+
+def test_merge_is_negative_incoming_negative():
+    """Auto merge carries the incoming negative flag onto an empty base frame."""
+    video = Video(filename="test.mp4", open_backend=False)
+    base = LabeledFrame(video=video, frame_idx=0)
+    incoming = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+
+    base.merge(incoming, frame="auto")
+
+    assert base.is_negative is True
+
+
+def test_merge_is_negative_both_negative():
+    """Auto merge keeps the negative flag when both frames are negative."""
+    video = Video(filename="test.mp4", open_backend=False)
+    base = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+    incoming = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+
+    base.merge(incoming, frame="auto")
+
+    assert base.is_negative is True
+
+
+def test_merge_is_negative_user_pose_cancels():
+    """A merged-in user pose cancels the negative flag."""
+    skel = Skeleton(["A"])
+    video = Video(filename="test.mp4", open_backend=False)
+    base = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+    incoming = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[10, 10]], skeleton=skel)],
+    )
+
+    base.merge(incoming, frame="auto")
+
+    assert base.is_negative is False
+
+
+def test_merge_is_negative_predicted_does_not_cancel():
+    """Predicted-only instances do not cancel the negative flag."""
+    skel = Skeleton(["A"])
+    video = Video(filename="test.mp4", open_backend=False)
+    base = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+    incoming = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[PredictedInstance([[10, 10]], skeleton=skel)],
+    )
+
+    base.merge(incoming, frame="auto")
+
+    assert base.is_negative is True
+
+
+def test_merge_is_negative_keep_original():
+    """keep_original still carries the incoming negative flag."""
+    video = Video(filename="test.mp4", open_backend=False)
+    base = LabeledFrame(video=video, frame_idx=0)
+    incoming = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+
+    base.merge(incoming, frame="keep_original")
+
+    assert base.is_negative is True
+
+
+def test_merge_is_negative_keep_new():
+    """keep_new keeps the base negative flag (sticky OR across strategies)."""
+    video = Video(filename="test.mp4", open_backend=False)
+    base = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+    incoming = LabeledFrame(video=video, frame_idx=0)
+
+    base.merge(incoming, frame="keep_new")
+
+    assert base.is_negative is True
+
+
+def test_merge_is_negative_keep_both():
+    """keep_both carries the incoming negative flag."""
+    video = Video(filename="test.mp4", open_backend=False)
+    base = LabeledFrame(video=video, frame_idx=0)
+    incoming = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+
+    base.merge(incoming, frame="keep_both")
+
+    assert base.is_negative is True
+
+
+def test_merge_is_negative_update_tracks():
+    """update_tracks carries the incoming negative flag."""
+    video = Video(filename="test.mp4", open_backend=False)
+    base = LabeledFrame(video=video, frame_idx=0)
+    incoming = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+
+    base.merge(incoming, frame="update_tracks")
+
+    assert base.is_negative is True
+
+
+def test_merge_is_negative_replace_predictions():
+    """replace_predictions carries the base negative flag for predicted merges."""
+    video = Video(filename="test.mp4", open_backend=False)
+    base = LabeledFrame(video=video, frame_idx=0, is_negative=True)
+    incoming = LabeledFrame(video=video, frame_idx=0)
+
+    base.merge(incoming, frame="replace_predictions")
+
+    assert base.is_negative is True

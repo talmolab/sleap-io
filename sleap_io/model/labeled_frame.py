@@ -201,6 +201,31 @@ def _resolve_annotation_update_tracks(
         self_list[self_idx].tracking_score = other_list[other_idx].tracking_score
 
 
+def _resolve_merged_is_negative(
+    self_negative: bool, other_negative: bool, merged: list
+) -> tuple[bool, bool]:
+    """Resolve the ``is_negative`` flag for a merged frame.
+
+    A frame asserted as negative (background) by either side of a merge stays
+    negative, unless the merge produced a real user pose -- a frame with a
+    labeled animal is not a background frame. Predicted instances do not cancel
+    the flag, keeping the predict -> merge-back workflow correct.
+
+    Args:
+        self_negative: The ``is_negative`` flag of the base frame.
+        other_negative: The ``is_negative`` flag of the incoming frame.
+        merged: The merged instance list.
+
+    Returns:
+        A tuple ``(resolved, conflict)`` where ``resolved`` is the merged
+        ``is_negative`` value and ``conflict`` is ``True`` if a negative flag
+        was dropped because the merge produced a user pose.
+    """
+    either_negative = self_negative or other_negative
+    has_user_pose = any(type(inst) is Instance for inst in merged)
+    return either_negative and not has_user_pose, either_negative and has_user_pose
+
+
 @define(eq=False)
 class LabeledFrame:
     """Labeled data for a single frame of a video.
@@ -531,8 +556,10 @@ class LabeledFrame:
             - conflicts: List of (original, new, resolution) tuples for conflicts
 
         Notes:
-            This method doesn't modify the frame in place. It returns the merged
-            instance list which can be assigned back if desired.
+            The merged instance list is returned (not assigned back) so the
+            caller can decide what to do with it. Frame-level annotations
+            (centroids, bboxes, masks, label images, rois) and the
+            ``is_negative`` flag are updated on this frame in place.
         """
         from sleap_io.model.matching import InstanceMatcher, InstanceMatchMethod
 
@@ -547,12 +574,21 @@ class LabeledFrame:
 
         if frame == "keep_original":
             self._merge_annotations(other, strategy="keep_original")
+            self.is_negative, _ = _resolve_merged_is_negative(
+                self.is_negative, other.is_negative, self.instances
+            )
             return self.instances.copy(), conflicts
         elif frame == "keep_new":
             self._merge_annotations(other, strategy="keep_new")
+            self.is_negative, _ = _resolve_merged_is_negative(
+                self.is_negative, other.is_negative, other.instances
+            )
             return other.instances.copy(), conflicts
         elif frame == "keep_both":
             self._merge_annotations(other, strategy="keep_both")
+            self.is_negative, _ = _resolve_merged_is_negative(
+                self.is_negative, other.is_negative, self.instances + other.instances
+            )
             return self.instances + other.instances, conflicts
         elif frame == "update_tracks":
             # match instances and update .track and tracking score of the old instances
@@ -567,6 +603,9 @@ class LabeledFrame:
                 strategy="update_tracks",
                 threshold=instance_matcher.threshold,
             )
+            self.is_negative, _ = _resolve_merged_is_negative(
+                self.is_negative, other.is_negative, self.instances
+            )
             return self.instances, conflicts
         elif frame == "replace_predictions":
             # Keep all user instances from original frame
@@ -576,7 +615,10 @@ class LabeledFrame:
                 inst for inst in other.instances if type(inst) is PredictedInstance
             )
             self._merge_annotations(other, strategy="replace_predictions")
-            # No conflicts to report - this is a clean replacement
+            self.is_negative, _ = _resolve_merged_is_negative(
+                self.is_negative, other.is_negative, merged
+            )
+            # No instance conflicts to report - this is a clean replacement
             return merged, []
 
         # Auto merging strategy
@@ -651,6 +693,10 @@ class LabeledFrame:
         # Merge annotations from the other frame (spatial matching + resolution)
         self._merge_annotations(
             other, strategy="auto", threshold=instance_matcher.threshold
+        )
+
+        self.is_negative, _ = _resolve_merged_is_negative(
+            self.is_negative, other.is_negative, merged_instances
         )
 
         return merged_instances, conflicts

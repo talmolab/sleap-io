@@ -24,7 +24,7 @@ from sleap_io.io.utils import sanitize_filename
 from sleap_io.model.camera import RecordingSession
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance, Track
-from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.labeled_frame import LabeledFrame, _resolve_merged_is_negative
 from sleap_io.model.skeleton import NodeOrIndex, Skeleton
 from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
@@ -3295,11 +3295,13 @@ class Labels:
                 matching_frames = self.find(mapped_video, mapped_frame_idx)
 
                 if len(matching_frames) == 0:
-                    # No matching frame, create new one
+                    # No matching frame, create new one. Preserve the negative
+                    # (background) marker from the incoming frame verbatim.
                     new_frame = LabeledFrame(
                         video=mapped_video,
                         frame_idx=mapped_frame_idx,
                         instances=[],
+                        is_negative=other_frame.is_negative,
                     )
 
                     # Map instances to new skeleton/track
@@ -3318,6 +3320,9 @@ class Labels:
                 else:
                     # Merge into existing frame
                     self_frame = matching_frames[0]
+
+                    # Capture is_negative before merge() resolves it in place.
+                    self_was_negative = self_frame.is_negative
 
                     # Merge instances using frame-level merge
                     merged_instances, conflicts = self_frame.merge(
@@ -3355,6 +3360,22 @@ class Labels:
                                 original_data=orig,
                                 new_data=new,
                                 resolution=resolution,
+                            )
+                        )
+
+                    # Record a conflict if a negative (background) marker was
+                    # dropped because the merge produced a user pose.
+                    _, negative_conflict = _resolve_merged_is_negative(
+                        self_was_negative, other_frame.is_negative, merged_instances
+                    )
+                    if negative_conflict:
+                        result.conflicts.append(
+                            ConflictResolution(
+                                frame=self_frame,
+                                conflict_type="negative_flag_conflict",
+                                original_data=self_was_negative,
+                                new_data=other_frame.is_negative,
+                                resolution="dropped_for_user_pose",
                             )
                         )
 
