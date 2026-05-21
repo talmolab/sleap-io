@@ -4605,28 +4605,25 @@ def test_render_trails_color_named(centered_pair, tmp_path):
     assert output_path.exists()
 
 
-def test_render_trails_color_invalid(centered_pair, tmp_path):
-    """An invalid --trail-color RGB string is reported clearly."""
-    runner = CliRunner()
-    output_path = tmp_path / "trail_bad.png"
+def test_parse_trail_color():
+    """_parse_trail_color handles RGB, named colors, and invalid input."""
+    from sleap_io.io.cli import _parse_trail_color
 
-    result = runner.invoke(
-        cli,
-        [
-            "render",
-            "-i",
-            centered_pair,
-            "--lf",
-            "50",
-            "--trails",
-            "--trail-color",
-            "1,2,bad",
-            "-o",
-            str(output_path),
-        ],
-    )
-    assert result.exit_code != 0
-    assert "Invalid --trail-color" in result.output
+    # Valid forms.
+    assert _parse_trail_color(None) is None
+    assert _parse_trail_color("255,128,0") == (255, 128, 0)
+    assert _parse_trail_color("white") == "white"
+    assert _parse_trail_color("#ff0000") == "#ff0000"
+
+    # Non-integer RGB component.
+    with pytest.raises(Exception) as exc_info:
+        _parse_trail_color("1,2,bad")
+    assert "Invalid --trail-color" in str(exc_info.value)
+
+    # Wrong number of RGB values.
+    with pytest.raises(Exception) as exc_info:
+        _parse_trail_color("255,0")
+    assert "RGB needs 3 values" in str(exc_info.value)
 
 
 def test_render_no_progress(centered_pair, tmp_path):

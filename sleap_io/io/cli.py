@@ -236,6 +236,42 @@ def _get_package_version(package: str) -> str:
         return "not installed"
 
 
+def _parse_trail_color(
+    color_str: str | None,
+) -> tuple[int, int, int] | str | None:
+    """Parse a trail color string from the CLI.
+
+    Args:
+        color_str: Color string. Can be a comma-separated RGB triple
+            (``"255,128,0"``), a named color, a hex string, or None.
+
+    Returns:
+        An RGB tuple for comma-separated input, the stripped string for a name
+        or hex spec, or None if ``color_str`` is None.
+
+    Raises:
+        click.ClickException: If a comma-separated value is not a valid RGB
+            triple.
+    """
+    if color_str is None:
+        return None
+
+    if "," in color_str:
+        try:
+            parts = [int(p.strip()) for p in color_str.split(",")]
+        except ValueError:
+            raise click.ClickException(
+                f"Invalid --trail-color: '{color_str}'. Use a name, hex, or 'r,g,b'."
+            )
+        if len(parts) != 3:
+            raise click.ClickException(
+                f"Invalid --trail-color: '{color_str}'. RGB needs 3 values."
+            )
+        return (parts[0], parts[1], parts[2])
+
+    return color_str.strip()
+
+
 def _parse_crop_string(
     crop_str: str | None,
 ) -> tuple | None:
@@ -3716,18 +3752,7 @@ def render(
 
     # Parse trail color: comma-separated RGB -> tuple, else pass through as a
     # color spec (named color, hex, etc.) resolved by the renderer.
-    trail_color: tuple[int, int, int] | str | None = None
-    if trail_color_str is not None:
-        if "," in trail_color_str:
-            try:
-                trail_color = tuple(int(p.strip()) for p in trail_color_str.split(","))
-            except ValueError:
-                raise click.ClickException(
-                    f"Invalid --trail-color: '{trail_color_str}'. "
-                    "Use a name, hex, or 'r,g,b'."
-                )
-        else:
-            trail_color = trail_color_str.strip()
+    trail_color = _parse_trail_color(trail_color_str)
 
     trail_kwargs = dict(
         show_trails=show_trails,
