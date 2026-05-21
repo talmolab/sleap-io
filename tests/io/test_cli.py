@@ -4650,6 +4650,72 @@ def test_render_no_progress(centered_pair, tmp_path):
     assert output_path.exists()
 
 
+def test_parse_trail_node():
+    """_parse_trail_node handles single names, lists, and empty input."""
+    from sleap_io.io.cli import _parse_trail_node
+
+    # Single targets pass through as strings.
+    assert _parse_trail_node("centroid") == "centroid"
+    assert _parse_trail_node("head") == "head"
+    # Comma-separated names become a list; whitespace and blanks are dropped.
+    assert _parse_trail_node("head,thorax") == ["head", "thorax"]
+    assert _parse_trail_node("head, ,thorax") == ["head", "thorax"]
+    # A single name with a trailing comma collapses back to a string.
+    assert _parse_trail_node("head,") == "head"
+
+    # Empty or all-blank input is rejected.
+    with pytest.raises(Exception) as exc_info:
+        _parse_trail_node(" , ")
+    assert "Invalid --trail-node" in str(exc_info.value)
+    with pytest.raises(Exception) as exc_info:
+        _parse_trail_node("")
+    assert "Invalid --trail-node" in str(exc_info.value)
+
+
+def test_render_trail_length_invalid(centered_pair, tmp_path):
+    """--trail-length below 1 is rejected by the CLI."""
+    runner = CliRunner()
+    output_path = tmp_path / "bad_length.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--trails",
+            "--trail-length",
+            "0",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert not output_path.exists()
+
+
+def test_render_trail_alpha_invalid(centered_pair, tmp_path):
+    """--trail-alpha outside [0, 1] is rejected by the CLI."""
+    runner = CliRunner()
+    output_path = tmp_path / "bad_alpha.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--trails",
+            "--trail-alpha",
+            "1.5",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert not output_path.exists()
+
+
 def test_render_crop_invalid_format():
     """Test error with invalid crop format."""
     from sleap_io.io.cli import _parse_crop_string

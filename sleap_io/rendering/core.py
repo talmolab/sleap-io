@@ -6,7 +6,7 @@ This module provides the main API for rendering pose data with skia-python.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Literal
+from typing import TYPE_CHECKING, Callable, Iterable, Literal
 
 import numpy as np
 
@@ -209,6 +209,7 @@ def _compute_trails(
     track_idx_map: dict[int, int],
     palette_colors: list[tuple[int, int, int]],
     has_tracks: bool,
+    pts_cache: dict[int, np.ndarray] | None = None,
 ) -> tuple[list[np.ndarray], list[tuple[int, int, int]]]:
     """Compute motion-trail polylines ending at a given frame.
 
@@ -225,6 +226,10 @@ def _compute_trails(
             instance index (untracked data).
         has_tracks: Whether the data has track assignments. When ``False``,
             trails are keyed by instance position index instead of track.
+        pts_cache: Optional cache mapping ``id(instance)`` to its extracted
+            ``(n_nodes, 2)`` point array. When rendering a video, consecutive
+            frames share overlapping trail windows, so passing a persistent
+            cache avoids re-extracting the same instance points repeatedly.
 
     Returns:
         Tuple of ``(trails, colors)`` where ``trails`` is a list of ``(M, 2)``
@@ -252,22 +257,32 @@ def _compute_trails(
             else:
                 key_idx = inst_idx
 
-            pts = None  # Lazily computed instance.numpy() when a node is needed.
+            # Extract instance points once, reusing the cache across the
+            # overlapping trail windows of consecutive frames when provided.
+            if pts_cache is not None:
+                pts = pts_cache.get(id(inst))
+                if pts is None:
+                    pts = inst.numpy()
+                    pts_cache[id(inst)] = pts
+            else:
+                pts = inst.numpy()
+
             for t_idx, target in enumerate(trail_targets):
                 if target is None:
-                    xy = inst.centroid_xy
-                    coord = (
-                        (float(xy[0]), float(xy[1]))
-                        if xy is not None
-                        else (np.nan, np.nan)
-                    )
-                else:
-                    if pts is None:
-                        pts = inst.numpy()
-                    if target < len(pts):
-                        coord = (float(pts[target][0]), float(pts[target][1]))
+                    # Centroid: mean of visible points, matching
+                    # `Instance.centroid_xy` (visibility keyed off column 0).
+                    visible = ~np.isnan(pts[:, 0])
+                    if visible.any():
+                        coord = (
+                            float(pts[visible, 0].mean()),
+                            float(pts[visible, 1].mean()),
+                        )
                     else:
                         coord = (np.nan, np.nan)
+                elif target < len(pts):
+                    coord = (float(pts[target][0]), float(pts[target][1]))
+                else:
+                    coord = (np.nan, np.nan)
 
                 dkey = (key_idx, t_idx)
                 arr = trail_data.get(dkey)
@@ -285,6 +300,32 @@ def _compute_trails(
         colors.append(palette_colors[key_idx % len(palette_colors)])
 
     return trails, colors
+
+
+def _n_trail_palette_colors(
+    has_tracks: bool,
+    n_tracks: int,
+    labeled_frames: Iterable["LabeledFrame"],
+) -> int:
+    """Return the number of palette colors needed for motion trails.
+
+    Trails are colored by track when tracks are present, otherwise by instance
+    position index. To keep untracked colors stable across a render, the palette
+    is sized to the largest instance count over the provided frames.
+
+    Args:
+        has_tracks: Whether the data has track assignments.
+        n_tracks: Total number of tracks (used when ``has_tracks`` is ``True``).
+        labeled_frames: Frames to scan for the peak instance count (used when
+            ``has_tracks`` is ``False``).
+
+    Returns:
+        The palette size, always at least 1.
+    """
+    if has_tracks:
+        return max(n_tracks, 1)
+    peak = max((len(lf.instances) for lf in labeled_frames), default=1)
+    return max(peak, 1)
 
 
 def _prepare_frame_rgba(frame: np.ndarray) -> np.ndarray:
@@ -1139,13 +1180,17 @@ def render_image(
         )
 
     # Draw motion trails behind the poses and centroids. Trails need temporal
-    # context, so they are only drawn when the source is a Labels object.
-    if show_trails and isinstance(source, Labels) and trail_length > 0 and instances:
+    # context, so they are only drawn when the source is a Labels object. They
+    # are drawn even when the current frame has no instances, since past frames
+    # may still contribute (matching render_video).
+    if show_trails and isinstance(source, Labels) and trail_length > 0:
         from sleap_io.rendering.overlays import draw_trails as _draw_trails
 
         trail_targets = _resolve_trail_node(trail_node, skeleton)
         frame_idx_to_lf = {lframe.frame_idx: lframe for lframe in source.find(lf.video)}
-        n_trail_colors = max(n_tracks if has_tracks else len(instances), 1)
+        n_trail_colors = _n_trail_palette_colors(
+            has_tracks, n_tracks, frame_idx_to_lf.values()
+        )
         trail_palette = get_palette(palette, n_trail_colors)
         trails, trail_colors = _compute_trails(
             fidx=fidx_for_callback,
@@ -1157,8 +1202,6 @@ def render_image(
             has_tracks=has_tracks,
         )
         if trails:
-            if render_image_data.ndim == 2:
-                render_image_data = np.stack([render_image_data] * 3, axis=-1)
             # A uniform trail_color overrides the per-track palette colors.
             trail_draw_kwargs: dict = {}
             if trail_color is not None:
@@ -1656,26 +1699,18 @@ def render_video(
     if _has_video_centroids and labels is not None:
         _centroid_palette = get_palette(palette, max(len(labels.tracks), 1))
 
-    # Set up motion trails (drawn behind poses).
-    _do_trails = show_trails and trail_length > 0
+    # Set up motion trails (drawn behind poses). Trails trace instances, and
+    # every instance carries a skeleton, so a missing skeleton means there are
+    # no instances to trail.
+    _do_trails = show_trails and trail_length > 0 and skeleton is not None
     _trail_targets: list[int | None] = []
     _trail_palette: list[tuple[int, int, int]] = []
+    _trail_pts_cache: dict[int, np.ndarray] = {}
     if _do_trails:
-        if skeleton is not None:
-            _trail_targets = _resolve_trail_node(trail_node, skeleton)
-        elif isinstance(trail_node, str) and trail_node.lower() == "centroid":
-            _trail_targets = [None]
-        else:
-            # Node-name trails need a skeleton; skip trails without one.
-            _do_trails = False
-        if _do_trails:
-            if has_tracks:
-                n_trail_colors = max(n_tracks, 1)
-            else:
-                n_trail_colors = max(
-                    (len(lf.instances) for lf in labeled_frames), default=1
-                )
-            _trail_palette = get_palette(palette, max(n_trail_colors, 1))
+        _trail_targets = _resolve_trail_node(trail_node, skeleton)
+        _trail_palette = get_palette(
+            palette, _n_trail_palette_colors(has_tracks, n_tracks, labeled_frames)
+        )
     # A uniform trail_color overrides the per-track palette colors.
     _trail_color_resolved = (
         resolve_color(trail_color) if trail_color is not None else None
@@ -1824,15 +1859,12 @@ def render_video(
             track_idx_map=_track_idx_map,
             palette_colors=_trail_palette,
             has_tracks=has_tracks,
+            pts_cache=_trail_pts_cache,
         )
         if not trails:
             return image
 
         from sleap_io.rendering.overlays import draw_trails
-
-        # Ensure RGB.
-        if image.ndim == 2:
-            image = np.stack([image] * 3, axis=-1)
 
         # A uniform trail_color overrides the per-track palette colors.
         if _trail_color_resolved is not None:

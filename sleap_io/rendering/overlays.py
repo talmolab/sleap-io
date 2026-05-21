@@ -722,6 +722,12 @@ def draw_trails(
     frames. Segments are drawn individually so opacity can fade from faint
     (oldest) to opaque (newest).
 
+    All segments are rasterized into a separate transparent buffer with the
+    ``kSrc`` blend mode, so overlapping joints (and crossing trails) take the
+    newest segment's alpha instead of accumulating it. That buffer is then
+    composited onto the image in a single pass, touching only the pixels the
+    trails actually cover.
+
     Args:
         image: Image array of shape ``(H, W, 3)`` uint8. Modified in-place when
             possible and returned.
@@ -740,23 +746,36 @@ def draw_trails(
 
     Returns:
         The image array with trails drawn.
+
+    Raises:
+        ValueError: If ``colors`` is provided and its length does not match
+            ``trails``.
     """
     if not trails:
         return image
+
+    if colors is not None and len(colors) != len(trails):
+        raise ValueError(
+            f"colors has length {len(colors)} but there are {len(trails)} "
+            "trails; they must be the same length."
+        )
 
     import skia
 
     ox, oy = offset
 
-    # Ensure RGB before padding to RGBA.
+    # Ensure RGB so trail pixels can be composited back.
     if image.ndim == 2:
         image = np.stack([image] * 3, axis=-1)
     elif image.ndim == 3 and image.shape[2] == 1:
         image = np.concatenate([image] * 3, axis=-1)
 
-    # Pad to RGBA for skia surface.
-    frame_rgba = np.dstack([image, np.full(image.shape[:2], 255, dtype=np.uint8)])
-    surface = skia.Surface(frame_rgba, colorType=skia.kRGBA_8888_ColorType)
+    # Rasterize the trails into a separate transparent RGBA buffer. Drawing into
+    # a dedicated buffer (rather than the frame) lets the kSrc blend mode below
+    # replace overlapping joints instead of accumulating their alpha.
+    h, w = image.shape[:2]
+    trail_rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    surface = skia.Surface(trail_rgba, colorType=skia.kRGBA_8888_ColorType)
     canvas = surface.getCanvas()
 
     for i, trail in enumerate(trails):
@@ -795,6 +814,7 @@ def draw_trails(
                 Style=skia.Paint.kStroke_Style,
                 StrokeWidth=float(line_width),
                 StrokeCap=skia.Paint.kRound_Cap,
+                BlendMode=skia.BlendMode.kSrc,
             )
             canvas.drawLine(
                 float(x0) - ox,
@@ -805,8 +825,14 @@ def draw_trails(
             )
 
     surface.flushAndSubmit()
-    result = frame_rgba[:, :, :3]
-    if image.shape == result.shape:
-        image[:] = result
-        return image
-    return result.copy()
+
+    # Composite only the pixels the trails actually covered (typically a small
+    # fraction of the frame). The buffer is unpremultiplied, so each covered
+    # pixel blends once as ``out = dst * (1 - a) + src * a``.
+    ys, xs = np.nonzero(trail_rgba[:, :, 3])
+    if len(ys):
+        a = trail_rgba[ys, xs, 3, None].astype(np.float32) / 255.0
+        src = trail_rgba[ys, xs, :3].astype(np.float32)
+        dst = image[ys, xs].astype(np.float32)
+        image[ys, xs] = (dst * (1.0 - a) + src * a).astype(np.uint8)
+    return image

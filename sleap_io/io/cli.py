@@ -272,6 +272,39 @@ def _parse_trail_color(
     return color_str.strip()
 
 
+def _parse_trail_node(node_str: str) -> str | list[str]:
+    """Parse the ``--trail-node`` value from the CLI.
+
+    Args:
+        node_str: Trail node specification. Either a single target
+            (``"centroid"`` or a node name) or a comma-separated list of node
+            names.
+
+    Returns:
+        A single string for one target, or a list of strings for a
+        comma-separated list of node names.
+
+    Raises:
+        click.ClickException: If the value is empty or contains no names.
+    """
+    if "," in node_str:
+        names = [s.strip() for s in node_str.split(",") if s.strip()]
+        if not names:
+            raise click.ClickException(
+                f"Invalid --trail-node: '{node_str}'. Provide a node name, "
+                "'centroid', or a comma-separated list of node names."
+            )
+        return names[0] if len(names) == 1 else names
+
+    name = node_str.strip()
+    if not name:
+        raise click.ClickException(
+            "Invalid --trail-node: value is empty. Provide a node name, "
+            "'centroid', or a comma-separated list of node names."
+        )
+    return name
+
+
 def _parse_crop_string(
     crop_str: str | None,
 ) -> tuple | None:
@@ -3340,7 +3373,7 @@ def filenames(
 @click.option(
     "--trail-length",
     "trail_length",
-    type=int,
+    type=click.IntRange(min=1),
     default=10,
     show_default=True,
     help="Number of past frames included in each trail.",
@@ -3371,7 +3404,7 @@ def filenames(
 @click.option(
     "--trail-alpha",
     "trail_alpha",
-    type=float,
+    type=click.FloatRange(0.0, 1.0),
     default=1.0,
     show_default=True,
     help="Global trail opacity (0.0-1.0).",
@@ -3743,12 +3776,7 @@ def render(
     )
 
     # Parse trail node specification (comma-separated names -> list).
-    if "," in trail_node_str:
-        trail_node: str | list[str] = [
-            s.strip() for s in trail_node_str.split(",") if s.strip()
-        ]
-    else:
-        trail_node = trail_node_str.strip()
+    trail_node = _parse_trail_node(trail_node_str)
 
     # Parse trail color: comma-separated RGB -> tuple, else pass through as a
     # color spec (named color, hex, etc.) resolved by the renderer.
