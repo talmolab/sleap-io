@@ -99,6 +99,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
+from sleap_io.codecs.numpy import to_analysis_arrays
 from sleap_io.model.instance import PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -474,157 +475,6 @@ def read_labels(
 # =============================================================================
 
 
-def _get_occupancy_and_points(
-    labels: Labels,
-    video: Video | None = None,
-    all_frames: bool = True,
-    min_occupancy: float = 0.0,
-) -> tuple[
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    list[str],
-    int,
-]:
-    """Build numpy matrices with track occupancy and point location data.
-
-    All returned arrays are in canonical shape (frame-first ordering).
-
-    Args:
-        labels: The Labels from which to get data.
-        video: Video to export. If None, uses first video.
-        all_frames: If True, include all frames from 0 to end of video.
-            If False, only include frames from first labeled frame to end of
-            video.
-        min_occupancy: Minimum occupancy ratio (0-1) to keep a track.
-            0 = keep all non-empty tracks (default SLEAP behavior).
-
-    Returns:
-        Tuple of (all in canonical shape):
-
-        - occupancy_matrix: shape (n_frames, n_tracks)
-            Binary matrix indicating track presence per frame.
-
-        - locations_matrix: shape (n_frames, n_tracks, n_nodes, 2)
-            Point coordinates (x, y) for each frame, track, and node.
-
-        - point_scores: shape (n_frames, n_tracks, n_nodes)
-            Confidence score for each point.
-
-        - instance_scores: shape (n_frames, n_tracks)
-            Overall instance confidence score.
-
-        - tracking_scores: shape (n_frames, n_tracks)
-            Tracking confidence score.
-
-        - track_names: list of track name strings, length n_tracks
-
-        - first_frame: first frame index (int)
-    """
-    if video is None:
-        video = labels.videos[0]
-
-    # Get labeled frames for this video
-    lfs = labels.find(video)
-    if not lfs:
-        raise ValueError(f"No labeled frames in video: {video.filename}")
-
-    frame_idxs = sorted(lf.frame_idx for lf in lfs)
-    first_frame = 0 if all_frames else frame_idxs[0]
-
-    # Use video length when available so output spans the full video duration.
-    last_frame = frame_idxs[-1]
-    video_length = len(video)
-    if video_length > 0:
-        last_frame = max(last_frame, video_length - 1)
-
-    n_frames = last_frame - first_frame + 1
-
-    # Get track and node info
-    tracks = labels.tracks or [None]  # Handle untracked case
-    track_count = len(tracks)
-    skeleton = labels.skeletons[0]
-    node_count = len(skeleton.nodes)
-
-    # Initialize matrices in canonical shape: (frame, track, ...)
-    occupancy = np.zeros((n_frames, track_count), dtype=np.uint8)
-    locations = np.full(
-        (n_frames, track_count, node_count, 2), np.nan, dtype=np.float64
-    )
-    point_scores = np.full(
-        (n_frames, track_count, node_count), np.nan, dtype=np.float64
-    )
-    instance_scores = np.full((n_frames, track_count), np.nan, dtype=np.float64)
-    tracking_scores = np.full((n_frames, track_count), np.nan, dtype=np.float64)
-
-    # Build lookup for frame index -> LabeledFrame
-    lf_map = {lf.frame_idx: lf for lf in lfs}
-
-    # Fill matrices
-    for frame_idx in range(first_frame, last_frame + 1):
-        frame_i = frame_idx - first_frame
-        lf = lf_map.get(frame_idx)
-        if lf is None:
-            continue
-
-        # Prefer user instances over predicted for same track
-        track_instances = {}
-
-        # Add predicted first (will be overwritten by user if exists)
-        for inst in lf.predicted_instances:
-            track = inst.track
-            track_i = tracks.index(track) if track in tracks else 0
-            track_instances[track_i] = inst
-
-        # Add user instances (override predicted)
-        for inst in lf.user_instances:
-            track = inst.track
-            track_i = tracks.index(track) if track in tracks else 0
-            track_instances[track_i] = inst
-
-        # Fill matrices
-        for track_i, inst in track_instances.items():
-            occupancy[frame_i, track_i] = 1
-            locations[frame_i, track_i, :, :] = inst.numpy()
-
-            if hasattr(inst, "tracking_score") and inst.tracking_score is not None:
-                tracking_scores[frame_i, track_i] = inst.tracking_score
-
-            if isinstance(inst, PredictedInstance):
-                if "score" in inst.points.dtype.names:
-                    point_scores[frame_i, track_i, :] = inst.points["score"]
-                if inst.score is not None:
-                    instance_scores[frame_i, track_i] = inst.score
-
-    # Filter empty/low-occupancy tracks
-    occupied_frames = np.sum(occupancy, axis=0)
-    occupancy_ratio = occupied_frames / n_frames
-    keep_mask = (occupied_frames > 0) & (occupancy_ratio >= min_occupancy)
-
-    if not np.all(keep_mask):
-        occupancy = occupancy[:, keep_mask]
-        locations = locations[:, keep_mask, :, :]
-        point_scores = point_scores[:, keep_mask, :]
-        instance_scores = instance_scores[:, keep_mask]
-        tracking_scores = tracking_scores[:, keep_mask]
-        tracks = [t for i, t in enumerate(tracks) if keep_mask[i]]
-
-    # Get track names
-    track_names = [t.name if t else "" for t in tracks]
-
-    return (
-        occupancy,
-        locations,
-        point_scores,
-        instance_scores,
-        tracking_scores,
-        track_names,
-        first_frame,
-    )
-
-
 def write_labels(
     labels: Labels,
     filename: str | Path,
@@ -721,7 +571,9 @@ def write_labels(
         tracking_scores,
         track_names,
         first_frame,
-    ) = _get_occupancy_and_points(labels, video, all_frames, min_occupancy)
+    ) = to_analysis_arrays(
+        labels, video=video, all_frames=all_frames, min_occupancy=min_occupancy
+    )
 
     # Define canonical order
     canonical_order_4d = {"frame": 0, "track": 1, "node": 2, "xy": 3}

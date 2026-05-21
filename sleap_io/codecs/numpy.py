@@ -21,6 +21,147 @@ if TYPE_CHECKING:
     pass
 
 
+def _max_instances_per_frame(
+    lfs: list[LabeledFrame],
+    *,
+    user_instances: bool,
+    predicted_instances: bool,
+) -> int:
+    """Return the maximum number of instances to export from any single frame.
+
+    Args:
+        lfs: Labeled frames to scan.
+        user_instances: If True, count user instances.
+        predicted_instances: If True, count predicted instances.
+
+    Returns:
+        The largest per-frame instance count. When both instance types are
+        included, user and predicted instances are assumed to overlap, so the
+        per-frame count is `max(n_user, n_predicted)` rather than their sum.
+    """
+    n_instances = 0
+    for lf in lfs:
+        n_user = len(lf.user_instances) if user_instances else 0
+        n_predicted = len(lf.predicted_instances) if predicted_instances else 0
+
+        if user_instances and predicted_instances:
+            # Count max of either user or predicted instances per frame (not sum).
+            n_frame_instances = max(n_user, n_predicted)
+        else:
+            n_frame_instances = n_user + n_predicted
+
+        n_instances = max(n_instances, n_frame_instances)
+    return n_instances
+
+
+def _untracked_frame_instances(
+    lf: LabeledFrame,
+    *,
+    is_single_instance: bool,
+    user_instances: bool,
+    predicted_instances: bool,
+) -> list[Instance]:
+    """Select instances to export from a frame without using track identity.
+
+    User instances are preferred. Predicted instances that duplicate a user
+    instance (linked via `from_predicted` or sharing the same track) are
+    dropped. For single-instance projects, any user instance fully suppresses
+    predicted instances in the same frame.
+
+    Args:
+        lf: The labeled frame to select instances from.
+        is_single_instance: True if the project has at most one instance per
+            frame.
+        user_instances: If True, include user instances, preferring them over
+            predicted instances.
+        predicted_instances: If True, include predicted instances.
+
+    Returns:
+        A new list of instances to export, in frame order.
+    """
+    instances_to_include: list[Instance] = []
+
+    if user_instances and lf.has_user_instances:
+        # Collect all user instances first.
+        for inst in lf.user_instances:
+            instances_to_include.append(inst)
+
+        # For the trivial case (single instance per frame), if we found user
+        # instances, we shouldn't include any predicted instances.
+        if is_single_instance and len(instances_to_include) > 0:
+            return instances_to_include
+
+        # Add predicted instances that don't have a corresponding user instance.
+        if predicted_instances:
+            for inst in lf.predicted_instances:
+                skip = False
+                for user_inst in lf.user_instances:
+                    # Skip if this predicted instance is linked to a user
+                    # instance via from_predicted.
+                    if (
+                        hasattr(user_inst, "from_predicted")
+                        and user_inst.from_predicted == inst
+                    ):
+                        skip = True
+                        break
+                    # Skip if user and predicted instances share same track.
+                    if (
+                        user_inst.track is not None
+                        and inst.track is not None
+                        and user_inst.track == inst.track
+                    ):
+                        skip = True
+                        break
+                if not skip:
+                    instances_to_include.append(inst)
+    else:
+        # If user_instances=False or there are no user instances, only include
+        # predicted instances (or fall back to user instances).
+        if predicted_instances:
+            instances_to_include = list(lf.predicted_instances)
+        elif user_instances:
+            instances_to_include = list(lf.user_instances)
+
+    return instances_to_include
+
+
+def _tracked_frame_instances(
+    lf: LabeledFrame,
+    *,
+    user_instances: bool,
+    predicted_instances: bool,
+) -> dict[Track, Instance]:
+    """Select one instance per track from a frame.
+
+    Predicted instances are added first, then user instances override them for
+    the same track. Instances without a track assignment are ignored.
+
+    Args:
+        lf: The labeled frame to select instances from.
+        user_instances: If True, include user instances, preferring them over
+            predicted instances with the same track.
+        predicted_instances: If True, include predicted instances.
+
+    Returns:
+        A mapping from `Track` to the instance to export for that track.
+    """
+    track_to_instance: dict[Track, Instance] = {}
+
+    # First, add predicted instances to the mapping.
+    if predicted_instances:
+        for inst in lf.predicted_instances:
+            if inst.track is not None:
+                track_to_instance[inst.track] = inst
+
+    # Then, add user instances to the mapping (they override predicted).
+    if user_instances:
+        for inst in lf.user_instances:
+            if inst.track is not None:
+                track_to_instance[inst.track] = inst
+
+    return track_to_instance
+
+
 def to_numpy(
     labels: Labels,
     *,
@@ -111,19 +252,9 @@ def to_numpy(
         last_frame = max(last_frame, video_length - 1)
 
     # Figure out the number of tracks based on number of instances in each frame.
-    n_instances = 0
-    for lf in lfs:
-        # Count instances based on what we're including
-        n_user = len(lf.user_instances) if user_instances else 0
-        n_predicted = len(lf.predicted_instances) if predicted_instances else 0
-
-        if user_instances and predicted_instances:
-            # Count max of either user or predicted instances per frame (not sum)
-            n_frame_instances = max(n_user, n_predicted)
-        else:
-            n_frame_instances = n_user + n_predicted
-
-        n_instances = max(n_instances, n_frame_instances)
+    n_instances = _max_instances_per_frame(
+        lfs, user_instances=user_instances, predicted_instances=predicted_instances
+    )
 
     # Case 1: We don't care about order because there's only 1 instance per frame,
     # or we're considering untracked instances.
@@ -148,54 +279,14 @@ def to_numpy(
         i = int(lf.frame_idx - first_frame)
 
         if untracked:
-            # For untracked instances, fill them in arbitrary order
-            j = 0
-            instances_to_include = []
-
-            # If user instances are preferred, add them first
-            if user_instances and lf.has_user_instances:
-                # First collect all user instances
-                for inst in lf.user_instances:
-                    instances_to_include.append(inst)
-
-                # For the trivial case (single instance per frame), if we found
-                # user instances, we shouldn't include any predicted instances
-                if is_single_instance and len(instances_to_include) > 0:
-                    pass  # Skip adding predicted instances
-                else:
-                    # Add predicted instances that don't have a corresponding
-                    # user instance
-                    if predicted_instances:
-                        for inst in lf.predicted_instances:
-                            skip = False
-                            for user_inst in lf.user_instances:
-                                # Skip if this predicted instance is linked to a user
-                                # instance via from_predicted
-                                if (
-                                    hasattr(user_inst, "from_predicted")
-                                    and user_inst.from_predicted == inst
-                                ):
-                                    skip = True
-                                    break
-                                # Skip if user and predicted instances share same track
-                                if (
-                                    user_inst.track is not None
-                                    and inst.track is not None
-                                    and user_inst.track == inst.track
-                                ):
-                                    skip = True
-                                    break
-                            if not skip:
-                                instances_to_include.append(inst)
-            else:
-                # If user_instances=False, only include predicted instances
-                if predicted_instances:
-                    instances_to_include = lf.predicted_instances
-                elif user_instances:
-                    instances_to_include = lf.user_instances
-
-            # Now process all the instances we want to include
-            for inst in instances_to_include:
+            # For untracked instances, fill them in arbitrary order.
+            frame_instances = _untracked_frame_instances(
+                lf,
+                is_single_instance=is_single_instance,
+                user_instances=user_instances,
+                predicted_instances=predicted_instances,
+            )
+            for j, inst in enumerate(frame_instances):
                 if j < n_tracks:
                     if return_confidence:
                         if isinstance(inst, PredictedInstance):
@@ -209,28 +300,14 @@ def to_numpy(
                             tracks[i, j] = np.hstack((points_data, confidence))
                     else:
                         tracks[i, j] = inst.numpy()
-                    j += 1
         else:  # untracked is False
-            # For tracked instances, organize by track ID
-
-            # Create mapping from track to best instance for this frame
-            track_to_instance = {}
-
-            # First, add predicted instances to the mapping
-            if predicted_instances:
-                for inst in lf.predicted_instances:
-                    if inst.track is not None:
-                        track_to_instance[inst.track] = inst
-
-            # Then, add user instances to the mapping (if user_instances=True)
-            if user_instances:
-                for inst in lf.user_instances:
-                    if inst.track is not None:
-                        track_to_instance[inst.track] = inst
-
-            # Process the preferred instances for each track
-            for track in track_to_instance:
-                inst = track_to_instance[track]
+            # For tracked instances, organize by track ID.
+            track_to_instance = _tracked_frame_instances(
+                lf,
+                user_instances=user_instances,
+                predicted_instances=predicted_instances,
+            )
+            for track, inst in track_to_instance.items():
                 j = labels.tracks.index(track)
 
                 if type(inst) is PredictedInstance:
@@ -243,6 +320,195 @@ def to_numpy(
                         tracks[i, j, :, 2] = 1.0
 
     return tracks
+
+
+def to_analysis_arrays(
+    labels: Labels,
+    *,
+    video: Video | int | None = None,
+    all_frames: bool = True,
+    min_occupancy: float = 0.0,
+    user_instances: bool = True,
+    predicted_instances: bool = True,
+) -> tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    list[str],
+    int,
+]:
+    """Build occupancy and point-data matrices for an analysis HDF5 export.
+
+    All returned arrays are in canonical shape (frame-first ordering). This is
+    the shared builder behind `save_analysis_h5`; it reuses the same
+    instance-slotting logic as `to_numpy` so that projects without track
+    assignments keep every instance instead of collapsing to one per frame.
+
+    Args:
+        labels: The `Labels` from which to get data.
+        video: Video (or video index) to export. If None, uses the first video.
+        all_frames: If True, include all frames from 0 to the end of the video.
+            If False, only include frames from the first labeled frame onward.
+        min_occupancy: Minimum occupancy ratio (0-1) for a track to be kept.
+            0 keeps all non-empty tracks (default SLEAP behavior).
+        user_instances: If True, include user instances, preferring them over
+            predicted instances.
+        predicted_instances: If True, include predicted instances.
+
+    Returns:
+        A tuple of (all arrays in canonical shape):
+
+        - occupancy: shape `(n_frames, n_tracks)`, binary `uint8` matrix
+          indicating track presence per frame.
+        - locations: shape `(n_frames, n_tracks, n_nodes, 2)`, point
+          coordinates `(x, y)`.
+        - point_scores: shape `(n_frames, n_tracks, n_nodes)`, per-point
+          confidence.
+        - instance_scores: shape `(n_frames, n_tracks)`, instance confidence.
+        - tracking_scores: shape `(n_frames, n_tracks)`, tracking confidence.
+        - track_names: list of track name strings, length `n_tracks`.
+        - first_frame: first frame index (int).
+
+    Raises:
+        ValueError: If there are no labeled frames for the selected video.
+
+    Notes:
+        When the project has no `Track` assignments, instances are slotted in
+        arbitrary per-frame order and `n_tracks` is sized to the largest number
+        of instances in any frame (matching `to_numpy(untracked=True)`).
+        Synthetic track names `track_0 ... track_{n-1}` are generated in that
+        case. Per-slot animal identity is arbitrary across frames without real
+        track information, but no data is dropped.
+    """
+    # Resolve video.
+    if video is None:
+        video = labels.videos[0]
+    elif type(video) is int:
+        video = labels.videos[video]
+
+    # Get labeled frames for this video.
+    lfs = labels.find(video)
+    if not lfs:
+        raise ValueError(f"No labeled frames in video: {video.filename}")
+
+    frame_idxs = sorted(lf.frame_idx for lf in lfs)
+    first_frame = 0 if all_frames else frame_idxs[0]
+
+    # Use video length when available so output spans the full video duration.
+    last_frame = frame_idxs[-1]
+    video_length = len(video)
+    if video_length > 0:
+        last_frame = max(last_frame, video_length - 1)
+
+    n_frames = last_frame - first_frame + 1
+
+    skeleton = labels.skeletons[0]
+    node_count = len(skeleton.nodes)
+
+    # Size the track axis. With no track assignments, fall back to untracked
+    # slotting so multi-animal projects keep every instance.
+    untracked = len(labels.tracks) == 0
+    if untracked:
+        n_instances = _max_instances_per_frame(
+            lfs,
+            user_instances=user_instances,
+            predicted_instances=predicted_instances,
+        )
+        is_single_instance = n_instances == 1
+        n_tracks = n_instances
+    else:
+        n_tracks = len(labels.tracks)
+        track_to_slot = {track: i for i, track in enumerate(labels.tracks)}
+
+    # Initialize matrices in canonical shape: (frame, track, ...).
+    occupancy = np.zeros((n_frames, n_tracks), dtype=np.uint8)
+    locations = np.full((n_frames, n_tracks, node_count, 2), np.nan, dtype=np.float64)
+    point_scores = np.full((n_frames, n_tracks, node_count), np.nan, dtype=np.float64)
+    instance_scores = np.full((n_frames, n_tracks), np.nan, dtype=np.float64)
+    tracking_scores = np.full((n_frames, n_tracks), np.nan, dtype=np.float64)
+
+    # Build lookup for frame index -> LabeledFrame.
+    lf_map = {lf.frame_idx: lf for lf in lfs}
+
+    # Fill matrices.
+    for frame_idx in range(first_frame, last_frame + 1):
+        frame_i = frame_idx - first_frame
+        lf = lf_map.get(frame_idx)
+        if lf is None:
+            continue
+
+        # Determine which instances go into which track slot.
+        if untracked:
+            slotted = enumerate(
+                _untracked_frame_instances(
+                    lf,
+                    is_single_instance=is_single_instance,
+                    user_instances=user_instances,
+                    predicted_instances=predicted_instances,
+                )
+            )
+        else:
+            slotted = (
+                (track_to_slot[track], inst)
+                for track, inst in _tracked_frame_instances(
+                    lf,
+                    user_instances=user_instances,
+                    predicted_instances=predicted_instances,
+                ).items()
+                if track in track_to_slot
+            )
+
+        for track_i, inst in slotted:
+            # Defensive: per-frame dedup can occasionally leave more instances
+            # than the global maximum; extra instances are dropped to stay
+            # consistent with to_numpy's `j < n_tracks` guard.
+            if track_i >= n_tracks:
+                continue
+
+            occupancy[frame_i, track_i] = 1
+            locations[frame_i, track_i, :, :] = inst.numpy()
+
+            if hasattr(inst, "tracking_score") and inst.tracking_score is not None:
+                tracking_scores[frame_i, track_i] = inst.tracking_score
+
+            if isinstance(inst, PredictedInstance):
+                if "score" in inst.points.dtype.names:
+                    point_scores[frame_i, track_i, :] = inst.points["score"]
+                if inst.score is not None:
+                    instance_scores[frame_i, track_i] = inst.score
+
+    # Filter empty/low-occupancy tracks.
+    occupied_frames = np.sum(occupancy, axis=0)
+    occupancy_ratio = occupied_frames / n_frames
+    keep_mask = (occupied_frames > 0) & (occupancy_ratio >= min_occupancy)
+
+    if not np.all(keep_mask):
+        occupancy = occupancy[:, keep_mask]
+        locations = locations[:, keep_mask, :, :]
+        point_scores = point_scores[:, keep_mask, :]
+        instance_scores = instance_scores[:, keep_mask]
+        tracking_scores = tracking_scores[:, keep_mask]
+
+    # Build track names sized to the surviving tracks.
+    if untracked:
+        # Synthesize positional names, renumbered after filtering (no gaps).
+        track_names = [f"track_{i}" for i in range(occupancy.shape[1])]
+    else:
+        track_names = [
+            track.name for i, track in enumerate(labels.tracks) if keep_mask[i]
+        ]
+
+    return (
+        occupancy,
+        locations,
+        point_scores,
+        instance_scores,
+        tracking_scores,
+        track_names,
+        first_frame,
+    )
 
 
 def from_numpy(

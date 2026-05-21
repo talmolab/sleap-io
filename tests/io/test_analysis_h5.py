@@ -974,6 +974,85 @@ class TestEdgeCases:
             inst.numpy(),
         )
 
+    def test_untracked_single_instance_track_count(self, simple_skeleton, tmp_path):
+        """A single-instance untracked project exports exactly one track."""
+        video = Video(str(tmp_path / "video.mp4"))
+
+        lfs = []
+        for i in range(3):
+            inst = PredictedInstance.from_numpy(
+                np.array([[100.0 + i, 200.0 + i], [150.0 + i, 250.0 + i]]),
+                simple_skeleton,
+                np.array([0.9, 0.85]),
+                0.95,
+                track=None,
+            )
+            lfs.append(LabeledFrame(video=video, frame_idx=i, instances=[inst]))
+        labels = Labels(labeled_frames=lfs, tracks=[])
+
+        h5_path = tmp_path / "untracked_single.analysis.h5"
+        analysis_h5.write_labels(labels, h5_path, preset="standard")
+
+        with h5py.File(h5_path, "r") as f:
+            # Standard preset: (frame, track, node, xy).
+            assert f["tracks"].shape == (3, 1, 2, 2)
+            assert [n.decode() for n in f["track_names"][:]] == ["track_0"]
+
+    def test_untracked_multi_animal_keeps_all_instances(
+        self, simple_skeleton, tmp_path
+    ):
+        """Untracked multi-animal export keeps every instance (issue #430).
+
+        Before the fix, an untracked 2-animal project collapsed to a single
+        track slot, silently dropping the second instance of every frame.
+        """
+        video = Video(str(tmp_path / "video.mp4"))
+
+        lfs = []
+        for i in range(5):
+            inst1 = PredictedInstance.from_numpy(
+                np.array([[10.0 + i, 20.0 + i], [30.0 + i, 40.0 + i]]),
+                simple_skeleton,
+                np.array([0.9, 0.85]),
+                0.95,
+                track=None,
+            )
+            inst2 = PredictedInstance.from_numpy(
+                np.array([[100.0 + i, 200.0 + i], [300.0 + i, 400.0 + i]]),
+                simple_skeleton,
+                np.array([0.8, 0.75]),
+                0.9,
+                track=None,
+            )
+            lfs.append(LabeledFrame(video=video, frame_idx=i, instances=[inst1, inst2]))
+        labels = Labels(labeled_frames=lfs, tracks=[])
+
+        for preset, expected_shape in [
+            ("matlab", (2, 2, 2, 5)),  # (track, xy, node, frame)
+            ("standard", (5, 2, 2, 2)),  # (frame, track, node, xy)
+        ]:
+            h5_path = tmp_path / f"untracked_multi_{preset}.analysis.h5"
+            analysis_h5.write_labels(labels, h5_path, preset=preset)
+
+            with h5py.File(h5_path, "r") as f:
+                assert f["tracks"].shape == expected_shape
+                assert [n.decode() for n in f["track_names"][:]] == [
+                    "track_0",
+                    "track_1",
+                ]
+
+            # Round-trip: both instances of every frame survive.
+            loaded = analysis_h5.read_labels(h5_path)
+            assert len(loaded) == 5
+            for i in range(5):
+                assert len(loaded[i].instances) == 2
+                np.testing.assert_allclose(
+                    loaded[i].instances[0].numpy(), lfs[i].instances[0].numpy()
+                )
+                np.testing.assert_allclose(
+                    loaded[i].instances[1].numpy(), lfs[i].instances[1].numpy()
+                )
+
 
 # =============================================================================
 # Integration with Real Data
