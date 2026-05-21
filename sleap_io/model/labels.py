@@ -654,10 +654,17 @@ class Labels:
         | slice
         | list[int]
         | np.ndarray
-        | tuple[Video, int]
-        | list[tuple[Video, int]],
+        | Video
+        | str
+        | Path
+        | tuple[Video | str | Path, int]
+        | list[tuple[Video | str | Path, int]],
     ) -> list[LabeledFrame] | LabeledFrame:
-        """Return one or more labeled frames based on indexing criteria."""
+        """Return one or more labeled frames based on indexing criteria.
+
+        A `Video`, filename (`str`/`Path`), or `(video_or_path, frame_idx)` tuple is
+        resolved to the matching `Video` in `self.videos` via `match_video`.
+        """
         if type(key) is int:
             return self.labeled_frames[key]
         elif type(key) is slice:
@@ -681,7 +688,7 @@ class Labels:
                     f"No labeled frames found for video {video} and "
                     f"frame index {frame_idx}."
                 )
-        elif type(key) is Video:
+        elif type(key) is Video or isinstance(key, (str, Path)):
             res = self.find(key)
             if len(res) == 0:
                 raise IndexError(f"No labeled frames found for video {key}.")
@@ -883,7 +890,7 @@ class Labels:
 
     def numpy(
         self,
-        video: Video | int | None = None,
+        video: Video | str | Path | int | None = None,
         untracked: bool = False,
         return_confidence: bool = False,
         user_instances: bool = True,
@@ -891,8 +898,10 @@ class Labels:
         """Construct a numpy array from instance points.
 
         Args:
-            video: Video or video index to convert to numpy arrays. If `None` (the
-                default), uses the first video.
+            video: Video, filename, or video index to convert to numpy arrays. If
+                `None` (the default), uses the first video. A foreign `Video`
+                instance or filename is resolved to the matching `Video` in
+                `self.videos` via `match_video`.
             untracked: If `False` (the default), include only instances that have a
                 track assignment. If `True`, includes all instances in each frame in
                 arbitrary order.
@@ -924,18 +933,13 @@ class Labels:
             objects. This method now delegates to `sleap_io.codecs.numpy.to_numpy()`.
             See that function for implementation details.
         """
+        # Canonicalize a foreign Video / filename / index to the matching Video.
+        video = self._resolve_video(video)
+
         # Fast path for lazy-loaded Labels
         if self.is_lazy:
-            # Resolve video argument
-            if video is None:
-                resolved_video = None  # Will default to first video
-            elif isinstance(video, int):
-                resolved_video = self.videos[video]
-            else:
-                resolved_video = video
-
             return self._lazy_store.to_numpy(
-                video=resolved_video,
+                video=video,
                 untracked=untracked,
                 return_confidence=return_confidence,
                 user_instances=user_instances,
@@ -1209,16 +1213,155 @@ class Labels:
                 "saved in the labels. Use Labels.skeletons instead."
             )
 
+    def match_video(
+        self,
+        video_or_path: Video | str | Path,
+        method: "str | VideoMatcher" = "auto",
+    ) -> Video | None:
+        """Resolve a foreign `Video` or path to the canonical `Video` in this `Labels`.
+
+        `Video` objects compare by identity (`eq=False`), so a freshly created
+        `Video` pointing at the same file as one already in `self.videos` will not
+        be recognized by `find`, `extract`, or `__getitem__`. This method maps such
+        a foreign `Video` (or a plain filename) to the matching `Video` instance
+        already stored on this `Labels`.
+
+        Args:
+            video_or_path: A `Video` instance or a filename (`str` or `Path`) to
+                resolve against `self.videos`.
+            method: Matching strategy. Either a string (`"auto"`, `"path"`,
+                `"basename"`, `"content"`, `"shape"`, `"image_dedup"`) or a
+                `VideoMatcher` instance. The default `"auto"` uses a tiered cascade:
+                it first looks for a definitive match (same underlying file, or an
+                identical path), and only if none is found falls back to basename
+                matching.
+
+        Returns:
+            The canonical `Video` from `self.videos` that matches, or `None` if no
+            video matches.
+
+        Raises:
+            ValueError: If more than one video matches ambiguously.
+            TypeError: If `video_or_path` is not a `Video`, `str`, or `Path`.
+
+        Notes:
+            For HDF5-backed videos (e.g. embedded videos in `.pkg.slp` files),
+            matching disambiguates on both `dataset` and `source_filename`, so
+            multiple videos sharing the same `.pkg.slp` path resolve correctly. A
+            bare path string cannot carry a `dataset`, so resolving a multi-dataset
+            `.pkg.slp` by path alone may raise the ambiguity error -- pass a `Video`
+            instance in that case.
+
+            For image-sequence (`ImageVideo`) backends, `"auto"` matching requires
+            the full set of image filenames to match. Pass `method="image_dedup"`
+            to resolve sequences that only partially overlap.
+
+        Example:
+            >>> video = sio.load_video("path/to/video.mp4")  # doctest: +SKIP
+            >>> canonical = labels.match_video(video)  # doctest: +SKIP
+            >>> labels.find(canonical)  # equivalently: labels.find(video)
+        """
+        from sleap_io.model.matching import (
+            VideoMatcher,
+            VideoMatchMethod,
+            is_same_file,
+        )
+
+        # Coerce a path argument into a Video for comparison purposes. The backend
+        # is left unopened so dead/network paths never trigger I/O here.
+        if isinstance(video_or_path, Video):
+            query = video_or_path
+        elif isinstance(video_or_path, (str, Path)):
+            query = Video(filename=str(video_or_path), open_backend=False)
+        else:
+            raise TypeError(
+                "match_video() expects a Video, str, or Path, got "
+                f"{type(video_or_path).__name__}."
+            )
+
+        # Identity short-circuit: already a canonical video in this Labels.
+        for video in self.videos:
+            if video is query:
+                return video
+
+        def _ambiguous(candidates: list[Video], by: str) -> ValueError:
+            names = ", ".join(repr(v.filename) for v in candidates)
+            return ValueError(
+                f"Ambiguous video match for {query.filename!r}: matched "
+                f"{len(candidates)} videos {by}: {names}."
+            )
+
+        if isinstance(method, str) and method == "auto":
+            # Tiered cascade: prefer a definitive (file identity / exact path)
+            # match so a shared basename never shadows a true match.
+            definitive = [
+                v
+                for v in self.videos
+                if is_same_file(v, query) or v.matches_path(query, strict=True)
+            ]
+            if len(definitive) > 1:
+                raise _ambiguous(definitive, "by file identity")
+            if definitive:
+                return definitive[0]
+
+            basename = [v for v in self.videos if v.matches_path(query, strict=False)]
+            if len(basename) > 1:
+                raise _ambiguous(basename, "by basename")
+            return basename[0] if basename else None
+
+        # Explicit matching strategy.
+        if isinstance(method, str):
+            matcher = VideoMatcher(method=VideoMatchMethod(method))
+        else:
+            matcher = method
+        matches = [v for v in self.videos if matcher.match(v, query)]
+        if len(matches) > 1:
+            raise _ambiguous(matches, f"with method {matcher.method.value!r}")
+        return matches[0] if matches else None
+
+    def _resolve_video(self, video: Video | str | Path | int | None) -> Video | None:
+        """Resolve a video argument to the canonical `Video` in this `Labels`.
+
+        Used internally by video-accepting query methods (`find`, `numpy`, and the
+        `get_*` family) to canonicalize a foreign `Video` or filename so that
+        identity-based lookups succeed. See `match_video` for the matching rules.
+
+        Args:
+            video: A `Video`, filename (`str`/`Path`), integer index into
+                `self.videos`, or `None`.
+
+        Returns:
+            The canonical `Video`, or `None` if `video` is `None`. If no video
+            matches, a foreign `Video` is returned unchanged and a path is coerced
+            into a new (unopened) `Video`, so identity-based lookups simply yield
+            empty results (preserving the "no match" behavior).
+        """
+        if video is None:
+            return None
+        if isinstance(video, int):
+            return self.videos[video]
+        matched = self.match_video(video)
+        if matched is not None:
+            return matched
+        # No match: return a usable Video so callers (e.g. find(..., return_new))
+        # can still attach it to new frames.
+        if isinstance(video, Video):
+            return video
+        return Video(filename=str(video), open_backend=False)
+
     def find(
         self,
-        video: Video,
+        video: Video | str | Path,
         frame_idx: int | list[int] | None = None,
         return_new: bool = False,
     ) -> list[LabeledFrame]:
         """Search for labeled frames given video and/or frame index.
 
         Args:
-            video: A `Video` that is associated with the project.
+            video: A `Video` associated with the project, or a filename (`str` or
+                `Path`). A foreign `Video` instance or filename is resolved to the
+                matching `Video` in `self.videos` via `match_video`, so an object
+                created independently (e.g. with `sio.load_video`) still works.
             frame_idx: The frame index (or indices) which we want to find in the video.
                 If a range is specified, we'll return all frames with indices in that
                 range. If not specific, then we'll return all labeled frames for video.
@@ -1232,6 +1375,7 @@ class Labels:
             which case it contains new (empty) `LabeledFrame` objects with `video` and
             `frame_index` set.
         """
+        video = self._resolve_video(video)
         results = []
 
         # Lazy fast path: scan raw arrays directly
@@ -1603,8 +1747,8 @@ class Labels:
         frames, use ``Labels.temporal_rois``.
 
         Args:
-            video: If specified, only return ROIs for this video (identity
-                comparison).
+            video: If specified, only return ROIs for this video. A foreign
+                `Video` instance or filename is resolved via `match_video`.
             frame_idx: If specified, only return ROIs for this frame index.
             category: If specified, only return ROIs with this category.
             track: If specified, only return ROIs for this track (identity
@@ -1617,6 +1761,7 @@ class Labels:
         Returns:
             A list of matching ROIs.
         """
+        video = self._resolve_video(video)
         # Fast path: O(1) frame lookup when both video and frame_idx given
         if video is not None and frame_idx is not None:
             lf = self.get_frame(video, frame_idx)
@@ -1663,8 +1808,8 @@ class Labels:
               ``self.masks``.
 
         Args:
-            video: If specified, only return masks for this video (identity
-                comparison).
+            video: If specified, only return masks for this video. A foreign
+                `Video` instance or filename is resolved via `match_video`.
             frame_idx: If specified, only return masks for this frame index.
             category: If specified, only return masks with this category.
             track: If specified, only return masks for this track (identity
@@ -1677,6 +1822,7 @@ class Labels:
         Returns:
             A list of matching segmentation masks.
         """
+        video = self._resolve_video(video)
         # Fast path: O(1) frame lookup when both video and frame_idx given
         if video is not None and frame_idx is not None:
             lf = self.get_frame(video, frame_idx)
@@ -1723,8 +1869,8 @@ class Labels:
               ``self.bboxes``.
 
         Args:
-            video: If specified, only return bboxes for this video (identity
-                comparison).
+            video: If specified, only return bboxes for this video. A foreign
+                `Video` instance or filename is resolved via `match_video`.
             frame_idx: If specified, only return bboxes for this frame index.
             category: If specified, only return bboxes with this category.
             track: If specified, only return bboxes for this track (identity
@@ -1742,6 +1888,7 @@ class Labels:
             hierarchy (``UserBoundingBox`` vs ``PredictedBoundingBox``) for
             user/predicted distinction.
         """
+        video = self._resolve_video(video)
         # Fast path: O(1) frame lookup when both video and frame_idx given
         if video is not None and frame_idx is not None:
             lf = self.get_frame(video, frame_idx)
@@ -1788,8 +1935,8 @@ class Labels:
               ``self.centroids``.
 
         Args:
-            video: If specified, only return centroids for this video (identity
-                comparison).
+            video: If specified, only return centroids for this video. A foreign
+                `Video` instance or filename is resolved via `match_video`.
             frame_idx: If specified, only return centroids for this frame index.
             category: If specified, only return centroids with this category.
             track: If specified, only return centroids for this track (identity
@@ -1803,6 +1950,7 @@ class Labels:
         Returns:
             A list of matching centroids.
         """
+        video = self._resolve_video(video)
         # Fast path: O(1) frame lookup when both video and frame_idx given
         if video is not None and frame_idx is not None:
             lf = self.get_frame(video, frame_idx)
@@ -1856,8 +2004,8 @@ class Labels:
               ``predicted``), the search runs over ``self.label_images``.
 
         Args:
-            video: If specified, only return label images for this video
-                (identity comparison).
+            video: If specified, only return label images for this video. A
+                foreign `Video` instance or filename is resolved via `match_video`.
             frame_idx: If specified, only return label images for this frame
                 index.
             track: If specified, only return label images containing this track
@@ -1871,6 +2019,7 @@ class Labels:
         Returns:
             A list of matching label images.
         """
+        video = self._resolve_video(video)
         # Fast path: O(1) frame lookup when both video and frame_idx given
         if video is not None and frame_idx is not None:
             lf = self.get_frame(video, frame_idx)
@@ -2307,13 +2456,23 @@ class Labels:
                             video.replace_filename(new_fn, open=open_videos)
 
     def extract(
-        self, inds: list[int] | list[tuple[Video, int]] | np.ndarray, copy: bool = True
+        self,
+        inds: list[int]
+        | list[tuple[Video | str | Path, int]]
+        | np.ndarray
+        | Video
+        | str
+        | Path,
+        copy: bool = True,
     ) -> "Labels":
         """Extract a set of frames into a new Labels object.
 
         Args:
-            inds: Indices of labeled frames. Can be specified as a list of array of
-                integer indices of labeled frames or tuples of Video and frame indices.
+            inds: Indices of labeled frames. Can be specified as a list or array of
+                integer indices of labeled frames, tuples of `(video, frame_idx)`,
+                or a single `Video`/filename to extract all of its frames. A
+                foreign `Video` instance or filename is resolved to the matching
+                `Video` in `self.videos` via `match_video`.
             copy: If `True` (the default), return a copy of the frames and containing
                 objects. Otherwise, return a reference to the data.
 
