@@ -435,11 +435,39 @@ def test_match_video_explicit_method_ambiguous():
         labels.match_video("/x/vid.mp4", method="basename")
 
 
+def test_match_video_auto_matcher_instance():
+    """An AUTO VideoMatcher instance uses the same tiered cascade as method='auto'."""
+    v1 = Video(filename="/dir1/vid.mp4", open_backend=False)
+    v2 = Video(filename="/dir2/vid.mp4", open_backend=False)
+    labels = Labels(videos=[v1, v2])
+
+    # An exact path resolves via the definitive tier despite the shared basename,
+    # exactly as method="auto" does (not the simplified pairwise AUTO check, which
+    # would treat the basename match as a second, ambiguous candidate).
+    matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+    assert labels.match_video("/dir1/vid.mp4", method=matcher) is v1
+    assert labels.match_video("/dir1/vid.mp4", method="auto") is v1
+
+
 def test_match_video_bad_type():
     """match_video raises TypeError for unsupported argument types."""
     labels = Labels(videos=[Video(filename="vid.mp4", open_backend=False)])
     with pytest.raises(TypeError):
         labels.match_video(42)
+
+
+def test_match_video_bad_method_type():
+    """match_video raises TypeError for an unsupported method argument."""
+    labels = Labels(videos=[Video(filename="vid.mp4", open_backend=False)])
+    with pytest.raises(TypeError, match="method"):
+        labels.match_video("vid.mp4", method=42)
+
+
+def test_match_video_bad_method_string():
+    """match_video raises ValueError for an unrecognized method string."""
+    labels = Labels(videos=[Video(filename="vid.mp4", open_backend=False)])
+    with pytest.raises(ValueError):
+        labels.match_video("vid.mp4", method="not_a_method")
 
 
 def test_match_video_hdf5_pkg(slp_minimal_pkg):

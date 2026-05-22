@@ -1234,15 +1234,18 @@ class Labels:
                 `VideoMatcher` instance. The default `"auto"` uses a tiered cascade:
                 it first looks for a definitive match (same underlying file, or an
                 identical path), and only if none is found falls back to basename
-                matching.
+                matching. A `VideoMatcher` whose method is `AUTO` (equivalently, the
+                string `"auto"`) uses this same tiered cascade.
 
         Returns:
             The canonical `Video` from `self.videos` that matches, or `None` if no
             video matches.
 
         Raises:
-            ValueError: If more than one video matches ambiguously.
-            TypeError: If `video_or_path` is not a `Video`, `str`, or `Path`.
+            ValueError: If more than one video matches ambiguously, or if `method`
+                is a string that is not a recognized matching strategy.
+            TypeError: If `video_or_path` is not a `Video`, `str`, or `Path`, or if
+                `method` is not a string or `VideoMatcher`.
 
         Notes:
             For HDF5-backed videos (e.g. embedded videos in `.pkg.slp` files),
@@ -1256,6 +1259,11 @@ class Labels:
             the full set of image filenames to match. Pass `method="image_dedup"`
             to resolve sequences that only partially overlap.
 
+            The `"content"` and `"shape"` methods compare shape metadata, which a
+            bare path argument cannot provide (its backend is left unopened). Pass
+            a `Video` instance to resolve by content/shape, or use
+            `"auto"`/`"path"`/`"basename"` to resolve a path by filename.
+
         Example:
             >>> video = sio.load_video("path/to/video.mp4")  # doctest: +SKIP
             >>> canonical = labels.match_video(video)  # doctest: +SKIP
@@ -1268,7 +1276,8 @@ class Labels:
         )
 
         # Coerce a path argument into a Video for comparison purposes. The backend
-        # is left unopened so dead/network paths never trigger I/O here.
+        # is left unopened, so resolution never opens (or hangs on decoding) a video
+        # file -- though path-based checks may still stat the filesystem.
         if isinstance(video_or_path, Video):
             query = video_or_path
         elif isinstance(video_or_path, (str, Path)):
@@ -1277,6 +1286,25 @@ class Labels:
             raise TypeError(
                 "match_video() expects a Video, str, or Path, got "
                 f"{type(video_or_path).__name__}."
+            )
+
+        # Normalize the matching strategy. A string is validated eagerly (raising
+        # ValueError for an unrecognized strategy). The AUTO method -- whether given
+        # as the "auto" string or an AUTO `VideoMatcher` -- uses the tiered cascade,
+        # signaled by leaving `matcher` as None.
+        if isinstance(method, str):
+            method_enum = VideoMatchMethod(method)
+            matcher = (
+                None
+                if method_enum == VideoMatchMethod.AUTO
+                else VideoMatcher(method=method_enum)
+            )
+        elif isinstance(method, VideoMatcher):
+            matcher = None if method.method == VideoMatchMethod.AUTO else method
+        else:
+            raise TypeError(
+                "match_video() expects method to be a str or VideoMatcher, got "
+                f"{type(method).__name__}."
             )
 
         # Identity short-circuit: already a canonical video in this Labels.
@@ -1291,7 +1319,7 @@ class Labels:
                 f"{len(candidates)} videos {by}: {names}."
             )
 
-        if isinstance(method, str) and method == "auto":
+        if matcher is None:
             # Tiered cascade: prefer a definitive (file identity / exact path)
             # match so a shared basename never shadows a true match.
             definitive = [
@@ -1309,11 +1337,7 @@ class Labels:
                 raise _ambiguous(basename, "by basename")
             return basename[0] if basename else None
 
-        # Explicit matching strategy.
-        if isinstance(method, str):
-            matcher = VideoMatcher(method=VideoMatchMethod(method))
-        else:
-            matcher = method
+        # Explicit (non-AUTO) matching strategy.
         matches = [v for v in self.videos if matcher.match(v, query)]
         if len(matches) > 1:
             raise _ambiguous(matches, f"with method {matcher.method.value!r}")
