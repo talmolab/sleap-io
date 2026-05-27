@@ -1153,8 +1153,11 @@ class ConflictResolution:
 
     Attributes:
         frame: The labeled frame where the conflict occurred.
-        conflict_type: Type of conflict (e.g., "duplicate_instance",
-            "skeleton_mismatch").
+        conflict_type: Type of conflict. Emitted values are
+            ``"instance_conflict"`` (an instance pair conflicted under the
+            chosen frame strategy) and ``"negative_flag_conflict"`` (the
+            ``is_negative`` background marker was cleared because the merged
+            frame now contains a user pose).
         original_data: The original data before resolution.
         new_data: The new/incoming data that caused the conflict.
         resolution: Description of how the conflict was resolved.

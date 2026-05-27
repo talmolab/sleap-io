@@ -114,6 +114,13 @@ You can also index with a `(video, frame_idx)` tuple:
 lf = labels[video, 0]  # same as labels.find(video, 0)[0]
 ```
 
+`find`, `__getitem__`, `extract`, `numpy`, and the `get_*` family also accept a
+filename (`str` / `Path`) or a foreign `Video` (one constructed outside the
+project) and resolve it to the canonical `Video` already on the labels via
+[`Labels.match_video`][sleap_io.Labels.match_video]. See
+[Resolving a video by path or foreign instance](../examples.md#resolving-a-video-by-path-or-foreign-instance)
+for the full pattern.
+
 ### Fast lookups
 
 `Labels` maintains lazy indices for O(1) frame and track lookups. Use

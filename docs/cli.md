@@ -141,6 +141,7 @@ sio render predictions.slp --start 100 --end 200
 sio render predictions.slp --lf 0                          # Single frame -> PNG
 sio render predictions.slp --lf 0 --crop auto              # Auto-fit to instances
 sio render predictions.slp --color-by track --marker-shape diamond
+sio render predictions.slp --trails --trail-length 10           # Motion trails
 
 # Trim video and labels to a frame range
 sio trim labels.slp --start 100 --end 1000                 # -> labels.trim.slp
@@ -1836,6 +1837,22 @@ See [Segmentation Overlays](#segmentation-overlays) for end-to-end examples.
 | `--overlay-outline` / `--no-overlay-outline` | off | Draw outlines around segmented regions |
 | `--overlay-outline-width` | 1 | Outline width in pixels |
 | `--overlay-outline-color` | (darkened fill) | Outline color (e.g., `white`, `#ff0000`, `255,0,0`) |
+
+#### Motion Trail Options
+
+Trace each animal's path over the last `N` frames behind the current frame.
+Only takes effect when rendering a video (a single labeled frame has no
+temporal context).
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--trails` | off | Enable motion-trail overlay drawn beneath poses and centroids. |
+| `--trail-length` | 10 | Number of past frames to include in each trail. |
+| `--trail-node` | `centroid` | Point to trail. Either `centroid`, a single node name, or a comma-separated list of node names (one trail per node). |
+| `--trail-width` | 2.0 | Trail line width in pixels. |
+| `--trail-fade` / `--no-trail-fade` | `--trail-fade` | Fade trails from faint (oldest) to opaque (newest). |
+| `--trail-alpha` | 1.0 | Global opacity multiplier for trails (0.0–1.0). Combines with fade. |
+| `--trail-color` | (match poses) | Uniform color for all trails (e.g., `white`, `#ff0000`, `255,0,0`). Default matches the pose color (by track or instance). |
 
 #### Discovery Options
 
