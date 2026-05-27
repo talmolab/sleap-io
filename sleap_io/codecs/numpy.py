@@ -346,6 +346,10 @@ def to_analysis_arrays(
     instance-slotting logic as `to_numpy` so that projects without track
     assignments keep every instance instead of collapsing to one per frame.
 
+    This is an internal building block — most users should call
+    `sleap_io.save_analysis_h5` instead, which writes these arrays to disk in
+    the SLEAP analysis HDF5 layout.
+
     Args:
         labels: The `Labels` from which to get data.
         video: Video (or video index) to export. If None, uses the first video.
