@@ -329,6 +329,31 @@ labels.reindex()
 !!! tip "When to call `reindex()`"
     The indices rebuild automatically when you use the public `Labels` APIs. You only need `reindex()` after mutating `labels.labeled_frames` or the annotation lists in place (which bypasses the invalidation hooks).
 
+### Resolving a video by path or foreign instance
+
+`Video` objects compare by identity, so a `Video` you create yourself (e.g. with `sio.load_video`) is *not* recognized by `Labels` lookups even if it points at the same file as one already in the project. [`Labels.match_video`][sleap_io.Labels.match_video] resolves a foreign `Video` — or a plain filename — to the canonical instance, and `find`, `extract`, `__getitem__`, `numpy`, and the `get_*` family all canonicalize their `video` argument through it automatically.
+
+```python title="resolve_video.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+
+# A freshly loaded Video is a different object than the one in the project.
+foreign = sio.load_video("predictions_video.mp4")
+
+# These all work now (previously returned [] / raised IndexError):
+labels.find(foreign)                      # by foreign Video instance
+labels.find("predictions_video.mp4")      # by filename
+labels["predictions_video.mp4"]           # __getitem__ by filename
+labels.extract([("predictions_video.mp4", 0)])
+
+# Resolve explicitly to the canonical Video stored on the project:
+canonical = labels.match_video(foreign)   # -> Video, or None if no match
+```
+
+!!! note "Matching strategy"
+    `match_video` uses a tiered cascade by default: a definitive match (same underlying file, or identical path) wins, and only if none is found does it fall back to basename matching. Ambiguous matches raise `ValueError`. Pass `method=` (`"path"`, `"basename"`, `"content"`, ...) for explicit control.
+
 ## Format conversion
 
 ### Load and save in different formats
