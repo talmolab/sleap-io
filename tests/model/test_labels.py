@@ -340,6 +340,235 @@ def test_labels_getitem_list_of_tuples(slp_typical):
     assert len(lfs) == 0
 
 
+def test_match_video_foreign_instance(slp_typical):
+    """match_video resolves a foreign Video with the same path to the canonical."""
+    labels = load_slp(slp_typical)
+    canonical = labels.video
+
+    # A freshly created Video is not identity-equal (Video is eq=False).
+    foreign = Video(filename=canonical.filename, open_backend=False)
+    assert foreign is not canonical
+    assert labels.match_video(foreign) is canonical
+
+    # An identity argument is returned unchanged.
+    assert labels.match_video(canonical) is canonical
+
+
+def test_match_video_by_path(slp_typical):
+    """match_video resolves str and Path filenames to the canonical Video."""
+    labels = load_slp(slp_typical)
+    canonical = labels.video
+
+    assert labels.match_video(str(canonical.filename)) is canonical
+    assert labels.match_video(Path(canonical.filename)) is canonical
+
+
+def test_match_video_no_match(slp_typical):
+    """match_video returns None when no video matches."""
+    labels = load_slp(slp_typical)
+    assert labels.match_video("not_in_project.mp4") is None
+    assert labels.match_video(Video(filename="not_in_project.mp4")) is None
+
+
+def test_match_video_basename_fallback():
+    """match_video falls back to basename matching for relocated files."""
+    video = Video(filename="/original/dir/video.mp4", open_backend=False)
+    labels = Labels(videos=[video])
+
+    # Same basename in a different directory still resolves.
+    assert labels.match_video("/new/location/video.mp4") is video
+
+
+def test_match_video_definitive_over_basename():
+    """An exact path match wins over a shared basename (no false ambiguity)."""
+    v1 = Video(filename="/dir1/vid.mp4", open_backend=False)
+    v2 = Video(filename="/dir2/vid.mp4", open_backend=False)
+    labels = Labels(videos=[v1, v2])
+
+    # Exact path -> definitive tier resolves to v1 despite the shared basename.
+    assert labels.match_video("/dir1/vid.mp4") is v1
+    assert labels.match_video("/dir2/vid.mp4") is v2
+
+
+def test_match_video_ambiguous_raises():
+    """match_video raises when multiple videos match by basename."""
+    v1 = Video(filename="/dir1/vid.mp4", open_backend=False)
+    v2 = Video(filename="/dir2/vid.mp4", open_backend=False)
+    labels = Labels(videos=[v1, v2])
+
+    with pytest.raises(ValueError, match="Ambiguous video match"):
+        labels.match_video("/elsewhere/vid.mp4")
+
+
+def test_match_video_ambiguous_definitive_raises():
+    """match_video raises when multiple videos share the exact same path."""
+    v1 = Video(filename="/dir/vid.mp4", open_backend=False)
+    v2 = Video(filename="/dir/vid.mp4", open_backend=False)
+    labels = Labels(videos=[v1, v2])
+
+    with pytest.raises(ValueError, match="by file identity"):
+        labels.match_video("/dir/vid.mp4")
+
+
+def test_match_video_explicit_method():
+    """match_video accepts an explicit method string or VideoMatcher."""
+    v1 = Video(filename="/dir1/vid.mp4", open_backend=False)
+    v2 = Video(filename="/dir2/other.mp4", open_backend=False)
+    labels = Labels(videos=[v1, v2])
+
+    # Basename method resolves a relocated file.
+    assert labels.match_video("/x/vid.mp4", method="basename") is v1
+    # Path method (lenient by default) also matches by basename.
+    assert labels.match_video("/x/other.mp4", method="path") is v2
+    # A VideoMatcher instance works too.
+    matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+    assert labels.match_video("/x/vid.mp4", method=matcher) is v1
+
+
+def test_match_video_explicit_method_ambiguous():
+    """Explicit-method matching raises on ambiguous matches."""
+    v1 = Video(filename="/dir1/vid.mp4", open_backend=False)
+    v2 = Video(filename="/dir2/vid.mp4", open_backend=False)
+    labels = Labels(videos=[v1, v2])
+
+    with pytest.raises(ValueError, match="Ambiguous video match"):
+        labels.match_video("/x/vid.mp4", method="basename")
+
+
+def test_match_video_auto_matcher_instance():
+    """An AUTO VideoMatcher instance uses the same tiered cascade as method='auto'."""
+    v1 = Video(filename="/dir1/vid.mp4", open_backend=False)
+    v2 = Video(filename="/dir2/vid.mp4", open_backend=False)
+    labels = Labels(videos=[v1, v2])
+
+    # An exact path resolves via the definitive tier despite the shared basename,
+    # exactly as method="auto" does (not the simplified pairwise AUTO check, which
+    # would treat the basename match as a second, ambiguous candidate).
+    matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+    assert labels.match_video("/dir1/vid.mp4", method=matcher) is v1
+    assert labels.match_video("/dir1/vid.mp4", method="auto") is v1
+
+
+def test_match_video_bad_type():
+    """match_video raises TypeError for unsupported argument types."""
+    labels = Labels(videos=[Video(filename="vid.mp4", open_backend=False)])
+    with pytest.raises(TypeError):
+        labels.match_video(42)
+
+
+def test_match_video_bad_method_type():
+    """match_video raises TypeError for an unsupported method argument."""
+    labels = Labels(videos=[Video(filename="vid.mp4", open_backend=False)])
+    with pytest.raises(TypeError, match="method"):
+        labels.match_video("vid.mp4", method=42)
+
+
+def test_match_video_bad_method_string():
+    """match_video raises ValueError for an unrecognized method string."""
+    labels = Labels(videos=[Video(filename="vid.mp4", open_backend=False)])
+    with pytest.raises(ValueError):
+        labels.match_video("vid.mp4", method="not_a_method")
+
+
+def test_match_video_hdf5_pkg(slp_minimal_pkg):
+    """match_video resolves embedded HDF5 videos in a .pkg.slp file."""
+    labels = load_slp(slp_minimal_pkg)
+    canonical = labels.video
+
+    # Foreign Video carrying the HDF5 backend resolves on dataset identity.
+    foreign = Video(filename=canonical.filename, open_backend=False)
+    foreign.backend = canonical.backend
+    assert labels.match_video(foreign) is canonical
+
+    # Resolving by the .pkg.slp path alone also works (single embedded video).
+    assert labels.match_video(canonical.filename) is canonical
+
+
+def test_find_foreign_video(slp_typical):
+    """Find accepts a foreign Video, str, or Path argument."""
+    labels = load_slp(slp_typical)
+    canonical = labels.video
+    labels.labeled_frames.append(LabeledFrame(video=canonical, frame_idx=1))
+
+    foreign = Video(filename=canonical.filename, open_backend=False)
+    assert len(labels.find(foreign)) == 2
+    assert len(labels.find(str(canonical.filename))) == 2
+    assert len(labels.find(Path(canonical.filename))) == 2
+    assert len(labels.find(foreign, frame_idx=0)) == 1
+
+
+def test_find_returns_new_for_unmatched_path(slp_typical):
+    """find(..., return_new=True) attaches a usable Video for an unmatched path."""
+    labels = load_slp(slp_typical)
+    results = labels.find("unmatched.mp4", frame_idx=0, return_new=True)
+    assert len(results) == 1
+    assert results[0].frame_idx == 0
+    assert isinstance(results[0].video, Video)
+    assert Path(results[0].video.filename).name == "unmatched.mp4"
+
+
+def test_getitem_by_path(slp_typical):
+    """__getitem__ accepts str/Path videos and (path, frame_idx) tuples."""
+    labels = load_slp(slp_typical)
+    canonical = labels.video
+    labels.labeled_frames.append(LabeledFrame(video=canonical, frame_idx=1))
+
+    assert len(labels[str(canonical.filename)]) == 2
+    assert len(labels[Path(canonical.filename)]) == 2
+    assert labels[(str(canonical.filename), 0)].frame_idx == 0
+
+    foreign = Video(filename=canonical.filename, open_backend=False)
+    assert len(labels[foreign]) == 2
+
+    # List of (path, frame_idx) tuples.
+    keys = [(str(canonical.filename), 0), (str(canonical.filename), 1)]
+    lfs = labels[keys]
+    assert [lf.frame_idx for lf in lfs] == [0, 1]
+
+    with pytest.raises(IndexError):
+        labels["not_in_project.mp4"]
+
+
+def test_extract_foreign_video(slp_typical):
+    """Extract resolves foreign Video / path arguments via __getitem__."""
+    labels = load_slp(slp_typical)
+    canonical = labels.video
+    foreign = Video(filename=canonical.filename, open_backend=False)
+
+    assert len(labels.extract([(foreign, 0)])) == 1
+    assert len(labels.extract(str(canonical.filename))) == 1
+
+
+def test_get_queries_foreign_video():
+    """get_* and numpy resolve a foreign Video argument."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="/data/vid.mp4", open_backend=False)
+    inst = Instance.from_numpy(np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skel)
+    centroid = UserCentroid(x=5.0, y=10.0)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst], centroids=[centroid])
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skel])
+
+    foreign = Video(filename="/data/vid.mp4", open_backend=False)
+    assert len(labels.get_centroids(video=foreign)) == 1
+    assert len(labels.get_centroids(video="/data/vid.mp4")) == 1
+    assert labels.numpy(video=foreign, untracked=True).shape[0] == 1
+    # Integer index still selects the video.
+    assert labels.numpy(video=0, untracked=True).shape[0] == 1
+
+
+def test_match_video_image_sequence(centered_pair_frame_paths):
+    """match_video resolves image-sequence videos by their full filename list."""
+    video = Video(filename=list(centered_pair_frame_paths), open_backend=False)
+    labels = Labels(videos=[video])
+
+    foreign = Video(filename=list(centered_pair_frame_paths), open_backend=False)
+    assert labels.match_video(foreign) is video
+
+    # A partially overlapping sequence is not an "auto" match.
+    partial = Video(filename=list(centered_pair_frame_paths[:1]), open_backend=False)
+    assert labels.match_video(partial) is None
+
+
 def test_labels_save(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
     labels.save(tmp_path / "test.slp")
