@@ -1,10 +1,12 @@
 """Tests for functions in the sleap_io.io.main file."""
 
 import shutil
+from pathlib import Path
 
 import pytest
 
-from sleap_io import Labels, LabelsSet
+from sleap_io import Labels, LabelsSet, RemoteIOError, clear_remote_cache
+from sleap_io.io._remote import _require_package
 from sleap_io.io.main import (
     load_file,
     load_jabs,
@@ -368,3 +370,136 @@ def test_load_labels_set_format_detection_edge_cases(tmp_path, slp_minimal):
         load_labels_set(str(single_file), format="slp")
     except ValueError as e:
         assert "Path must be a directory" in str(e)
+
+
+# ---------------------------------------------------------------------------
+# Remote URL loading (PR 1)
+# ---------------------------------------------------------------------------
+
+
+def test_load_slp_url_via_httpserver(httpserver, slp_minimal):
+    """`load_slp` loads a `.slp` served over HTTP into a `Labels` object.
+
+    The fixture is served with a plain 200 (no Range support), so the
+    ``download`` stream mode (full read into memory) is used.
+    """
+    file_bytes = Path(slp_minimal).read_bytes()
+    httpserver.expect_request("/labels.slp").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.slp")
+
+    labels = load_slp(url, stream_mode="download")
+    assert type(labels) is Labels
+    assert len(labels) == 1
+
+
+def test_load_slp_url_preserves_lazy(httpserver, slp_minimal):
+    """`load_slp(url, lazy=True)` produces a lazy `Labels` over HTTP."""
+    file_bytes = Path(slp_minimal).read_bytes()
+    httpserver.expect_request("/labels.slp").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.slp")
+
+    lazy_labels = load_slp(url, lazy=True, stream_mode="download")
+    assert type(lazy_labels) is Labels
+    assert lazy_labels.is_lazy
+    # Lazy labels still expose frames.
+    assert len(lazy_labels) == 1
+
+
+def test_load_slp_url_invalid_stream_mode(httpserver, slp_minimal):
+    """An unrecognized `stream_mode` raises `ValueError` (not RemoteIOError)."""
+    file_bytes = Path(slp_minimal).read_bytes()
+    httpserver.expect_request("/labels.slp").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.slp")
+
+    with pytest.raises(ValueError, match="Invalid stream_mode"):
+        load_slp(url, stream_mode="not-a-real-mode")
+
+
+def test_load_video_url_raises_not_implemented():
+    """`load_video(url)` raises `NotImplementedError` with a redacted URL.
+
+    The message must mention the follow-up PR and must not leak credentials.
+    """
+    url = "https://user:secret@example.com/movie.mp4?token=abc123"
+    with pytest.raises(NotImplementedError) as exc_info:
+        load_video(url)
+
+    message = str(exc_info.value)
+    # Follow-up PR is mentioned.
+    assert "follow-up" in message.lower()
+    # Credentials are redacted out of the surfaced URL.
+    assert "secret" not in message
+    assert "abc123" not in message
+    assert "example.com" in message
+
+
+def test_load_file_url_sniff_routes_slp(httpserver, slp_minimal):
+    """`load_file` sniffs an ambiguous `.h5` URL and routes it to `load_slp`."""
+    file_bytes = Path(slp_minimal).read_bytes()
+    httpserver.expect_request("/labels.h5").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.h5")
+
+    # `.h5` is an ambiguous extension; sniffing the HDF5 magic + group
+    # structure should route to the slp loader.
+    labels = load_file(url, stream_mode="download")
+    assert type(labels) is Labels
+    assert len(labels) == 1
+
+
+def test_load_file_url_sniff_false_ambiguous_raises(httpserver, slp_minimal):
+    """`load_file(url, sniff=False)` on an ambiguous extension raises."""
+    file_bytes = Path(slp_minimal).read_bytes()
+    httpserver.expect_request("/labels.h5").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.h5")
+
+    with pytest.raises(ValueError, match="ambiguous extension"):
+        load_file(url, sniff=False)
+
+
+def test_load_file_url_explicit_format_skips_sniff(httpserver, slp_minimal):
+    """An explicit `format` dispatches a URL directly without sniffing."""
+    file_bytes = Path(slp_minimal).read_bytes()
+    httpserver.expect_request("/labels.h5").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.h5")
+
+    labels = load_file(url, format="slp", stream_mode="download")
+    assert type(labels) is Labels
+    assert len(labels) == 1
+
+
+def test_load_slp_url_cloud_missing_extra():
+    """A missing cloud adapter raises `ImportError` with the `[cloud]` hint.
+
+    Exercised via `_require_package` with a genuinely-absent package name so no
+    mocking is needed (CI installs the real cloud adapters).
+    """
+    with pytest.raises(ImportError) as exc_info:
+        _require_package("definitely_not_installed_pkg_xyz", scheme="s3")
+    message = str(exc_info.value)
+    assert "sleap-io[cloud]" in message
+    assert "definitely_not_installed_pkg_xyz" in message
+
+
+def test_imports_clear_remote_cache_at_top_level():
+    """`clear_remote_cache` and `RemoteIOError` are importable from the top.
+
+    Also verifies the lazy re-exports resolve to the underlying objects.
+    """
+    import sleap_io as sio
+
+    assert sio.clear_remote_cache is clear_remote_cache
+    assert sio.RemoteIOError is RemoteIOError
+    assert issubclass(RemoteIOError, OSError)
+    assert callable(clear_remote_cache)
