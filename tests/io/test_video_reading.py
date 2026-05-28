@@ -8,7 +8,9 @@ import imageio.v3 as iio
 import numpy as np
 import pytest
 from numpy.testing import assert_equal
+from pytest_httpserver import HTTPServer
 
+import sleap_io as sio
 from sleap_io.io.video_reading import (
     HDF5Video,
     ImageVideo,
@@ -1435,3 +1437,128 @@ def test_tiffvideo_fps(tmp_path):
     # Can set FPS explicitly
     backend.fps = 10.0
     assert backend.fps == 10.0
+
+
+# ---------------------------------------------------------------------------
+# Remote (URL) media video loading via pyav.
+#
+# av.open / imageio's pyav plugin stream the full body via a plain GET (no
+# Range requests), so a simple ``respond_with_data`` 200 server is sufficient
+# to back these tests with a real fixture video's bytes.
+# ---------------------------------------------------------------------------
+
+
+def _serve_video(server: HTTPServer, path: str, route: str) -> str:
+    """Serve a local video file's bytes at ``route`` and return its URL.
+
+    Args:
+        server: A running ``pytest_httpserver`` server.
+        path: Local path to the fixture video to serve.
+        route: The URL route to bind (e.g. ``"/video.mp4"``).
+
+    Returns:
+        The full URL the served bytes are reachable at.
+    """
+    data = Path(path).read_bytes()
+    server.expect_request(route).respond_with_data(data, content_type="video/mp4")
+    return server.url_for(route)
+
+
+def test_from_filename_url_routes_to_mediavideo(
+    httpserver, centered_pair_low_quality_path
+):
+    """A media-video URL is routed to MediaVideo with the pyav plugin."""
+    url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+    backend = VideoBackend.from_filename(url)
+    assert type(backend) is MediaVideo
+    assert backend.filename == url
+    # URLs default to the pyav plugin (validated/normalized on the backend).
+    assert backend.plugin == "pyav"
+
+
+def test_from_filename_url_respects_explicit_plugin(
+    httpserver, centered_pair_low_quality_path
+):
+    """An explicit ``plugin`` on a URL is honored (not overridden by the default)."""
+    url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+    backend = VideoBackend.from_filename(url, plugin="pyav")
+    assert type(backend) is MediaVideo
+    assert backend.plugin == "pyav"
+    assert backend[0].shape == (384, 384, 1)
+
+
+def test_from_filename_url_with_query_string_matches_extension(
+    httpserver, centered_pair_low_quality_path
+):
+    """A URL carrying a ``?query`` still matches the mp4 extension and reads."""
+    base = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+    url = base + "?token=secret&x=1"
+    backend = VideoBackend.from_filename(url)
+    assert type(backend) is MediaVideo
+    assert backend[0].shape == (384, 384, 1)
+
+
+def test_load_video_url_reads_first_frame(httpserver, centered_pair_low_quality_path):
+    """A frame read over http matches the frame read from the local file."""
+    url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+
+    local = sio.load_video(centered_pair_low_quality_path)
+    remote = sio.load_video(url)
+
+    local_frame = local[0]
+    remote_frame = remote[0]
+    assert remote_frame.shape == local_frame.shape
+    assert remote_frame.dtype == local_frame.dtype
+    assert_equal(remote_frame, local_frame)
+
+
+def test_load_video_url_num_frames(httpserver, centered_pair_low_quality_path):
+    """num_frames over http (via pyav improps) matches the local value."""
+    url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+    local = sio.load_video(centered_pair_low_quality_path)
+    remote = sio.load_video(url)
+    assert remote.backend.num_frames == local.backend.num_frames == 1100
+
+
+def test_load_video_url_img_shape(httpserver, centered_pair_low_quality_path):
+    """img_shape over http (via a pyav test-frame read) matches the local value."""
+    url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+    local = sio.load_video(centered_pair_low_quality_path)
+    remote = sio.load_video(url)
+    assert remote.backend.img_shape == local.backend.img_shape == (384, 384, 1)
+
+
+def test_load_video_url_fps(httpserver, centered_pair_low_quality_path):
+    """FPS over http (via av.open) matches the local value."""
+    url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+    local = sio.load_video(centered_pair_low_quality_path)
+    remote = sio.load_video(url)
+    assert remote.backend.fps == local.backend.fps == 15.0
+
+
+def test_load_video_url_full_shape(httpserver, centered_pair_low_quality_path):
+    """The full (frames, h, w, c) shape over http matches the local value."""
+    url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+    local = sio.load_video(centered_pair_low_quality_path)
+    remote = sio.load_video(url)
+    assert remote.shape == local.shape == (1100, 384, 384, 1)
+
+
+def test_load_video_url_get_frames(httpserver, centered_pair_low_quality_path):
+    """Reading multiple frames over http matches the local frames."""
+    url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+    local = sio.load_video(centered_pair_low_quality_path)
+    remote = sio.load_video(url)
+    assert_equal(remote[:3], local[:3])
+
+
+def test_is_pyav_available_when_installed():
+    """``_is_pyav_available`` reports True in the test environment (av installed).
+
+    The complementary False branch only fires for an install lacking the
+    ``[pyav]`` extra; it is marked ``# pragma: no cover`` rather than forced via
+    monkeypatching, since ``av`` is a required dependency of the test suite.
+    """
+    from sleap_io.io.video_reading import _is_pyav_available
+
+    assert _is_pyav_available() is True
