@@ -851,6 +851,10 @@ def load_video(filename: str, **kwargs) -> Video:
             with the pyav plugin, which is selected automatically for URLs; it
             requires the ``av`` package (install with
             ``pip install 'sleap-io[pyav]'``). See the security warning above.
+            Google Drive share links are **not** supported for video (Drive
+            download links carry no file extension and reject the range
+            requests video streaming relies on); download the video file first,
+            then load it locally.
         **kwargs: Additional arguments passed to `Video.from_filename`.
             Currently supports:
             - dataset: Name of dataset in HDF5 file.
@@ -902,6 +906,10 @@ def load_video(filename: str, **kwargs) -> Video:
 
     Returns:
         A `Video` object.
+
+    Raises:
+        NotImplementedError: If ``filename`` is a Google Drive share link
+            (Drive video loading is not supported; download the file first).
 
     See Also:
         set_default_video_plugin: Set the default video plugin globally.
