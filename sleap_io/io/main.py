@@ -98,6 +98,7 @@ def load_slp(
             cache_expiry=cache_expiry,
             block_size=block_size,
             max_blocks=max_blocks,
+            retries=retries,
         )
         try:
             with h5py.File(file_like, "r") as f:

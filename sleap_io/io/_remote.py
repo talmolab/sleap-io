@@ -72,6 +72,19 @@ _MIN_AIOHTTP = "3.13.5"
 #: Filename written into a cache directory to mark it as managed by sleap-io.
 _CACHE_MARKER_NAME = ".sleap-io-cache-marker"
 
+#: HTTP status codes that are retried (transient server / rate-limit errors).
+_RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+#: Base backoff (seconds) for exponential retry: attempt N waits
+#: ``_RETRY_BACKOFF_BASE * 2**N`` (200/400/800 ms for the default 3 retries),
+#: unless the server sends a ``Retry-After`` header which takes precedence.
+_RETRY_BACKOFF_BASE = 0.2
+
+#: Upper bound (seconds) on any single retry sleep, including a server-provided
+#: ``Retry-After`` value. Caps pathological ``Retry-After`` values from blocking
+#: a load indefinitely.
+_RETRY_BACKOFF_MAX = 30.0
+
 #: Pattern matching fsspec cache filenames (sha hex hashes, optional ``.tags``).
 _CACHE_KEY_PATTERN = re.compile(r"^[0-9a-f]{32,64}(\.tags)?$")
 
@@ -273,6 +286,29 @@ def _check_aiohttp_version() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _strip_cross_origin_headers(prev_url, new_url, headers) -> None:
+    """Drop sensitive headers in-place when a redirect crosses origins.
+
+    Factored out of the :func:`_safe_get_client` trace hook so the
+    credential-stripping decision is directly unit-testable (the hook itself
+    runs inside aiohttp's event-loop thread). Mutates ``headers`` in place,
+    removing :data:`_SENSITIVE_HEADERS` (case-insensitive) only when the origin
+    of ``new_url`` differs from ``prev_url``.
+
+    Args:
+        prev_url: The URL the request was redirected from (an ``aiohttp.URL``),
+            or None if there is no prior URL (in which case nothing is done).
+        new_url: The redirect target URL (an ``aiohttp.URL``).
+        headers: A mutable, case-insensitive header mapping to scrub in place.
+    """
+    if prev_url is None:
+        return
+    if prev_url.origin() != new_url.origin():
+        for header in list(headers):
+            if header.lower() in _SENSITIVE_HEADERS:
+                headers.pop(header, None)
+
+
 async def _safe_get_client(**client_kwargs: Any):
     """Build an aiohttp.ClientSession that strips sensitive headers on redirect.
 
@@ -294,13 +330,7 @@ async def _safe_get_client(**client_kwargs: Any):
     async def on_redirect(session, ctx, params):
         history = params.response.history if params.response else []
         prev_url = history[-1].url if history else None
-        new_url = params.url
-        if prev_url is None:
-            return
-        if prev_url.origin() != new_url.origin():
-            for header in list(params.headers):
-                if header.lower() in _SENSITIVE_HEADERS:
-                    params.headers.pop(header, None)
+        _strip_cross_origin_headers(prev_url, params.url, params.headers)
 
     trace_config.on_request_redirect.append(on_redirect)
     return aiohttp.ClientSession(trace_configs=[trace_config], **client_kwargs)
@@ -369,6 +399,84 @@ def _http_inner_options(headers: dict[str, str] | None) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _retry_after_seconds(e: BaseException) -> float | None:
+    """Extract a ``Retry-After`` delay (seconds) from an HTTP error, if present.
+
+    Only the integer-seconds form of ``Retry-After`` is honored (the
+    HTTP-date form is ignored and falls back to exponential backoff).
+
+    Args:
+        e: The caught exception (its chain is searched for a response error).
+
+    Returns:
+        The non-negative ``Retry-After`` value in seconds, or None if the
+        header is absent or not an integer.
+    """
+    resp = _find_response_error(e)
+    if resp is None or resp.headers is None:
+        return None
+    raw = resp.headers.get("Retry-After")
+    if raw is None:
+        return None
+    try:
+        value = float(int(str(raw).strip()))
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, value)
+
+
+def _retry_sleep_seconds(attempt: int, exc: BaseException) -> float:
+    """Compute the sleep before the next attempt.
+
+    Honors a server ``Retry-After`` header if present, else uses exponential
+    backoff (``_RETRY_BACKOFF_BASE * 2**attempt``). The result is clamped to
+    ``_RETRY_BACKOFF_MAX``.
+
+    Args:
+        attempt: Zero-based index of the attempt that just failed.
+        exc: The exception from the failed attempt.
+
+    Returns:
+        Seconds to sleep before retrying.
+    """
+    retry_after = _retry_after_seconds(exc)
+    if retry_after is not None:
+        return min(retry_after, _RETRY_BACKOFF_MAX)
+    return min(_RETRY_BACKOFF_BASE * (2**attempt), _RETRY_BACKOFF_MAX)
+
+
+def _open_with_retries(open_fn, *, url: str, retries: int):
+    """Call ``open_fn()`` with retries on transient HTTP errors.
+
+    Retries are attempted only for the statuses in :data:`_RETRYABLE_STATUSES`
+    (429/500/502/503/504). All other errors (and a final retryable error after
+    the budget is exhausted) are converted via :func:`_raise_remote`.
+
+    Args:
+        open_fn: A zero-argument callable that performs the open and returns a
+            file-like object.
+        url: The URL involved (for error redaction).
+        retries: Maximum number of retries (so up to ``retries + 1`` attempts).
+
+    Returns:
+        Whatever ``open_fn()`` returns on success.
+
+    Raises:
+        RemoteIOError: If all attempts fail.
+    """
+    attempt = 0
+    while True:
+        try:
+            return open_fn()
+        except Exception as e:  # noqa: BLE001 - mapped via _raise_remote below
+            status = _status_from_exception(e)
+            if status in _RETRYABLE_STATUSES and attempt < retries:
+                time.sleep(_retry_sleep_seconds(attempt, e))
+                attempt += 1
+                continue
+            _raise_remote(e, url=url)
+
+
 def open_url(
     url: str,
     *,
@@ -378,6 +486,7 @@ def open_url(
     cache_expiry: float | None = None,
     block_size: int = 1 << 20,
     max_blocks: int = 32,
+    retries: int = 3,
 ):
     """Open ``url`` as a file-like object using the configured strategy.
 
@@ -392,6 +501,8 @@ def open_url(
             3600 when not given.
         block_size: Range block size in bytes for ``blockcache``.
         max_blocks: Max in-memory LRU blocks per open file for ``blockcache``.
+        retries: Maximum retries for transient HTTP errors (429/500/502/503/504),
+            with exponential backoff honoring ``Retry-After``. Default: 3.
 
     Returns:
         A file-like object (fsspec buffered file or ``io.BytesIO``) ready to be
@@ -417,17 +528,21 @@ def open_url(
             "{'auto', 'blockcache', 'cache', 'filecache', 'download'}."
         )
 
-    try:
-        if stream_mode == "blockcache":
+    if stream_mode == "blockcache":
+
+        def _open():
             return fs.open(
                 url,
                 mode="rb",
                 cache_type="blockcache",
                 block_size=block_size,
-                cache_options={"max_blocks": max_blocks},
+                # fsspec's BlockCache uses ``maxblocks`` (no underscore).
+                cache_options={"maxblocks": max_blocks},
             )
 
-        if stream_mode == "cache":
+    elif stream_mode == "cache":
+
+        def _open():
             import fsspec
 
             simplecache_opts: dict[str, Any] = {}
@@ -441,7 +556,9 @@ def open_url(
                 http=_http_inner_options(headers),
             ).open()
 
-        if stream_mode == "filecache":
+    elif stream_mode == "filecache":
+
+        def _open():
             import fsspec
 
             options: dict[str, Any] = {
@@ -457,11 +574,13 @@ def open_url(
                 http=_http_inner_options(headers),
             ).open()
 
-        # stream_mode == "download"
-        with fs.open(url, mode="rb") as src:
-            return io.BytesIO(src.read())
-    except Exception as e:
-        _raise_remote(e, url=url)
+    else:  # stream_mode == "download"
+
+        def _open():
+            with fs.open(url, mode="rb") as src:
+                return io.BytesIO(src.read())
+
+    return _open_with_retries(_open, url=url, retries=retries)
 
 
 def open_remote_h5(url: str, *, headers: dict[str, str] | None = None):
@@ -485,6 +604,47 @@ def open_remote_h5(url: str, *, headers: dict[str, str] | None = None):
 # ---------------------------------------------------------------------------
 
 
+def _find_response_error(e: BaseException):
+    """Find a wrapped ``aiohttp.ClientResponseError`` in an exception chain.
+
+    fsspec wraps the underlying ``aiohttp.ClientResponseError`` as the
+    ``__cause__`` (or ``__context__``) of a ``FileNotFoundError`` for HTTP error
+    responses, so the HTTP status is not visible on the top-level exception.
+    This walks the chain (bounded) to recover it.
+
+    Args:
+        e: The caught exception.
+
+    Returns:
+        The first ``aiohttp.ClientResponseError`` found in ``e``'s cause/context
+        chain (including ``e`` itself), or None if there is none.
+    """
+    import aiohttp
+
+    seen: set[int] = set()
+    cur: BaseException | None = e
+    while cur is not None and id(cur) not in seen:
+        if isinstance(cur, aiohttp.ClientResponseError):
+            return cur
+        seen.add(id(cur))
+        cur = cur.__cause__ or cur.__context__
+    return None
+
+
+def _status_from_exception(e: BaseException) -> int | None:
+    """Return the HTTP status of an exception (unwrapping fsspec's wrapper).
+
+    Args:
+        e: The caught exception.
+
+    Returns:
+        The HTTP status code if an ``aiohttp.ClientResponseError`` is found in
+        the chain, else None.
+    """
+    resp = _find_response_error(e)
+    return resp.status if resp is not None else None
+
+
 def _raise_remote(e: BaseException, *, url: str) -> None:
     """Convert an aiohttp/fsspec exception into a :class:`RemoteIOError`.
 
@@ -499,13 +659,17 @@ def _raise_remote(e: BaseException, *, url: str) -> None:
 
     if isinstance(e, RemoteIOError):
         raise e
-    if isinstance(e, aiohttp.ClientResponseError):
+
+    # fsspec wraps HTTP error responses (e.g. as FileNotFoundError); recover the
+    # underlying ClientResponseError from the chain so the status is preserved.
+    resp = _find_response_error(e)
+    if resp is not None:
         msg = {
             404: "file not found",
             416: "range past end of file",
             412: "file changed since cached (ETag mismatch)",
-        }.get(e.status, f"HTTP {e.status}")
-        raise RemoteIOError(msg, url=url, status=e.status, cause=e) from e
+        }.get(resp.status, f"HTTP {resp.status}")
+        raise RemoteIOError(msg, url=url, status=resp.status, cause=e) from e
     if isinstance(e, aiohttp.ClientConnectorError):
         raise RemoteIOError("connection error", url=url, cause=e) from e
     if isinstance(e, aiohttp.ClientPayloadError):
@@ -583,12 +747,15 @@ def _head_or_range_probe(url: str, *, headers: dict[str, str] | None = None) -> 
         fs = _build_fsspec_filesystem(scheme, headers=headers)
         try:
             return bool(fs.exists(url))
-        except Exception:
-            # HEAD may be unsupported; fall back to a tiny ranged read.
+        except Exception:  # pragma: no cover - defensive: fsspec's _exists
+            # swallows HTTP/ClientError internally and returns a bool, so this
+            # only fires for unusual non-HTTP failures. Fall back to a tiny
+            # ranged read in case HEAD is unsupported.
             with fs.open(url, mode="rb") as f:
                 f.read(1)
             return True
-    except Exception:
+    except Exception:  # pragma: no cover - defensive: filesystem construction
+        # or the ranged-read fallback failing is not reachable via real servers.
         return False
 
 
