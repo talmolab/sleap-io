@@ -830,6 +830,11 @@ def load_video(filename: str, **kwargs) -> Video:
             "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
             "tiff", "bmp", "seq". If the filename is a list, a list of image filenames
             are expected. If filename is a folder, it will be searched for images.
+            May also be an ``http(s)://`` URL pointing to a remote media video
+            (one of "mp4", "avi", "mov", "mj2", "mkv"). Remote videos are read
+            with the pyav plugin, which is selected automatically for URLs; it
+            requires the ``av`` package (install with
+            ``pip install 'sleap-io[pyav]'``).
         **kwargs: Additional arguments passed to `Video.from_filename`.
             Currently supports:
             - dataset: Name of dataset in HDF5 file.
@@ -886,15 +891,6 @@ def load_video(filename: str, **kwargs) -> Video:
         set_default_video_plugin: Set the default video plugin globally.
         get_default_video_plugin: Get the current default video plugin.
     """
-    from sleap_io.io import _remote
-
-    if _remote._is_url(filename):
-        raise NotImplementedError(
-            "Remote video loading is not yet implemented "
-            f"(URL: {_remote._redact_url(str(filename))}). Tracked as a "
-            "follow-up PR in the remote loaders feature stack. For now, "
-            "download the file locally before calling load_video()."
-        )
     return Video.from_filename(filename, **kwargs)
 
 
