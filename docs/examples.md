@@ -626,6 +626,183 @@ sio.save_coco(
     - [`load_coco`](formats/#sleap_io.load_coco): COCO import documentation
     - [COCO Format](formats/#coco-format-json): COCO format details
 
+## Loading from URLs
+
+Load `.slp` files directly from HTTP/HTTPS and cloud-storage URLs. Reads are
+lazy and range-based: for the default streaming mode only the bytes actually
+needed (typically a small fraction of the file) are pulled over the network.
+
+### Quickstart
+
+[`load_slp`][sleap_io.load_slp] (and the universal
+[`load_file`][sleap_io.load_file]) accept a URL anywhere a local path is
+accepted:
+
+```python
+import sleap_io as sio
+
+# Just works for http/https out of the box
+labels = sio.load_slp("https://example.com/path/labels.slp")
+
+# load_file also accepts URLs (dispatches by extension)
+labels = sio.load_file("https://example.com/path/labels.slp")
+```
+
+`pkg.slp` files with embedded frames work too — the embedded `HDF5Video`
+backends reopen the remote file lazily when you read frames, reusing the same
+streaming configuration.
+
+!!! info "What is and isn't supported"
+    URL loading covers `.slp`/`.pkg.slp` and the other labels formats through
+    [`load_file`][sleap_io.load_file]. Remote *video* loading
+    (`sio.load_video("https://.../movie.mp4")`) is not yet implemented and
+    raises `NotImplementedError`; download the video locally first.
+
+### Supported schemes and install matrix
+
+| Scheme | Requires | Notes |
+|--------|----------|-------|
+| `http`, `https` | nothing extra | Works with a plain `pip install sleap-io` |
+| `s3` | `sleap-io[cloud]` | Amazon S3 (via `s3fs`) |
+| `gs`, `gcs` | `sleap-io[cloud]` | Google Cloud Storage (via `gcsfs`) |
+| `az`, `abfs` | `sleap-io[cloud]` | Azure Blob / ADLS (via `adlfs`) |
+
+```bash
+pip install sleap-io               # http/https only
+pip install "sleap-io[cloud]"      # + s3, gs/gcs, az/abfs
+pip install "sleap-io[all]"        # everything (cloud schemes included)
+```
+
+```python
+# Cloud scheme (requires sleap-io[cloud])
+labels = sio.load_slp("s3://my-bucket/path/labels.slp")
+```
+
+!!! warning "Missing cloud extra"
+    Using a cloud scheme without the `[cloud]` extra raises an `ImportError`
+    whose message names the missing package and the
+    `pip install 'sleap-io[cloud]'` install hint.
+
+### Streaming modes
+
+Control how bytes are fetched with the `stream_mode` keyword argument:
+
+| `stream_mode` | Backing strategy | Memory | Disk cache | Revalidation | Best for |
+|---------------|------------------|--------|------------|--------------|----------|
+| `"auto"` (default) | fsspec `blockcache` | Low (LRU of `max_blocks`) | None | n/a | One-off lazy reads, low memory |
+| `"blockcache"` | fsspec `blockcache` | Low | None | n/a | Same as `auto` (explicit) |
+| `"cache"` | fsspec `simplecache` | Whole file on disk | Persistent | None | Repeated opens of an immutable file |
+| `"filecache"` | fsspec `filecache` | Whole file on disk | Persistent | ETag / `Last-Modified` after `cache_expiry` | Repeated opens of a file that may change |
+| `"download"` | Full read into memory | Whole file in RAM | None | n/a | Small files, ephemeral environments |
+
+```python
+# Default: lazy range reads, low memory
+labels = sio.load_slp("https://example.com/labels.slp")
+
+# Persistent on-disk cache with daily ETag revalidation
+labels = sio.load_slp(
+    "https://example.com/labels.slp",
+    stream_mode="filecache",
+    cache_storage="~/.cache/sleap-io",
+    cache_expiry=86400,  # revalidate after a day
+)
+
+# Ephemeral full download into memory (no disk cache)
+labels = sio.load_slp("https://example.com/labels.slp", stream_mode="download")
+```
+
+The `"auto"`/`"blockcache"` reads can be tuned with `block_size` (range block
+size, default 1 MiB) and `max_blocks` (in-memory LRU cap per open file,
+default 32 → ~32 MiB per file).
+
+### Authentication
+
+Pass HTTP headers (such as a bearer token) with `headers=`:
+
+```python
+labels = sio.load_slp(
+    "https://my-org.example/private/labels.slp",
+    headers={"Authorization": "Bearer <token>"},
+)
+```
+
+!!! warning "Headers are stripped on cross-origin redirect"
+    For security, sensitive headers (`Authorization`, `Cookie`,
+    `Proxy-Authorization`) are **dropped automatically** if the request is
+    redirected to a different origin (scheme/host/port). This prevents leaking
+    credentials to a third-party host and is intentional — if a download
+    redirects cross-origin (e.g. to a pre-signed CDN URL), put the credentials
+    in the redirect target's query string rather than in `headers`.
+
+    Cloud schemes (`s3://`, `gs://`, …) use their own per-provider credential
+    chains (environment variables, credential files, instance metadata) rather
+    than `headers=`.
+
+### Caching: location, override, and clearing
+
+For `"cache"` and `"filecache"` modes, downloaded files live in the directory
+you pass as `cache_storage=`. sleap-io writes a small marker file there so it
+can later identify and clean up only its own cache files.
+
+To clear the cache, call [`clear_remote_cache`][sleap_io.clear_remote_cache]
+with the **same** `cache_storage` you loaded with:
+
+```python
+import sleap_io as sio
+
+# Delete every sleap-io cache file in the directory
+sio.clear_remote_cache(cache_storage="~/.cache/sleap-io")
+
+# Or only files older than an hour (3600 seconds)
+sio.clear_remote_cache(cache_storage="~/.cache/sleap-io", older_than=3600)
+```
+
+!!! note "An explicit `cache_storage` is required to clear the cache"
+    `clear_remote_cache` only operates on a directory that contains the
+    sleap-io marker file, and it only deletes files matching fsspec's
+    cache-key naming pattern — so it will never touch unrelated files even if
+    you point it at a shared directory. It refuses to run on a directory with
+    no marker, or on forbidden paths like `/` or `$HOME`. Because fsspec's
+    *default* cache directory is a per-process temporary location that cannot
+    be cleared reliably, you must pass the explicit `cache_storage` you used
+    when loading.
+
+### CI and ephemeral environments
+
+In CI or other short-lived environments, prefer the default `stream_mode="auto"`
+(no persistent cache to manage), or scope a per-run cache to a temporary
+directory you control:
+
+```python
+import os
+import sleap_io as sio
+
+cache_dir = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "sleap-io-cache")
+labels = sio.load_slp(url, stream_mode="filecache", cache_storage=cache_dir)
+```
+
+### Troubleshooting
+
+- **`RemoteIOError`** — raised for HTTP-level failures (404 not found, 416 range
+  past end of file, 5xx after retries, connection errors, timeouts). The
+  exception carries a `status` (HTTP code or `None`) and a credential-redacted
+  `url` so tokens never leak into logs or tracebacks. See
+  [`RemoteIOError`][sleap_io.RemoteIOError].
+- **`ImportError` for cloud schemes** — install the cloud adapters with
+  `pip install 'sleap-io[cloud]'` (covers `s3`, `gs`/`gcs`, `az`/`abfs`).
+- **`RuntimeWarning` about `aiohttp`** — remote loading needs
+  `aiohttp >= 3.13.5` for safe cross-origin header stripping. If you see this
+  warning, upgrade with `pip install --upgrade 'aiohttp>=3.13.5'`.
+- **`NotImplementedError` from `load_video(url)`** — remote video loading is not
+  supported yet; download the file locally first.
+
+!!! note "See also"
+    - [`load_slp`][sleap_io.load_slp]: Full URL keyword-argument reference
+    - [`load_file`][sleap_io.load_file]: Universal loader with URL sniffing
+    - [`clear_remote_cache`][sleap_io.clear_remote_cache]: Cache cleanup helper
+    - [`RemoteIOError`][sleap_io.RemoteIOError]: Remote I/O error surface
+    - [SLP Format](formats/slp.md): The on-disk `.slp` layout that URL loading streams
+
 ## Editing labels data
 
 ### Fix video paths
