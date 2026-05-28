@@ -21,6 +21,7 @@ from __future__ import annotations
 import sys
 import warnings
 import zlib
+from contextlib import nullcontext
 from enum import Enum, IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -346,7 +347,12 @@ def make_video(
     )
 
 
-def read_videos(labels_path: str, open_backend: bool = True) -> list[Video]:
+def read_videos(
+    labels_path: str,
+    open_backend: bool = True,
+    *,
+    _hdf5_file: h5py.File | None = None,
+) -> list[Video]:
     """Read `Video` dataset in a SLEAP labels file.
 
     Args:
@@ -354,14 +360,18 @@ def read_videos(labels_path: str, open_backend: bool = True) -> list[Video]:
         open_backend: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened (useful for reading metadata
             when the video files are not available).
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (which is left open for the caller
+            to close) and threaded into `make_video`; otherwise `labels_path` is
+            opened and closed internally. This is a private argument used to thread
+            a single open handle through multiple reads.
 
     Returns:
         A list of `Video` objects.
     """
     videos = []
-    # Open file once and pass handle to make_video to avoid repeated opens
-    # for embedded videos (which would otherwise open the file per video).
-    with h5py.File(labels_path, "r") as f:
+
+    def _read_videos(f: h5py.File) -> None:
         videos_metadata = f["videos_json"][:]
         for video_data in videos_metadata:
             video_json = json.loads(video_data)
@@ -369,6 +379,14 @@ def read_videos(labels_path: str, open_backend: bool = True) -> list[Video]:
                 labels_path, video_json, open_backend=open_backend, _hdf5_file=f
             )
             videos.append(video)
+
+    # Open file once and pass handle to make_video to avoid repeated opens
+    # for embedded videos (which would otherwise open the file per video).
+    if _hdf5_file is not None:
+        _read_videos(_hdf5_file)
+    else:
+        with h5py.File(labels_path, "r") as f:
+            _read_videos(f)
     return videos
 
 
@@ -1176,16 +1194,25 @@ def write_videos(
                     )
 
 
-def read_tracks(labels_path: str) -> list[Track]:
+def read_tracks(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> list[Track]:
     """Read `Track` dataset in a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of `Track` objects.
     """
-    tracks = [json.loads(x) for x in read_hdf5_dataset(labels_path, "tracks_json")]
+    tracks = [
+        json.loads(x)
+        for x in read_hdf5_dataset(labels_path, "tracks_json", _hdf5_file=_hdf5_file)
+    ]
     track_objects = []
     for track in tracks:
         track_objects.append(Track(name=track[1]))
@@ -1209,17 +1236,25 @@ def write_tracks(labels_path: str, tracks: list[Track]):
         f.create_dataset("tracks_json", data=tracks_json, maxshape=(None,))
 
 
-def read_identities(labels_path: str) -> list[Identity]:
+def read_identities(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> list[Identity]:
     """Read Identity dataset from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of `Identity` objects.
     """
     try:
-        identities = read_hdf5_dataset(labels_path, "identities_json")
+        identities = read_hdf5_dataset(
+            labels_path, "identities_json", _hdf5_file=_hdf5_file
+        )
     except KeyError:
         return []
     identity_objects = []
@@ -1257,18 +1292,29 @@ def write_identities(labels_path: str, identities: list[Identity]):
         f.create_dataset("identities_json", data=identities_json, maxshape=(None,))
 
 
-def read_suggestions(labels_path: str, videos: list[Video]) -> list[SuggestionFrame]:
+def read_suggestions(
+    labels_path: str,
+    videos: list[Video],
+    *,
+    _hdf5_file: h5py.File | None = None,
+) -> list[SuggestionFrame]:
     """Read `SuggestionFrame` dataset in a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
         videos: A list of `Video` objects.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of `SuggestionFrame` objects.
     """
     try:
-        suggestions = read_hdf5_dataset(labels_path, "suggestions_json")
+        suggestions = read_hdf5_dataset(
+            labels_path, "suggestions_json", _hdf5_file=_hdf5_file
+        )
     except KeyError:
         return []
     suggestions = [json.loads(x) for x in suggestions]
@@ -1368,33 +1414,43 @@ def write_negative_frames(labels_path: str, labels: Labels):
             f.create_dataset("negative_frames", data=data)
 
 
-def read_negative_frames(labels_path: str) -> set[tuple[int, int]]:
+def read_negative_frames(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> set[tuple[int, int]]:
     """Read negative frame markers from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A set of (sparse_video_id, frame_idx) tuples identifying negative frames.
         Returns empty set if no negative frames dataset exists.
     """
     try:
-        data = read_hdf5_dataset(labels_path, "negative_frames")
+        data = read_hdf5_dataset(labels_path, "negative_frames", _hdf5_file=_hdf5_file)
         return {(int(row["video_id"]), int(row["frame_idx"])) for row in data}
     except KeyError:
         return set()
 
 
-def read_metadata(labels_path: str) -> dict:
+def read_metadata(labels_path: str, *, _hdf5_file: h5py.File | None = None) -> dict:
     """Read metadata from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A dict containing the metadata from a SLEAP labels file.
     """
-    md = read_hdf5_attrs(labels_path, "metadata", "json")
+    md = read_hdf5_attrs(labels_path, "metadata", "json", _hdf5_file=_hdf5_file)
     if isinstance(md, bytes):
         md = md.decode()
     elif isinstance(md, np.ndarray):
@@ -1403,16 +1459,22 @@ def read_metadata(labels_path: str) -> dict:
     return json.loads(md)
 
 
-def read_skeletons(labels_path: str) -> list[Skeleton]:
+def read_skeletons(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> list[Skeleton]:
     """Read `Skeleton` dataset from a SLEAP labels file.
 
     Args:
         labels_path: A string that contains the path to the labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of `Skeleton` objects.
     """
-    metadata = read_metadata(labels_path)
+    metadata = read_metadata(labels_path, _hdf5_file=_hdf5_file)
 
     # Get node names. This is a superset of all nodes across all skeletons. Note that
     # node ordering is specific to each skeleton, so we'll need to fix this afterwards.
@@ -1528,29 +1590,39 @@ def write_metadata(labels_path: str, labels: Labels):
         grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
 
 
-def read_points(labels_path: str) -> np.ndarray:
+def read_points(labels_path: str, *, _hdf5_file: h5py.File | None = None) -> np.ndarray:
     """Read points dataset from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A structured array of point data.
     """
-    pts = read_hdf5_dataset(labels_path, "points")
+    pts = read_hdf5_dataset(labels_path, "points", _hdf5_file=_hdf5_file)
     return pts
 
 
-def read_pred_points(labels_path: str) -> np.ndarray:
+def read_pred_points(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> np.ndarray:
     """Read predicted points dataset from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A structured array of predicted point data.
     """
-    pred_pts = read_hdf5_dataset(labels_path, "pred_points")
+    pred_pts = read_hdf5_dataset(labels_path, "pred_points", _hdf5_file=_hdf5_file)
     return pred_pts
 
 
@@ -1600,6 +1672,8 @@ def read_instances(
     points: np.ndarray,
     pred_points: np.ndarray,
     format_id: float,
+    *,
+    _hdf5_file: h5py.File | None = None,
 ) -> list[Instance | PredictedInstance]:
     """Read `Instance` dataset in a SLEAP labels file.
 
@@ -1612,11 +1686,15 @@ def read_instances(
             `read_pred_points`).
         format_id: The format version identifier used to specify the format of the input
             file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of `Instance` and/or `PredictedInstance` objects.
     """
-    instances_data = read_hdf5_dataset(labels_path, "instances")
+    instances_data = read_hdf5_dataset(labels_path, "instances", _hdf5_file=_hdf5_file)
 
     instances = {}
     from_predicted_pairs = []
@@ -2209,6 +2287,8 @@ def read_sessions(
     videos: list[Video],
     labeled_frames: list[LabeledFrame],
     identities: list[Identity] | None = None,
+    *,
+    _hdf5_file: h5py.File | None = None,
 ) -> list[RecordingSession]:
     """Read `RecordingSession` dataset from a SLEAP labels file.
 
@@ -2221,12 +2301,18 @@ def read_sessions(
         labeled_frames: A list of `LabeledFrame` objects.
         identities: Optional list of `Identity` objects for resolving identity
             indices.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of `RecordingSession` objects.
     """
     try:
-        sessions = read_hdf5_dataset(labels_path, "sessions_json")
+        sessions = read_hdf5_dataset(
+            labels_path, "sessions_json", _hdf5_file=_hdf5_file
+        )
     except KeyError:
         return []
     sessions = [json.loads(x) for x in sessions]
@@ -2550,30 +2636,53 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     Returns:
         Labels with LazyFrameList for labeled_frames.
     """
+    with h5py.File(labels_path, "r") as f:
+        return _read_labels_lazy_from_open_file(labels_path, f, open_videos=open_videos)
+
+
+def _read_labels_lazy_from_open_file(
+    labels_path: str, f: h5py.File, *, open_videos: bool = True
+) -> Labels:
+    """Build a lazy `Labels` from an already-open `h5py.File`.
+
+    Threads `_hdf5_file=f` through every `read_*` helper so the entire metadata
+    read happens against a single open handle. Does NOT close `f` (the caller's
+    `with` block owns it). The long-lived label-image handle returned by
+    `read_label_images` (a separate, second handle) is attached to
+    `labels._label_image_file` and intentionally outlives `f`.
+
+    Args:
+        labels_path: Path to .slp file.
+        f: An already-open `h5py.File` handle to read from.
+        open_videos: Whether to open video backends.
+
+    Returns:
+        Labels with LazyFrameList for labeled_frames.
+    """
     from sleap_io.io.slp_lazy import LazyDataStore, LazyFrameList
 
     # Read raw arrays
-    frames_data = read_hdf5_dataset(labels_path, "frames")
-    instances_data = read_hdf5_dataset(labels_path, "instances")
-    points_data = read_points(labels_path)
-    pred_points_data = read_pred_points(labels_path)
+    frames_data = read_hdf5_dataset(labels_path, "frames", _hdf5_file=f)
+    instances_data = read_hdf5_dataset(labels_path, "instances", _hdf5_file=f)
+    points_data = read_points(labels_path, _hdf5_file=f)
+    pred_points_data = read_pred_points(labels_path, _hdf5_file=f)
 
     # Read format ID
-    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id", _hdf5_file=f)
 
     # Read metadata eagerly (these are small and needed for lazy access)
-    videos = read_videos(labels_path, open_backend=open_videos)
-    skeletons = read_skeletons(labels_path)
-    tracks = read_tracks(labels_path)
-    suggestions = read_suggestions(labels_path, videos)
-    metadata = read_metadata(labels_path)
+    videos = read_videos(labels_path, open_backend=open_videos, _hdf5_file=f)
+    skeletons = read_skeletons(labels_path, _hdf5_file=f)
+    tracks = read_tracks(labels_path, _hdf5_file=f)
+    suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
+    metadata = read_metadata(labels_path, _hdf5_file=f)
     provenance = metadata.get("provenance", dict())
-    negative_frames = read_negative_frames(labels_path)
+    negative_frames = read_negative_frames(labels_path, _hdf5_file=f)
 
     # Read sessions (small, no need for lazy loading)
     # Note: sessions require labeled_frames for full linking, but for lazy loading
     # we pass an empty list since we don't have materialized frames yet
-    sessions = read_sessions(labels_path, videos, [])
+    sessions = read_sessions(labels_path, videos, [], _hdf5_file=f)
 
     # Create LazyDataStore
     lazy_store = LazyDataStore(
@@ -2593,11 +2702,11 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     lazy_frames = LazyFrameList(lazy_store)
 
     # Read ROIs, masks, bboxes, and label images eagerly (typically small count)
-    roi_tuples = read_rois(labels_path, videos, tracks)
-    mask_tuples = read_masks(labels_path, videos, tracks)
-    bbox_tuples = read_bboxes(labels_path, videos, tracks)
-    centroid_tuples = read_centroids(labels_path, videos, tracks)
-    li_tuples, li_file = read_label_images(labels_path, videos, tracks)
+    roi_tuples = read_rois(labels_path, videos, tracks, _hdf5_file=f)
+    mask_tuples = read_masks(labels_path, videos, tracks, _hdf5_file=f)
+    bbox_tuples = read_bboxes(labels_path, videos, tracks, _hdf5_file=f)
+    centroid_tuples = read_centroids(labels_path, videos, tracks, _hdf5_file=f)
+    li_tuples, li_file = read_label_images(labels_path, videos, tracks, _hdf5_file=f)
 
     # Build per-frame annotation dicts for lazy materialization
     def _build_ann_by_frame(ann_tuples):
@@ -2692,6 +2801,8 @@ def read_rois(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    *,
+    _hdf5_file: h5py.File | None = None,
 ) -> list[tuple[ROI, int, int]]:
     """Read ROI annotations from a SLEAP labels file.
 
@@ -2702,6 +2813,10 @@ def read_rois(
         instances: Optional list of Instance/PredictedInstance objects for
             relinking ROI instance associations. If ``None``, instance
             associations will not be restored.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of ``(roi, video_idx, frame_idx)`` tuples. ``video_idx`` and
@@ -2711,7 +2826,7 @@ def read_rois(
     import shapely
 
     try:
-        roi_data = read_hdf5_dataset(labels_path, "rois")
+        roi_data = read_hdf5_dataset(labels_path, "rois", _hdf5_file=_hdf5_file)
     except KeyError:
         return []
 
@@ -2720,12 +2835,17 @@ def read_rois(
 
     # Read packed WKB geometry bytes
     try:
-        roi_wkb_flat = read_hdf5_dataset(labels_path, "roi_wkb")
+        roi_wkb_flat = read_hdf5_dataset(labels_path, "roi_wkb", _hdf5_file=_hdf5_file)
     except KeyError:
         return []
 
     # Read string metadata from string datasets first, fall back to JSON attributes
-    with h5py.File(labels_path, "r") as f:
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
         roi_grp = f["rois"]
         if "roi_categories" in f:
             categories = [
@@ -2922,6 +3042,8 @@ def read_bboxes(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    *,
+    _hdf5_file: h5py.File | None = None,
 ) -> list[tuple[BoundingBox, int, int]]:
     """Read bounding box annotations from a SLEAP labels file.
 
@@ -2932,13 +3054,22 @@ def read_bboxes(
         instances: Optional list of Instance/PredictedInstance objects for
             relinking bounding box instance associations. If ``None``, instance
             associations will not be restored.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of ``(bbox, video_idx, frame_idx)`` tuples. ``video_idx`` and
         ``frame_idx`` are the routing context read from the file (``-1``
         means undistributable). Returns an empty list if no bboxes are stored.
     """
-    with h5py.File(labels_path, "r") as f:
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
         if "bboxes" not in f:
             return []
 
@@ -3191,6 +3322,8 @@ def read_centroids(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    *,
+    _hdf5_file: h5py.File | None = None,
 ) -> "list[tuple[Centroid, int, int]]":
     """Read centroid annotations from a SLEAP labels file.
 
@@ -3200,6 +3333,10 @@ def read_centroids(
         tracks: List of Track objects for relinking.
         instances: Optional list of Instance/PredictedInstance objects for
             relinking centroid instance associations.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of ``(centroid, video_idx, frame_idx)`` tuples. ``video_idx``
@@ -3209,7 +3346,12 @@ def read_centroids(
     """
     from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 
-    with h5py.File(labels_path, "r") as f:
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
         if "centroids" not in f:
             return []
 
@@ -3383,6 +3525,8 @@ def read_masks(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    *,
+    _hdf5_file: h5py.File | None = None,
 ) -> list[tuple[SegmentationMask, int, int]]:
     """Read segmentation masks from a SLEAP labels file.
 
@@ -3393,6 +3537,10 @@ def read_masks(
         instances: Optional list of Instance/PredictedInstance objects for
             relinking mask instance associations. If ``None``, instance
             associations will not be restored.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally. This is a
+            private argument used to thread a single open handle through reads.
 
     Returns:
         A list of ``(mask, video_idx, frame_idx)`` tuples. ``video_idx`` and
@@ -3400,7 +3548,7 @@ def read_masks(
         means undistributable). Returns empty list if none stored.
     """
     try:
-        mask_data = read_hdf5_dataset(labels_path, "masks")
+        mask_data = read_hdf5_dataset(labels_path, "masks", _hdf5_file=_hdf5_file)
     except KeyError:
         return []
 
@@ -3409,13 +3557,20 @@ def read_masks(
 
     # Read packed RLE bytes
     try:
-        mask_rle_flat = read_hdf5_dataset(labels_path, "mask_rle")
+        mask_rle_flat = read_hdf5_dataset(
+            labels_path, "mask_rle", _hdf5_file=_hdf5_file
+        )
     except KeyError:
         return []
 
     # Read string metadata and score maps in a single file open
     score_map_by_idx: dict[int, np.ndarray] = {}
-    with h5py.File(labels_path, "r") as f:
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
         mask_grp = f["masks"]
         if "mask_categories" in f:
             categories = [
@@ -3734,6 +3889,8 @@ def read_label_images(
     videos: list[Video],
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
+    *,
+    _hdf5_file: h5py.File | None = None,
 ) -> tuple[list[tuple[LabelImage, int, int]], "h5py.File | None"]:
     """Read label image annotations from a SLEAP labels file.
 
@@ -3749,6 +3906,13 @@ def read_label_images(
         instances: Optional list of Instance/PredictedInstance objects for
             relinking label image instance associations. If ``None``, instance
             associations will not be restored.
+        _hdf5_file: An already-open `h5py.File` handle to use for the metadata
+            reads (``label_images`` and ``label_image_objects``). If provided,
+            those reads use this handle (left open for the caller to close).
+            A separate long-lived handle is always opened for lazy pixel data
+            access regardless of this argument, since that handle must outlive
+            the caller's `with` block. This is a private argument used to thread
+            a single open handle through reads.
 
     Returns:
         A tuple of ``(label_image_tuples, h5py_file)`` where
@@ -3760,14 +3924,16 @@ def read_label_images(
         file handle.
     """
     try:
-        li_data = read_hdf5_dataset(labels_path, "label_images")
+        li_data = read_hdf5_dataset(labels_path, "label_images", _hdf5_file=_hdf5_file)
     except KeyError:
         return [], None
 
     if len(li_data) == 0:
         return [], None
 
-    # Open file for lazy pixel data reading
+    # Open a SECOND, long-lived file handle for lazy pixel data reading. This
+    # handle intentionally outlives the orchestrator's `with` block (the closures
+    # below capture it), so it cannot reuse `_hdf5_file`.
     f = h5py.File(labels_path, "r")
 
     if "label_image_data" not in f:
@@ -3779,7 +3945,9 @@ def read_label_images(
 
     # Read objects table
     try:
-        obj_data = read_hdf5_dataset(labels_path, "label_image_objects")
+        obj_data = read_hdf5_dataset(
+            labels_path, "label_image_objects", _hdf5_file=_hdf5_file
+        )
     except KeyError:
         obj_dtype = [
             ("label_id", "i4"),
@@ -5086,21 +5254,45 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     Returns:
         The processed `Labels` object.
     """
-    tracks = read_tracks(labels_path)
-    videos = read_videos(labels_path, open_backend=open_videos)
-    skeletons = read_skeletons(labels_path)
-    points = read_points(labels_path)
-    pred_points = read_pred_points(labels_path)
-    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    with h5py.File(labels_path, "r") as f:
+        return _read_labels_from_open_file(labels_path, f, open_videos=open_videos)
+
+
+def _read_labels_from_open_file(
+    labels_path: str, f: h5py.File, *, open_videos: bool = True
+) -> Labels:
+    """Build a `Labels` from an already-open `h5py.File`.
+
+    Threads `_hdf5_file=f` through every `read_*` helper so the entire eager
+    read happens against a single open handle. Does NOT close `f` (the caller's
+    `with` block owns it). The long-lived label-image handle returned by
+    `read_label_images` (a separate, second handle) is attached to
+    `labels._label_image_file` and intentionally outlives `f`.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        f: An already-open `h5py.File` handle to read from.
+        open_videos: If `True` (the default), attempt to open the video backend
+            for I/O.
+
+    Returns:
+        The processed `Labels` object.
+    """
+    tracks = read_tracks(labels_path, _hdf5_file=f)
+    videos = read_videos(labels_path, open_backend=open_videos, _hdf5_file=f)
+    skeletons = read_skeletons(labels_path, _hdf5_file=f)
+    points = read_points(labels_path, _hdf5_file=f)
+    pred_points = read_pred_points(labels_path, _hdf5_file=f)
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id", _hdf5_file=f)
     instances = read_instances(
-        labels_path, skeletons, tracks, points, pred_points, format_id
+        labels_path, skeletons, tracks, points, pred_points, format_id, _hdf5_file=f
     )
-    suggestions = read_suggestions(labels_path, videos)
-    metadata = read_metadata(labels_path)
+    suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
+    metadata = read_metadata(labels_path, _hdf5_file=f)
     provenance = metadata.get("provenance", dict())
 
-    frames = read_hdf5_dataset(labels_path, "frames")
-    negative_markers = read_negative_frames(labels_path)
+    frames = read_hdf5_dataset(labels_path, "frames", _hdf5_file=f)
+    negative_markers = read_negative_frames(labels_path, _hdf5_file=f)
 
     # Check if video IDs in frames are sequential list indices (0, 1, 2, ..., n-1)
     # or sparse embedded IDs (e.g., 0, 15, 29, 47, ...) that need remapping
@@ -5161,13 +5353,19 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
             )
         )
 
-    identities = read_identities(labels_path)
-    sessions = read_sessions(labels_path, videos, labeled_frames, identities=identities)
-    roi_tuples = read_rois(labels_path, videos, tracks, instances)
-    mask_tuples = read_masks(labels_path, videos, tracks, instances)
-    bbox_tuples = read_bboxes(labels_path, videos, tracks, instances)
-    centroid_tuples = read_centroids(labels_path, videos, tracks, instances)
-    li_tuples, _li_file = read_label_images(labels_path, videos, tracks, instances)
+    identities = read_identities(labels_path, _hdf5_file=f)
+    sessions = read_sessions(
+        labels_path, videos, labeled_frames, identities=identities, _hdf5_file=f
+    )
+    roi_tuples = read_rois(labels_path, videos, tracks, instances, _hdf5_file=f)
+    mask_tuples = read_masks(labels_path, videos, tracks, instances, _hdf5_file=f)
+    bbox_tuples = read_bboxes(labels_path, videos, tracks, instances, _hdf5_file=f)
+    centroid_tuples = read_centroids(
+        labels_path, videos, tracks, instances, _hdf5_file=f
+    )
+    li_tuples, _li_file = read_label_images(
+        labels_path, videos, tracks, instances, _hdf5_file=f
+    )
 
     # Attach annotations to their corresponding LabeledFrames
     frame_lookup: dict[tuple[int, int], LabeledFrame] = {}
