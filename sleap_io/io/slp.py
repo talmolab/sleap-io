@@ -216,8 +216,14 @@ def make_video(
         video_path = labels_path
         is_embedded = True
 
-    # Basic path resolution.
-    video_path = Path(sanitize_filename(video_path))
+    # Basic path resolution. Keep URLs as strings — wrapping a URL in ``Path``
+    # would collapse the ``//`` after the scheme (e.g. ``https://`` -> ``https:/``),
+    # corrupting the URL for embedded videos loaded from a remote ``.pkg.slp``.
+    from sleap_io.io._remote import _is_url
+
+    video_path = sanitize_filename(video_path)
+    if not _is_url(video_path):
+        video_path = Path(video_path)
 
     if is_embedded:
         # Try to recover the source video from HDF5 attrs.
@@ -291,7 +297,11 @@ def make_video(
     backend = None
     if open_backend:
         try:
-            if not isinstance(video_path, list) and not is_file_accessible(video_path):
+            if (
+                not isinstance(video_path, list)
+                and not _is_url(video_path)
+                and not is_file_accessible(video_path)
+            ):
                 # Check for the same filename in the same directory as the labels file.
                 candidate_video_path = Path(labels_path).parent / video_path.name
                 if is_file_accessible(candidate_video_path):

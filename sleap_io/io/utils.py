@@ -307,7 +307,16 @@ def sanitize_filename(
     Returns:
         A sanitized filename as a string (or list of strings if a list was provided)
         with forward slashes and posix-formatted.
+
+    Notes:
+        URLs (e.g. ``https://...``, ``s3://...``) are returned unchanged. Passing a
+        URL through ``Path`` would collapse the ``//`` after the scheme (turning
+        ``https://host/x`` into ``https:/host/x``), corrupting the URL.
     """
     if isinstance(filename, list):
         return [sanitize_filename(f) for f in filename]
+    from sleap_io.io._remote import _is_url
+
+    if isinstance(filename, str) and _is_url(filename):
+        return filename
     return Path(filename).as_posix().replace("\\", "/")
