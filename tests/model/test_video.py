@@ -187,6 +187,61 @@ def test_safe_video_open(slp_minimal_pkg):
     assert not video.is_open
 
 
+def _count_requests(httpserver, path: str) -> int:
+    """Count the requests in the server log matching the given path."""
+    return sum(1 for req, _ in httpserver.log if req.path == path)
+
+
+def test_video_exists_url_cached_within_ttl(httpserver):
+    """A URL `exists()` probes the server once and reuses the cache within TTL."""
+    httpserver.expect_request("/labels.slp").respond_with_data(
+        b"hello world data", content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.slp")
+
+    video = Video(filename=url, open_backend=False)
+
+    assert video.exists() is True
+    first = _count_requests(httpserver, "/labels.slp")
+    assert first == 1
+
+    # Second call within the TTL must NOT hit the server again.
+    assert video.exists() is True
+    second = _count_requests(httpserver, "/labels.slp")
+    assert second == first
+
+
+def test_video_exists_url_404(httpserver):
+    """A URL that 404s returns False from `exists()`."""
+    httpserver.expect_request("/missing.slp").respond_with_data("nope", status=404)
+    url = httpserver.url_for("/missing.slp")
+
+    video = Video(filename=url, open_backend=False)
+    assert video.exists() is False
+
+
+def test_video_exists_replace_filename_clears_cache(httpserver, monkeypatch):
+    """`replace_filename` clears the cached URL existence result."""
+    # Force a short TTL so we control caching behavior deterministically.
+    monkeypatch.setenv("SLEAP_IO_EXISTS_TTL", "1000")
+    httpserver.expect_request("/labels.slp").respond_with_data(
+        b"hello world data", content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.slp")
+
+    video = Video(filename=url, open_backend=False)
+    assert video.exists() is True
+    assert video._exists_cache  # populated
+
+    # Replacing the filename must invalidate the cache.
+    video.replace_filename(url, open=False)
+    assert video._exists_cache == {}
+
+    # The next call re-probes the server (a second request appears).
+    assert video.exists() is True
+    assert _count_requests(httpserver, "/labels.slp") == 2
+
+
 def test_video_set_plugin(centered_pair_low_quality_path):
     """Test Video.set_video_plugin() method."""
     import sleap_io as sio
