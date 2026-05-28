@@ -4099,6 +4099,13 @@ with forward slashes and posix-formatted.</p>
     </table>
 
 
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>URLs (e.g. <code>https://...</code>, <code>s3://...</code>) are returned unchanged. Passing a
+URL through <code>Path</code> would collapse the <code>//</code> after the scheme (turning
+<code>https://host/x</code> into <code>https:/host/x</code>), corrupting the URL.</p>
+</details>
+
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/utils.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-299" name="__codelineno-0-299"></a><a href="#__codelineno-0-299"><span class="linenos" data-linenos="299 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sanitize_filename</span><span class="p">(</span>
@@ -4112,10 +4119,19 @@ with forward slashes and posix-formatted.</p>
 <a id="__codelineno-0-307" name="__codelineno-0-307"></a><a href="#__codelineno-0-307"><span class="linenos" data-linenos="307 "></span></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-308" name="__codelineno-0-308"></a><a href="#__codelineno-0-308"><span class="linenos" data-linenos="308 "></span></a><span class="sd">        A sanitized filename as a string (or list of strings if a list was provided)</span>
 <a id="__codelineno-0-309" name="__codelineno-0-309"></a><a href="#__codelineno-0-309"><span class="linenos" data-linenos="309 "></span></a><span class="sd">        with forward slashes and posix-formatted.</span>
-<a id="__codelineno-0-310" name="__codelineno-0-310"></a><a href="#__codelineno-0-310"><span class="linenos" data-linenos="310 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-311" name="__codelineno-0-311"></a><a href="#__codelineno-0-311"><span class="linenos" data-linenos="311 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
-<a id="__codelineno-0-312" name="__codelineno-0-312"></a><a href="#__codelineno-0-312"><span class="linenos" data-linenos="312 "></span></a>        <span class="k">return</span> <span class="p">[</span><span class="n">sanitize_filename</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">filename</span><span class="p">]</span>
-<a id="__codelineno-0-313" name="__codelineno-0-313"></a><a href="#__codelineno-0-313"><span class="linenos" data-linenos="313 "></span></a>    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">as_posix</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;/&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a><a href="#__codelineno-0-310"><span class="linenos" data-linenos="310 "></span></a>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a><a href="#__codelineno-0-311"><span class="linenos" data-linenos="311 "></span></a><span class="sd">    Notes:</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a><a href="#__codelineno-0-312"><span class="linenos" data-linenos="312 "></span></a><span class="sd">        URLs (e.g. ``https://...``, ``s3://...``) are returned unchanged. Passing a</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a><a href="#__codelineno-0-313"><span class="linenos" data-linenos="313 "></span></a><span class="sd">        URL through ``Path`` would collapse the ``//`` after the scheme (turning</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a><a href="#__codelineno-0-314"><span class="linenos" data-linenos="314 "></span></a><span class="sd">        ``https://host/x`` into ``https:/host/x``), corrupting the URL.</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a><a href="#__codelineno-0-315"><span class="linenos" data-linenos="315 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a><a href="#__codelineno-0-316"><span class="linenos" data-linenos="316 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><a href="#__codelineno-0-317"><span class="linenos" data-linenos="317 "></span></a>        <span class="k">return</span> <span class="p">[</span><span class="n">sanitize_filename</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">filename</span><span class="p">]</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a><a href="#__codelineno-0-318"><span class="linenos" data-linenos="318 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io._remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">_is_url</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a><a href="#__codelineno-0-319"><span class="linenos" data-linenos="319 "></span></a>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a><a href="#__codelineno-0-320"><span class="linenos" data-linenos="320 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_is_url</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a><a href="#__codelineno-0-321"><span class="linenos" data-linenos="321 "></span></a>        <span class="k">return</span> <span class="n">filename</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a><a href="#__codelineno-0-322"><span class="linenos" data-linenos="322 "></span></a>    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">as_posix</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;/&quot;</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
