@@ -421,6 +421,56 @@ def test_load_slp_url_invalid_stream_mode(httpserver, slp_minimal):
         load_slp(url, stream_mode="not-a-real-mode")
 
 
+def _serve_with_range(httpserver, path, data):
+    """Serve `data` at `path` honoring HTTP Range requests (206 partial content)."""
+    from werkzeug.wrappers import Response
+
+    def handler(request):
+        rng = request.headers.get("Range")
+        if rng and rng.startswith("bytes="):
+            spec = rng.split("=", 1)[1].split(",")[0]
+            start_s, _, end_s = spec.partition("-")
+            start = int(start_s) if start_s else 0
+            end = int(end_s) if end_s else len(data) - 1
+            end = min(end, len(data) - 1)
+            chunk = data[start : end + 1]
+            resp = Response(chunk, status=206)
+            resp.headers["Content-Range"] = f"bytes {start}-{end}/{len(data)}"
+        else:
+            resp = Response(data, status=200)
+        resp.headers["Accept-Ranges"] = "bytes"
+        return resp
+
+    httpserver.expect_request(path).respond_with_handler(handler)
+
+
+def test_load_slp_url_embedded_pkg_keeps_clean_url_and_reads_frame(
+    httpserver, slp_minimal_pkg
+):
+    """Embedded ``pkg.slp`` over a URL keeps a clean URL and streams frames.
+
+    Regression test: ``make_video`` previously ran the embedded video's URL
+    through ``Path``, collapsing ``https://`` to ``https:/`` so the embedded
+    ``HDF5Video`` could not be reopened over the network.
+    """
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range(httpserver, "/minimal.pkg.slp", data)
+    url = httpserver.url_for("/minimal.pkg.slp")
+
+    labels = load_slp(url)
+    video = labels.videos[0]
+
+    # The embedded video filename must be the unmangled URL (scheme "//" intact).
+    assert str(video.filename) == url
+    assert "://" in str(video.filename)
+    assert type(video.backend).__name__ == "HDF5Video"
+
+    # The embedded frame must be readable over the URL (range-streamed).
+    frame = video[0]
+    assert frame.shape == (384, 384, 1)
+    assert frame.dtype.name == "uint8"
+
+
 def test_load_video_url_raises_not_implemented():
     """`load_video(url)` raises `NotImplementedError` with a redacted URL.
 
