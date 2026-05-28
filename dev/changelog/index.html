@@ -384,6 +384,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v071" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.7.1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v070" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -696,17 +707,6 @@
     <span class="md-ellipsis">
       
         v0.1.2
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v011" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.1
       
     </span>
   </a>
@@ -3366,6 +3366,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v071" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.7.1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v070" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3684,17 +3695,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v011" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.1
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -3714,6 +3714,279 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v071"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.7.1">v0.7.1</a><a class="headerlink" href="#v071" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.7.1 Release Notes</h1>
+<h2>Summary</h2>
+<p>A focused patch release: one new feature (<strong>motion trail overlays</strong> for video rendering) and a series of fixes for data-preservation gaps in <strong>analysis HDF5 export</strong>, <strong>merge</strong>, and the <strong>DLC / COCO readers</strong>, plus a quality-of-life upgrade to <code>Labels</code> lookups so a foreign <code>Video</code> or a plain filename now resolves transparently to the canonical project video.</p>
+<p><strong>Highlights:</strong></p>
+<ul>
+<li><g-emoji class="g-emoji" alias="warning">⚠️</g-emoji> <strong>Analysis HDF5 fix for untracked multi-animal projects</strong> — <code>save_analysis_h5</code> was silently keeping only one instance per frame for untracked projects. Re-export any analysis files produced on v0.7.0 from an untracked multi-animal project.</li>
+<li><strong>Motion trail overlays</strong> — <code>sio.render_image</code> / <code>sio.render_video</code> (and <code>sio render</code>) now draw configurable per-animal motion trails over the last N frames.</li>
+<li><strong>Merge preserves <code>is_negative</code></strong> — background (negative training) frame markers are no longer dropped by <code>Labels.merge</code> / <code>LabeledFrame.merge</code>.</li>
+<li><strong>Empty frames preserved</strong> — the DLC and COCO readers now retain images / rows with zero annotations as empty <code>LabeledFrame</code>s (negative-frame friendly).</li>
+<li><strong>Foreign-<code>Video</code> lookups</strong> — <code>Labels.find</code>, <code>__getitem__</code>, <code>numpy</code>, <code>extract</code>, and the <code>get_*</code> family now accept a filename or a <code>Video</code> created outside the project; new public <code>Labels.match_video()</code> exposes the resolver.</li>
+<li><strong>CI</strong>: GitHub Actions bumped off the deprecated Node.js 20 toolchain.</li>
+</ul>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.7.1 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;
+
+# Upgrade existing project dependency
+uv lock --upgrade-package sleap-io &amp;&amp; uv sync"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.7.1 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing project dependency</span>
+uv lock --upgrade-package sleap-io <span class="pl-k">&amp;&amp;</span> uv sync</pre></div>
+<p>See <a href="https://io.sleap.ai/install/" rel="nofollow">installation docs</a> for more options.</p>
+<hr>
+<h2>New Features</h2>
+<h3>Motion Trail Overlays (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4495491159" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/434" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/434/hovercard" href="https://github.com/talmolab/sleap-io/pull/434">#434</a>)</h3>
+<p>Trace each animal's recent trajectory over the last N frames behind the current frame. Trails are drawn beneath the pose and centroid layers and are off by default.</p>
+<p><strong>Python API:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+labels = sio.load_file(&quot;predictions.slp&quot;)
+
+# Render with default centroid trails
+sio.render_video(
+    labels,
+    &quot;trails.mp4&quot;,
+    show_trails=True,
+    trail_length=15,
+)
+
+# Or trail specific nodes with a custom appearance
+sio.render_video(
+    labels,
+    &quot;trails.mp4&quot;,
+    show_trails=True,
+    trail_node=[&quot;head&quot;, &quot;thorax&quot;],   # one trail per node
+    trail_width=3.0,
+    trail_alpha_fade=True,
+    trail_color=&quot;#ff8800&quot;,
+)
+
+# Low-level: draw trails onto an arbitrary frame
+img = sio.draw_trails(image, labels, frame_idx=120, trail_length=10)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"predictions.slp"</span>)
+
+<span class="pl-c"># Render with default centroid trails</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">render_video</span>(
+    <span class="pl-s1">labels</span>,
+    <span class="pl-s">"trails.mp4"</span>,
+    <span class="pl-s1">show_trails</span><span class="pl-c1">=</span><span class="pl-c1">True</span>,
+    <span class="pl-s1">trail_length</span><span class="pl-c1">=</span><span class="pl-c1">15</span>,
+)
+
+<span class="pl-c"># Or trail specific nodes with a custom appearance</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">render_video</span>(
+    <span class="pl-s1">labels</span>,
+    <span class="pl-s">"trails.mp4"</span>,
+    <span class="pl-s1">show_trails</span><span class="pl-c1">=</span><span class="pl-c1">True</span>,
+    <span class="pl-s1">trail_node</span><span class="pl-c1">=</span>[<span class="pl-s">"head"</span>, <span class="pl-s">"thorax"</span>],   <span class="pl-c"># one trail per node</span>
+    <span class="pl-s1">trail_width</span><span class="pl-c1">=</span><span class="pl-c1">3.0</span>,
+    <span class="pl-s1">trail_alpha_fade</span><span class="pl-c1">=</span><span class="pl-c1">True</span>,
+    <span class="pl-s1">trail_color</span><span class="pl-c1">=</span><span class="pl-s">"#ff8800"</span>,
+)
+
+<span class="pl-c"># Low-level: draw trails onto an arbitrary frame</span>
+<span class="pl-s1">img</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">draw_trails</span>(<span class="pl-s1">image</span>, <span class="pl-s1">labels</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">120</span>, <span class="pl-s1">trail_length</span><span class="pl-c1">=</span><span class="pl-c1">10</span>)</pre></div>
+<p><strong>CLI:</strong></p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio render predictions.slp --trails --trail-length 10
+sio render predictions.slp --trails --trail-node head,thorax --trail-width 3
+sio render predictions.slp --trails --no-trail-fade --trail-color &quot;255,128,0&quot;"><pre>sio render predictions.slp --trails --trail-length 10
+sio render predictions.slp --trails --trail-node head,thorax --trail-width 3
+sio render predictions.slp --trails --no-trail-fade --trail-color <span class="pl-s"><span class="pl-pds">"</span>255,128,0<span class="pl-pds">"</span></span></pre></div>
+<p>Trails need temporal context — they're silently skipped when rendering a single <code>LabeledFrame</code> or a list of instances. For untracked data, trails key by instance index across frames; identity swaps will produce identity-jumping trails (use tracking for stable trails).</p>
+<hr>
+<h2>Bug Fixes</h2>
+<h3><g-emoji class="g-emoji" alias="warning">⚠️</g-emoji> Analysis HDF5 dropped instances for untracked multi-animal projects (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4491841405" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/433" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/433/hovercard" href="https://github.com/talmolab/sleap-io/pull/433">#433</a>)</h3>
+<p><strong>Fixed:</strong> <code>sio.save_analysis_h5</code> on an untracked multi-animal project allocated a single track slot, so every instance after the first in each frame silently overwrote slot 0. Only one animal's data survived per frame.</p>
+<p><strong>Root Cause:</strong> <code>_get_occupancy_and_points</code> sized the track axis as <code>labels.tracks or [None]</code> (length 1) and routed every untracked instance to that single slot.</p>
+<p><strong>Fix:</strong> The track axis is now sized to the largest number of instances in any frame (<code>max_instances_per_frame</code>), and slots are filled per frame in arbitrary order using the same logic as <code>Labels.numpy</code>. Synthetic track names <code>track_0 … track_{n-1}</code> are written in the file.</p>
+<blockquote>
+<p><strong>Re-export recommended.</strong> Any analysis HDF5 produced on v0.7.0 from an untracked multi-animal project should be re-exported with v0.7.1 to recover the missing instances. Files exported from fully-tracked projects are unaffected.</p>
+</blockquote>
+<p><strong>Behavioral notes:</strong></p>
+<ul>
+<li>Single-instance untracked projects now use <code>track_names = ["track_0"]</code> (previously <code>[""]</code>).</li>
+<li>Tracked projects with a stray <code>track=None</code> instance now drop that instance (matching <code>to_numpy</code>) instead of overwriting slot 0.</li>
+</ul>
+<hr>
+<h3>Merge dropped the <code>is_negative</code> background-frame marker (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4491740920" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/432" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/432/hovercard" href="https://github.com/talmolab/sleap-io/pull/432">#432</a>, fixes <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4490584691" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/431" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/431/hovercard" href="https://github.com/talmolab/sleap-io/issues/431">#431</a>)</h3>
+<p><strong>Fixed:</strong> <code>LabeledFrame.merge</code> (every <code>frame=</code> strategy) and <code>Labels.merge</code> (non-colliding path) both ignored the <code>is_negative</code> flag, so background training frames lost their marker when merged.</p>
+<p><strong>Fix:</strong> The merged frame's <code>is_negative</code> is now resolved as<br>
+<code>(self.is_negative or other.is_negative) and not has_user_pose</code> — real user poses cancel the flag (and record a <code>negative_flag_conflict</code> in <code>MergeResult.conflicts</code>), but predicted instances do not. Documented in <code>docs/merging.md</code> under "Negative (background) frames".</p>
+<blockquote>
+<p><strong>Re-merge recommended</strong> if you ran v0.7.0 merges over labels containing negative frames.</p>
+</blockquote>
+<hr>
+<h3>DLC and COCO readers dropped empty / background frames (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4263567372" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/418" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/418/hovercard" href="https://github.com/talmolab/sleap-io/pull/418">#418</a>)</h3>
+<p><strong>Fixed:</strong> COCO files with images that had no annotations, and DLC CSVs with rows of all-NaN keypoints, lost those entries entirely — the negative-/background-frame signal vanished from the in-memory <code>Labels</code>.</p>
+<p><strong>Fix:</strong> Both readers now create an empty <code>LabeledFrame</code> for every image / row, even when no instances exist.</p>
+<blockquote>
+<p><strong>Behavior change downstream:</strong> <code>len(labels.labeled_frames)</code> from these readers will increase by the number of unannotated images. Code that asserts a specific frame count against the v0.7.0 behavior should be updated. On-disk data is unaffected — re-loading recovers the frames.</p>
+</blockquote>
+<hr>
+<h3>Foreign-<code>Video</code> and filename lookups silently returned nothing (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4498697791" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/436" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/436/hovercard" href="https://github.com/talmolab/sleap-io/pull/436">#436</a>)</h3>
+<p><strong>Fixed:</strong> Because <code>Video</code> uses identity comparison (<code>@define(eq=False)</code>), a <code>Video</code> created outside the project — or a plain filename — never matched anything in <code>Labels.videos</code>, so <code>find</code>, <code>__getitem__</code>, <code>extract</code>, <code>numpy</code>, and the <code>get_*</code> family silently returned <code>[]</code> or raised <code>IndexError</code>. The only workaround was to hand-walk <code>labels.videos</code>.</p>
+<p><strong>Fix:</strong> A new public method <code>Labels.match_video(video_or_path, method="auto")</code> canonicalizes any of <code>Video</code>, <code>str</code>, or <code>Path</code> to the matching project <code>Video</code> (or <code>None</code> if no match). The lookup APIs above now canonicalize their <code>video</code> argument through it automatically, and <code>Labels[path]</code> / <code>Labels[path, frame_idx]</code> are now valid:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="labels = sio.load_file(&quot;predictions.slp&quot;)
+
+# All of these work, even if `video` was constructed outside the project:
+labels.find(&quot;video.mp4&quot;, frame_idx=10)
+labels.find(sio.load_video(&quot;video.mp4&quot;), frame_idx=10)
+labels[&quot;video.mp4&quot;, 10]
+labels.numpy(video=&quot;video.mp4&quot;)
+
+# Or resolve explicitly
+canonical = labels.match_video(&quot;video.mp4&quot;)"><pre><span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"predictions.slp"</span>)
+
+<span class="pl-c"># All of these work, even if `video` was constructed outside the project:</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">find</span>(<span class="pl-s">"video.mp4"</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">10</span>)
+<span class="pl-s1">labels</span>.<span class="pl-c1">find</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">load_video</span>(<span class="pl-s">"video.mp4"</span>), <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">10</span>)
+<span class="pl-s1">labels</span>[<span class="pl-s">"video.mp4"</span>, <span class="pl-c1">10</span>]
+<span class="pl-s1">labels</span>.<span class="pl-c1">numpy</span>(<span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s">"video.mp4"</span>)
+
+<span class="pl-c"># Or resolve explicitly</span>
+<span class="pl-s1">canonical</span> <span class="pl-c1">=</span> <span class="pl-s1">labels</span>.<span class="pl-c1">match_video</span>(<span class="pl-s">"video.mp4"</span>)</pre></div>
+<p>The default <code>method="auto"</code> runs a tiered cascade (definitive match → basename fallback). Other methods: <code>"path"</code>, <code>"basename"</code>, <code>"content"</code>, <code>"shape"</code>, <code>"image_dedup"</code>, or any <code>VideoMatcher</code> instance. Ambiguous matches raise <code>ValueError</code>; bad argument types raise <code>TypeError</code>.</p>
+<hr>
+<h2>API Changes</h2>
+<h3>New Symbols</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Name</th>
+<th>Location</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Function</td>
+<td><code>draw_trails</code></td>
+<td><code>sleap_io.rendering.overlays</code> (exported as <code>sio.draw_trails</code>)</td>
+<td>Draw motion trails onto an image</td>
+</tr>
+<tr>
+<td>Method</td>
+<td><code>Labels.match_video</code></td>
+<td><code>sleap_io.model.labels</code></td>
+<td>Resolve a foreign <code>Video</code>, <code>str</code>, or <code>Path</code> to the canonical project <code>Video</code></td>
+</tr>
+</tbody>
+</table>
+<h3>New Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>New Keyword Arguments</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sio.render_image</code>, <code>sio.render_video</code></td>
+<td><code>show_trails: bool = False</code>, <code>trail_length: int = 10</code>, <code>trail_node: str | list[str] = "centroid"</code>, <code>trail_width: float = 2.0</code>, <code>trail_alpha_fade: bool = True</code>, <code>trail_alpha: float = 1.0</code>, <code>trail_color: ColorSpec | None = None</code></td>
+</tr>
+<tr>
+<td><code>sio render</code> (CLI)</td>
+<td><code>--trails</code>, <code>--trail-length</code>, <code>--trail-node</code>, <code>--trail-width</code>, <code>--trail-fade</code> / <code>--no-trail-fade</code>, <code>--trail-alpha</code>, <code>--trail-color</code>, plus <code>--progress</code> / <code>--no-progress</code></td>
+</tr>
+</tbody>
+</table>
+<h3>Widened Signatures (backwards-compatible)</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Accepts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Labels.find</code>, <code>Labels.numpy</code>, <code>Labels.extract</code>, <code>Labels.get_rois</code>, <code>Labels.get_masks</code>, <code>Labels.get_bboxes</code>, <code>Labels.get_centroids</code>, <code>Labels.get_label_images</code></td>
+<td><code>video=</code> now accepts a foreign <code>Video</code>, <code>str</code>, or <code>Path</code> and resolves via <code>match_video</code></td>
+</tr>
+<tr>
+<td><code>Labels.__getitem__</code></td>
+<td>Also accepts <code>str</code> / <code>Path</code> and <code>(path, frame_idx)</code> tuples</td>
+</tr>
+</tbody>
+</table>
+<h3>Modified Behavior</h3>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Labels.merge</code></td>
+<td>Emits <code>ConflictResolution(conflict_type="negative_flag_conflict", ...)</code> when merging clears <code>is_negative</code> due to a user pose</td>
+</tr>
+<tr>
+<td><code>LabeledFrame.merge</code></td>
+<td>Mutates <code>is_negative</code> in place per the new resolution rule</td>
+</tr>
+<tr>
+<td><code>sio.load_coco</code>, <code>sio.load_dlc</code></td>
+<td>Preserve images / rows with no annotations as empty <code>LabeledFrame</code>s</td>
+</tr>
+<tr>
+<td><code>sio.save_analysis_h5</code></td>
+<td>Untracked projects size the track axis to max instances per frame; synthetic <code>track_0..N-1</code> names written</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>Documentation</h2>
+<ul>
+<li><strong><code>docs/cli.md</code></strong>: New "Motion Trail Options" subtable under <code>sio render</code> and a trail example in the Quick Reference.</li>
+<li><strong><code>docs/rendering.md</code></strong>: "Motion trails" section and <code>draw_trails</code> API entry.</li>
+<li><strong><code>docs/model/labels.md</code></strong>: Querying section cross-references <code>match_video</code> and the widened lookup signatures.</li>
+<li><strong><code>docs/merging.md</code></strong>: "Negative (background) frames" section describes the <code>is_negative</code> merge rule.</li>
+<li><strong><code>docs/examples.md</code></strong>: "Resolving a video by path or foreign instance" walkthrough.</li>
+</ul>
+<hr>
+<h2>CI / Infrastructure</h2>
+<ul>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4497915028" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/435" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/435/hovercard" href="https://github.com/talmolab/sleap-io/pull/435">#435</a></strong>: Bumped <code>actions/checkout</code> (v4→v6), <code>astral-sh/setup-uv</code> (v6→v7), and <code>codecov/codecov-action</code> (v4→v6) across all 7 workflows. Clears GitHub's Node.js 20 deprecation warnings ahead of the June 2026 forced bump and September 2026 removal.</li>
+</ul>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4263567372" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/418" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/418/hovercard" href="https://github.com/talmolab/sleap-io/pull/418">#418</a>: Preserve images with 0 instances as empty labeled frames in DLC and COCO readers (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/lochhh/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/lochhh">@lochhh</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4491740920" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/432" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/432/hovercard" href="https://github.com/talmolab/sleap-io/pull/432">#432</a>: fix: Preserve <code>is_negative</code> when merging colliding and new frames (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4490584691" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/431" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/431/hovercard" href="https://github.com/talmolab/sleap-io/issues/431">#431</a>) (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4491841405" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/433" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/433/hovercard" href="https://github.com/talmolab/sleap-io/pull/433">#433</a>: fix: Preserve all instances in analysis HDF5 export for untracked multi-animal projects (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4495491159" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/434" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/434/hovercard" href="https://github.com/talmolab/sleap-io/pull/434">#434</a>: Add motion trail overlay to video rendering (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4497915028" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/435" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/435/hovercard" href="https://github.com/talmolab/sleap-io/pull/435">#435</a>: ci: Bump GitHub Actions off deprecated Node.js 20 (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4498697791" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/436" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/436/hovercard" href="https://github.com/talmolab/sleap-io/pull/436">#436</a>: Resolve foreign <code>Video</code> by path/content matching in <code>Labels</code> lookups (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/talmolab/sleap-io/compare/v0.7.0...v0.7.1">v0.7.0...v0.7.1</a></p>
 <h2 id="v070"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.7.0">v0.7.0</a><a class="headerlink" href="#v070" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.7.0 Release Notes</h1>
 <h2>Summary</h2>
@@ -9347,16 +9620,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Fix suggestions deserialization by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2310892071" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/95" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/95/hovercard" href="https://github.com/talmolab/sleap-io/pull/95">#95</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.1...v0.1.2"><tt>v0.1.1...v0.1.2</tt></a></p>
-<h2 id="v011"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.1">v0.1.1</a><a class="headerlink" href="#v011" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Create docs pages by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2268163863" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/87" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/87/hovercard" href="https://github.com/talmolab/sleap-io/pull/87">#87</a></li>
-<li>Add <code>ImageVideo</code> backend by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2272922898" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/88" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/88/hovercard" href="https://github.com/talmolab/sleap-io/pull/88">#88</a></li>
-<li>Add <code>SuggestionFrame</code> by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2272965391" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/89" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/89/hovercard" href="https://github.com/talmolab/sleap-io/pull/89">#89</a></li>
-<li>Implement <code>ImageVideo</code> support in SLP by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2272972640" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/90" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/90/hovercard" href="https://github.com/talmolab/sleap-io/pull/90">#90</a></li>
-<li>Bump to v0.1.1 by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2307031086" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/93" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/93/hovercard" href="https://github.com/talmolab/sleap-io/pull/93">#93</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.0...v0.1.1"><tt>v0.1.0...v0.1.1</tt></a></p>
 
 
 
