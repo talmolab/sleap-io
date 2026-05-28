@@ -6,6 +6,8 @@ a video and its components used in SLEAP.
 
 from __future__ import annotations
 
+import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +47,13 @@ class Video:
             Set this to `False` when you want to manually open the backend, or when the
             you know the video file does not exist and you want to avoid trying to open
             the file.
+        _exists_cache: Per-instance TTL cache for the result of `exists()` when the
+            `filename` is a remote URL. Keyed by `(filename, dataset)` and storing
+            `(exists_bool, monotonic_timestamp)`. This avoids issuing a network probe
+            on every call (e.g. from the `is_open` property, which GUIs poll on each
+            render). The TTL defaults to 60 seconds and can be overridden via the
+            `SLEAP_IO_EXISTS_TTL` environment variable. The cache is cleared on
+            `replace_filename`.
 
     Notes:
         Instances of this class are hashed by identity, not by value. This means that
@@ -79,6 +88,9 @@ class Video:
     backend_metadata: dict[str, any] = attrs.field(factory=dict)
     source_video: "Video | None" = None
     open_backend: bool = True
+    _exists_cache: dict[tuple[str, str | None], tuple[bool, float]] = attrs.field(
+        init=False, factory=dict, repr=False, eq=False
+    )
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS + ("seq",)
 
@@ -370,6 +382,13 @@ class Video:
             else:
                 return is_file_accessible(self.filename[0])
 
+        # URL fast path: must run BEFORE `is_file_accessible`, which treats the
+        # filename as a local path and would spuriously return False for a URL.
+        from sleap_io.io._remote import _is_url
+
+        if _is_url(self.filename):
+            return self._url_exists(dataset)
+
         file_is_accessible = is_file_accessible(self.filename)
         if not file_is_accessible:
             # Check if it's a directory (ImageVideo source)
@@ -394,6 +413,76 @@ class Video:
             return has_dataset
 
         return True
+
+    def _url_exists(self, dataset: str | None) -> bool:
+        """Check whether a remote URL `filename` exists, with a TTL cache.
+
+        Args:
+            dataset: Name of dataset in the (remote) HDF5 file. If specified (or
+                derivable from `backend_metadata`), existence additionally requires
+                that the dataset be present in the file.
+
+        Returns:
+            `True` if the URL is reachable (and, if a dataset was requested, the
+            dataset exists), `False` otherwise.
+
+        Notes:
+            Results are cached per instance keyed by `(filename, dataset)` for a
+            TTL (default 60s, overridable via the `SLEAP_IO_EXISTS_TTL` env var) so
+            repeated calls (e.g. from the `is_open` property in a GUI render loop)
+            do not issue a network probe each time.
+        """
+        from sleap_io.io._remote import _head_or_range_probe
+
+        key = (self.filename, dataset)
+        ttl = float(os.environ.get("SLEAP_IO_EXISTS_TTL", "60"))
+        cached = self._exists_cache.get(key)
+        if cached is not None and (time.monotonic() - cached[1]) < ttl:
+            return cached[0]
+
+        try:
+            if not _head_or_range_probe(self.filename):
+                result = False
+            else:
+                if dataset is None or dataset == "":
+                    dataset = self.backend_metadata.get("dataset", None)
+                if dataset is None or dataset == "":
+                    result = True
+                else:
+                    result = self._url_dataset_exists(dataset)
+        except Exception:
+            result = False
+
+        self._exists_cache[key] = (result, time.monotonic())
+        return result
+
+    def _url_dataset_exists(self, dataset: str) -> bool:
+        """Check whether `dataset` is present in the remote HDF5 file.
+
+        Reuses the backend's already-open HDF5 reader when available; otherwise
+        opens the remote file via fsspec for a single membership check.
+
+        Args:
+            dataset: Name of dataset in the remote HDF5 file.
+
+        Returns:
+            `True` if the dataset is present, `False` otherwise.
+        """
+        if (
+            self.backend is not None
+            and type(self.backend) is HDF5Video
+            and self.backend._open_reader is not None
+        ):
+            return dataset in self.backend._open_reader
+
+        from sleap_io.io._remote import open_remote_h5
+
+        url_file = open_remote_h5(self.filename)
+        try:
+            with h5py.File(url_file, "r") as f:
+                return dataset in f
+        finally:
+            url_file.close()
 
     @property
     def is_open(self) -> bool:
@@ -523,6 +612,8 @@ class Video:
 
         self.filename = new_filename
         self.backend_metadata["filename"] = new_filename
+        # Invalidate any cached URL existence results for the previous filename.
+        self._exists_cache.clear()
 
         if open:
             if self.exists():
