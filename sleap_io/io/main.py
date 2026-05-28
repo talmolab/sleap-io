@@ -817,6 +817,19 @@ def save_coco(
 def load_video(filename: str, **kwargs) -> Video:
     """Load a video file.
 
+    Remote media videos can be loaded from ``http``/``https`` URLs (see the
+    ``filename`` argument). Only ``http``/``https`` URLs are supported for video
+    (cloud schemes are not), and the ``av`` package is required (install with
+    ``pip install 'sleap-io[pyav]'``).
+
+    Warning:
+        Decoding a remote video streams bytes from the URL into FFmpeg (via
+        pyav), whose demuxers/decoders are a large, historically
+        vulnerability-prone attack surface. Load remote video only from trusted
+        sources, and sandbox untrusted inputs (e.g. decode in an isolated
+        container/VM with no credentials and a restricted network). sleap-io
+        only passes ``http``/``https`` URLs through to the decoder.
+
     Args:
         filename: The filename(s) of the video. Supported extensions: "mp4", "avi",
             "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
@@ -826,7 +839,7 @@ def load_video(filename: str, **kwargs) -> Video:
             (one of "mp4", "avi", "mov", "mj2", "mkv"). Remote videos are read
             with the pyav plugin, which is selected automatically for URLs; it
             requires the ``av`` package (install with
-            ``pip install 'sleap-io[pyav]'``).
+            ``pip install 'sleap-io[pyav]'``). See the security warning above.
         **kwargs: Additional arguments passed to `Video.from_filename`.
             Currently supports:
             - dataset: Name of dataset in HDF5 file.
