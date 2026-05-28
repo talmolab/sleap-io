@@ -119,6 +119,9 @@ filterwarnings = [
     "ignore:ROI\\.from_bbox\\(\\) is deprecated:DeprecationWarning",
     "ignore:ROI\\.from_xyxy\\(\\) is deprecated:DeprecationWarning",
 ]
+markers = [
+    "live: tests that require live internet access (deselect with '-m \"not live\"').",
+]
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
