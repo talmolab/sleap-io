@@ -708,6 +708,46 @@ the install hint above.
       credentials, restricted network, and a non-privileged user) and keep
       FFmpeg/pyav up to date.
 
+### Google Drive
+
+Google Drive file share links are recognized and resolved to a direct download
+automatically, so you can pass a Drive URL straight to
+[`load_slp`][sleap_io.load_slp] or [`load_file`][sleap_io.load_file]:
+
+```python
+import sleap_io as sio
+
+# Any of these Drive share-link shapes work:
+labels = sio.load_slp("https://drive.google.com/file/d/<FILE_ID>/view")
+labels = sio.load_slp("https://drive.google.com/uc?id=<FILE_ID>&export=download")
+labels = sio.load_slp("https://drive.google.com/open?id=<FILE_ID>")
+
+# load_file resolves the Drive link, sniffs the content, and routes it:
+labels = sio.load_file("https://drive.google.com/file/d/<FILE_ID>/view")
+```
+
+The file must be shared as **"Anyone with the link"** (no sign-in required).
+Because Drive download links carry no file extension and reject the `HEAD`/range
+requests that lazy streaming relies on, a Drive file is **fully downloaded into
+memory** during resolution (the `stream_mode`/cache keyword arguments do not
+apply). The two-hop "can't scan for viruses" confirmation page that Drive serves
+for larger files is handled transparently.
+
+Some limitations:
+
+- **Folder links are not supported** — pass a single-file share link
+  (`…/file/d/<FILE_ID>/view`), not a `…/drive/folders/<ID>` URL. A folder URL
+  raises a `ValueError`.
+- **Drive videos are not supported** — `load_video(<drive url>)` raises a
+  `NotImplementedError`. Download the video file first, then load it locally.
+- **Quota / permission errors** — if Drive returns its "too many users have
+  viewed or downloaded this file recently" page, a `RemoteIOError` is raised;
+  retry later or re-check the file's sharing settings.
+
+For `load_file`, the format is detected from the downloaded bytes (which costs
+one extra fetch). Pass an explicit `format=` (e.g. `format="slp"`) to skip the
+detection download.
+
 ### Supported schemes and install matrix
 
 | Scheme | Requires | Notes |
@@ -847,6 +887,10 @@ labels = sio.load_slp(url, stream_mode="filecache", cache_storage=cache_dir)
   `pyav` extra; install it with `pip install 'sleap-io[pyav]'`. Only `http`/
   `https` URLs are supported for video. See [Remote video](#remote-video) for
   the security considerations of decoding untrusted remote video.
+- **Google Drive errors** — a `ValueError` means the link is a folder (pass a
+  `…/file/d/<ID>/view` file link) or the file ID could not be parsed; a
+  `RemoteIOError` mentioning a quota/permission page means the file is not shared
+  publicly or Drive is rate-limiting downloads. See [Google Drive](#google-drive).
 
 !!! note "See also"
     - [`load_slp`][sleap_io.load_slp]: Full URL keyword-argument reference
