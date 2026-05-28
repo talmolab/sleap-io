@@ -591,6 +591,15 @@ def open_url(
         ImportError: For cloud schemes when the extra is not installed.
         ValueError: For an unrecognized ``stream_mode``.
     """
+    # Google Drive share links resolve through a two-hop interstitial flow and
+    # are full-prefetched into memory (Drive's HEAD 405 + quota-mid-stream
+    # behavior makes lazy range reads unreliable). The streaming kwargs above
+    # (stream_mode/cache/block_size/...) do not apply to this branch.
+    from sleap_io.io._gdrive import _is_gdrive_url, _open_gdrive
+
+    if _is_gdrive_url(url):
+        return _open_gdrive(url, headers=headers)
+
     parsed = urllib.parse.urlparse(url)
     scheme = parsed.scheme.lower()
     fs = _build_fsspec_filesystem(

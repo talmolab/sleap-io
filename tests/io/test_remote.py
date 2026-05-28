@@ -14,6 +14,7 @@ import asyncio
 import os
 import time
 import traceback
+import urllib.parse
 import warnings
 from pathlib import Path
 
@@ -24,6 +25,12 @@ from multidict import CIMultiDict
 from werkzeug.wrappers import Response
 from yarl import URL
 
+from sleap_io.io._gdrive import (
+    _is_gdrive_url,
+    _open_gdrive,
+    _parse_gdrive,
+    _url_from_confirmation,
+)
 from sleap_io.io._remote import (
     _CACHE_MARKER_NAME,
     _RETRY_BACKOFF_BASE,
@@ -1205,6 +1212,347 @@ def test_open_url_blockcache_explicit_max_blocks(httpserver):
         assert file_like.read(8) == b"\x89HDF\r\n\x1a\n"
     finally:
         file_like.close()
+
+
+# ---------------------------------------------------------------------------
+# Google Drive: URL detection + file-id parsing (pure, no server)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://drive.google.com/file/d/ABC123/view", True),
+        ("https://drive.google.com/uc?id=ABC123&export=download", True),
+        ("https://docs.google.com/uc?id=ABC123", True),
+        ("https://DRIVE.GOOGLE.COM/file/d/ABC/view", True),
+        ("https://example.com/file/d/ABC/view", False),
+        ("https://storage.googleapis.com/bucket/x.slp", False),
+        ("s3://bucket/key.slp", False),
+        ("not a url at all", False),
+    ],
+)
+def test_is_gdrive_url(url, expected):
+    """`_is_gdrive_url` recognizes drive/docs hostnames only."""
+    assert _is_gdrive_url(url) is expected
+
+
+@pytest.mark.parametrize(
+    "url,expected_id",
+    [
+        # /file/d/<ID>/view (+ ?usp=sharing in the query).
+        ("https://drive.google.com/file/d/FILEID/view", "FILEID"),
+        ("https://drive.google.com/file/d/FILEID/view?usp=sharing", "FILEID"),
+        ("https://drive.google.com/file/d/FILEID/edit", "FILEID"),
+        # /file/u/<n>/d/<ID>/view per-account variant.
+        ("https://drive.google.com/file/u/0/d/FILEID/view", "FILEID"),
+        # id= query param, both orderings + /open?id=.
+        ("https://drive.google.com/uc?id=FILEID&export=download", "FILEID"),
+        ("https://drive.google.com/uc?export=download&id=FILEID", "FILEID"),
+        ("https://drive.google.com/open?id=FILEID", "FILEID"),
+    ],
+)
+def test_parse_gdrive_extracts_file_id(url, expected_id):
+    """`_parse_gdrive` extracts the file ID from every supported URL shape."""
+    file_id, is_folder = _parse_gdrive(url)
+    assert file_id == expected_id
+    assert is_folder is False
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://drive.google.com/drive/folders/FOLDERID",
+        "https://drive.google.com/folders/FOLDERID",
+        "https://drive.google.com/drive/folders/FOLDERID?usp=sharing",
+    ],
+)
+def test_parse_gdrive_folder_raises(url):
+    """Folder share links raise a clear ValueError."""
+    with pytest.raises(ValueError, match="folder URLs are not supported"):
+        _parse_gdrive(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://drive.google.com/",
+        "https://drive.google.com/something/else",
+        "https://drive.google.com/file/d/ABC",  # missing /view|/edit suffix
+    ],
+)
+def test_parse_gdrive_unparseable_raises(url):
+    """A URL with no recoverable file ID raises a clear ValueError."""
+    with pytest.raises(ValueError, match="Could not parse a Google Drive file ID"):
+        _parse_gdrive(url)
+
+
+def test_parse_gdrive_redacts_credentials_in_error():
+    """A token in an unparseable URL is redacted in the raised error."""
+    with pytest.raises(ValueError) as ei:
+        _parse_gdrive("https://drive.google.com/nope?token=SECRET")
+    assert "SECRET" not in str(ei.value)
+
+
+# ---------------------------------------------------------------------------
+# Google Drive: confirmation-page scraping (pure, no server)
+# ---------------------------------------------------------------------------
+
+
+def test_url_from_confirmation_download_form_merges_params():
+    """The #download-form action is merged with all hidden inputs."""
+    html = (
+        '<html><body><form id="download-form" '
+        'action="https://drive.usercontent.google.com/download" method="get">'
+        '<input type="hidden" name="id" value="FILEID">'
+        '<input type="hidden" name="export" value="download">'
+        '<input type="hidden" name="confirm" value="t">'
+        '<input type="hidden" name="uuid" value="u-1-2-3">'
+        "</form></body></html>"
+    )
+    url = _url_from_confirmation(html)
+    parsed = urllib.parse.urlparse(url)
+    assert parsed.netloc == "drive.usercontent.google.com"
+    assert parsed.path == "/download"
+    params = dict(urllib.parse.parse_qsl(parsed.query))
+    assert params == {
+        "id": "FILEID",
+        "export": "download",
+        "confirm": "t",
+        "uuid": "u-1-2-3",
+    }
+
+
+def test_url_from_confirmation_download_form_skips_nameless_input():
+    """Hidden inputs without a `name` attribute are ignored, not crashed on."""
+    html = (
+        '<form id="download-form" '
+        'action="https://drive.usercontent.google.com/download" method="get">'
+        '<input type="hidden" value="orphan">'  # no name= attribute
+        '<input type="hidden" name="id" value="FILEID">'
+        "</form>"
+    )
+    url = _url_from_confirmation(html)
+    params = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
+    assert params == {"id": "FILEID"}
+
+
+def test_url_from_confirmation_href_variant():
+    """The small-file href variant is absolutized and unescaped."""
+    html = '<a href="/uc?export=download&amp;id=ABC&amp;confirm=t">Download</a>'
+    url = _url_from_confirmation(html)
+    assert url == "https://docs.google.com/uc?export=download&id=ABC&confirm=t"
+
+
+def test_url_from_confirmation_json_variant():
+    r"""The "downloadUrl":"…" JSON variant unescapes =/&."""
+    html = r'window.x = {"downloadUrl":"https://h/p?a=1&b=2=x"};'
+    url = _url_from_confirmation(html)
+    assert url == "https://h/p?a=1&b=2=x"
+
+
+def test_url_from_confirmation_quota_error_raises():
+    """A uc-error-subcaption quota page raises a clear RemoteIOError."""
+    html = (
+        '<p class="uc-error-subcaption">Too many users have viewed or '
+        "downloaded this file recently.</p>"
+    )
+    with pytest.raises(RemoteIOError, match="Google Drive refused the download"):
+        _url_from_confirmation(html)
+
+
+def test_url_from_confirmation_no_link_raises():
+    """A page with no recognizable download link raises ValueError."""
+    with pytest.raises(ValueError, match="Could not find a Google Drive"):
+        _url_from_confirmation("<html><body>nothing here</body></html>")
+
+
+def test_url_from_confirmation_href_precedence_over_form():
+    """When both an href and a form are present, the href wins (gdown order)."""
+    html = (
+        '<a href="/uc?export=download&amp;id=HREFID">link</a>'
+        '<form id="download-form" action="https://drive.usercontent.google.com/'
+        'download"><input name="id" value="FORMID"></form>'
+    )
+    url = _url_from_confirmation(html)
+    assert "HREFID" in url
+    assert "FORMID" not in url
+
+
+# ---------------------------------------------------------------------------
+# Google Drive: end-to-end two-hop resolution against pytest-httpserver
+#
+# The resolver hardcodes the start host (drive.google.com); these tests repoint
+# it at the loopback test server by overriding the `_UC_URL_TEMPLATE` constant
+# (the documented test seam) so NO request ever reaches real Google Drive.
+# ---------------------------------------------------------------------------
+
+
+def _serve_gdrive_two_hop(
+    httpserver,
+    *,
+    file_bytes: bytes,
+    set_cookie: str | None = None,
+    cookie_seen: list[str | None] | None = None,
+):
+    """Wire a two-hop Drive flow (`/uc` interstitial -> `/download`) on a server.
+
+    Args:
+        httpserver: The `pytest-httpserver` instance to configure.
+        file_bytes: The bytes served at the `/download` (usercontent) hop.
+        set_cookie: If given, a `Set-Cookie` value emitted by the `/uc` hop.
+        cookie_seen: If given, the `Cookie` header value received at `/download`
+            is appended to this list (to assert cookie carry across the hop).
+
+    Returns:
+        The `/uc?id=...` start URL (a Drive-looking template is installed on
+        `_gdrive._UC_URL_TEMPLATE` separately by the caller via the fixture).
+    """
+    download_url = httpserver.url_for("/download")
+    form = (
+        f'<html><body><form id="download-form" action="{download_url}" '
+        'method="get">'
+        '<input type="hidden" name="id" value="FILEID">'
+        '<input type="hidden" name="export" value="download">'
+        '<input type="hidden" name="confirm" value="t">'
+        '<input type="hidden" name="uuid" value="u-1-2-3">'
+        "</form></body></html>"
+    )
+
+    def _uc_handler(request):
+        resp = Response(form, status=200, content_type="text/html")
+        if set_cookie is not None:
+            resp.headers["Set-Cookie"] = set_cookie
+        return resp
+
+    def _download_handler(request):
+        if cookie_seen is not None:
+            cookie_seen.append(request.headers.get("Cookie"))
+        resp = Response(file_bytes, status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="data.bin"'
+        return resp
+
+    httpserver.expect_request("/uc").respond_with_handler(_uc_handler)
+    httpserver.expect_request("/download").respond_with_handler(_download_handler)
+
+
+@pytest.fixture
+def gdrive_uc_template(monkeypatch, httpserver):
+    """Repoint the Drive resolver's start URL at the loopback test server.
+
+    Overrides the `_gdrive._UC_URL_TEMPLATE` module constant so
+    `_open_gdrive(...)` begins its GET loop at the local `pytest-httpserver`'s
+    `/uc` endpoint instead of `https://drive.google.com/uc`. This is the
+    documented test seam from the resolver spec; no real Drive request is made.
+
+    Yields:
+        The httpserver (already installed as the resolver start host).
+    """
+    import sleap_io.io._gdrive as gdrive_mod
+
+    template = httpserver.url_for("/uc") + "?id={file_id}"
+    monkeypatch.setattr(gdrive_mod, "_UC_URL_TEMPLATE", template)
+    return httpserver
+
+
+def test_open_gdrive_two_hop_download_form(gdrive_uc_template):
+    """`_open_gdrive` follows the interstitial #download-form to the bytes."""
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+
+    bio = _open_gdrive("https://drive.google.com/file/d/FILEID/view")
+    assert bio.read() == _HDF5_BODY
+
+
+def test_open_gdrive_carries_cookie_across_hop(gdrive_uc_template):
+    """The interstitial Set-Cookie is echoed back on the second (download) hop."""
+    cookie_seen: list[str | None] = []
+    _serve_gdrive_two_hop(
+        gdrive_uc_template,
+        file_bytes=_HDF5_BODY,
+        set_cookie="download_warning=xyz; Path=/",
+        cookie_seen=cookie_seen,
+    )
+
+    bio = _open_gdrive("https://drive.google.com/file/d/FILEID/view")
+    assert bio.read() == _HDF5_BODY
+    assert cookie_seen, "download hop was never reached"
+    assert cookie_seen[0] is not None
+    assert "download_warning=xyz" in cookie_seen[0]
+
+
+def test_open_gdrive_direct_content_disposition_first_hop(gdrive_uc_template):
+    """A first hop that already carries Content-Disposition returns immediately."""
+
+    def _handler(request):
+        resp = Response(_HDF5_BODY, status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="small.bin"'
+        return resp
+
+    gdrive_uc_template.expect_request("/uc").respond_with_handler(_handler)
+
+    bio = _open_gdrive("https://drive.google.com/uc?id=FILEID")
+    assert bio.read() == _HDF5_BODY
+
+
+def test_open_gdrive_non_html_first_hop(gdrive_uc_template):
+    """A non-HTML first response is treated as the direct file."""
+    gdrive_uc_template.expect_request("/uc").respond_with_data(
+        _HDF5_BODY, content_type="application/octet-stream"
+    )
+
+    bio = _open_gdrive("https://drive.google.com/uc?id=FILEID")
+    assert bio.read() == _HDF5_BODY
+
+
+def test_open_gdrive_quota_page_raises(gdrive_uc_template):
+    """A quota interstitial surfaces as a RemoteIOError, not file bytes."""
+    quota_html = (
+        '<html><body><p class="uc-error-subcaption">Too many users have '
+        "viewed or downloaded this file recently.</p></body></html>"
+    )
+    gdrive_uc_template.expect_request("/uc").respond_with_data(
+        quota_html, content_type="text/html"
+    )
+
+    with pytest.raises(RemoteIOError, match="Google Drive refused the download"):
+        _open_gdrive("https://drive.google.com/file/d/FILEID/view")
+
+
+def test_open_gdrive_folder_url_raises():
+    """`_open_gdrive` on a folder URL raises ValueError before any request."""
+    with pytest.raises(ValueError, match="folder URLs are not supported"):
+        _open_gdrive("https://drive.google.com/drive/folders/FID")
+
+
+def test_open_gdrive_http_error_maps_to_remote_io_error(gdrive_uc_template):
+    """A non-2xx first hop is normalized to a RemoteIOError with the status."""
+    gdrive_uc_template.expect_request("/uc").respond_with_data("nope", status=404)
+
+    with pytest.raises(RemoteIOError) as ei:
+        _open_gdrive("https://drive.google.com/file/d/FILEID/view")
+    assert ei.value.status == 404
+
+
+def test_open_gdrive_non_convergent_raises(gdrive_uc_template):
+    """If every hop returns interstitial HTML, resolution fails after the bound.
+
+    The `/uc` interstitial's #download-form points back at `/uc` itself (a
+    self-referential interstitial), so the loop runs out its hop budget and
+    raises rather than spinning forever.
+    """
+    uc_url = gdrive_uc_template.url_for("/uc")
+    loop_html = (
+        f'<form id="download-form" action="{uc_url}" method="get">'
+        '<input type="hidden" name="id" value="FILEID"></form>'
+    )
+
+    def _handler(request):
+        return Response(loop_html, status=200, content_type="text/html")
+
+    gdrive_uc_template.expect_request("/uc").respond_with_handler(_handler)
+
+    with pytest.raises(RemoteIOError, match="did not converge"):
+        _open_gdrive("https://drive.google.com/file/d/FILEID/view")
 
 
 @pytest.mark.live

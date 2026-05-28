@@ -44,7 +44,10 @@ def load_slp(
     Args:
         filename: Path to a SLEAP labels file (`.slp`), or a URL. Supported URL
             schemes: `http`, `https`, `s3`, `gs`, `gcs`, `az`, `abfs`. Cloud
-            schemes require `pip install 'sleap-io[cloud]'`.
+            schemes require `pip install 'sleap-io[cloud]'`. Google Drive share
+            links (`https://drive.google.com/file/d/<ID>/view`) are also
+            supported and resolved to a direct download automatically (the file
+            is fully downloaded into memory; folder links are not supported).
         open_videos: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened (useful for reading metadata
             when the video files are not available).
@@ -967,7 +970,9 @@ def load_file(
 
     Args:
         filename: Path to a file, or a URL (`http`, `https`, `s3`, `gs`, `gcs`,
-            `az`, `abfs`).
+            `az`, `abfs`). Google Drive file share links are also supported; the
+            file is downloaded and its format detected from the content (pass an
+            explicit `format=` to skip the detection download).
         format: Optional format to load as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "geojson",
             "alphatracker", "labelstudio", "coco", "jabs", "analysis_h5", "dlc",
@@ -1163,6 +1168,87 @@ def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video
     return load_slp(filename, **kwargs)
 
 
+def _gdrive_format_from_bytes(data: bytes) -> str:
+    """Resolve a format name from the first bytes of a Drive download.
+
+    Drive download URLs have no extension, so the format is inferred from the
+    magic bytes (and, for HDF5, the top-level group structure).
+
+    Args:
+        data: The fully-downloaded file bytes.
+
+    Returns:
+        A format name suitable for `_dispatch_url_format` (e.g. ``"slp"``,
+        ``"analysis_h5"``, ``"jabs"``, ``"coco"``, ``"labelstudio"``,
+        ``"alphatracker"``, ``"csv"``).
+
+    Raises:
+        ValueError: If the content type cannot be recognized.
+    """
+    import io
+    import json
+
+    from sleap_io.io import _remote
+
+    family = _remote._identify_magic(data[:16])
+    if family == "hdf5":
+        import h5py
+
+        with h5py.File(io.BytesIO(data), "r") as f:
+            if "track_occupancy" in f:
+                return "analysis_h5"
+            if "metadata" in f:
+                return "slp"
+            return "jabs"
+    if family == "json":
+        try:
+            parsed = json.loads(data)
+        except Exception:
+            parsed = None
+        if _is_alphatracker_data(parsed):
+            return "alphatracker"
+        if _is_coco_data(parsed):
+            return "coco"
+        return "labelstudio"
+    if family == "csv":
+        return "csv"
+    raise ValueError(
+        f"Could not determine the format of the Google Drive file (sniffed "
+        f"'{family}'). Pass an explicit format= (e.g. 'slp')."
+    )
+
+
+def _dispatch_gdrive_url_format(filename: str, **kwargs) -> Labels | Video:
+    """Resolve + sniff a Google Drive URL, then dispatch to the right loader.
+
+    The Drive bytes are fetched once to sniff the format; the chosen loader
+    then re-resolves the URL to read it. Pass an explicit ``format=`` to skip
+    this detection fetch entirely.
+
+    Args:
+        filename: The Google Drive URL.
+        **kwargs: Forwarded to the underlying loader (URL streaming kwargs such
+            as ``headers`` flow through to `load_slp`).
+
+    Returns:
+        The loaded `Labels` or `Video` object.
+
+    Raises:
+        ValueError: If the content type cannot be recognized.
+        RemoteIOError: For HTTP / resolution failures.
+    """
+    from sleap_io.io._gdrive import _open_gdrive
+
+    headers = kwargs.get("headers")
+    file_like = _open_gdrive(filename, headers=headers)
+    try:
+        data = file_like.read()
+    finally:
+        file_like.close()
+    fmt = _gdrive_format_from_bytes(data)
+    return _dispatch_url_format(filename, fmt, **kwargs)
+
+
 def _resolve_hdf5_url_format(
     url: str,
     headers: dict[str, str] | None,
@@ -1235,6 +1321,20 @@ def _load_file_url(
     # Explicit format always wins, bypassing detection entirely.
     if format is not None:
         return _dispatch_url_format(filename, format, **kwargs)
+
+    # Google Drive share links carry no usable file extension, so resolve +
+    # sniff the bytes to pick a format. `sniff=False` disables this since there
+    # is no extension to fall back on.
+    from sleap_io.io._gdrive import _is_gdrive_url
+
+    if _is_gdrive_url(filename):
+        if sniff is False:
+            raise ValueError(
+                "Cannot infer format for a Google Drive URL when sniff=False "
+                f"(Drive links carry no file extension): '{filename}'. Pass an "
+                "explicit format= (e.g. 'slp')."
+            )
+        return _dispatch_gdrive_url_format(filename, **kwargs)
 
     parsed = urllib.parse.urlparse(filename)
     ext = "".join(Path(parsed.path).suffixes[-1:]).lower()
