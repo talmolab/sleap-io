@@ -1,5 +1,6 @@
 """Tests for methods in the sleap_io.io.video_reading file."""
 
+import pickle
 from pathlib import Path
 
 import h5py
@@ -240,6 +241,66 @@ def test_hdf5video_get_frame_raw_bytes_keep_open_false(slp_minimal_pkg):
     # Verify PNG magic bytes
     png_magic = raw_bytes[:4].view(np.uint8)
     assert list(png_magic) == [137, 80, 78, 71]
+
+
+def test_hdf5video_pickle_drops_reader(slp_minimal_pkg):
+    """Pickling an HDF5Video drops the open reader and stays readable."""
+    backend = VideoBackend.from_filename(slp_minimal_pkg)
+    assert type(backend) is HDF5Video
+
+    # Force the cached reader handle to be populated by reading a frame.
+    _ = backend[0]
+    assert backend._open_reader is not None
+
+    restored = pickle.loads(pickle.dumps(backend))
+    assert type(restored) is HDF5Video
+
+    # The unpicklable h5py handle must not survive the round-trip.
+    assert restored._open_reader is None
+    assert restored._url_file is None
+
+    # Shape (and lazy reopening) still works after unpickling.
+    assert restored.shape == backend.shape
+    assert_equal(restored[0], backend[0])
+
+
+def test_hdf5video_url_reads_frames(httpserver, slp_minimal_pkg):
+    """An HDF5Video with a URL filename reads frames via fsspec over HTTP.
+
+    The fixture is served with a plain 200 (no Range/206 support) to confirm
+    small files load via a full read.
+    """
+    file_bytes = Path(slp_minimal_pkg).read_bytes()
+    httpserver.expect_request("/labels.pkg.slp").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.pkg.slp")
+
+    # Construct the HDF5Video directly against the URL and exercise _open_h5.
+    # Use the "download" stream mode (full read into memory) so it works against
+    # a server that only returns 200 with no Range support.
+    backend = HDF5Video(filename=url, dataset=None, keep_open=False)
+    object.__setattr__(backend, "_url_stream_mode", "download")
+    object.__setattr__(backend, "_url_file", None)
+    assert type(backend) is HDF5Video
+
+    # Re-run heuristic detection over the URL now that download mode is set so
+    # the embedded image format/dataset are read from the remote file.
+    backend.__attrs_post_init__()
+    assert backend.dataset == "video0/video"
+    assert backend.has_embedded_images
+
+    # _open_h5() should open the remote file and yield a usable handle.
+    with backend._open_h5() as f:
+        assert "video0/video" in f
+
+    # Reading the first frame should pull bytes over HTTP and decode them.
+    frame = backend[0]
+    assert frame.shape == (384, 384, 1)
+
+    # Compare against a local read of the same fixture for parity.
+    local = HDF5Video(filename=slp_minimal_pkg, dataset="video0/video", keep_open=False)
+    assert_equal(frame, local[0])
 
 
 def test_hdf5video_get_frame_raw_bytes_fixed_length(tmpdir):
