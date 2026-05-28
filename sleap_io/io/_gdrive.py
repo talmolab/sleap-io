@@ -28,14 +28,21 @@ import re
 import urllib.parse
 from html.parser import HTMLParser
 
-from sleap_io.io._remote import RemoteIOError, _redact_url
+from sleap_io.io._remote import (
+    _GDRIVE_HOSTS,
+    RemoteIOError,
+    _is_gdrive_url,
+    _redact_url,
+)
+
+# Re-export the pure-stdlib Drive detection helpers (defined in ``_remote`` so
+# they are importable without this heavier resolver module). Keeping them in the
+# ``_gdrive`` namespace preserves the import sites in ``main``/``video_reading``.
+__all__ = ["_GDRIVE_HOSTS", "_is_gdrive_url"]
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-#: Hostnames recognized as Google Drive / Docs share links.
-_GDRIVE_HOSTS = frozenset({"drive.google.com", "docs.google.com"})
 
 #: Base used to absolutize a relative ``href="/uc?export=download…"`` link.
 _DOCS_BASE = "https://docs.google.com"
@@ -77,23 +84,10 @@ _ERROR_SUBCAPTION_RE = re.compile(
 
 # ---------------------------------------------------------------------------
 # URL detection + file-id parsing
+#
+# ``_is_gdrive_url`` / ``_GDRIVE_HOSTS`` are imported from ``_remote`` above and
+# re-exported here (see ``__all__``).
 # ---------------------------------------------------------------------------
-
-
-def _is_gdrive_url(url: str) -> bool:
-    """Return True if ``url`` is a Google Drive / Docs share link.
-
-    Args:
-        url: The candidate URL.
-
-    Returns:
-        True if the hostname is ``drive.google.com`` or ``docs.google.com``.
-    """
-    try:
-        host = urllib.parse.urlparse(url).hostname
-    except (ValueError, TypeError):  # pragma: no cover - urlparse is permissive
-        return False
-    return host in _GDRIVE_HOSTS
 
 
 def _parse_gdrive(url: str) -> tuple[str, bool]:

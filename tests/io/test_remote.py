@@ -1463,6 +1463,22 @@ def test_open_gdrive_two_hop_download_form(gdrive_uc_template):
     assert bio.read() == _HDF5_BODY
 
 
+def test_open_url_routes_gdrive_to_resolver(gdrive_uc_template):
+    """`open_url` detects a Drive link and routes it through the resolver.
+
+    Exercises the Google Drive branch of `open_url` itself (not just the
+    `_open_gdrive` helper): a `drive.google.com` URL is recognized by
+    `_is_gdrive_url`, the streaming kwargs are bypassed, and the resolved bytes
+    come back as a BytesIO.
+    """
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+
+    file_like = open_url(
+        "https://drive.google.com/file/d/FILEID/view", stream_mode="blockcache"
+    )
+    assert file_like.read() == _HDF5_BODY
+
+
 def test_open_gdrive_carries_cookie_across_hop(gdrive_uc_template):
     """The interstitial Set-Cookie is echoed back on the second (download) hop."""
     cookie_seen: list[str | None] = []

@@ -50,6 +50,11 @@ _CLOUD_PROTOCOL_TO_PACKAGE = {
     "abfs": "adlfs",
 }
 
+#: Hostnames recognized as Google Drive / Docs share links. Detection lives
+#: here (pure stdlib) so it is reachable without importing the heavier
+#: :mod:`sleap_io.io._gdrive` resolver; the resolver re-exports this symbol.
+_GDRIVE_HOSTS = frozenset({"drive.google.com", "docs.google.com"})
+
 #: HTTP headers stripped on cross-origin redirect (case-insensitive).
 _SENSITIVE_HEADERS = frozenset({"authorization", "cookie", "proxy-authorization"})
 
@@ -182,6 +187,26 @@ def _is_url(filename: str | os.PathLike) -> bool:
         return False
     scheme = urllib.parse.urlparse(s).scheme.lower()
     return scheme in _URL_SCHEMES
+
+
+def _is_gdrive_url(url: str) -> bool:
+    """Return True if ``url`` is a Google Drive / Docs share link.
+
+    Lives in this module (alongside :func:`_is_url`) so the cheap, pure-stdlib
+    Drive detection is importable without pulling in the heavier
+    :mod:`sleap_io.io._gdrive` resolver; that module re-exports this function.
+
+    Args:
+        url: The candidate URL.
+
+    Returns:
+        True if the hostname is ``drive.google.com`` or ``docs.google.com``.
+    """
+    try:
+        host = urllib.parse.urlparse(url).hostname
+    except (ValueError, TypeError):  # pragma: no cover - urlparse is permissive
+        return False
+    return host in _GDRIVE_HOSTS
 
 
 def _redact_url(url: str) -> str:
@@ -594,10 +619,12 @@ def open_url(
     # Google Drive share links resolve through a two-hop interstitial flow and
     # are full-prefetched into memory (Drive's HEAD 405 + quota-mid-stream
     # behavior makes lazy range reads unreliable). The streaming kwargs above
-    # (stream_mode/cache/block_size/...) do not apply to this branch.
-    from sleap_io.io._gdrive import _is_gdrive_url, _open_gdrive
-
+    # (stream_mode/cache/block_size/...) do not apply to this branch. Detection
+    # (``_is_gdrive_url``) is local + pure stdlib; the resolver is imported
+    # lazily only when a Drive URL is actually seen.
     if _is_gdrive_url(url):
+        from sleap_io.io._gdrive import _open_gdrive
+
         return _open_gdrive(url, headers=headers)
 
     parsed = urllib.parse.urlparse(url)
