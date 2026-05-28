@@ -438,10 +438,30 @@ class SkeletonEncoder:
             if node not in node_to_py_id:
                 node_to_py_id[node] = self._get_or_create_py_id(node)
 
-        # Create nodes section with py/id references
+        # Determine which nodes were serialized with full object state inside
+        # `links`. Nodes that appear in no edge or symmetry (e.g. the lone node
+        # of a single-node skeleton, or any isolated node) are never emitted in
+        # `links`, so referencing them here by py/id alone would dangle and the
+        # decoder would silently drop them. Emit their full object state in the
+        # nodes section instead.
+        nodes_in_links = set()
+        for edge in skeleton.edges:
+            nodes_in_links.add(edge.source)
+            nodes_in_links.add(edge.destination)
+        for symmetry in skeleton.symmetries:
+            for node in symmetry.nodes:
+                nodes_in_links.add(node)
+
+        # Create nodes section: py/id references for nodes already serialized in
+        # `links`, full object state for isolated nodes. Fully-connected
+        # skeletons are unaffected (every node is in a link), so existing output
+        # is unchanged.
         nodes = []
         for node in skeleton.nodes:
-            nodes.append({"id": {"py/id": node_to_py_id[node]}})
+            if node in nodes_in_links:
+                nodes.append({"id": {"py/id": node_to_py_id[node]}})
+            else:
+                nodes.append({"id": self._encode_node(node)})
 
         # Build final skeleton dict
         return {
