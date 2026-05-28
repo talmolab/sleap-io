@@ -301,6 +301,35 @@ def test_complex_round_trip():
     assert sym_nodes1 == sym_nodes2
 
 
+def test_round_trip_single_node_skeleton():
+    """Single-node (edge-less) skeletons must round-trip without dropping nodes.
+
+    Regression test: the encoder previously emitted isolated nodes as a bare
+    ``py/id`` back-reference to an object that was never serialized (full node
+    state is only written inside ``links``), so a skeleton with no edges decoded
+    to an empty skeleton.
+    """
+    skeleton1 = sio.Skeleton(nodes=[sio.Node("centroid")], name="centroid")
+
+    skeleton2 = decode_skeleton(encode_skeleton(skeleton1))
+
+    assert skeleton2.name == "centroid"
+    assert [n.name for n in skeleton2.nodes] == ["centroid"]
+    assert len(skeleton2.edges) == 0
+
+
+def test_round_trip_isolated_node():
+    """Skeletons with an isolated (unconnected) node retain all nodes."""
+    nodes = [sio.Node("a"), sio.Node("b"), sio.Node("c")]
+    edges = [sio.Edge(nodes[0], nodes[1])]  # "c" is isolated
+    skeleton1 = sio.Skeleton(nodes=nodes, edges=edges, name="mixed")
+
+    skeleton2 = decode_skeleton(encode_skeleton(skeleton1))
+
+    assert {n.name for n in skeleton2.nodes} == {"a", "b", "c"}
+    assert len(skeleton2.edges) == 1
+
+
 # File I/O tests using fixtures
 def test_load_minimal_skeleton_fixture(skeleton_json_minimal):
     """Test loading the minimal skeleton fixture."""
