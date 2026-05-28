@@ -23,6 +23,7 @@ does *not* include labeling, training, or inference.
 - **Codecs** -- Convert to/from NumPy arrays, DataFrames (pandas/polars), and dictionaries ([guide](codecs.md))
 - **Video I/O** -- Read any video format via pluggable backends (FFMPEG, OpenCV, PyAV) with a NumPy-like interface ([model](model/video.md))
 - **Lazy loading** -- Load large SLP files up to 90x faster by deferring object creation ([details](formats/slp.md#lazy-loading))
+- **Remote URLs** -- Load `.slp` files directly from `https://`, `s3://`, `gs://`, and `az://` URLs with lazy range-based reads and optional persistent caching ([guide](examples.md#loading-from-urls))
 - **Dataset splits** -- Create train/val/test splits and export to formats like Ultralytics YOLO ([example](examples.md#make-trainingvalidationtest-splits))
 
 ## Installation

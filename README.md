@@ -22,6 +22,7 @@ Complements the core [SLEAP](https://github.com/talmolab/sleap) package but does
 - **Codecs** -- Convert to/from NumPy arrays, DataFrames (pandas/polars), and dictionaries
 - **Video I/O** -- Read any video format via pluggable backends (FFMPEG, OpenCV, PyAV) with a NumPy-like interface
 - **Lazy loading** -- Load large SLP files up to 90x faster by deferring object creation
+- **Remote URLs** -- Load `.slp` files directly from `https://`, `s3://`, `gs://`, and `az://` URLs with lazy range-based reads and optional persistent caching
 - **Dataset splits** -- Create train/val/test splits and export to formats like Ultralytics YOLO
 
 ## Installation
