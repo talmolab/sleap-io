@@ -1632,6 +1632,75 @@ def test_open_gdrive_non_html_first_hop(gdrive_uc_template):
     assert bio.read() == _HDF5_BODY
 
 
+def test_open_gdrive_rejects_oversize_content_length(gdrive_uc_template):
+    """An advertised Content-Length over the cap is rejected before reading."""
+    # The two-hop helper's bytes download hop sets a concrete Content-Length.
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=b"x" * 1000)
+
+    with pytest.raises(RemoteIOError, match="exceeds the maximum"):
+        _open_gdrive("https://drive.google.com/file/d/FILEID/view", max_bytes=16)
+
+
+def test_open_gdrive_rejects_oversize_streamed_body(gdrive_uc_template):
+    """A body over the cap with NO Content-Length is caught by the running cap."""
+
+    def _handler(request):
+        # An iterator body makes werkzeug use chunked transfer with no
+        # Content-Length, so only the running total can catch the overflow.
+        def gen():
+            yield b"x" * 5000
+            yield b"y" * 5000
+
+        resp = Response(gen(), status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="big.bin"'
+        return resp
+
+    gdrive_uc_template.expect_request("/uc").respond_with_handler(_handler)
+
+    with pytest.raises(RemoteIOError, match="exceeds the maximum"):
+        _open_gdrive("https://drive.google.com/uc?id=FILEID", max_bytes=8)
+
+
+def test_open_gdrive_accepts_body_within_cap(gdrive_uc_template):
+    """A body at or under the cap downloads byte-exact (chunked reassembly)."""
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+
+    bio = _open_gdrive(
+        "https://drive.google.com/file/d/FILEID/view", max_bytes=10_000
+    )
+    assert bio.read() == _HDF5_BODY
+
+
+def test_open_gdrive_default_cap_allows_small_file(gdrive_uc_template):
+    """With no explicit max_bytes the default cap is a no-op for normal files."""
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+
+    bio = _open_gdrive("https://drive.google.com/file/d/FILEID/view")
+    assert bio.read() == _HDF5_BODY
+
+
+def test_open_gdrive_cap_boundary_exact_passes(gdrive_uc_template):
+    """A body exactly equal to max_bytes is accepted (cap uses strict `>`)."""
+    body = b"z" * 256
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=body)
+
+    bio = _open_gdrive(
+        "https://drive.google.com/file/d/FILEID/view", max_bytes=256
+    )
+    assert bio.read() == body
+
+
+def test_open_gdrive_cap_boundary_off_by_one_fails(gdrive_uc_template):
+    """A body one byte over max_bytes is rejected (guards `>` vs `>=`)."""
+    body = b"z" * 257
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=body)
+
+    with pytest.raises(RemoteIOError, match="exceeds the maximum"):
+        _open_gdrive(
+            "https://drive.google.com/file/d/FILEID/view", max_bytes=256
+        )
+
+
 def test_open_gdrive_quota_page_raises(gdrive_uc_template):
     """A quota interstitial surfaces as a RemoteIOError, not file bytes."""
     quota_html = (
