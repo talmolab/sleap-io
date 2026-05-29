@@ -1243,8 +1243,12 @@ def _dispatch_gdrive_url_format(filename: str, **kwargs) -> Labels | Video:
 
     Raises:
         ValueError: If the content type cannot be recognized.
+        NotImplementedError: If the sniffed format is recognized but remote
+            loading for it is not yet implemented (every format other than
+            `slp`/`video`).
         RemoteIOError: For HTTP / resolution failures.
     """
+    from sleap_io.io import _remote
     from sleap_io.io._gdrive import _open_gdrive
 
     headers = kwargs.get("headers")
@@ -1254,6 +1258,19 @@ def _dispatch_gdrive_url_format(filename: str, **kwargs) -> Labels | Video:
     finally:
         file_like.close()
     fmt = _gdrive_format_from_bytes(data)
+
+    # The bytes were already fully downloaded to sniff the format above, so the
+    # generic `_dispatch_url_format` "Download the file locally first." message
+    # would be misleading here (the download cost was already paid). Raise a
+    # Drive-specific message instead for unsupported formats.
+    if fmt not in _URL_IMPLEMENTED_FORMATS:
+        raise NotImplementedError(
+            f"The Google Drive file was detected as '{fmt}' after a full "
+            f"download, but remote loading for '{fmt}' is not yet implemented "
+            f"(URL: {_remote._redact_url(filename)}); only 'slp' and 'video' "
+            "are supported over URLs. Save the bytes to a local file and load "
+            "that path instead."
+        )
     return _dispatch_url_format(filename, fmt, **kwargs)
 
 

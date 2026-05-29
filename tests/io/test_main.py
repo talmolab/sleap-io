@@ -893,6 +893,58 @@ def test_load_video_gdrive_url_not_supported():
         load_video("https://drive.google.com/file/d/FILEID/view")
 
 
+def _serve_gdrive_bytes(httpserver, body):
+    """Wire a two-hop Drive flow serving arbitrary ``body`` bytes.
+
+    Args:
+        httpserver: The `pytest-httpserver` instance to configure.
+        body: The raw bytes served at the usercontent `/download` hop.
+    """
+    from werkzeug.wrappers import Response
+
+    download_url = httpserver.url_for("/download")
+    form = (
+        f'<html><body><form id="download-form" action="{download_url}" '
+        'method="get">'
+        '<input type="hidden" name="id" value="FILEID">'
+        '<input type="hidden" name="export" value="download">'
+        '<input type="hidden" name="confirm" value="t">'
+        "</form></body></html>"
+    )
+
+    def _download_handler(request):
+        resp = Response(body, status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="data.bin"'
+        return resp
+
+    httpserver.expect_request("/uc").respond_with_data(form, content_type="text/html")
+    httpserver.expect_request("/download").respond_with_handler(_download_handler)
+
+
+def test_load_file_gdrive_url_unsupported_format_message(gdrive_uc_template):
+    """A Drive file sniffed as a non-slp/video format raises a Drive-specific error.
+
+    The bytes are already fully downloaded to sniff the format, so the generic
+    "Download the file locally first." wording would be misleading. The
+    Drive-sniff path must instead say the download cost was already paid and
+    point at saving the bytes locally.
+    """
+    buf = io.BytesIO()
+    with h5py.File(buf, "w") as f:
+        f.create_dataset("track_occupancy", data=np.zeros((1, 1)))
+    _serve_gdrive_bytes(gdrive_uc_template, buf.getvalue())
+
+    with pytest.raises(NotImplementedError) as ei:
+        load_file("https://drive.google.com/file/d/FILEID/view")
+
+    msg = str(ei.value)
+    assert "analysis_h5" in msg
+    assert "after a full download" in msg
+    # Must not reuse the misleading generic "Download the file locally first."
+    # wording (the user already paid the download cost).
+    assert "Download the file locally first." not in msg
+
+
 def test_gdrive_format_from_bytes_hdf5_slp():
     """An HDF5 body with a `metadata` group is classified as slp."""
     buf = io.BytesIO()

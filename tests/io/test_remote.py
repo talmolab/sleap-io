@@ -1244,8 +1244,15 @@ def test_is_gdrive_url(url, expected):
         ("https://drive.google.com/file/d/FILEID/view", "FILEID"),
         ("https://drive.google.com/file/d/FILEID/view?usp=sharing", "FILEID"),
         ("https://drive.google.com/file/d/FILEID/edit", "FILEID"),
-        # /file/u/<n>/d/<ID>/view per-account variant.
+        # /file/d/<ID>/preview (in-browser preview address-bar shape).
+        ("https://drive.google.com/file/d/FILEID/preview", "FILEID"),
+        # Bare /file/d/<ID> with no trailing action segment (+ trailing slash).
+        ("https://drive.google.com/file/d/FILEID", "FILEID"),
+        ("https://drive.google.com/file/d/FILEID/", "FILEID"),
+        # /file/u/<n>/d/<ID>/view per-account variant (+ /preview, bare).
         ("https://drive.google.com/file/u/0/d/FILEID/view", "FILEID"),
+        ("https://drive.google.com/file/u/0/d/FILEID/preview", "FILEID"),
+        ("https://drive.google.com/file/u/0/d/FILEID", "FILEID"),
         # id= query param, both orderings + /open?id=.
         ("https://drive.google.com/uc?id=FILEID&export=download", "FILEID"),
         ("https://drive.google.com/uc?export=download&id=FILEID", "FILEID"),
@@ -1278,7 +1285,8 @@ def test_parse_gdrive_folder_raises(url):
     [
         "https://drive.google.com/",
         "https://drive.google.com/something/else",
-        "https://drive.google.com/file/d/ABC",  # missing /view|/edit suffix
+        # A trailing path segment past the ID is not a recognized action.
+        "https://drive.google.com/file/d/ABC/view/extra",
     ],
 )
 def test_parse_gdrive_unparseable_raises(url):

@@ -62,10 +62,13 @@ _UC_URL_TEMPLATE = "https://drive.google.com/uc?id={file_id}"
 #: Maximum number of interstitial hops to follow before giving up.
 _MAX_HOPS = 4
 
-#: Path regexes that yield a Drive file ID (``/file/d/<ID>/view|edit`` and the
-#: ``/file/u/<n>/d/<ID>/…`` per-account variant).
-_FILE_PATH_RE = re.compile(r"^/file/d/(.+?)/(?:edit|view)$")
-_FILE_PATH_U_RE = re.compile(r"^/file/u/[0-9]+/d/(.+?)/(?:edit|view)$")
+#: Path regex that yields a Drive file ID. Accepts the ``/file/d/<ID>/…`` share
+#: path with an optional ``/u/<n>/`` per-account prefix and an optional trailing
+#: action segment (``/view``, ``/edit``, ``/preview``, or none). Using
+#: ``[^/]+`` for the ID segment keeps multi-segment paths from being misparsed.
+_FILE_PATH_RE = re.compile(
+    r"^/file/(?:u/[0-9]+/)?d/(?P<id>[^/]+)(?:/(?:edit|view|preview))?/?$"
+)
 
 #: Marks a folder share link (unsupported -- sleap-io loads single files).
 _FOLDER_RE = re.compile(r"/(?:drive/)?folders/")
@@ -94,9 +97,10 @@ def _parse_gdrive(url: str) -> tuple[str, bool]:
     """Extract the file ID from a Google Drive share URL.
 
     Supports the ``id=`` query parameter (``/open?id=…``,
-    ``/uc?id=…&export=download``), the ``/file/d/<ID>/view`` (and
-    ``/file/d/<ID>/edit``) path form, and the ``/file/u/<n>/d/<ID>/…``
-    per-account variant.
+    ``/uc?id=…&export=download``) and the ``/file/d/<ID>/…`` path form. The
+    trailing action segment is optional and may be ``/view``, ``/edit``,
+    ``/preview``, or absent (a bare ``/file/d/<ID>``); the ``/file/u/<n>/d/<ID>``
+    per-account prefix is also accepted.
 
     Args:
         url: A Google Drive share URL.
@@ -127,9 +131,9 @@ def _parse_gdrive(url: str) -> tuple[str, bool]:
         return query["id"][0], False
 
     # 2) Path-based forms.
-    match = _FILE_PATH_RE.match(path) or _FILE_PATH_U_RE.match(path)
+    match = _FILE_PATH_RE.match(path)
     if match:
-        return match.group(1), False
+        return match.group("id"), False
 
     raise ValueError(
         "Could not parse a Google Drive file ID from the URL; expected an "
