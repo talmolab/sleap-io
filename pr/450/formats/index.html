@@ -6734,8 +6734,20 @@ up from the CSV — the following extra metadata is imported:</p>
   mismatch or missing file.</li>
 </ul>
 <p>Pass <code>config=False</code> to disable config use entirely and reproduce the legacy,
-config-free output. Cropping/ROI metadata (<code>video_sets[...].crop</code>) is not yet
-imported.</p>
+config-free output.</p>
+<div class="admonition note">
+<p class="admonition-title">Cropping is not yet applied</p>
+<p>DeepLabCut's <code>video_sets[...].crop</code> is a <em>virtual</em> read-time crop (an ROI
+that DLC's video reader slices out of each full frame on the fly). When a
+project uses cropping, the images under <code>labeled-data/&lt;video&gt;/</code> are the
+cropped region and the labels are stored in <strong>cropped-frame coordinates</strong>,
+whereas the linked <code>source_video</code> points at the original, <strong>uncropped</strong>
+video. sleap-io does not yet apply this crop, so for cropped projects the
+labels are offset from the source video by the crop origin <code>(x1, y1)</code>.
+Reconciling the two requires virtual ROI-cropping of a <code>Video</code> on read,
+which is planned future work. For the common case of no cropping (the DLC
+default is the full frame), there is no offset and the link is exact.</p>
+</div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Single CSV; auto-discovers config.yaml for edges + source-video links.</span>
