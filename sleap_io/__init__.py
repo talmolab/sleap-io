@@ -20,6 +20,8 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "load_coco",
             "load_csv",
             "load_dlc",
+            "load_dlc_project",
+            "load_dlc_splits",
             "load_file",
             "load_geojson",
             "load_jabs",
