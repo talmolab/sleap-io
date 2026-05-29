@@ -1,6 +1,9 @@
 """Integration tests for the merging functionality."""
 
+import warnings
+
 import numpy as np
+import pytest
 
 from sleap_io import Labels, Skeleton
 from sleap_io.model.instance import Instance, PredictedInstance, Track
@@ -9,6 +12,8 @@ from sleap_io.model.matching import (
     InstanceMatcher,
     InstanceMatchMethod,
     MergeResult,
+    TrackMatcher,
+    TrackMatchMethod,
 )
 from sleap_io.model.video import Video
 
@@ -1883,3 +1888,271 @@ class TestMergeOriginalVideoLogic:
             "Chain: final.pkg.slp → intermediate.pkg.slp → /data/video.mp4"
         )
         assert labels.labeled_frames[0].video is base_video
+
+
+def _make_run(track_name, points, frame_idx=0, *, skeleton=None, video=None):
+    """Build a single-frame, single-instance Labels for divergence tests.
+
+    Args:
+        track_name: Name for the instance's track.
+        points: ``(n_nodes, 2)`` array of point coordinates.
+        frame_idx: Frame index for the labeled frame.
+        skeleton: Skeleton to use. A 2-node skeleton is created if None.
+        video: Video to use. A ``test.mp4`` video is created if None.
+
+    Returns:
+        A ``Labels`` with one ``LabeledFrame`` holding one tracked ``Instance``.
+    """
+    if skeleton is None:
+        skeleton = Skeleton(["head", "tail"])
+    if video is None:
+        video = Video(filename="test.mp4", open_backend=False)
+    labels = Labels()
+    frame = LabeledFrame(video=video, frame_idx=frame_idx)
+    inst = Instance.from_numpy(
+        np.asarray(points, dtype="float64"),
+        skeleton=skeleton,
+        track=Track(name=track_name),
+    )
+    frame.instances = [inst]
+    labels.append(frame)
+    return labels
+
+
+class TestTrackNameDivergenceWarning:
+    """Tests for the name-collision divergence warning in ``Labels.merge``."""
+
+    def test_warns_on_spatial_divergence(self):
+        """Warns when same-named tracks are far apart on the shared frame."""
+        skeleton = Skeleton(["head", "tail"])
+        run1 = _make_run("track_0", [[10, 10], [20, 20]], skeleton=skeleton)
+        run2 = _make_run("track_0", [[500, 500], [510, 510]], skeleton=skeleton)
+
+        with pytest.warns(UserWarning, match=r"track_0.*diverge spatially"):
+            result = run1.merge(run2, track="name")
+
+        assert result.successful
+        # Diagnostic only: tracks still collapse by name.
+        assert len(run1.tracks) == 1
+
+    def test_no_warning_when_instances_overlap(self):
+        """No divergence warning when same-named tracks overlap spatially."""
+        skeleton = Skeleton(["head", "tail"])
+        run1 = _make_run("track_0", [[10, 10], [20, 20]], skeleton=skeleton)
+        run2 = _make_run("track_0", [[11, 11], [21, 21]], skeleton=skeleton)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = run1.merge(run2, track="name")
+
+        assert result.successful
+        assert not any("diverge spatially" in str(w.message) for w in caught)
+        assert len(run1.tracks) == 1
+
+    def test_skipped_for_identity_track_method(self):
+        """No divergence check when track matching is by identity, not name."""
+        skeleton = Skeleton(["head", "tail"])
+        run1 = _make_run("track_0", [[10, 10], [20, 20]], skeleton=skeleton)
+        run2 = _make_run("track_0", [[500, 500], [510, 510]], skeleton=skeleton)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            run1.merge(run2, track="identity")
+
+        assert not any("diverge spatially" in str(w.message) for w in caught)
+
+    def test_skipped_for_custom_identity_matcher(self):
+        """No divergence check for a custom non-NAME TrackMatcher."""
+        skeleton = Skeleton(["head", "tail"])
+        run1 = _make_run("track_0", [[10, 10], [20, 20]], skeleton=skeleton)
+        run2 = _make_run("track_0", [[500, 500], [510, 510]], skeleton=skeleton)
+
+        matcher = TrackMatcher(method=TrackMatchMethod.IDENTITY)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            run1.merge(run2, track=matcher)
+
+        assert not any("diverge spatially" in str(w.message) for w in caught)
+
+    def test_skipped_for_identity_instance_matcher(self):
+        """No divergence check when the instance matcher is identity-based.
+
+        Identity instance matching compares track-object identity, which is
+        always False across a name collision, so it cannot assess spatial
+        divergence and must not warn unconditionally (even on divergent points).
+        """
+        skeleton = Skeleton(["head", "tail"])
+        run1 = _make_run("track_0", [[10, 10], [20, 20]], skeleton=skeleton)
+        run2 = _make_run("track_0", [[500, 500], [510, 510]], skeleton=skeleton)
+
+        matcher = InstanceMatcher(method=InstanceMatchMethod.IDENTITY)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            run1.merge(run2, track="name", instance=matcher)
+
+        assert not any("diverge spatially" in str(w.message) for w in caught)
+
+    def test_no_warning_without_shared_frames(self):
+        """No warning when same-named tracks never co-occur on a frame."""
+        skeleton = Skeleton(["head", "tail"])
+        run1 = _make_run(
+            "track_0", [[10, 10], [20, 20]], frame_idx=0, skeleton=skeleton
+        )
+        run2 = _make_run(
+            "track_0", [[500, 500], [510, 510]], frame_idx=5, skeleton=skeleton
+        )
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            run1.merge(run2, track="name")
+
+        assert not any("diverge spatially" in str(w.message) for w in caught)
+
+    def test_no_warning_when_track_not_on_shared_frame(self):
+        """No warning when the colliding track has no instance on a shared frame."""
+        skeleton = Skeleton(["head", "tail"])
+        video = Video(filename="test.mp4", open_backend=False)
+
+        # run1 has track_0 on frame 0.
+        run1 = _make_run(
+            "track_0", [[10, 10], [20, 20]], skeleton=skeleton, video=video
+        )
+
+        # run2 has both track_0 and track_1 in its track list (so track_0
+        # collides), but on the shared frame 0 only a track_1 instance appears.
+        run2 = Labels()
+        track0 = Track(name="track_0")
+        track1 = Track(name="track_1")
+        # Frame 0 (shared): only a track_1 instance.
+        f0 = LabeledFrame(video=video, frame_idx=0)
+        f0.instances = [
+            Instance.from_numpy(
+                np.array([[500.0, 500.0], [510.0, 510.0]]),
+                skeleton=skeleton,
+                track=track1,
+            )
+        ]
+        # Frame 5 (not shared): a track_0 instance, so track_0 is in run2.tracks.
+        f5 = LabeledFrame(video=video, frame_idx=5)
+        f5.instances = [
+            Instance.from_numpy(
+                np.array([[500.0, 500.0], [510.0, 510.0]]),
+                skeleton=skeleton,
+                track=track0,
+            )
+        ]
+        run2.append(f0)
+        run2.append(f5)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            run1.merge(run2, track="name")
+
+        assert not any("diverge spatially" in str(w.message) for w in caught)
+
+    def test_no_warning_for_appended_new_track(self):
+        """No warning when the incoming track is new (appended, not collided)."""
+        skeleton = Skeleton(["head", "tail"])
+        run1 = _make_run("track_0", [[10, 10], [20, 20]], skeleton=skeleton)
+        run2 = _make_run("track_2", [[500, 500], [510, 510]], skeleton=skeleton)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            run1.merge(run2, track="name")
+
+        assert not any("diverge spatially" in str(w.message) for w in caught)
+        # The new track is appended.
+        assert len(run1.tracks) == 2
+
+    def test_warns_once_per_pair_across_multiple_frames(self):
+        """Warning fires once per pair even with several divergent frames."""
+        skeleton = Skeleton(["head", "tail"])
+        video = Video(filename="test.mp4", open_backend=False)
+
+        # One Track object per run, reused across all frames, so the same
+        # (self_track, other_track) pair spans every shared frame.
+        run1 = Labels()
+        run2 = Labels()
+        self_track = Track(name="track_0")
+        other_track = Track(name="track_0")
+        for idx in range(3):
+            f1 = LabeledFrame(video=video, frame_idx=idx)
+            f1.instances = [
+                Instance.from_numpy(
+                    np.array([[10.0, 10.0], [20.0, 20.0]]),
+                    skeleton=skeleton,
+                    track=self_track,
+                )
+            ]
+            run1.append(f1)
+
+            f2 = LabeledFrame(video=video, frame_idx=idx)
+            f2.instances = [
+                Instance.from_numpy(
+                    np.array([[500.0, 500.0], [510.0, 510.0]]),
+                    skeleton=skeleton,
+                    track=other_track,
+                )
+            ]
+            run2.append(f2)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            run1.merge(run2, track="name")
+
+        divergence = [w for w in caught if "diverge spatially" in str(w.message)]
+        assert len(divergence) == 1
+        assert "3 overlapping" in str(divergence[0].message)
+
+    def test_many_to_one_collision_warns_per_other_track(self):
+        """Two incoming same-named tracks colliding onto one self track."""
+        skeleton = Skeleton(["head", "tail"])
+        video = Video(filename="test.mp4", open_backend=False)
+
+        run1 = _make_run(
+            "track_0", [[10, 10], [20, 20]], skeleton=skeleton, video=video
+        )
+
+        # run2: two distinct Track objects both named track_0 on distinct frames.
+        run2 = Labels()
+        track_a = Track(name="track_0")
+        track_b = Track(name="track_0")
+        fa = LabeledFrame(video=video, frame_idx=0)
+        fa.instances = [
+            Instance.from_numpy(
+                np.array([[500.0, 500.0], [510.0, 510.0]]),
+                skeleton=skeleton,
+                track=track_a,
+            )
+        ]
+        fb = LabeledFrame(video=video, frame_idx=0)
+        fb.instances = [
+            Instance.from_numpy(
+                np.array([[600.0, 600.0], [610.0, 610.0]]),
+                skeleton=skeleton,
+                track=track_b,
+            )
+        ]
+        # Distinct frame_idx so both frames coexist in run2.
+        fb.frame_idx = 1
+        run1_extra = LabeledFrame(video=video, frame_idx=1)
+        run1_extra.instances = [
+            Instance.from_numpy(
+                np.array([[10.0, 10.0], [20.0, 20.0]]),
+                skeleton=skeleton,
+                track=run1.tracks[0],
+            )
+        ]
+        run1.append(run1_extra)
+        run2.append(fa)
+        run2.append(fb)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = run1.merge(run2, track="name")
+
+        assert result.successful
+        divergence = [w for w in caught if "diverge spatially" in str(w.message)]
+        # Both incoming track_0 objects collide onto self's single track_0 and
+        # both diverge, so one warning per colliding other_track (two total).
+        assert len(divergence) == 2

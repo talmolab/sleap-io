@@ -3498,6 +3498,13 @@ class Labels:
                     self.tracks.append(other_track)
                     track_map[other_track] = other_track
 
+            # Warn (diagnostic only) if any name-matched track pair carries
+            # instances that diverge spatially on every shared frame. This does
+            # not alter track_map or any merge result.
+            self._warn_track_name_divergence(
+                other, video_map, track_map, track_matcher, instance_matcher
+            )
+
             # Step 4: Merge frames
             total_frames = len(other.labeled_frames)
 
@@ -3661,6 +3668,108 @@ class Labels:
             progress_callback(total_frames, total_frames, "Merge complete")
 
         return result
+
+    def _warn_track_name_divergence(
+        self,
+        other: "Labels",
+        video_map: dict,
+        track_map: dict,
+        track_matcher: "TrackMatcher",
+        instance_matcher: "InstanceMatcher",
+    ) -> None:
+        """Warn when name-matched tracks diverge spatially on all shared frames.
+
+        Name-based track merging silently coalesces tracks that share a name
+        across two ``Labels``. If those tracks actually label different animals,
+        this can glue distinct tracks together. This helper emits a diagnostic
+        ``UserWarning`` (purely additive; it never changes the merge result) when
+        a track pair matched by name carries instances on overlapping frames that
+        do not spatially correspond under the merge's instance matcher.
+
+        The check is a no-op unless track matching is by ``NAME`` (divergence is
+        meaningless for identity/object track matching) and the instance matcher
+        is spatial (``SPATIAL`` or ``IOU``). A warning fires at most once per
+        colliding ``(self_track, other_track)`` pair, only when the pair has at
+        least one shared frame with instances on both sides and zero spatial
+        instance matches across all such frames.
+
+        Args:
+            other: The other ``Labels`` being merged into ``self``.
+            video_map: Mapping from ``other`` videos to the matched ``self``
+                videos, as built in ``merge()``.
+            track_map: Mapping from ``other`` tracks to the matched ``self``
+                tracks (or back to themselves if appended as new), as built in
+                ``merge()``.
+            track_matcher: The ``TrackMatcher`` used for the merge. The check is
+                skipped unless its method is ``NAME``.
+            instance_matcher: The ``InstanceMatcher`` used for the merge. Reused
+                here as the divergence primitive (no new threshold introduced).
+                Skipped when its method is ``IDENTITY`` (see below).
+        """
+        import warnings
+
+        from sleap_io.model.matching import InstanceMatchMethod, TrackMatchMethod
+
+        # Only name-based merging can silently glue distinct tracks together.
+        if track_matcher.method != TrackMatchMethod.NAME:
+            return
+
+        # Divergence is a spatial question. An ``IDENTITY`` instance matcher
+        # compares track-object identity, which is always False across a name
+        # collision (the tracks are distinct objects by definition), so it cannot
+        # assess spatial divergence and would warn unconditionally. Skip it.
+        if instance_matcher.method == InstanceMatchMethod.IDENTITY:
+            return
+
+        # Select true name collisions: an other_track coalesced onto a distinct
+        # self_track object with an equal name (not a track appended as new).
+        colliding_pairs = [
+            (other_track, self_track)
+            for other_track, self_track in track_map.items()
+            if self_track is not other_track and self_track.name == other_track.name
+        ]
+        if not colliding_pairs:
+            return
+
+        for other_track, self_track in colliding_pairs:
+            n_shared = 0
+            n_matches = 0
+            divergent_video = None
+
+            for other_frame in other.labeled_frames:
+                mapped_video = video_map.get(other_frame.video, other_frame.video)
+                matching_frames = self.find(mapped_video, other_frame.frame_idx)
+                if len(matching_frames) == 0:
+                    continue
+
+                self_insts = [
+                    inst
+                    for frame in matching_frames
+                    for inst in frame.instances
+                    if inst.track is self_track
+                ]
+                other_insts = [
+                    inst for inst in other_frame.instances if inst.track is other_track
+                ]
+                if len(self_insts) == 0 or len(other_insts) == 0:
+                    continue
+
+                n_shared += 1
+                n_matches += len(instance_matcher.find_matches(self_insts, other_insts))
+                if divergent_video is None:
+                    divergent_video = mapped_video
+
+            if n_shared >= 1 and n_matches == 0:
+                warnings.warn(
+                    f"Track {self_track.name!r} was merged by name across labels "
+                    f"that share video {divergent_video!r}, but instances on that "
+                    f"track diverge spatially on all {n_shared} overlapping "
+                    f"frame(s) (no instance matched under the merge's instance "
+                    f"matcher). If these tracking runs label different animals, "
+                    f"name-based merging may glue distinct tracks together. "
+                    f"Review the merge or resolve tracks at the instance level.",
+                    stacklevel=2,
+                )
 
     @staticmethod
     def _remap_frame_annotations(
