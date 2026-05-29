@@ -21,6 +21,11 @@ from pathlib import Path
 import aiohttp
 import pytest
 from aiohttp.client_reqrep import ConnectionKey
+from fsspec.implementations.cached import (
+    SimpleCacheFileSystem,
+    WholeFileCacheFileSystem,
+)
+from fsspec.implementations.http import HTTPFileSystem
 from multidict import CIMultiDict
 from pytest_httpserver import HTTPServer
 from werkzeug.wrappers import Response
@@ -1216,6 +1221,106 @@ def test_open_url_blockcache_explicit_max_blocks(httpserver):
 
 
 # ---------------------------------------------------------------------------
+# fsspec instance-cache growth guard (skip_instance_cache on header-bearing
+# filesystems so rotating per-request tokens do not accumulate fs instances).
+# ---------------------------------------------------------------------------
+
+
+def test_build_fsspec_filesystem_http_skips_instance_cache(httpserver):
+    """Distinct per-request headers do not grow `HTTPFileSystem._cache`."""
+    httpserver.expect_request("/data").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/data")
+
+    before = len(HTTPFileSystem._cache)
+    for i in range(5):
+        fs = _build_fsspec_filesystem(
+            "https", headers={"Authorization": f"Bearer t{i}"}
+        )
+        # The filesystem still works: a ranged read returns the served body.
+        with fs.open(url, mode="rb") as f:
+            assert f.read(8) == b"\x89HDF\r\n\x1a\n"
+    assert len(HTTPFileSystem._cache) == before
+
+
+def test_http_inner_options_marks_skip_instance_cache():
+    """`_http_inner_options` opts the inner http fs out of the instance cache."""
+    opts = _http_inner_options({"Authorization": "x"})
+    assert opts["skip_instance_cache"] is True
+    # The identity-encoding guarantee and client wiring are still present.
+    assert opts["client_kwargs"]["headers"]["Accept-Encoding"] == "identity"
+    assert "get_client" in opts
+
+
+def test_open_url_cache_mode_does_not_grow_instance_cache(httpserver, tmp_path):
+    """`cache` mode keeps both the SimpleCache and inner HTTP caches flat."""
+    httpserver.expect_request("/data.slp").respond_with_data(
+        _HDF5_BODY, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/data.slp")
+
+    simple_before = len(SimpleCacheFileSystem._cache)
+    http_before = len(HTTPFileSystem._cache)
+    for i in range(3):
+        file_like = open_url(
+            url,
+            stream_mode="cache",
+            cache_storage=tmp_path,
+            headers={"Authorization": f"Bearer c{i}"},
+        )
+        try:
+            assert file_like.read(8) == b"\x89HDF\r\n\x1a\n"
+        finally:
+            file_like.close()
+    # Both halves of the chained simplecache::http open must stay bounded; an
+    # outer-only skip would leak the inner HTTP filesystem cache.
+    assert len(SimpleCacheFileSystem._cache) == simple_before
+    assert len(HTTPFileSystem._cache) == http_before
+
+
+def test_open_url_filecache_mode_does_not_grow_instance_cache(httpserver, tmp_path):
+    """`filecache` mode keeps the WholeFileCache and inner HTTP caches flat."""
+    httpserver.expect_request("/data.slp").respond_with_data(
+        _HDF5_BODY, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/data.slp")
+
+    whole_before = len(WholeFileCacheFileSystem._cache)
+    http_before = len(HTTPFileSystem._cache)
+    for i in range(3):
+        file_like = open_url(
+            url,
+            stream_mode="filecache",
+            cache_storage=tmp_path,
+            headers={"Authorization": f"Bearer f{i}"},
+        )
+        try:
+            assert file_like.read(8) == b"\x89HDF\r\n\x1a\n"
+        finally:
+            file_like.close()
+    assert len(WholeFileCacheFileSystem._cache) == whole_before
+    assert len(HTTPFileSystem._cache) == http_before
+
+
+def test_open_url_blockcache_does_not_grow_instance_cache(httpserver):
+    """`blockcache` (auto) mode does not grow the HTTP instance cache."""
+    httpserver.expect_request("/data.slp").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/data.slp")
+
+    before = len(HTTPFileSystem._cache)
+    for i in range(3):
+        file_like = open_url(url, headers={"Authorization": f"Bearer b{i}"})
+        try:
+            assert file_like.read(8) == b"\x89HDF\r\n\x1a\n"
+        finally:
+            file_like.close()
+    assert len(HTTPFileSystem._cache) == before
+
+
+# ---------------------------------------------------------------------------
 # Google Drive: URL detection + file-id parsing (pure, no server)
 # ---------------------------------------------------------------------------
 
@@ -1527,6 +1632,69 @@ def test_open_gdrive_non_html_first_hop(gdrive_uc_template):
 
     bio = _open_gdrive("https://drive.google.com/uc?id=FILEID")
     assert bio.read() == _HDF5_BODY
+
+
+def test_open_gdrive_rejects_oversize_content_length(gdrive_uc_template):
+    """An advertised Content-Length over the cap is rejected before reading."""
+    # The two-hop helper's bytes download hop sets a concrete Content-Length.
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=b"x" * 1000)
+
+    with pytest.raises(RemoteIOError, match="exceeds the maximum"):
+        _open_gdrive("https://drive.google.com/file/d/FILEID/view", max_bytes=16)
+
+
+def test_open_gdrive_rejects_oversize_streamed_body(gdrive_uc_template):
+    """A body over the cap with NO Content-Length is caught by the running cap."""
+
+    def _handler(request):
+        # An iterator body makes werkzeug use chunked transfer with no
+        # Content-Length, so only the running total can catch the overflow.
+        def gen():
+            yield b"x" * 5000
+            yield b"y" * 5000
+
+        resp = Response(gen(), status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="big.bin"'
+        return resp
+
+    gdrive_uc_template.expect_request("/uc").respond_with_handler(_handler)
+
+    with pytest.raises(RemoteIOError, match="exceeds the maximum"):
+        _open_gdrive("https://drive.google.com/uc?id=FILEID", max_bytes=8)
+
+
+def test_open_gdrive_accepts_body_within_cap(gdrive_uc_template):
+    """A body at or under the cap downloads byte-exact (chunked reassembly)."""
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+
+    bio = _open_gdrive("https://drive.google.com/file/d/FILEID/view", max_bytes=10_000)
+    assert bio.read() == _HDF5_BODY
+
+
+def test_open_gdrive_default_cap_allows_small_file(gdrive_uc_template):
+    """With no explicit max_bytes the default cap is a no-op for normal files."""
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+
+    bio = _open_gdrive("https://drive.google.com/file/d/FILEID/view")
+    assert bio.read() == _HDF5_BODY
+
+
+def test_open_gdrive_cap_boundary_exact_passes(gdrive_uc_template):
+    """A body exactly equal to max_bytes is accepted (cap uses strict `>`)."""
+    body = b"z" * 256
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=body)
+
+    bio = _open_gdrive("https://drive.google.com/file/d/FILEID/view", max_bytes=256)
+    assert bio.read() == body
+
+
+def test_open_gdrive_cap_boundary_off_by_one_fails(gdrive_uc_template):
+    """A body one byte over max_bytes is rejected (guards `>` vs `>=`)."""
+    body = b"z" * 257
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=body)
+
+    with pytest.raises(RemoteIOError, match="exceeds the maximum"):
+        _open_gdrive("https://drive.google.com/file/d/FILEID/view", max_bytes=256)
 
 
 def test_open_gdrive_quota_page_raises(gdrive_uc_template):

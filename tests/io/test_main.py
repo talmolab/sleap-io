@@ -476,6 +476,170 @@ def test_load_slp_url_embedded_pkg_keeps_clean_url_and_reads_frame(
     assert frame.dtype.name == "uint8"
 
 
+def _serve_with_range_auth(httpserver, path, data, token):
+    """Serve `data` at `path` with Range support, gated on a bearer token.
+
+    Any request whose `Authorization` header does not equal `token` gets a 401,
+    so an unauthenticated probe fails exactly as an auth-gated remote would. HEAD
+    and ranged/full GET are supported for the authenticated case.
+    """
+    from werkzeug.wrappers import Response
+
+    def handler(request):
+        if request.headers.get("Authorization") != token:
+            return Response(b"unauthorized", status=401)
+        total = len(data)
+        if request.method == "HEAD":
+            resp = Response(b"", status=200)
+            resp.headers["Content-Length"] = str(total)
+            resp.headers["Accept-Ranges"] = "bytes"
+            return resp
+        rng = request.headers.get("Range")
+        if rng and rng.startswith("bytes="):
+            spec = rng.split("=", 1)[1].split(",")[0]
+            start_s, _, end_s = spec.partition("-")
+            start = int(start_s) if start_s else 0
+            end = int(end_s) if end_s else total - 1
+            end = min(end, total - 1)
+            chunk = data[start : end + 1]
+            resp = Response(chunk, status=206)
+            resp.headers["Content-Range"] = f"bytes {start}-{end}/{total}"
+        else:
+            resp = Response(data, status=200)
+        resp.headers["Accept-Ranges"] = "bytes"
+        return resp
+
+    httpserver.expect_request(path).respond_with_handler(handler)
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_load_slp_url_embedded_pkg_authenticated_reads_frame(
+    httpserver, slp_minimal_pkg, lazy
+):
+    """An auth-gated embedded ``pkg.slp`` over a URL loads embedded metadata.
+
+    The embedded ``HDF5Video`` metadata probe runs at backend *construction*
+    time; before headers were threaded to construction it ran unauthenticated
+    and silently lost the embedded-image metadata (``image_format`` stayed
+    ``"hdf5"`` -> ``has_embedded_images`` False, empty ``frame_map``). With the
+    fix it is authenticated and the embedded frame is readable.
+    """
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range_auth(httpserver, "/auth.pkg.slp", data, "Bearer SECRET")
+    url = httpserver.url_for("/auth.pkg.slp")
+
+    labels = load_slp(url, headers={"Authorization": "Bearer SECRET"}, lazy=lazy)
+    video = labels.videos[0]
+
+    # Embedded-image metadata was read by the authenticated construction probe.
+    assert video.backend.has_embedded_images is True
+    assert video.backend.image_format != "hdf5"
+    assert len(video.backend.frame_map) > 0
+
+    # And the embedded frame is readable over the authenticated URL.
+    frame = video[0]
+    assert frame.shape == (384, 384, 1)
+    assert frame.dtype.name == "uint8"
+
+
+def test_load_slp_url_embedded_pkg_authenticated_exists(httpserver, slp_minimal_pkg):
+    """`Video.exists()` forwards the backend auth headers to its remote probe."""
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range_auth(httpserver, "/auth.pkg.slp", data, "Bearer SECRET")
+    url = httpserver.url_for("/auth.pkg.slp")
+
+    labels = load_slp(url, headers={"Authorization": "Bearer SECRET"})
+    video = labels.videos[0]
+
+    # Both the root probe and the dataset-membership probe must authenticate.
+    assert video.exists() is True
+    assert video.exists(dataset=video.backend.dataset) is True
+
+
+def test_load_slp_url_embedded_pkg_reopen_stays_authenticated(
+    httpserver, slp_minimal_pkg
+):
+    """After close(), a reopened remote HDF5Video still reads authenticated.
+
+    `Video.open()` rebuilds the backend via `from_filename`; the URL auth
+    context persisted on the `Video` must be forwarded so the new backend is
+    authenticated (the old backend, and its headers, were dropped by close()).
+    """
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range_auth(httpserver, "/auth.pkg.slp", data, "Bearer SECRET")
+    url = httpserver.url_for("/auth.pkg.slp")
+
+    labels = load_slp(url, headers={"Authorization": "Bearer SECRET"})
+    video = labels.videos[0]
+    assert video[0].shape == (384, 384, 1)  # first read
+
+    video.close()
+    # Forces Video.open() -> from_filename reconstruction; must stay authed.
+    frame = video[0]
+    assert frame.shape == (384, 384, 1)
+    assert video.backend._url_headers == {"Authorization": "Bearer SECRET"}
+
+
+def test_load_slp_url_embedded_pkg_wrong_token_raises(httpserver, slp_minimal_pkg):
+    """A wrong token fails the load cleanly rather than silently degrading."""
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range_auth(httpserver, "/auth.pkg.slp", data, "Bearer SECRET")
+    url = httpserver.url_for("/auth.pkg.slp")
+
+    # RemoteIOError subclasses OSError; the top-level open is unauthenticated.
+    with pytest.raises(OSError):
+        load_slp(url, headers={"Authorization": "Bearer WRONG"})
+
+
+def test_video_close_releases_remote_url_file(httpserver, slp_minimal_pkg):
+    """`Video.close()` deterministically closes the backend's URL file-like."""
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range(httpserver, "/minimal.pkg.slp", data)
+    url = httpserver.url_for("/minimal.pkg.slp")
+
+    labels = load_slp(url)
+    video = labels.videos[0]
+    assert video[0].shape == (384, 384, 1)  # opens reader + caches _url_file
+    url_file = video.backend._url_file
+    assert url_file is not None
+
+    video.close()
+    assert video.backend is None
+    assert url_file.closed is True
+
+
+def test_video_close_then_reopen_remote(httpserver, slp_minimal_pkg):
+    """After `Video.close()`, a remote video reopens and reads again."""
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range(httpserver, "/minimal.pkg.slp", data)
+    url = httpserver.url_for("/minimal.pkg.slp")
+
+    labels = load_slp(url)
+    video = labels.videos[0]
+    assert video[0].shape == (384, 384, 1)
+
+    video.close()
+    assert video.backend is None
+    # Reading again forces Video.open() to rebuild the backend over the URL.
+    frame = video[0]
+    assert frame.shape == (384, 384, 1)
+    assert video.backend._url_file is not None
+
+
+def test_video_close_twice_is_noop(httpserver, slp_minimal_pkg):
+    """Calling `Video.close()` twice does not raise."""
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range(httpserver, "/minimal.pkg.slp", data)
+    url = httpserver.url_for("/minimal.pkg.slp")
+
+    labels = load_slp(url)
+    video = labels.videos[0]
+    assert video[0].shape == (384, 384, 1)
+    video.close()
+    video.close()  # second call must be a no-op
+    assert video.backend is None
+
+
 def _make_label_image_pkg(tmp_path):
     """Build a `.pkg.slp` containing a single `UserLabelImage` and return path.
 
@@ -873,6 +1037,103 @@ def test_load_file_gdrive_url_explicit_format(gdrive_uc_template, slp_minimal):
     labels = load_file("https://drive.google.com/file/d/FILEID/view", format="slp")
     assert type(labels) is Labels
     assert len(labels) == 1
+
+
+def _serve_gdrive_slp_counting(httpserver, slp_path):
+    """Like `_serve_gdrive_slp` but records each `/download` hit.
+
+    Returns a list appended to on every download hop so a test can assert how
+    many times the Drive file was actually downloaded.
+    """
+    from werkzeug.wrappers import Response
+
+    file_bytes = Path(slp_path).read_bytes()
+    download_url = httpserver.url_for("/download")
+    form = (
+        f'<html><body><form id="download-form" action="{download_url}" '
+        'method="get">'
+        '<input type="hidden" name="id" value="FILEID">'
+        '<input type="hidden" name="export" value="download">'
+        '<input type="hidden" name="confirm" value="t">'
+        "</form></body></html>"
+    )
+    hits: list[int] = []
+
+    def _download_handler(request):
+        hits.append(1)
+        resp = Response(file_bytes, status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="labels.slp"'
+        return resp
+
+    httpserver.expect_request("/uc").respond_with_data(form, content_type="text/html")
+    httpserver.expect_request("/download").respond_with_handler(_download_handler)
+    return hits
+
+
+def test_load_file_gdrive_url_single_download(gdrive_uc_template, slp_minimal):
+    """`load_file` auto-detect on a Drive .slp downloads exactly once (was 2x)."""
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, slp_minimal)
+
+    labels = load_file("https://drive.google.com/file/d/FILEID/view")
+    assert type(labels) is Labels
+    assert len(hits) == 1
+
+
+def test_load_slp_gdrive_url_single_download(gdrive_uc_template, slp_minimal):
+    """Direct `load_slp` on a Drive .slp downloads exactly once."""
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, slp_minimal)
+
+    labels = load_slp("https://drive.google.com/file/d/FILEID/view")
+    assert type(labels) is Labels
+    assert len(hits) == 1
+
+
+def test_load_file_gdrive_url_explicit_format_single_download(
+    gdrive_uc_template, slp_minimal
+):
+    """`format='slp'` on a Drive URL downloads exactly once (no sniff fetch)."""
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, slp_minimal)
+
+    labels = load_file("https://drive.google.com/file/d/FILEID/view", format="slp")
+    assert type(labels) is Labels
+    assert len(hits) == 1
+
+
+def test_load_file_gdrive_url_label_image_single_download(gdrive_uc_template, tmp_path):
+    """A Drive label-image .slp via `load_file` downloads once (was 3x).
+
+    The third download came from `read_label_images` re-resolving the URL for
+    its long-lived lazy-pixel handle; it now reuses the already-downloaded bytes.
+    """
+    from sleap_io.io.main import save_slp
+    from tests.fixtures.labels import make_labels_all_annotations
+
+    path = str(tmp_path / "label_images.slp")
+    save_slp(make_labels_all_annotations(), path, embed=False)
+    with h5py.File(path, "r") as f:
+        assert "label_images" in f  # fixture must actually exercise the LI path
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, path)
+
+    labels = load_file("https://drive.google.com/file/d/FILEID/view")
+    assert type(labels) is Labels
+    assert len(hits) == 1
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_load_slp_gdrive_url_label_image_single_download(
+    gdrive_uc_template, tmp_path, lazy
+):
+    """Direct `load_slp` on a Drive label-image .slp downloads once (was 2x)."""
+    from sleap_io.io.main import save_slp
+    from tests.fixtures.labels import make_labels_all_annotations
+
+    path = str(tmp_path / "label_images.slp")
+    save_slp(make_labels_all_annotations(), path, embed=False)
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, path)
+
+    labels = load_slp("https://drive.google.com/file/d/FILEID/view", lazy=lazy)
+    assert type(labels) is Labels
+    assert len(hits) == 1
 
 
 def test_load_file_gdrive_url_sniff_false_raises(slp_minimal):

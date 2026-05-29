@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 
@@ -36,6 +36,7 @@ def load_slp(
     block_size: int = 1 << 20,
     max_blocks: int = 32,
     retries: int = 3,
+    _file_like: Any | None = None,
 ) -> Labels:
     """Load a SLEAP dataset from a local path or HTTP/cloud URL.
 
@@ -93,46 +94,61 @@ def load_slp(
 
     if _remote._is_url(filename):
         url = os.fspath(filename) if isinstance(filename, os.PathLike) else filename
-        file_like = _remote.open_url(
-            url,
-            headers=headers,
-            stream_mode=stream_mode,
-            cache_storage=cache_storage,
-            cache_expiry=cache_expiry,
-            block_size=block_size,
-            max_blocks=max_blocks,
-            retries=retries,
+        # ``_file_like`` lets a caller hand in an already-resolved file-like
+        # (private; used by the Google Drive auto-detect path to reuse the bytes
+        # it had to download to sniff the format, rather than re-resolving the
+        # link a second time against Drive's per-file download quota). When
+        # provided, the caller owns closing it.
+        owns_file_like = _file_like is None
+        file_like = (
+            _remote.open_url(
+                url,
+                headers=headers,
+                stream_mode=stream_mode,
+                cache_storage=cache_storage,
+                cache_expiry=cache_expiry,
+                block_size=block_size,
+                max_blocks=max_blocks,
+                retries=retries,
+            )
+            if owns_file_like
+            else _file_like
         )
         resolved_mode = "blockcache" if stream_mode == "auto" else stream_mode
+
+        # Google Drive resolves to a full in-memory BytesIO (no range support).
+        # Capture its bytes once so the long-lived label-image reopen reuses them
+        # instead of re-resolving (and re-downloading) the Drive link.
+        from sleap_io.io._gdrive import _is_gdrive_url
+
+        url_bytes = None
+        if _is_gdrive_url(url) and hasattr(file_like, "getvalue"):
+            url_bytes = file_like.getvalue()
+
         try:
             with h5py.File(file_like, "r") as f:
-                if lazy:
-                    labels = slp._read_labels_lazy_from_open_file(
-                        url,
-                        f,
-                        open_videos=open_videos,
-                        _url_headers=headers,
-                        _url_stream_mode=resolved_mode,
-                    )
-                else:
-                    labels = slp._read_labels_from_open_file(
-                        url,
-                        f,
-                        open_videos=open_videos,
-                        _url_headers=headers,
-                        _url_stream_mode=resolved_mode,
-                    )
+                reader = (
+                    slp._read_labels_lazy_from_open_file
+                    if lazy
+                    else slp._read_labels_from_open_file
+                )
+                labels = reader(
+                    url,
+                    f,
+                    open_videos=open_videos,
+                    _url_headers=headers,
+                    _url_stream_mode=resolved_mode,
+                    _url_bytes=url_bytes,
+                )
         finally:
-            file_like.close()
+            if owns_file_like:
+                file_like.close()
 
-        # Propagate URL config to embedded HDF5Video backends so they can reopen
-        # the remote file lazily on frame reads.
-        from sleap_io.io.video_reading import HDF5Video
-
-        for video in labels.videos:
-            if isinstance(video.backend, HDF5Video):
-                object.__setattr__(video.backend, "_url_headers", headers)
-                object.__setattr__(video.backend, "_url_stream_mode", resolved_mode)
+        # The URL auth context (headers/resolved_mode) is threaded into each
+        # video backend at construction time and persisted on the Video by
+        # `make_video` (via `_read_labels_*_from_open_file` -> `read_videos`), so
+        # the embedded HDF5Video probe is authenticated and later frame reads /
+        # existence probes / reopens stay authenticated. No post-hoc backfill.
         return labels
 
     # Local path - UNCHANGED behaviour; URL-specific kwargs are no-ops.
@@ -1255,23 +1271,31 @@ def _dispatch_gdrive_url_format(filename: str, **kwargs) -> Labels | Video:
     file_like = _open_gdrive(filename, headers=headers)
     try:
         data = file_like.read()
+        fmt = _gdrive_format_from_bytes(data)
+
+        # A Drive byte-sniff only classifies labels/annotation formats, and among
+        # those only `.slp` is loadable over a URL today (Drive video is rejected
+        # earlier; video bytes are never classified as a loadable format here).
+        # The bytes were already fully downloaded to sniff, so the generic
+        # `_dispatch_url_format` "Download the file locally first." wording would
+        # misstate the cost already paid -- raise a Drive-specific message.
+        if fmt != "slp":
+            raise NotImplementedError(
+                f"The Google Drive file was detected as '{fmt}' after a full "
+                f"download, but only '.slp' labels can be loaded over a URL "
+                f"(URL: {_remote._redact_url(filename)}). Save the bytes to a "
+                "local file and load that path instead."
+            )
+
+        # Reuse the already-downloaded bytes instead of re-resolving the Drive
+        # link in load_slp (which would be a second download against Drive's
+        # per-file quota). The buffer is closed in the finally below, after
+        # load_slp has fully read it (lazy pixel/label-image access uses
+        # independent in-memory handles, not this one).
+        file_like.seek(0)
+        return load_slp(filename, _file_like=file_like, **kwargs)
     finally:
         file_like.close()
-    fmt = _gdrive_format_from_bytes(data)
-
-    # The bytes were already fully downloaded to sniff the format above, so the
-    # generic `_dispatch_url_format` "Download the file locally first." message
-    # would be misleading here (the download cost was already paid). Raise a
-    # Drive-specific message instead for unsupported formats.
-    if fmt not in _URL_IMPLEMENTED_FORMATS:
-        raise NotImplementedError(
-            f"The Google Drive file was detected as '{fmt}' after a full "
-            f"download, but remote loading for '{fmt}' is not yet implemented "
-            f"(URL: {_remote._redact_url(filename)}); only 'slp' and 'video' "
-            "are supported over URLs. Save the bytes to a local file and load "
-            "that path instead."
-        )
-    return _dispatch_url_format(filename, fmt, **kwargs)
 
 
 def _resolve_hdf5_url_format(

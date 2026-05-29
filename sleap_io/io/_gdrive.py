@@ -74,6 +74,17 @@ _DOWNLOAD_HOST_SUFFIX = ".googleusercontent.com"
 #: Maximum number of interstitial hops to follow before giving up.
 _MAX_HOPS = 4
 
+#: Default upper bound (bytes) on the in-memory Drive prefetch. The resolver
+#: fully buffers the resolved file (Drive rejects HEAD and can interrupt a
+#: ranged transfer mid-stream), so an unbounded read would let a hostile or
+#: accidentally-huge share link OOM the process. 8 GiB is well above realistic
+#: ``.slp``/``.pkg.slp`` sizes (including embedded media) while still capping the
+#: worst case.
+_DEFAULT_MAX_BYTES = 8 * 1024**3
+
+#: Chunk size (bytes) for the capped streaming read of the resolved body.
+_READ_CHUNK = 1 << 20
+
 #: Path regex that yields a Drive file ID. Accepts the ``/file/d/<ID>/…`` share
 #: path with an optional ``/u/<n>/`` per-account prefix and an optional trailing
 #: action segment (``/view``, ``/edit``, ``/preview``, or none). Using
@@ -350,7 +361,50 @@ def _url_from_confirmation(confirmation_html: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _resolve_and_fetch(file_id: str, headers: dict[str, str] | None) -> bytes:
+async def _read_body_capped(resp, max_bytes: int, url: str) -> bytes:
+    """Drain a response body fully while enforcing a maximum byte budget.
+
+    Drive's usercontent download responses frequently omit ``Content-Length``
+    (chunked transfer) and a hostile file could advertise a small/absent length,
+    so the cap is enforced both as a cheap pre-check against any advertised
+    ``Content-Length`` and as a running total during a chunked read.
+
+    Args:
+        resp: The aiohttp response to read.
+        max_bytes: Maximum number of bytes permitted.
+        url: The download URL (redacted on display) for the error message.
+
+    Returns:
+        The full response body.
+
+    Raises:
+        RemoteIOError: If the body exceeds ``max_bytes``. The partial buffer is
+            discarded (never returned to the caller).
+    """
+    advertised = resp.content_length
+    if advertised is not None and advertised > max_bytes:
+        raise RemoteIOError(
+            "Google Drive file exceeds the maximum in-memory download size "
+            f"(cap={max_bytes} bytes, Content-Length={advertised}); pass a "
+            "larger max_bytes or download the file manually.",
+            url=url,
+        )
+    buf = bytearray()
+    async for chunk in resp.content.iter_chunked(_READ_CHUNK):
+        buf += chunk
+        if len(buf) > max_bytes:
+            raise RemoteIOError(
+                "Google Drive file exceeds the maximum in-memory download size "
+                f"(cap={max_bytes} bytes); pass a larger max_bytes or download "
+                "the file manually.",
+                url=url,
+            )
+    return bytes(buf)
+
+
+async def _resolve_and_fetch(
+    file_id: str, headers: dict[str, str] | None, max_bytes: int | None = None
+) -> bytes:
     """Run the Drive GET loop and return the resolved file bytes.
 
     This coroutine is driven from :func:`_open_gdrive` via
@@ -362,16 +416,20 @@ async def _resolve_and_fetch(file_id: str, headers: dict[str, str] | None) -> by
     Args:
         file_id: The Google Drive file ID.
         headers: Optional extra HTTP headers (merged over the browser default).
+        max_bytes: Maximum number of bytes to buffer in memory. ``None`` uses
+            :data:`_DEFAULT_MAX_BYTES`.
 
     Returns:
         The fully-downloaded file bytes.
 
     Raises:
-        RemoteIOError: For quota/permission pages or if resolution does not
-            converge on a downloadable response within :data:`_MAX_HOPS`.
+        RemoteIOError: For quota/permission pages, an oversize file, or if
+            resolution does not converge within :data:`_MAX_HOPS`.
         ValueError: If a confirmation page yields no download link.
     """
     import aiohttp
+
+    cap = _DEFAULT_MAX_BYTES if max_bytes is None else max_bytes
 
     # Public Drive-link downloads never need credentials; strip any sensitive
     # user headers (Authorization/Cookie/Proxy-Authorization) before they can be
@@ -400,9 +458,10 @@ async def _resolve_and_fetch(file_id: str, headers: dict[str, str] | None) -> by
                 is_html = "text/html" in content_type.lower()
 
                 # A Content-Disposition header (or any non-HTML body) means we
-                # have reached the file itself: read it fully in this session.
+                # have reached the file itself: read it fully (capped) in this
+                # session.
                 if has_disposition or not is_html:
-                    return await resp.read()
+                    return await _read_body_capped(resp, cap, url)
 
                 # Otherwise this is the interstitial HTML; scrape the next URL.
                 page = await resp.text()
@@ -415,18 +474,27 @@ async def _resolve_and_fetch(file_id: str, headers: dict[str, str] | None) -> by
     )
 
 
-def _open_gdrive(url: str, *, headers: dict[str, str] | None = None) -> io.BytesIO:
+def _open_gdrive(
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    max_bytes: int | None = None,
+) -> io.BytesIO:
     """Resolve a Google Drive share URL and return its bytes as a BytesIO.
 
     The Drive download URL carries no file extension and Drive rejects ``HEAD``
     with 405, both of which break the lazy fsspec open path; the resolved bytes
     are therefore fully prefetched here (within one cookie-carrying session) and
     returned as an in-memory :class:`io.BytesIO`, mirroring ``open_url``'s
-    ``stream_mode="download"`` shape.
+    ``stream_mode="download"`` shape. The prefetch is bounded by ``max_bytes``
+    (default :data:`_DEFAULT_MAX_BYTES`) so a hostile or accidentally-huge file
+    cannot exhaust memory.
 
     Args:
         url: A Google Drive / Docs share URL.
         headers: Optional extra HTTP headers to forward.
+        max_bytes: Maximum number of bytes to buffer in memory. ``None`` uses
+            :data:`_DEFAULT_MAX_BYTES`.
 
     Returns:
         An :class:`io.BytesIO` positioned at the start of the downloaded bytes.
@@ -434,8 +502,8 @@ def _open_gdrive(url: str, *, headers: dict[str, str] | None = None) -> io.Bytes
     Raises:
         ValueError: For folder URLs, unparsable file IDs, or confirmation
             pages with no download link.
-        RemoteIOError: For HTTP failures, quota/permission pages, or
-            non-convergent resolution.
+        RemoteIOError: For HTTP failures, quota/permission pages, an oversize
+            file, or non-convergent resolution.
     """
     import fsspec.asyn
 
@@ -443,7 +511,7 @@ def _open_gdrive(url: str, *, headers: dict[str, str] | None = None) -> io.Bytes
 
     loop = fsspec.asyn.get_loop()
     try:
-        data = fsspec.asyn.sync(loop, _resolve_and_fetch, file_id, headers)
+        data = fsspec.asyn.sync(loop, _resolve_and_fetch, file_id, headers, max_bytes)
     except (RemoteIOError, ValueError):
         raise
     except Exception as e:  # noqa: BLE001 - normalize transport errors

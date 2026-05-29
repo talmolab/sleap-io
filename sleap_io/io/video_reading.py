@@ -435,6 +435,31 @@ class VideoBackend:
         for key, value in state.items():
             object.__setattr__(self, key, value)
 
+    def close(self) -> None:
+        """Release the cached open reader handle, if any.
+
+        Closes (``.close()``) or releases (``.release()`` for an OpenCV
+        ``VideoCapture``) the cached ``_open_reader`` and drops the reference so
+        a long-lived backend does not leak the underlying file/container handle.
+        The reader is lazily reopened on the next read, so this is safe to call
+        between reads. A no-op when nothing is cached. Subclasses that hold
+        additional handles (e.g. :class:`HDF5Video`'s URL file-like) override
+        this and call ``super().close()``.
+        """
+        reader = self._open_reader
+        self._open_reader = None
+        if reader is None:
+            return
+        # Every real reader is an h5py.File / imageio reader (``.close()``) or an
+        # OpenCV VideoCapture (``.release()``); the None case is purely defensive.
+        closer = getattr(reader, "close", None) or getattr(reader, "release", None)
+        if closer is None:  # pragma: no cover - defensive: reader always closeable
+            return
+        try:
+            closer()
+        except Exception:  # pragma: no cover - defensive: close should not raise
+            pass
+
     @classmethod
     def from_filename(
         cls,
@@ -442,6 +467,8 @@ class VideoBackend:
         dataset: str | None = None,
         grayscale: bool | None = None,
         keep_open: bool = True,
+        url_headers: dict[str, str] | None = None,
+        url_stream_mode: str = "blockcache",
         **kwargs,
     ) -> "VideoBackend":
         """Create a VideoBackend from a filename.
@@ -455,6 +482,13 @@ class VideoBackend:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            url_headers: HTTP headers forwarded to the remote backend when
+                ``filename`` is a URL (HDF5Video only). Set at construction so the
+                metadata probe is authenticated; ignored for local files and other
+                backends.
+            url_stream_mode: Remote streaming strategy for a URL-backed HDF5Video
+                (one of ``"blockcache"``/``"cache"``/``"filecache"``/``"download"``).
+                Ignored for local files and other backends.
             **kwargs: Additional backend-specific arguments. These are filtered to only
                 include parameters that are valid for the specific backend being
                 created:
@@ -585,11 +619,17 @@ class VideoBackend:
                 **media_kwargs,
             )
         elif ext_token.endswith(tuple(ext.lower() for ext in HDF5Video.EXTS)):
+            # Pass ``url_headers`` / ``url_stream_mode`` explicitly (not via
+            # ``_get_valid_kwargs``, which keys on the underscored field *name*
+            # and would drop the alias) so the construction-time probe in
+            # ``HDF5Video.__attrs_post_init__`` is authenticated for remote URLs.
             return HDF5Video(
                 filename,
                 dataset=dataset,
                 grayscale=grayscale,
                 keep_open=keep_open,
+                url_headers=url_headers,
+                url_stream_mode=url_stream_mode,
                 **_get_valid_kwargs(HDF5Video, kwargs),
             )
         else:
@@ -1107,6 +1147,16 @@ class HDF5Video(VideoBackend):
             "FFMPEG". If None, uses the global default or auto-detects based on
             available packages. Note that "pyav" is automatically mapped to "FFMPEG"
             since PyAV doesn't support image decoding.
+
+    Notes:
+        Concurrent reads of a single remote (URL-backed) `HDF5Video` from
+        multiple threads are safe: although all reads share one cached fsspec
+        file-like (a single byte position), h5py serializes every HDF5 C-library
+        call under a global recursive lock (`h5py._objects.phil`), so the
+        seek+read pair a frame read performs is never interleaved across threads.
+        For true read *parallelism* (rather than just safety), construct
+        independent `Video`/`HDF5Video` instances per worker; each gets its own
+        fsspec file and block cache.
     """
 
     dataset: str | None = None
@@ -1123,12 +1173,18 @@ class HDF5Video(VideoBackend):
     _url_file: object | None = attrs.field(
         init=False, default=None, repr=False, eq=False
     )
+    # ``_url_headers`` / ``_url_stream_mode`` are ``init=True`` (attrs derives the
+    # constructor aliases ``url_headers`` / ``url_stream_mode`` by stripping the
+    # leading underscore) so the metadata probe in ``__attrs_post_init__`` runs
+    # *authenticated*: an embedded ``pkg.slp`` over an auth-gated URL would
+    # otherwise probe with no headers and silently lose the embedded-image
+    # metadata. They remain ``repr=False, eq=False`` and, because the attribute
+    # names keep the leading underscore, the name-based ``__getstate__`` pickle
+    # contract is unchanged.
     _url_headers: dict[str, str] | None = attrs.field(
-        init=False, default=None, repr=False, eq=False
+        default=None, repr=False, eq=False
     )
-    _url_stream_mode: str = attrs.field(
-        init=False, default="blockcache", repr=False, eq=False
-    )
+    _url_stream_mode: str = attrs.field(default="blockcache", repr=False, eq=False)
 
     EXTS = ("h5", "hdf5", "slp")
 
@@ -1156,6 +1212,20 @@ class HDF5Video(VideoBackend):
             return h5py.File(self._url_file, "r")
         return h5py.File(self.filename, "r")
 
+    def _close_url_file(self) -> None:
+        """Close and drop the cached fsspec URL file-like, if any (idempotent).
+
+        A no-op for local files (where ``_url_file`` is never set) and when it
+        has already been closed/dropped.
+        """
+        if self._url_file is None:
+            return
+        try:
+            self._url_file.close()
+        except Exception:  # pragma: no cover - defensive: close() should not raise
+            pass
+        self._url_file = None
+
     def _release_probe_url_file(self, preexisting: bool) -> None:
         """Close and drop ``self._url_file`` if a probe opened it.
 
@@ -1168,13 +1238,20 @@ class HDF5Video(VideoBackend):
             preexisting: Whether ``self._url_file`` was already set before the
                 probe opened the file (in which case it is left untouched).
         """
-        if preexisting or self._url_file is None:
+        if preexisting:
             return
-        try:
-            self._url_file.close()
-        except Exception:  # pragma: no cover - defensive: close() should not raise
-            pass
-        self._url_file = None
+        self._close_url_file()
+
+    def close(self) -> None:
+        """Release the cached HDF5 reader and the cached fsspec URL file-like.
+
+        Extends :meth:`VideoBackend.close` (which drops the cached ``h5py.File``
+        reader) by also closing the fsspec-backed ``_url_file`` shared across
+        reads, which ``h5py.File.close()`` does not close on its own. Both are
+        lazily reopened on the next read, so this is safe to call between reads.
+        """
+        super().close()
+        self._close_url_file()
 
     def __getstate__(self) -> dict:
         """Return state for pickling/deepcopy, dropping unpicklable handles.

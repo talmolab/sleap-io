@@ -187,6 +187,8 @@ def make_video(
     video_json: dict,
     open_backend: bool = True,
     _hdf5_file: h5py.File | None = None,
+    _url_headers: dict[str, str] | None = None,
+    _url_stream_mode: str = "blockcache",
 ) -> Video:
     """Create a `Video` object from a JSON dictionary.
 
@@ -198,6 +200,12 @@ def make_video(
             when the video files are not available).
         _hdf5_file: Optional already-open HDF5 file handle. For internal use to avoid
             repeatedly opening the same file when loading many embedded videos.
+        _url_headers: HTTP headers forwarded to the backend (and stored on the
+            returned `Video`) when `labels_path`/the video is a remote URL, so the
+            construction-time metadata probe and later existence probes are
+            authenticated. Private; ignored for local files.
+        _url_stream_mode: Remote streaming strategy for a URL-backed video. Private;
+            ignored for local files.
     """
     backend_metadata = video_json["backend"]
 
@@ -247,6 +255,8 @@ def make_video(
                     source_video_json,
                     open_backend=open_backend,
                     _hdf5_file=f,
+                    _url_headers=_url_headers,
+                    _url_stream_mode=_url_stream_mode,
                 )
 
             # Legacy compatibility: if original_video exists but source_video doesn't,
@@ -260,6 +270,8 @@ def make_video(
                     original_video_json,
                     open_backend=False,  # Original videos are often not available
                     _hdf5_file=f,
+                    _url_headers=_url_headers,
+                    _url_stream_mode=_url_stream_mode,
                 )
 
         if _hdf5_file is not None:
@@ -274,6 +286,8 @@ def make_video(
                 labels_path,
                 video_json["source_video"],
                 open_backend=open_backend,
+                _url_headers=_url_headers,
+                _url_stream_mode=_url_stream_mode,
             )
 
         # Legacy compatibility: if original_video exists but source_video doesn't,
@@ -283,6 +297,8 @@ def make_video(
                 labels_path,
                 video_json["original_video"],
                 open_backend=False,  # Original videos are often not available
+                _url_headers=_url_headers,
+                _url_stream_mode=_url_stream_mode,
             )
 
     # Handle ImageVideo filenames - always expand to full list regardless of
@@ -329,6 +345,8 @@ def make_video(
                 grayscale=grayscale,
                 input_format=backend_metadata.get("input_format", None),
                 format=backend_metadata.get("format", None),
+                url_headers=_url_headers,
+                url_stream_mode=_url_stream_mode,
             )
 
             # Restore FPS from metadata for backends that don't read it from file
@@ -348,13 +366,20 @@ def make_video(
             sanitize_filename(p) if isinstance(p, Path) else p for p in video_path
         ]
 
-    return Video(
+    video = Video(
         filename=video_path,
         backend=backend,
         backend_metadata=backend_metadata,
         source_video=source_video,
         open_backend=open_backend,
     )
+    # Persist the URL auth context on the Video (init=False fields) so existence
+    # probes and a later Video.open() reconstruction stay authenticated even
+    # after the backend is closed/rebuilt.
+    if _url_headers is not None or _url_stream_mode != "blockcache":
+        object.__setattr__(video, "_url_headers", _url_headers)
+        object.__setattr__(video, "_url_stream_mode", _url_stream_mode)
+    return video
 
 
 def read_videos(
@@ -362,6 +387,8 @@ def read_videos(
     open_backend: bool = True,
     *,
     _hdf5_file: h5py.File | None = None,
+    _url_headers: dict[str, str] | None = None,
+    _url_stream_mode: str = "blockcache",
 ) -> list[Video]:
     """Read `Video` dataset in a SLEAP labels file.
 
@@ -375,6 +402,11 @@ def read_videos(
             to close) and threaded into `make_video`; otherwise `labels_path` is
             opened and closed internally. This is a private argument used to thread
             a single open handle through multiple reads.
+        _url_headers: HTTP headers forwarded to each video backend when
+            `labels_path` is a URL (so the construction-time probe is
+            authenticated). Private; ignored for local files.
+        _url_stream_mode: Remote streaming strategy for URL-backed videos.
+            Private; ignored for local files.
 
     Returns:
         A list of `Video` objects.
@@ -386,7 +418,12 @@ def read_videos(
         for video_data in videos_metadata:
             video_json = json.loads(video_data)
             video = make_video(
-                labels_path, video_json, open_backend=open_backend, _hdf5_file=f
+                labels_path,
+                video_json,
+                open_backend=open_backend,
+                _hdf5_file=f,
+                _url_headers=_url_headers,
+                _url_stream_mode=_url_stream_mode,
             )
             videos.append(video)
 
@@ -2657,6 +2694,7 @@ def _read_labels_lazy_from_open_file(
     open_videos: bool = True,
     _url_headers: dict[str, str] | None = None,
     _url_stream_mode: str = "blockcache",
+    _url_bytes: bytes | None = None,
 ) -> Labels:
     """Build a lazy `Labels` from an already-open `h5py.File`.
 
@@ -2674,6 +2712,10 @@ def _read_labels_lazy_from_open_file(
             handle when `labels_path` is a URL. Ignored for local paths.
         _url_stream_mode: Streaming strategy for the long-lived label-image
             handle when `labels_path` is a URL. Ignored for local paths.
+        _url_bytes: Already-downloaded file bytes to reuse for the long-lived
+            label-image handle instead of re-opening `labels_path` over the
+            network (used for Google Drive, where a re-resolve is a re-download
+            against the per-file quota). Ignored for local paths.
 
     Returns:
         Labels with LazyFrameList for labeled_frames.
@@ -2690,7 +2732,13 @@ def _read_labels_lazy_from_open_file(
     format_id = read_hdf5_attrs(labels_path, "metadata", "format_id", _hdf5_file=f)
 
     # Read metadata eagerly (these are small and needed for lazy access)
-    videos = read_videos(labels_path, open_backend=open_videos, _hdf5_file=f)
+    videos = read_videos(
+        labels_path,
+        open_backend=open_videos,
+        _hdf5_file=f,
+        _url_headers=_url_headers,
+        _url_stream_mode=_url_stream_mode,
+    )
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
     tracks = read_tracks(labels_path, _hdf5_file=f)
     suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
@@ -2732,6 +2780,7 @@ def _read_labels_lazy_from_open_file(
         _hdf5_file=f,
         _url_headers=_url_headers,
         _url_stream_mode=_url_stream_mode,
+        _url_bytes=_url_bytes,
     )
 
     # Build per-frame annotation dicts for lazy materialization
@@ -3919,6 +3968,7 @@ def read_label_images(
     _hdf5_file: h5py.File | None = None,
     _url_headers: dict[str, str] | None = None,
     _url_stream_mode: str = "blockcache",
+    _url_bytes: bytes | None = None,
 ) -> tuple[list[tuple[LabelImage, int, int]], "h5py.File | None"]:
     """Read label image annotations from a SLEAP labels file.
 
@@ -3946,6 +3996,10 @@ def read_label_images(
             Ignored for local paths.
         _url_stream_mode: Streaming strategy for the long-lived lazy-access
             handle when ``labels_path`` is a URL. Ignored for local paths.
+        _url_bytes: Already-downloaded file bytes to wrap in a fresh in-memory
+            handle for lazy pixel access, instead of re-opening ``labels_path``
+            over the network. Used for Google Drive (where a re-resolve is a
+            re-download against the per-file quota). Ignored for local paths.
 
     Returns:
         A tuple of ``(label_image_tuples, h5py_file)`` where
@@ -3969,9 +4023,15 @@ def read_label_images(
     # below capture it), so it cannot reuse `_hdf5_file`. For URL loads,
     # ``labels_path`` is the raw URL string, which ``h5py.File`` cannot open
     # directly; open a FRESH, independent fsspec file-like instead.
+    import io
+
     from sleap_io.io import _remote
 
-    if _remote._is_url(labels_path):
+    if _url_bytes is not None:
+        # Reuse already-downloaded bytes (e.g. a Google Drive prefetch) in a
+        # fresh, independent in-memory handle instead of re-resolving the URL.
+        f = h5py.File(io.BytesIO(_url_bytes), "r")
+    elif _remote._is_url(labels_path):
         f = h5py.File(
             _remote.open_url(
                 labels_path,
@@ -5312,6 +5372,7 @@ def _read_labels_from_open_file(
     open_videos: bool = True,
     _url_headers: dict[str, str] | None = None,
     _url_stream_mode: str = "blockcache",
+    _url_bytes: bytes | None = None,
 ) -> Labels:
     """Build a `Labels` from an already-open `h5py.File`.
 
@@ -5330,12 +5391,22 @@ def _read_labels_from_open_file(
             handle when `labels_path` is a URL. Ignored for local paths.
         _url_stream_mode: Streaming strategy for the long-lived label-image
             handle when `labels_path` is a URL. Ignored for local paths.
+        _url_bytes: Already-downloaded file bytes to reuse for the long-lived
+            label-image handle instead of re-opening `labels_path` over the
+            network (used for Google Drive, where a re-resolve is a re-download
+            against the per-file quota). Ignored for local paths.
 
     Returns:
         The processed `Labels` object.
     """
     tracks = read_tracks(labels_path, _hdf5_file=f)
-    videos = read_videos(labels_path, open_backend=open_videos, _hdf5_file=f)
+    videos = read_videos(
+        labels_path,
+        open_backend=open_videos,
+        _hdf5_file=f,
+        _url_headers=_url_headers,
+        _url_stream_mode=_url_stream_mode,
+    )
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
     points = read_points(labels_path, _hdf5_file=f)
     pred_points = read_pred_points(labels_path, _hdf5_file=f)
@@ -5427,6 +5498,7 @@ def _read_labels_from_open_file(
         _hdf5_file=f,
         _url_headers=_url_headers,
         _url_stream_mode=_url_stream_mode,
+        _url_bytes=_url_bytes,
     )
 
     # Attach annotations to their corresponding LabeledFrames

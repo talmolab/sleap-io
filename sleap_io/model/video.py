@@ -91,8 +91,30 @@ class Video:
     _exists_cache: dict[tuple[str, str | None], tuple[bool, float]] = attrs.field(
         init=False, factory=dict, repr=False, eq=False
     )
+    # URL auth context, threaded in by `make_video` for remote loads. Persisted
+    # on the Video (not just the backend) so existence probes and a later
+    # `open()` reconstruction stay authenticated after the backend is closed.
+    _url_headers: dict[str, str] | None = attrs.field(
+        init=False, default=None, repr=False, eq=False
+    )
+    _url_stream_mode: str = attrs.field(
+        init=False, default="blockcache", repr=False, eq=False
+    )
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS + ("seq",)
+
+    def _backend_url_headers(self) -> dict[str, str] | None:
+        """Return the HTTP headers to authenticate remote existence probes.
+
+        Prefers the URL auth context stored on this `Video` (set by `make_video`
+        at load time); falls back to the live backend's headers when present.
+        Returns `None` for local files and unauthenticated URLs.
+        """
+        if self._url_headers is not None:
+            return self._url_headers
+        if isinstance(self.backend, HDF5Video):
+            return getattr(self.backend, "_url_headers", None)
+        return None
 
     @property
     def original_video(self) -> "Video | None":
@@ -446,7 +468,9 @@ class Video:
             return cached[0]
 
         try:
-            if not _head_or_range_probe(self.filename):
+            if not _head_or_range_probe(
+                self.filename, headers=self._backend_url_headers()
+            ):
                 result = False
             else:
                 if dataset is None or dataset == "":
@@ -482,7 +506,7 @@ class Video:
 
         from sleap_io.io._remote import open_remote_h5
 
-        url_file = open_remote_h5(self.filename)
+        url_file = open_remote_h5(self.filename, headers=self._backend_url_headers())
         try:
             with h5py.File(url_file, "r") as f:
                 return dataset in f
@@ -576,12 +600,16 @@ class Video:
         if "plugin" in self.backend_metadata:
             backend_kwargs["plugin"] = self.backend_metadata["plugin"]
 
-        # Create new backend.
+        # Create new backend. Forward the URL auth context so a reopened remote
+        # HDF5Video stays authenticated (the previous backend, and its headers,
+        # were dropped by self.close() above).
         self.backend = VideoBackend.from_filename(
             self.filename,
             dataset=dataset,
             grayscale=grayscale,
             keep_open=keep_open,
+            url_headers=self._url_headers,
+            url_stream_mode=self._url_stream_mode,
             **backend_kwargs,
         )
 
@@ -599,6 +627,14 @@ class Video:
                 )
                 self.backend_metadata["shape"] = getattr(self.backend, "shape", None)
                 self.backend_metadata["fps"] = getattr(self.backend, "fps", None)
+            except Exception:
+                pass
+
+            # Deterministically release the backend's open handles (the cached
+            # reader and, for a remote HDF5Video, the fsspec URL file-like)
+            # rather than relying on garbage collection.
+            try:
+                self.backend.close()
             except Exception:
                 pass
 
