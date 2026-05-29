@@ -189,7 +189,8 @@ frame = labels.videos[0][0]  # range-reads just the bytes for frame 0
 
 This means you can inspect a remote packaged project without downloading the
 whole archive — the embedded video backends reopen the remote file using the
-same streaming configuration as the initial load.
+same streaming configuration and authentication `headers=` as the initial load,
+so an auth-gated `.pkg.slp` streams its frames without re-authenticating.
 
 ---
 
@@ -241,7 +242,8 @@ labels = sio.load_slp("https://drive.google.com/file/d/<FILE_ID>/view")
 labels = sio.load_slp("https://drive.google.com/uc?id=<FILE_ID>&export=download")
 labels = sio.load_slp("https://drive.google.com/open?id=<FILE_ID>")
 
-# load_file resolves the link, sniffs the bytes, and routes it (one extra fetch):
+# load_file resolves the link, sniffs the bytes to detect the format, and routes
+# it. The sniffed bytes are reused, so the file is downloaded only once:
 labels = sio.load_file("https://drive.google.com/file/d/<FILE_ID>/view")
 ```
 
@@ -263,10 +265,14 @@ Some limitations:
   viewed or downloaded this file recently" page, a
   [`RemoteIOError`][sleap_io.RemoteIOError] is raised; retry later or re-check
   the file's sharing settings.
+- **Large files** — the in-memory prefetch is capped (8 GiB by default); a file
+  exceeding the cap raises a [`RemoteIOError`][sleap_io.RemoteIOError] instead of
+  exhausting memory.
 
 For [`load_file`][sleap_io.load_file], the format is detected from the
-downloaded bytes (costing one extra fetch). Pass an explicit `format=` (e.g.
-`format="slp"`) to skip the detection download.
+downloaded bytes, and those bytes are reused for the load — so a Drive `.slp` is
+downloaded only once whether you call `load_slp` or `load_file` (an explicit
+`format=` is optional, and skips the format-detection step).
 
 ---
 
