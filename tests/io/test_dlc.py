@@ -1019,8 +1019,8 @@ def test_load_dlc_splits_select_by_train_fraction(tmp_path):
     assert _frame_keys(splits["train"]) == [("vid1", "img000.png")]
 
 
-def test_select_documentation_pickle_unparseable_single(tmp_path):
-    """A single pickle with an unparseable name is returned as-is."""
+def test_select_documentation_pickle_unparsable_single(tmp_path):
+    """A single pickle with an unparsable name is returned as-is."""
     config_path = make_dlc_project(tmp_path, folders={"vid1": ["img000"]})
     cfg = dlc._read_dlc_config(config_path)
     tdir = (
@@ -1033,8 +1033,8 @@ def test_select_documentation_pickle_unparseable_single(tmp_path):
     assert dlc._select_documentation_pickle(tmp_path, cfg, None, None, None) == p
 
 
-def test_select_documentation_pickle_unparseable_ambiguous(tmp_path):
-    """Multiple pickles with unparseable names raise a clear error."""
+def test_select_documentation_pickle_unparsable_ambiguous(tmp_path):
+    """Multiple pickles with unparsable names raise a clear error."""
     config_path = make_dlc_project(tmp_path, folders={"vid1": ["img000"]})
     cfg = dlc._read_dlc_config(config_path)
     tdir = (
