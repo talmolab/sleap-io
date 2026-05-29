@@ -4770,7 +4770,7 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 </tr>
 <tr>
 <td><code>--track</code></td>
-<td><code>name</code></td>
+<td><code>identity</code></td>
 <td>Track matching method</td>
 </tr>
 <tr>
@@ -4877,12 +4877,12 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 </thead>
 <tbody>
 <tr>
-<td><code>name</code></td>
-<td>Match tracks with identical names (default)</td>
+<td><code>identity</code></td>
+<td>Match by track object identity (default). Correctness-first: never collapses distinct tracks by arbitrary tracker-assigned names</td>
 </tr>
 <tr>
-<td><code>identity</code></td>
-<td>Match by track object identity</td>
+<td><code>name</code></td>
+<td>Match tracks with identical names. Opt-in for semantically meaningful names (user-assigned identities or identity-classification model outputs)</td>
 </tr>
 </tbody>
 </table>
