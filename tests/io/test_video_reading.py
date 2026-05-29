@@ -303,6 +303,53 @@ def test_hdf5video_url_reads_frames(httpserver, slp_minimal_pkg):
     assert_equal(frame, local[0])
 
 
+def test_hdf5video_post_init_closes_probe_handle_local(slp_minimal_pkg):
+    """`__attrs_post_init__` does not leak the probe HDF5 handle (local).
+
+    Re-running the heuristic probe must leave no open h5py file handle behind:
+    the probe handle is closed in a `finally` block regardless of early returns.
+    """
+    backend = HDF5Video(filename=slp_minimal_pkg, dataset=None, keep_open=False)
+    # The post-init probe ran during construction; it must not have stashed an
+    # open file handle (local files have no cached `_url_file`).
+    assert backend._url_file is None
+    # Re-running the probe explicitly must also leave nothing dangling.
+    backend.__attrs_post_init__()
+    assert backend._url_file is None
+    # Opening a fresh handle and checking the file object closes cleanly proves
+    # the probe did not hold the file open exclusively.
+    with h5py.File(slp_minimal_pkg, "r") as f:
+        assert "video0/video" in f
+
+
+def test_hdf5video_post_init_releases_probe_url_file(httpserver, slp_minimal_pkg):
+    """`__attrs_post_init__` releases a URL file-like opened solely to probe.
+
+    A probe-time open must not leak the cached fsspec `_url_file`, so that a
+    later (possibly authenticated) read reopens cleanly rather than reusing the
+    probe handle.
+    """
+    file_bytes = Path(slp_minimal_pkg).read_bytes()
+    httpserver.expect_request("/labels.pkg.slp").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.pkg.slp")
+
+    backend = HDF5Video(filename=url, dataset=None, keep_open=False)
+    object.__setattr__(backend, "_url_stream_mode", "download")
+    object.__setattr__(backend, "_url_file", None)
+
+    backend.__attrs_post_init__()
+    # The probe detected the embedded dataset...
+    assert backend.dataset == "video0/video"
+    # ...but did not leave the cached fsspec file-like dangling.
+    assert backend._url_file is None
+
+    # A subsequent read still works (reopens the URL lazily).
+    frame = backend[0]
+    assert frame.shape == (384, 384, 1)
+
+
 def test_hdf5video_get_frame_raw_bytes_fixed_length(tmpdir):
     """Test get_frame_raw_bytes() with fixed-length dataset (strips trailing zeros)."""
     import cv2

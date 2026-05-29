@@ -1012,6 +1012,26 @@ class HDF5Video(VideoBackend):
             return h5py.File(self._url_file, "r")
         return h5py.File(self.filename, "r")
 
+    def _release_probe_url_file(self, preexisting: bool) -> None:
+        """Close and drop ``self._url_file`` if a probe opened it.
+
+        Used by :meth:`__attrs_post_init__` so that a remote handle opened just
+        to sniff the dataset/frame-map does not leak and is not reused by later
+        (possibly authenticated) reads. A no-op for local files and when the
+        cached file-like already existed before the probe.
+
+        Args:
+            preexisting: Whether ``self._url_file`` was already set before the
+                probe opened the file (in which case it is left untouched).
+        """
+        if preexisting or self._url_file is None:
+            return
+        try:
+            self._url_file.close()
+        except Exception:  # pragma: no cover - defensive: close() should not raise
+            pass
+        self._url_file = None
+
     def __getstate__(self) -> dict:
         """Return state for pickling/deepcopy, dropping unpicklable handles.
 
@@ -1025,76 +1045,87 @@ class HDF5Video(VideoBackend):
     def __attrs_post_init__(self):
         """Auto-detect dataset and frame map heuristically."""
         # Check if the file accessible before applying heuristics.
+        # For URLs, track whether this probe opened the cached fsspec file-like
+        # so it can be released afterwards (it would otherwise leak the handle on
+        # an early return / exception, and a probe-time open may predate the
+        # final auth headers being applied).
+        url_file_preexisting = self._url_file is not None
         try:
             f = self._open_h5()
         except OSError:
+            self._release_probe_url_file(url_file_preexisting)
             return
 
-        if self.dataset is None:
-            # Iterate through datasets to find a rank 4 array.
-            def find_movies(name, obj):
-                if isinstance(obj, h5py.Dataset) and obj.ndim == 4:
-                    self.dataset = name
-                    return True
+        try:
+            if self.dataset is None:
+                # Iterate through datasets to find a rank 4 array.
+                def find_movies(name, obj):
+                    if isinstance(obj, h5py.Dataset) and obj.ndim == 4:
+                        self.dataset = name
+                        return True
 
-            f.visititems(find_movies)
+                f.visititems(find_movies)
 
-        if self.dataset is None:
-            # Iterate through datasets to find an embedded video dataset.
-            def find_embedded(name, obj):
-                if isinstance(obj, h5py.Dataset) and name.endswith("/video"):
-                    self.dataset = name
-                    return True
+            if self.dataset is None:
+                # Iterate through datasets to find an embedded video dataset.
+                def find_embedded(name, obj):
+                    if isinstance(obj, h5py.Dataset) and name.endswith("/video"):
+                        self.dataset = name
+                        return True
 
-            f.visititems(find_embedded)
+                f.visititems(find_embedded)
 
-        if self.dataset is None:
-            # Couldn't find video datasets.
-            return
+            if self.dataset is None:
+                # Couldn't find video datasets.
+                return
 
-        if isinstance(f[self.dataset], h5py.Group):
-            # If this is a group, assume it's an embedded video dataset.
-            if "video" in f[self.dataset]:
-                self.dataset = f"{self.dataset}/video"
+            if isinstance(f[self.dataset], h5py.Group):
+                # If this is a group, assume it's an embedded video dataset.
+                if "video" in f[self.dataset]:
+                    self.dataset = f"{self.dataset}/video"
 
-        if self.dataset.split("/")[-1] == "video":
-            # This may be an embedded video dataset. Check for frame map.
-            ds = f[self.dataset]
+            if self.dataset.split("/")[-1] == "video":
+                # This may be an embedded video dataset. Check for frame map.
+                ds = f[self.dataset]
 
-            if "format" in ds.attrs:
-                self.image_format = ds.attrs["format"]
+                if "format" in ds.attrs:
+                    self.image_format = ds.attrs["format"]
 
-            # Read channel_order, with backwards compatibility
-            if "channel_order" in ds.attrs:
-                self.channel_order = ds.attrs["channel_order"]
-            else:
-                # Backwards compatibility: Check format_id for older files
-                # Prior to format 1.4, embedded images were primarily encoded with
-                # OpenCV which uses BGR, so default to BGR for older formats
-                if "metadata" in f and "format_id" in f["metadata"].attrs:
-                    format_id = f["metadata"].attrs["format_id"]
-                    if format_id < 1.4:
-                        self.channel_order = "BGR"  # Legacy default
-                # If no format_id found, assume BGR (safest legacy default)
-                # since most embedded images before this change used OpenCV
+                # Read channel_order, with backwards compatibility
+                if "channel_order" in ds.attrs:
+                    self.channel_order = ds.attrs["channel_order"]
+                else:
+                    # Backwards compatibility: Check format_id for older files
+                    # Prior to format 1.4, embedded images were primarily encoded
+                    # with OpenCV which uses BGR, so default to BGR for older
+                    # formats
+                    if "metadata" in f and "format_id" in f["metadata"].attrs:
+                        format_id = f["metadata"].attrs["format_id"]
+                        if format_id < 1.4:
+                            self.channel_order = "BGR"  # Legacy default
+                    # If no format_id found, assume BGR (safest legacy default)
+                    # since most embedded images before this change used OpenCV
 
-            if "frame_numbers" in ds.parent:
-                frame_numbers = ds.parent["frame_numbers"][:].astype(int)
-                self.frame_map = {frame: idx for idx, frame in enumerate(frame_numbers)}
-                self.source_inds = frame_numbers
+                if "frame_numbers" in ds.parent:
+                    frame_numbers = ds.parent["frame_numbers"][:].astype(int)
+                    self.frame_map = {
+                        frame: idx for idx, frame in enumerate(frame_numbers)
+                    }
+                    self.source_inds = frame_numbers
 
-            if "source_video" in ds.parent:
-                self.source_filename = json.loads(
-                    ds.parent["source_video"].attrs["json"]
-                )["backend"]["filename"]
+                if "source_video" in ds.parent:
+                    self.source_filename = json.loads(
+                        ds.parent["source_video"].attrs["json"]
+                    )["backend"]["filename"]
 
-            # Read FPS from attributes if present
-            if "fps" in ds.attrs:
-                self._fps = float(ds.attrs["fps"])
-            elif "fps" in ds.parent.attrs:
-                self._fps = float(ds.parent.attrs["fps"])
-
-        f.close()
+                # Read FPS from attributes if present
+                if "fps" in ds.attrs:
+                    self._fps = float(ds.attrs["fps"])
+                elif "fps" in ds.parent.attrs:
+                    self._fps = float(ds.parent.attrs["fps"])
+        finally:
+            f.close()
+            self._release_probe_url_file(url_file_preexisting)
 
         # Set default plugin if not specified (use image plugin, not video plugin)
         if self.plugin is None:

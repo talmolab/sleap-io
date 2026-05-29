@@ -13,6 +13,7 @@ live-internet test is marked ``@pytest.mark.live``.
 import asyncio
 import os
 import time
+import traceback
 import warnings
 from pathlib import Path
 
@@ -37,6 +38,8 @@ from sleap_io.io._remote import (
     _mark_cache_dir,
     _raise_remote,
     _redact_url,
+    _redacted_cause_summary,
+    _redirect_target,
     _require_package,
     _retry_after_seconds,
     _retry_sleep_seconds,
@@ -273,11 +276,29 @@ def test_remote_io_error_no_url_no_status():
     assert str(err) == "boom"
 
 
-def test_remote_io_error_preserves_cause():
-    """The underlying cause is preserved as __cause__."""
-    cause = ValueError("inner")
-    err = RemoteIOError("wrap", cause=cause)
-    assert err.__cause__ is cause
+def test_remote_io_error_stores_redacted_cause_summary():
+    """A redacted cause summary is stored and surfaced without chaining."""
+    err = RemoteIOError("wrap", cause_summary="ValueError: inner")
+    # The raw exception is never chained (no credential leak via __cause__).
+    assert err.__cause__ is None
+    assert err.cause_summary == "ValueError: inner"
+    assert "cause=ValueError: inner" in str(err)
+
+
+def test_redacted_cause_summary_redacts_embedded_url():
+    """A URL embedded in an exception message is redacted in the summary."""
+    e = FileNotFoundError(
+        "GET https://user:s3cr3t@host/missing.slp?token=TOPSECRET -> 404"
+    )
+    summary = _redacted_cause_summary(e)
+    assert "s3cr3t" not in summary
+    assert "TOPSECRET" not in summary
+    assert summary.startswith("FileNotFoundError:")
+
+
+def test_redacted_cause_summary_empty_message():
+    """An exception with no message degrades to just its type name."""
+    assert _redacted_cause_summary(ValueError()) == "ValueError"
 
 
 # ---------------------------------------------------------------------------
@@ -654,6 +675,76 @@ def test_strip_cross_origin_headers_port_change_is_cross_origin():
     assert "Authorization" not in headers
 
 
+def test_strip_cross_origin_headers_noop_without_new_url():
+    """With no resolvable target (new_url=None) nothing is stripped."""
+    headers = CIMultiDict({"Authorization": "Bearer secret"})
+    _strip_cross_origin_headers(URL("https://a.example/x"), None, headers)
+    assert headers.get("Authorization") == "Bearer secret"
+
+
+# ---------------------------------------------------------------------------
+# _redirect_target (resolve a redirect's Location header against the source)
+# ---------------------------------------------------------------------------
+
+
+class _FakeRedirectResponse:
+    """Minimal stand-in for an aiohttp redirect response with headers."""
+
+    def __init__(self, headers: dict[str, str]) -> None:
+        self.headers = CIMultiDict(headers)
+
+
+def test_redirect_target_absolute_location():
+    """An absolute Location header resolves to its own origin (cross-origin)."""
+    prev = URL("https://a.example/start")
+    resp = _FakeRedirectResponse({"Location": "https://b.example/final"})
+    target = _redirect_target(prev, resp)
+    assert target == URL("https://b.example/final")
+    assert target.origin() != prev.origin()
+
+
+def test_redirect_target_relative_location_is_same_origin():
+    """A relative Location header resolves against the source (same origin)."""
+    prev = URL("https://a.example/dir/start")
+    resp = _FakeRedirectResponse({"Location": "/dir/final"})
+    target = _redirect_target(prev, resp)
+    assert target.origin() == prev.origin()
+
+
+def test_redirect_target_missing_location_returns_none():
+    """No Location header yields None (caller leaves headers untouched)."""
+    prev = URL("https://a.example/start")
+    assert _redirect_target(prev, _FakeRedirectResponse({})) is None
+
+
+def test_redirect_target_no_response_returns_none():
+    """A None response yields None."""
+    assert _redirect_target(URL("https://a.example/start"), None) is None
+
+
+def test_strip_cross_origin_via_redirect_target_strips():
+    """End-to-end of our logic: cross-origin Location strips sensitive headers.
+
+    Exercises ``_redirect_target`` + ``_strip_cross_origin_headers`` together
+    independent of aiohttp's native redirect handling.
+    """
+    prev = URL("https://a.example/start")
+    resp = _FakeRedirectResponse({"Location": "https://b.example/final"})
+    headers = CIMultiDict({"Authorization": "Bearer secret", "Accept": "*/*"})
+    _strip_cross_origin_headers(prev, _redirect_target(prev, resp), headers)
+    assert "Authorization" not in headers
+    assert headers.get("Accept") == "*/*"
+
+
+def test_strip_cross_origin_via_redirect_target_keeps_same_origin():
+    """Same-origin (relative) Location keeps sensitive headers."""
+    prev = URL("https://a.example/dir/start")
+    resp = _FakeRedirectResponse({"Location": "/dir/final"})
+    headers = CIMultiDict({"Authorization": "Bearer secret"})
+    _strip_cross_origin_headers(prev, _redirect_target(prev, resp), headers)
+    assert headers.get("Authorization") == "Bearer secret"
+
+
 # ---------------------------------------------------------------------------
 # Network: cross-origin redirect credential stripping (S2)
 #
@@ -763,6 +854,18 @@ def test_credentials_redacted_in_errors(httpserver):
     assert exc_info.value.url is not None
     assert "s3cr3t" not in exc_info.value.url
     assert "TOPSECRET" not in exc_info.value.url
+
+    # The FULL formatted traceback (which walks __cause__/__context__) must not
+    # leak credentials either: the credential-bearing aiohttp/fsspec exception is
+    # broken out of the displayed chain (raised `from None`).
+    e = exc_info.value
+    formatted = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+    assert "s3cr3t" not in formatted
+    assert "TOPSECRET" not in formatted
+    # The explicit cause is dropped and the implicit context is suppressed so
+    # the formatter never reaches the raw exception.
+    assert e.__cause__ is None
+    assert e.__suppress_context__ is True
 
 
 # ---------------------------------------------------------------------------

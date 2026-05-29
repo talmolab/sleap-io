@@ -2651,7 +2651,12 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
 
 
 def _read_labels_lazy_from_open_file(
-    labels_path: str, f: h5py.File, *, open_videos: bool = True
+    labels_path: str,
+    f: h5py.File,
+    *,
+    open_videos: bool = True,
+    _url_headers: dict[str, str] | None = None,
+    _url_stream_mode: str = "blockcache",
 ) -> Labels:
     """Build a lazy `Labels` from an already-open `h5py.File`.
 
@@ -2662,9 +2667,13 @@ def _read_labels_lazy_from_open_file(
     `labels._label_image_file` and intentionally outlives `f`.
 
     Args:
-        labels_path: Path to .slp file.
+        labels_path: Path or URL to .slp file.
         f: An already-open `h5py.File` handle to read from.
         open_videos: Whether to open video backends.
+        _url_headers: HTTP headers forwarded to the long-lived label-image
+            handle when `labels_path` is a URL. Ignored for local paths.
+        _url_stream_mode: Streaming strategy for the long-lived label-image
+            handle when `labels_path` is a URL. Ignored for local paths.
 
     Returns:
         Labels with LazyFrameList for labeled_frames.
@@ -2716,7 +2725,14 @@ def _read_labels_lazy_from_open_file(
     mask_tuples = read_masks(labels_path, videos, tracks, _hdf5_file=f)
     bbox_tuples = read_bboxes(labels_path, videos, tracks, _hdf5_file=f)
     centroid_tuples = read_centroids(labels_path, videos, tracks, _hdf5_file=f)
-    li_tuples, li_file = read_label_images(labels_path, videos, tracks, _hdf5_file=f)
+    li_tuples, li_file = read_label_images(
+        labels_path,
+        videos,
+        tracks,
+        _hdf5_file=f,
+        _url_headers=_url_headers,
+        _url_stream_mode=_url_stream_mode,
+    )
 
     # Build per-frame annotation dicts for lazy materialization
     def _build_ann_by_frame(ann_tuples):
@@ -3901,6 +3917,8 @@ def read_label_images(
     instances: list[Instance | PredictedInstance] | None = None,
     *,
     _hdf5_file: h5py.File | None = None,
+    _url_headers: dict[str, str] | None = None,
+    _url_stream_mode: str = "blockcache",
 ) -> tuple[list[tuple[LabelImage, int, int]], "h5py.File | None"]:
     """Read label image annotations from a SLEAP labels file.
 
@@ -3910,7 +3928,7 @@ def read_label_images(
     access.
 
     Args:
-        labels_path: A string path to the SLEAP labels file.
+        labels_path: A string path or URL to the SLEAP labels file.
         videos: List of Video objects for relinking.
         tracks: List of Track objects for relinking.
         instances: Optional list of Instance/PredictedInstance objects for
@@ -3923,6 +3941,11 @@ def read_label_images(
             access regardless of this argument, since that handle must outlive
             the caller's `with` block. This is a private argument used to thread
             a single open handle through reads.
+        _url_headers: HTTP headers used when ``labels_path`` is a URL and the
+            long-lived lazy-access handle must be opened over the network.
+            Ignored for local paths.
+        _url_stream_mode: Streaming strategy for the long-lived lazy-access
+            handle when ``labels_path`` is a URL. Ignored for local paths.
 
     Returns:
         A tuple of ``(label_image_tuples, h5py_file)`` where
@@ -3943,8 +3966,22 @@ def read_label_images(
 
     # Open a SECOND, long-lived file handle for lazy pixel data reading. This
     # handle intentionally outlives the orchestrator's `with` block (the closures
-    # below capture it), so it cannot reuse `_hdf5_file`.
-    f = h5py.File(labels_path, "r")
+    # below capture it), so it cannot reuse `_hdf5_file`. For URL loads,
+    # ``labels_path`` is the raw URL string, which ``h5py.File`` cannot open
+    # directly; open a FRESH, independent fsspec file-like instead.
+    from sleap_io.io import _remote
+
+    if _remote._is_url(labels_path):
+        f = h5py.File(
+            _remote.open_url(
+                labels_path,
+                headers=_url_headers,
+                stream_mode=_url_stream_mode,
+            ),
+            "r",
+        )
+    else:
+        f = h5py.File(labels_path, "r")
 
     if "label_image_data" not in f:
         f.close()
@@ -5269,7 +5306,12 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
 
 
 def _read_labels_from_open_file(
-    labels_path: str, f: h5py.File, *, open_videos: bool = True
+    labels_path: str,
+    f: h5py.File,
+    *,
+    open_videos: bool = True,
+    _url_headers: dict[str, str] | None = None,
+    _url_stream_mode: str = "blockcache",
 ) -> Labels:
     """Build a `Labels` from an already-open `h5py.File`.
 
@@ -5280,10 +5322,14 @@ def _read_labels_from_open_file(
     `labels._label_image_file` and intentionally outlives `f`.
 
     Args:
-        labels_path: A string path to the SLEAP labels file.
+        labels_path: A string path or URL to the SLEAP labels file.
         f: An already-open `h5py.File` handle to read from.
         open_videos: If `True` (the default), attempt to open the video backend
             for I/O.
+        _url_headers: HTTP headers forwarded to the long-lived label-image
+            handle when `labels_path` is a URL. Ignored for local paths.
+        _url_stream_mode: Streaming strategy for the long-lived label-image
+            handle when `labels_path` is a URL. Ignored for local paths.
 
     Returns:
         The processed `Labels` object.
@@ -5374,7 +5420,13 @@ def _read_labels_from_open_file(
         labels_path, videos, tracks, instances, _hdf5_file=f
     )
     li_tuples, _li_file = read_label_images(
-        labels_path, videos, tracks, instances, _hdf5_file=f
+        labels_path,
+        videos,
+        tracks,
+        instances,
+        _hdf5_file=f,
+        _url_headers=_url_headers,
+        _url_stream_mode=_url_stream_mode,
     )
 
     # Attach annotations to their corresponding LabeledFrames

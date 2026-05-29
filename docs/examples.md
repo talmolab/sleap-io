@@ -653,10 +653,12 @@ backends reopen the remote file lazily when you read frames, reusing the same
 streaming configuration.
 
 !!! info "What is and isn't supported"
-    URL loading covers `.slp`/`.pkg.slp` and the other labels formats through
-    [`load_file`][sleap_io.load_file]. Remote *video* loading
-    (`sio.load_video("https://.../movie.mp4")`) is not yet implemented and
-    raises `NotImplementedError`; download the video locally first.
+    URL loading currently covers `.slp`/`.pkg.slp` only (including through the
+    universal [`load_file`][sleap_io.load_file]). Other labels formats (NWB,
+    COCO, Label Studio, JABS, DLC, TrackMate, LEAP, GeoJSON, Ultralytics) and
+    remote *video* loading (`sio.load_video("https://.../movie.mp4")`) are not
+    yet implemented over URLs and raise `NotImplementedError`; download the file
+    locally first. These are tracked as follow-ups.
 
 ### Supported schemes and install matrix
 

@@ -88,6 +88,15 @@ _RETRY_BACKOFF_MAX = 30.0
 #: Pattern matching fsspec cache filenames (sha hex hashes, optional ``.tags``).
 _CACHE_KEY_PATTERN = re.compile(r"^[0-9a-f]{32,64}(\.tags)?$")
 
+#: Pattern matching any remote URL embedded in free text (e.g. an exception
+#: message). Used to redact credential-bearing URLs out of a cause summary. The
+#: scheme alternation mirrors :data:`_URL_SCHEMES`; the body stops at the first
+#: whitespace or quote so a single URL token is captured.
+_URL_IN_TEXT_PATTERN = re.compile(
+    r"(?:" + "|".join(sorted(_URL_SCHEMES)) + r")://[^\s\"'<>]+",
+    re.IGNORECASE,
+)
+
 
 # ---------------------------------------------------------------------------
 # Errors
@@ -100,9 +109,18 @@ class RemoteIOError(OSError):
     Subclasses :class:`OSError` so that callers which already handle
     ``OSError`` (e.g. ``HDF5Video.__attrs_post_init__``) degrade gracefully.
 
+    The original aiohttp/fsspec exception is intentionally *not* chained as
+    ``__cause__`` / ``__context__`` because its string form embeds the raw URL
+    (userinfo password, ``?token=`` query parameter, etc.), which
+    :func:`traceback.format_exception` would otherwise leak. A redacted summary
+    of the cause (type name + redacted message) is preserved instead via
+    :attr:`cause_summary`.
+
     Attributes:
         url: Redacted URL (credentials stripped if present), or None.
         status: HTTP status code, or None for connection-level errors.
+        cause_summary: Redacted, one-line summary of the underlying exception
+            (type name plus redacted message), or None.
     """
 
     def __init__(
@@ -111,7 +129,7 @@ class RemoteIOError(OSError):
         *,
         url: str | None = None,
         status: int | None = None,
-        cause: BaseException | None = None,
+        cause_summary: str | None = None,
     ) -> None:
         """Build a RemoteIOError with a redacted, composed message.
 
@@ -120,17 +138,22 @@ class RemoteIOError(OSError):
             url: Raw URL associated with the failure. It is redacted before
                 being stored or surfaced in the message.
             status: HTTP status code, if known.
-            cause: The underlying exception, preserved as ``__cause__``.
+            cause_summary: A pre-redacted summary of the underlying exception
+                (see :func:`_redacted_cause_summary`). It is stored on the
+                instance and appended to the message. The raw exception is
+                never chained, so no credential-bearing string can leak through
+                ``__cause__`` / ``__context__``.
         """
         self.url = _redact_url(url) if url else None
         self.status = status
-        if cause is not None:
-            self.__cause__ = cause
+        self.cause_summary = cause_summary
         parts = [message]
         if self.status is not None:
             parts.append(f"status={self.status}")
         if self.url:
             parts.append(f"url={self.url}")
+        if self.cause_summary:
+            parts.append(f"cause={self.cause_summary}")
         super().__init__("; ".join(parts))
 
 
@@ -298,15 +321,46 @@ def _strip_cross_origin_headers(prev_url, new_url, headers) -> None:
     Args:
         prev_url: The URL the request was redirected from (an ``aiohttp.URL``),
             or None if there is no prior URL (in which case nothing is done).
-        new_url: The redirect target URL (an ``aiohttp.URL``).
+        new_url: The redirect target URL (an ``aiohttp.URL``), or None if it
+            could not be determined (in which case nothing is done).
         headers: A mutable, case-insensitive header mapping to scrub in place.
     """
-    if prev_url is None:
+    if prev_url is None or new_url is None:
         return
     if prev_url.origin() != new_url.origin():
         for header in list(headers):
             if header.lower() in _SENSITIVE_HEADERS:
                 headers.pop(header, None)
+
+
+def _redirect_target(prev_url, response):
+    """Resolve a redirect's target URL from its ``Location`` header.
+
+    aiohttp's ``on_request_redirect`` trace hook fires when a redirect response
+    is received but before the redirected request is built, so the target is
+    not yet on ``params.url`` (which is still the *source* URL). The actual
+    target is the ``Location`` header resolved against the source URL (handling
+    relative redirects).
+
+    Args:
+        prev_url: The source request URL (an ``aiohttp.URL``).
+        response: The redirect response (must expose ``.headers``), or None.
+
+    Returns:
+        The resolved target ``aiohttp.URL``, or None if there is no usable
+        ``Location`` header (in which case the caller leaves headers untouched).
+    """
+    import yarl
+
+    if response is None:
+        return None
+    location = response.headers.get("Location")
+    if not location:
+        return None
+    try:
+        return prev_url.join(yarl.URL(location))
+    except (ValueError, TypeError):  # pragma: no cover - defensive: malformed URL
+        return None
 
 
 async def _safe_get_client(**client_kwargs: Any):
@@ -328,9 +382,12 @@ async def _safe_get_client(**client_kwargs: Any):
     trace_config = aiohttp.TraceConfig()
 
     async def on_redirect(session, ctx, params):
-        history = params.response.history if params.response else []
-        prev_url = history[-1].url if history else None
-        _strip_cross_origin_headers(prev_url, params.url, params.headers)
+        # In aiohttp 3.13.x the redirect hook fires with ``params.url`` still
+        # pointing at the *source* request and an empty ``response.history``;
+        # the target is the redirect ``Location`` resolved against the source.
+        prev_url = params.url
+        target = _redirect_target(prev_url, params.response)
+        _strip_cross_origin_headers(prev_url, target, params.headers)
 
     trace_config.on_request_redirect.append(on_redirect)
     return aiohttp.ClientSession(trace_configs=[trace_config], **client_kwargs)
@@ -666,8 +723,42 @@ def _status_from_exception(e: BaseException) -> int | None:
     return resp.status if resp is not None else None
 
 
+def _redacted_cause_summary(e: BaseException) -> str:
+    """Build a credential-safe one-line summary of an exception.
+
+    aiohttp / fsspec exceptions embed the raw request URL (which may include a
+    userinfo password or a ``?token=`` query parameter) in their string form.
+    This returns ``"<TypeName>: <redacted message>"`` so the summary can be
+    surfaced to users for debugging without leaking credentials. Every
+    URL-looking substring in the message is run through :func:`_redact_url`.
+
+    Args:
+        e: The underlying exception.
+
+    Returns:
+        A redacted, single-line summary (type name plus redacted message).
+    """
+    try:
+        raw = str(e)
+    except Exception:
+        # Some exceptions (e.g. an aiohttp.ClientResponseError without a
+        # request_info) raise from their own __str__; fall back to the type name.
+        return type(e).__name__
+    redacted = _URL_IN_TEXT_PATTERN.sub(lambda m: _redact_url(m.group(0)), raw)
+    redacted = redacted.replace("\n", " ").replace("\r", " ").strip()
+    if redacted:
+        return f"{type(e).__name__}: {redacted}"
+    return type(e).__name__
+
+
 def _raise_remote(e: BaseException, *, url: str) -> None:
     """Convert an aiohttp/fsspec exception into a :class:`RemoteIOError`.
+
+    The original exception is deliberately *not* chained (``from None``): its
+    string form embeds the raw URL (credentials, ``?token=``), which
+    :func:`traceback.format_exception` would otherwise leak via ``__cause__`` /
+    ``__context__``. A redacted summary is preserved on the raised error
+    instead (see :func:`_redacted_cause_summary`).
 
     Args:
         e: The caught exception.
@@ -681,6 +772,8 @@ def _raise_remote(e: BaseException, *, url: str) -> None:
     if isinstance(e, RemoteIOError):
         raise e
 
+    summary = _redacted_cause_summary(e)
+
     # fsspec wraps HTTP error responses (e.g. as FileNotFoundError); recover the
     # underlying ClientResponseError from the chain so the status is preserved.
     resp = _find_response_error(e)
@@ -690,16 +783,23 @@ def _raise_remote(e: BaseException, *, url: str) -> None:
             416: "range past end of file",
             412: "file changed since cached (ETag mismatch)",
         }.get(resp.status, f"HTTP {resp.status}")
-        raise RemoteIOError(msg, url=url, status=resp.status, cause=e) from e
-    if isinstance(e, aiohttp.ClientConnectorError):
-        raise RemoteIOError("connection error", url=url, cause=e) from e
-    if isinstance(e, aiohttp.ClientPayloadError):
-        raise RemoteIOError("truncated body", url=url, cause=e) from e
-    if isinstance(e, asyncio.TimeoutError):
-        raise RemoteIOError("timeout", url=url, cause=e) from e
-    raise RemoteIOError(
-        f"unexpected error: {type(e).__name__}", url=url, cause=e
-    ) from e
+        err = RemoteIOError(msg, url=url, status=resp.status, cause_summary=summary)
+    elif isinstance(e, aiohttp.ClientConnectorError):
+        err = RemoteIOError("connection error", url=url, cause_summary=summary)
+    elif isinstance(e, aiohttp.ClientPayloadError):
+        err = RemoteIOError("truncated body", url=url, cause_summary=summary)
+    elif isinstance(e, asyncio.TimeoutError):
+        err = RemoteIOError("timeout", url=url, cause_summary=summary)
+    else:
+        err = RemoteIOError(
+            f"unexpected error: {type(e).__name__}", url=url, cause_summary=summary
+        )
+
+    # Break the credential-bearing chain: `raise ... from None` clears
+    # `__cause__` and sets `__suppress_context__`, so `traceback.format_exception`
+    # never prints the raw aiohttp/fsspec exception (whose string embeds the raw
+    # URL). The redacted `cause_summary` carries the useful debugging info.
+    raise err from None
 
 
 # ---------------------------------------------------------------------------

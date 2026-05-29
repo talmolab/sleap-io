@@ -100,15 +100,24 @@ def load_slp(
             max_blocks=max_blocks,
             retries=retries,
         )
+        resolved_mode = "blockcache" if stream_mode == "auto" else stream_mode
         try:
             with h5py.File(file_like, "r") as f:
                 if lazy:
                     labels = slp._read_labels_lazy_from_open_file(
-                        url, f, open_videos=open_videos
+                        url,
+                        f,
+                        open_videos=open_videos,
+                        _url_headers=headers,
+                        _url_stream_mode=resolved_mode,
                     )
                 else:
                     labels = slp._read_labels_from_open_file(
-                        url, f, open_videos=open_videos
+                        url,
+                        f,
+                        open_videos=open_videos,
+                        _url_headers=headers,
+                        _url_stream_mode=resolved_mode,
                     )
         finally:
             file_like.close()
@@ -117,7 +126,6 @@ def load_slp(
         # the remote file lazily on frame reads.
         from sleap_io.io.video_reading import HDF5Video
 
-        resolved_mode = "blockcache" if stream_mode == "auto" else stream_mode
         for video in labels.videos:
             if isinstance(video.backend, HDF5Video):
                 object.__setattr__(video.backend, "_url_headers", headers)
@@ -1082,27 +1090,21 @@ _URL_UNAMBIGUOUS_EXTS: dict[str, str] = {
 #: URL extensions that map to multiple formats and require sniffing.
 _URL_AMBIGUOUS_EXTS = frozenset({".h5", ".json", ".csv"})
 
-#: Keyword args understood only by `load_slp` (the only URL-aware loader in this
-#: PR). They are stripped before dispatching to any other loader.
-_URL_STREAM_KWARGS = frozenset(
-    {
-        "headers",
-        "stream_mode",
-        "cache_storage",
-        "cache_expiry",
-        "block_size",
-        "max_blocks",
-        "retries",
-    }
-)
+
+#: URL-loadable formats. Only `.slp` (and `.pkg.slp`) loading is implemented
+#: for remote URLs in this PR; every other format's loader opens the path
+#: locally and would fail with a cryptic `OSError` over a URL, so those are
+#: gated behind a clean `NotImplementedError` (mirroring `load_video(url)`).
+_URL_IMPLEMENTED_FORMATS = frozenset({"slp"})
 
 
 def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video:
     """Dispatch a URL to a concrete loader given a resolved format string.
 
-    URL-streaming-only kwargs (see `_URL_STREAM_KWARGS`) are forwarded only to
-    `load_slp`; other loaders are not URL-aware in this PR and would reject
-    them, so they are stripped before dispatch.
+    Only the `slp` format is URL-aware in this PR; every other format's loader
+    opens the path with a local file `open()` and would fail with a cryptic
+    `OSError` over a URL, so those are gated behind a clean `NotImplementedError`
+    (mirroring `load_video(url)`).
 
     Args:
         filename: The URL to load.
@@ -1114,34 +1116,40 @@ def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video
 
     Raises:
         ValueError: If `format` is not a recognized format.
+        NotImplementedError: If `format` is recognized but remote loading for it
+            is not yet implemented (every format other than `slp`).
     """
     from sleap_io.io import _remote
 
-    if format != "slp":
-        kwargs = {k: v for k, v in kwargs.items() if k not in _URL_STREAM_KWARGS}
-    dispatch: dict[str, Callable[..., Labels | Video]] = {
-        "slp": load_slp,
-        "nwb": load_nwb,
-        "leap": load_leap,
-        "alphatracker": load_alphatracker,
-        "coco": load_coco,
-        "labelstudio": load_labelstudio,
-        "analysis_h5": load_analysis_h5,
-        "jabs": load_jabs,
-        "dlc": load_dlc,
-        "csv": load_csv,
-        "trackmate": load_trackmate,
-        "ultralytics": load_ultralytics,
-        "video": load_video,
+    known_formats = {
+        "slp",
+        "nwb",
+        "leap",
+        "alphatracker",
+        "coco",
+        "labelstudio",
+        "analysis_h5",
+        "jabs",
+        "dlc",
+        "csv",
+        "trackmate",
+        "ultralytics",
+        "video",
+        "geojson",
     }
-    if format == "geojson":
-        return Labels(rois=load_geojson(filename, **kwargs))
-    loader = dispatch.get(format)
-    if loader is None:
+    if format not in known_formats:
         raise ValueError(
             f"Unsupported format '{format}' for URL: '{_remote._redact_url(filename)}'."
         )
-    return loader(filename, **kwargs)
+
+    if format not in _URL_IMPLEMENTED_FORMATS:
+        raise NotImplementedError(
+            f"Remote {format} loading is not yet implemented "
+            f"(URL: {_remote._redact_url(filename)}); tracked as a follow-up. "
+            "Download the file locally first."
+        )
+
+    return load_slp(filename, **kwargs)
 
 
 def _resolve_hdf5_url_format(

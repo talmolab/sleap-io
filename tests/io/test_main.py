@@ -471,6 +471,68 @@ def test_load_slp_url_embedded_pkg_keeps_clean_url_and_reads_frame(
     assert frame.dtype.name == "uint8"
 
 
+def _make_label_image_pkg(tmp_path):
+    """Build a `.pkg.slp` containing a single `UserLabelImage` and return path.
+
+    Returns the path and the raw label-image pixel data so callers can assert a
+    pixel-perfect round-trip.
+    """
+    import numpy as np
+
+    from sleap_io import LabeledFrame, Skeleton, Track, Video
+    from sleap_io.io.main import save_slp
+    from sleap_io.model.label_image import LabelImage, UserLabelImage
+
+    data = np.zeros((8, 10), dtype=np.int32)
+    data[1:3, 2:5] = 1
+    data[5:7, 6:9] = 2
+
+    video = Video(filename="remote_label_image_test.mp4")
+    track = Track(name="cell_1")
+    li = UserLabelImage(
+        data=data,
+        objects={1: LabelImage.Info(track=track, category="neuron", name="n1")},
+        source="cellpose",
+    )
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.label_images.append(li)
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[Skeleton(nodes=["A"])],
+        tracks=[track],
+    )
+    path = str(tmp_path / "label_image.pkg.slp")
+    save_slp(labels, path)
+    return path, data
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_load_slp_url_label_image_roundtrip(httpserver, tmp_path, lazy):
+    """A remote `.pkg.slp` with a `LabelImage` loads and reads pixels over HTTP.
+
+    Regression test for finding 1: the long-lived lazy-access handle in
+    `read_label_images` was opened unconditionally as
+    `h5py.File(labels_path, "r")`, which raised `OSError` for URL loads (where
+    `labels_path` is the raw URL). It must now open a fresh fsspec file-like.
+    """
+    import numpy as np
+
+    path, data = _make_label_image_pkg(tmp_path)
+    file_bytes = Path(path).read_bytes()
+    _serve_with_range(httpserver, "/label_image.pkg.slp", file_bytes)
+    url = httpserver.url_for("/label_image.pkg.slp")
+
+    labels = load_slp(url, lazy=lazy, stream_mode="download")
+    assert len(labels.label_images) == 1
+
+    rli = labels.label_images[0]
+    assert rli.source == "cellpose"
+    assert rli.objects[1].category == "neuron"
+    # The pixel data must be readable over HTTP via the lazy loader.
+    np.testing.assert_array_equal(rli.data, data)
+
+
 def test_load_video_url_raises_not_implemented():
     """`load_video(url)` raises `NotImplementedError` with a redacted URL.
 
@@ -487,6 +549,36 @@ def test_load_video_url_raises_not_implemented():
     assert "secret" not in message
     assert "abc123" not in message
     assert "example.com" in message
+
+
+def test_load_file_url_nwb_raises_not_implemented():
+    """A `.nwb` URL raises a clean `NotImplementedError`, not a raw `OSError`.
+
+    No network request is issued: the extension routes directly to the
+    (unimplemented) `nwb` format before any I/O.
+    """
+    url = "https://user:s3cr3t@example.invalid/data.nwb?token=TOPSECRET"
+    with pytest.raises(NotImplementedError) as exc_info:
+        load_file(url)
+    message = str(exc_info.value)
+    assert "not yet implemented" in message
+    assert "nwb" in message
+    # Credentials are redacted out of the surfaced URL.
+    assert "s3cr3t" not in message
+    assert "TOPSECRET" not in message
+    assert "example.invalid" in message
+
+
+def test_load_file_url_slp_still_loads(httpserver, slp_minimal):
+    """A `.slp` URL still loads after the non-slp gate was added (finding 4)."""
+    file_bytes = Path(slp_minimal).read_bytes()
+    httpserver.expect_request("/labels.slp").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.slp")
+    labels = load_file(url, stream_mode="download")
+    assert type(labels) is Labels
+    assert len(labels) == 1
 
 
 def test_load_file_url_sniff_routes_slp(httpserver, slp_minimal):
