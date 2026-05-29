@@ -1,10 +1,138 @@
 """Tests for DeepLabCut I/O operations."""
 
+import pickle
+from pathlib import Path
+
 import numpy as np
 import pytest
+import yaml
 
 import sleap_io as sio
 from sleap_io.io import dlc
+from sleap_io.model.labels_set import LabelsSet
+
+
+def make_dlc_project(
+    root,
+    *,
+    scorer="LM",
+    task="proj",
+    date="Jan1",
+    iteration=0,
+    bodyparts=("snout", "leftear", "rightear"),
+    skeleton=(("snout", "leftear"), ("snout", "rightear")),
+    folders=None,
+    video_sets=None,
+    make_images=True,
+    train_indices=None,
+    test_indices=None,
+    train_fraction=0.8,
+    shuffle=1,
+    csv_scorer=None,
+):
+    """Build a minimal synthetic single-animal DLC project under ``root``.
+
+    Args:
+        root: Project root directory (created if needed).
+        scorer: Project scorer name (used for config and CSV filenames).
+        task: DLC ``Task`` name.
+        date: DLC ``date`` string.
+        iteration: DLC ``iteration`` index.
+        bodyparts: Bodypart names.
+        skeleton: Iterable of ``(src, dst)`` edge name pairs for the config.
+        folders: Mapping of ``labeled-data`` folder name to a list of image
+            basenames (without extension). Defaults to two videos.
+        video_sets: Optional explicit ``video_sets`` mapping. If `None`, built
+            from `folders` so each folder stem matches a ``<folder>.mp4`` entry.
+        make_images: Whether to write dummy image files.
+        train_indices: If given (with `test_indices`), write a Documentation
+            pickle encoding these positional split indices.
+        test_indices: Positional test indices for the Documentation pickle.
+        train_fraction: Training fraction for the pickle name/contents.
+        shuffle: Shuffle index for the pickle name.
+        csv_scorer: Scorer name written into the CSV header (defaults to
+            `scorer`); set differently to simulate a scorer mismatch.
+
+    Returns:
+        The path to the project's ``config.yaml``.
+    """
+    root = Path(root)
+    if folders is None:
+        folders = {"vid1": ["img000", "img001", "img002"], "vid2": ["img000", "img001"]}
+    csv_scorer = scorer if csv_scorer is None else csv_scorer
+
+    nbp = len(bodyparts)
+    scorer_row = "scorer," + ",".join([csv_scorer] * (2 * nbp))
+    bp_row = "bodyparts," + ",".join(bp for bp in bodyparts for _ in range(2))
+    coord_row = "coords," + ",".join(["x", "y"] * nbp)
+
+    for folder, imgs in folders.items():
+        d = root / "labeled-data" / folder
+        d.mkdir(parents=True, exist_ok=True)
+        lines = [scorer_row, bp_row, coord_row]
+        for i, img in enumerate(imgs):
+            vals = ",".join(str(v) for v in range(i * 100, i * 100 + 2 * nbp))
+            lines.append(f"labeled-data/{folder}/{img}.png,{vals}")
+        (d / f"CollectedData_{scorer}.csv").write_text("\n".join(lines) + "\n")
+        if make_images:
+            for img in imgs:
+                (d / f"{img}.png").write_text("dummy")
+
+    if video_sets is None:
+        video_sets = {
+            str(root / "videos" / f"{folder}.mp4"): {"crop": "0, 100, 0, 100"}
+            for folder in folders
+        }
+
+    cfg = {
+        "Task": task,
+        "scorer": scorer,
+        "date": date,
+        "iteration": iteration,
+        "multianimalproject": False,
+        "video_sets": video_sets,
+        "bodyparts": list(bodyparts),
+        "skeleton": [list(e) for e in skeleton],
+        "TrainingFraction": [train_fraction],
+    }
+    (root / "config.yaml").write_text(yaml.safe_dump(cfg))
+
+    if train_indices is not None and test_indices is not None:
+        tdir = (
+            root
+            / "training-datasets"
+            / f"iteration-{iteration}"
+            / f"UnaugmentedDataSet_{task}{date}"
+        )
+        tdir.mkdir(parents=True, exist_ok=True)
+        first_folder = list(folders)[0]
+        data = [
+            {"image": ("labeled-data", first_folder, f"{folders[first_folder][0]}.png")}
+        ]
+        name = (
+            f"Documentation_data-{task}_{int(round(train_fraction * 100))}"
+            f"shuffle{shuffle}.pickle"
+        )
+        with open(tdir / name, "wb") as f:
+            pickle.dump(
+                [data, list(train_indices), list(test_indices), train_fraction],
+                f,
+                pickle.HIGHEST_PROTOCOL,
+            )
+
+    return root / "config.yaml"
+
+
+def _frame_keys(labels):
+    """Return sorted ``(folder, filename)`` keys for a Labels' frames."""
+    keys = []
+    for lf in labels.labeled_frames:
+        fname = lf.video.filename
+        if isinstance(fname, list):
+            fname = fname[lf.frame_idx]
+        p = Path(str(fname))
+        keys.append((p.parent.name, p.name))
+    return sorted(keys)
 
 
 def test_is_dlc_file(dlc_maudlc_testdata, dlc_testdata):
@@ -341,3 +469,652 @@ def test_dlc_with_nested_path_structure(tmp_path):
     labels2 = sio.load_file(csv_parent_path)
     assert len(labels2.labeled_frames) == 3
     assert len(labels2.videos) == 1
+
+
+# -----------------------------------------------------------------------------
+# Config parsing and discovery
+# -----------------------------------------------------------------------------
+
+
+def test_read_dlc_config_valid(dlc_config):
+    """Reading a valid DLC config returns the expected mapping."""
+    cfg = dlc._read_dlc_config(dlc_config)
+    assert isinstance(cfg, dict)
+    assert cfg["Task"] == "maudlc_2.3.0"
+    assert "video_sets" in cfg
+    assert cfg["skeleton"] == [["A", "B"], ["B", "C"], ["A", "C"]]
+
+
+def test_read_dlc_config_missing(tmp_path):
+    """A missing config file warns and returns None."""
+    with pytest.warns(UserWarning):
+        assert dlc._read_dlc_config(tmp_path / "nope.yaml") is None
+
+
+def test_read_dlc_config_non_mapping(tmp_path):
+    """A YAML file that is not a mapping warns and returns None."""
+    bad = tmp_path / "config.yaml"
+    bad.write_text("- just\n- a\n- list\n")
+    with pytest.warns(UserWarning):
+        assert dlc._read_dlc_config(bad) is None
+
+
+def test_looks_like_dlc_config():
+    """DLC config detection requires multiple characteristic keys."""
+    assert dlc._looks_like_dlc_config({"video_sets": {}, "bodyparts": []})
+    assert not dlc._looks_like_dlc_config({"bodyparts": []})
+    assert not dlc._looks_like_dlc_config(["not", "a", "dict"])
+
+
+def test_discover_config_walks_up(tmp_path):
+    """Auto-discovery finds config.yaml two levels above the CSV."""
+    config_path = make_dlc_project(tmp_path)
+    csv = tmp_path / "labeled-data" / "vid1" / "CollectedData_LM.csv"
+    found = dlc._discover_config(csv)
+    assert found is not None
+    assert Path(found) == Path(config_path)
+
+
+def test_discover_config_none_when_absent(tmp_path):
+    """Auto-discovery returns None when no config.yaml is in range."""
+    csv = tmp_path / "labeled-data" / "vid1" / "data.csv"
+    csv.parent.mkdir(parents=True)
+    csv.write_text("scorer,A\n")
+    assert dlc._discover_config(csv) is None
+
+
+def test_discover_config_rejects_non_dlc_yaml(tmp_path):
+    """A config.yaml that is not a DLC config is rejected by discovery."""
+    (tmp_path / "config.yaml").write_text(yaml.safe_dump({"unrelated": 1}))
+    csv = tmp_path / "labeled-data" / "vid1" / "data.csv"
+    csv.parent.mkdir(parents=True)
+    csv.write_text("scorer,A\n")
+    assert dlc._discover_config(csv) is None
+
+
+# -----------------------------------------------------------------------------
+# Item 4: skeleton edges from config
+# -----------------------------------------------------------------------------
+
+
+def test_load_dlc_edges_from_explicit_config(dlc_maudlc_testdata, dlc_config):
+    """Skeleton edges are imported from an explicit config; nodes unchanged."""
+    labels = sio.load_dlc(dlc_maudlc_testdata, config=dlc_config)
+    skel = labels.skeleton
+    assert set(skel.node_names) == {"A", "B", "C", "D", "E"}  # nodes unchanged
+    assert skel.edge_names == [("A", "B"), ("B", "C"), ("A", "C")]
+    assert skel.name == "maudlc_2.3.0"
+
+
+def test_load_dlc_no_config_has_no_edges(dlc_maudlc_testdata):
+    """Without a config, no edges are added (backward compatible)."""
+    labels = sio.load_dlc(dlc_maudlc_testdata, config=False)
+    assert labels.skeleton.edges == []
+
+
+def test_load_dlc_config_false_disables_discovery(tmp_path):
+    """config=False reproduces legacy output even inside a project."""
+    make_dlc_project(tmp_path)
+    csv = tmp_path / "labeled-data" / "vid1" / "CollectedData_LM.csv"
+    labels = sio.load_dlc(csv, config=False)
+    assert labels.skeleton.edges == []
+
+
+def test_load_dlc_autodiscovers_config(tmp_path):
+    """config=None auto-discovers config.yaml and attaches edges."""
+    make_dlc_project(tmp_path)
+    csv = tmp_path / "labeled-data" / "vid1" / "CollectedData_LM.csv"
+    labels = sio.load_dlc(csv)  # default config=None -> auto-discover
+    assert labels.skeleton.edge_names == [("snout", "leftear"), ("snout", "rightear")]
+
+
+def test_edges_referencing_absent_bodypart_dropped(tmp_path):
+    """Edges naming a bodypart absent from the data are dropped with a warning."""
+    config_path = make_dlc_project(
+        tmp_path,
+        skeleton=(("snout", "leftear"), ("snout", "ghost")),
+    )
+    with pytest.warns(UserWarning, match="ghost"):
+        labels = sio.load_dlc_project(config_path)
+    assert labels.skeleton.edge_names == [("snout", "leftear")]
+
+
+def test_empty_skeleton_config_no_edges(tmp_path):
+    """An empty config skeleton yields no edges and no error."""
+    config_path = make_dlc_project(tmp_path, skeleton=())
+    labels = sio.load_dlc_project(config_path)
+    assert labels.skeleton.edges == []
+
+
+def test_malformed_skeleton_entry_skipped(tmp_path):
+    """Malformed skeleton entries (not 2-tuples) are skipped defensively."""
+    skel = sio.Skeleton(nodes=["snout", "leftear"])
+    cfg = {
+        "Task": "t",
+        "skeleton": [["snout", "leftear"], ["snout"], "bad", ["a", "b", "c"]],
+    }
+    with pytest.warns(UserWarning):
+        dlc._attach_config_skeleton(skel, cfg)
+    assert skel.edge_names == [("snout", "leftear")]
+
+
+# -----------------------------------------------------------------------------
+# Item 3: source video links from video_sets
+# -----------------------------------------------------------------------------
+
+
+def test_source_video_linked_by_stem(tmp_path):
+    """Each image folder is linked to its source video matched by stem."""
+    config_path = make_dlc_project(tmp_path)
+    labels = sio.load_dlc_project(config_path)
+    by_folder = {Path(v.filename[0]).parent.name: v for v in labels.videos}
+    assert by_folder["vid1"].source_video is not None
+    assert Path(by_folder["vid1"].source_video.filename).name == "vid1.mp4"
+    assert by_folder["vid1"].original_video is not None
+
+
+def test_source_video_none_on_stem_mismatch(tmp_path):
+    """A folder whose name does not match any video stem gets no source link."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"video": ["img000", "img001"]},
+        video_sets={str(tmp_path / "videos" / "different_name.mp4"): {}},
+    )
+    labels = sio.load_dlc_project(config_path)
+    assert labels.videos[0].source_video is None
+
+
+def test_source_video_placeholder_skipped(tmp_path):
+    """Placeholder video_sets entries are skipped."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000"]},
+        video_sets={
+            "WILL BE AUTOMATICALLY UPDATED BY DEMO CODE": {"crop": "0, 1, 0, 1"}
+        },
+    )
+    labels = sio.load_dlc_project(config_path)
+    assert labels.videos[0].source_video is None
+
+
+def test_source_video_windows_path_stem(tmp_path):
+    """Windows backslash video paths have their stem extracted correctly."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000"]},
+        video_sets={r"D:\data\videos\vid1.mp4": {"crop": "0, 1, 0, 1"}},
+    )
+    labels = sio.load_dlc_project(config_path)
+    assert labels.videos[0].source_video is not None
+    assert labels.videos[0].source_video.filename == r"D:\data\videos\vid1.mp4"
+
+
+def test_source_video_search_path_repair(tmp_path):
+    """video_search_paths repairs the original path by basename when present."""
+    vids = tmp_path / "found_videos"
+    vids.mkdir()
+    (vids / "vid1.mp4").write_text("dummy")
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000"]},
+        video_sets={r"X:\missing\vid1.mp4": {}},
+    )
+    labels = sio.load_dlc_project(config_path, video_search_paths=[vids])
+    assert Path(labels.videos[0].source_video.filename) == vids / "vid1.mp4"
+
+
+# -----------------------------------------------------------------------------
+# load_dlc_project + load_file routing
+# -----------------------------------------------------------------------------
+
+
+def test_load_dlc_project_merges_videos(tmp_path):
+    """A multi-video project merges into one Labels with a single skeleton."""
+    config_path = make_dlc_project(tmp_path)
+    labels = sio.load_dlc_project(config_path)
+    assert len(labels.skeletons) == 1
+    # Edges deduped to the config's 2 edges, not duplicated per video.
+    assert len(labels.skeleton.edges) == 2
+    assert len(labels.videos) == 2
+    assert len(labels.labeled_frames) == 5  # 3 + 2
+    assert labels.provenance["dlc_scorer"] == "LM"
+    assert labels.provenance["dlc_task"] == "proj"
+    assert "dlc_project" in labels.provenance
+
+
+def test_load_dlc_project_from_directory(tmp_path):
+    """A project directory can be passed directly."""
+    make_dlc_project(tmp_path)
+    labels = sio.load_dlc_project(tmp_path)
+    assert len(labels.videos) == 2
+
+
+def test_load_dlc_project_directory_no_config(tmp_path):
+    """A directory without config.yaml raises a clear error."""
+    with pytest.raises(FileNotFoundError):
+        dlc._resolve_project_config_path(tmp_path)
+
+
+def test_load_dlc_project_no_csvs(tmp_path):
+    """A project with no annotation CSVs raises a clear error."""
+    (tmp_path / "labeled-data").mkdir()
+    (tmp_path / "config.yaml").write_text(
+        yaml.safe_dump({"Task": "t", "scorer": "LM", "video_sets": {}, "bodyparts": []})
+    )
+    with pytest.raises(ValueError, match="No DLC annotation CSVs"):
+        sio.load_dlc_project(tmp_path / "config.yaml")
+
+
+def test_load_dlc_project_skips_non_dlc_csv(tmp_path):
+    """A non-DLC CSV in a labeled-data folder is ignored during discovery."""
+    config_path = make_dlc_project(tmp_path, folders={"vid1": ["img000"]})
+    # Drop a non-DLC CSV into a new folder with a non-standard scorer name.
+    extra = tmp_path / "labeled-data" / "vid2"
+    extra.mkdir()
+    (extra / "notes.csv").write_text("a,b,c\n1,2,3\n")
+    labels = sio.load_dlc_project(config_path)
+    # Only the real DLC folder is loaded.
+    assert len(labels.videos) == 1
+
+
+def test_load_file_routes_dlc_project_dir(tmp_path):
+    """load_file routes a DLC project directory to load_dlc_project."""
+    make_dlc_project(tmp_path)
+    labels = sio.load_file(str(tmp_path))
+    assert isinstance(labels, sio.Labels)
+    assert len(labels.videos) == 2
+    assert len(labels.skeleton.edges) == 2
+
+
+def test_load_file_routes_config_yaml(tmp_path):
+    """load_file routes a config.yaml path to load_dlc_project."""
+    config_path = make_dlc_project(tmp_path)
+    labels = sio.load_file(str(config_path))
+    assert isinstance(labels, sio.Labels)
+    assert len(labels.videos) == 2
+
+
+def test_is_dlc_project_path(tmp_path):
+    """Project path detection accepts dirs and config.yaml, rejects others."""
+    config_path = make_dlc_project(tmp_path)
+    assert dlc._is_dlc_project_path(tmp_path)
+    assert dlc._is_dlc_project_path(config_path)
+    assert not dlc._is_dlc_project_path(tmp_path / "labeled-data" / "vid1")
+    # A non-config file and a nonexistent path are not DLC projects.
+    other = tmp_path / "notes.txt"
+    other.write_text("hi")
+    assert not dlc._is_dlc_project_path(other)
+    assert not dlc._is_dlc_project_path(tmp_path / "does_not_exist")
+
+
+# -----------------------------------------------------------------------------
+# Item 1: training-set splits
+# -----------------------------------------------------------------------------
+
+
+def test_load_dlc_splits_maps_frames(tmp_path):
+    """Train/test indices map to the correct frames via the merged order."""
+    # Merged lexicographic order of (folder, filename):
+    #   0:(vid1,img000) 1:(vid1,img001) 2:(vid1,img002) 3:(vid2,img000) 4:(vid2,img001)
+    config_path = make_dlc_project(
+        tmp_path, train_indices=[0, 2, 4], test_indices=[1, 3]
+    )
+    splits = sio.load_dlc_splits(config_path)
+    assert isinstance(splits, LabelsSet)
+    assert set(splits.labels.keys()) == {"train", "test"}
+    assert _frame_keys(splits["train"]) == [
+        ("vid1", "img000.png"),
+        ("vid1", "img002.png"),
+        ("vid2", "img001.png"),
+    ]
+    assert _frame_keys(splits["test"]) == [
+        ("vid1", "img001.png"),
+        ("vid2", "img000.png"),
+    ]
+
+
+def test_load_dlc_splits_filters_negative_indices(tmp_path):
+    """Sentinel -1 indices are filtered out of the splits."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        train_indices=[0, -1],
+        test_indices=[1],
+    )
+    splits = sio.load_dlc_splits(config_path)
+    assert _frame_keys(splits["train"]) == [("vid1", "img000.png")]
+    assert _frame_keys(splits["test"]) == [("vid1", "img001.png")]
+
+
+def test_load_dlc_splits_lexicographic_order(tmp_path):
+    """Non-zero-padded filenames follow DLC's lexicographic order, with a warning."""
+    # Lexicographically, "img10.png" < "img2.png", so position 0 is img10.
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img2", "img10"]},
+        video_sets={str(tmp_path / "videos" / "vid1.mp4"): {}},
+        train_indices=[0],
+        test_indices=[1],
+    )
+    with pytest.warns(UserWarning, match="lexicographic"):
+        splits = sio.load_dlc_splits(config_path)
+    assert _frame_keys(splits["train"]) == [("vid1", "img10.png")]
+    assert _frame_keys(splits["test"]) == [("vid1", "img2.png")]
+
+
+def test_load_dlc_splits_missing_pickle(tmp_path):
+    """A project without a Documentation pickle raises FileNotFoundError."""
+    config_path = make_dlc_project(tmp_path)  # no train/test indices -> no pickle
+    with pytest.raises(FileNotFoundError):
+        sio.load_dlc_splits(config_path)
+
+
+def test_load_dlc_splits_ambiguous_requires_selector(tmp_path):
+    """Multiple shuffles require an explicit selector."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        train_indices=[0],
+        test_indices=[1],
+        shuffle=1,
+    )
+    # Add a second shuffle pickle.
+    make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        train_indices=[1],
+        test_indices=[0],
+        shuffle=2,
+    )
+    with pytest.raises(ValueError, match="Multiple DLC splits"):
+        sio.load_dlc_splits(config_path)
+    # Selecting a shuffle disambiguates.
+    splits = sio.load_dlc_splits(config_path, shuffle=2)
+    assert _frame_keys(splits["train"]) == [("vid1", "img001.png")]
+
+
+def test_load_dlc_splits_selector_no_match(tmp_path):
+    """A selector that matches nothing raises FileNotFoundError."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        train_indices=[0],
+        test_indices=[1],
+        shuffle=1,
+    )
+    with pytest.raises(FileNotFoundError):
+        sio.load_dlc_splits(config_path, shuffle=99)
+
+
+def test_read_dlc_split_reads_indices(tmp_path):
+    """_read_dlc_split returns train/test indices from meta[1]/meta[2]."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        train_indices=[0],
+        test_indices=[1],
+    )
+    project_dir = Path(config_path).parent
+    cfg = dlc._read_dlc_config(config_path)
+    pkl = dlc._select_documentation_pickle(project_dir, cfg, None, None, None)
+    train, test = dlc._read_dlc_split(pkl)
+    assert train == [0]
+    assert test == [1]
+
+
+def test_dlc_merged_order_skips_scorer_mismatch(tmp_path):
+    """Folders labeled by a different scorer are skipped in the merged order."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+    )
+    # Add a second folder whose CSV scorer does not match the project scorer.
+    make_dlc_project(
+        tmp_path,
+        folders={"vid2": ["img000"]},
+        video_sets={
+            str(tmp_path / "videos" / "vid1.mp4"): {},
+            str(tmp_path / "videos" / "vid2.mp4"): {},
+        },
+        csv_scorer="OtherScorer",
+    )
+    cfg = dlc._read_dlc_config(config_path)
+    with pytest.warns(UserWarning, match="different scorer|OtherScorer|scorer"):
+        merged = dlc._dlc_merged_order(tmp_path, cfg)
+    # Only vid1's two frames are included; vid2 (mismatched scorer) is skipped.
+    assert ("vid2", "img000.png") not in merged
+    assert ("vid1", "img000.png") in merged
+
+
+def make_dlc_ma_project(
+    root,
+    *,
+    scorer="LM",
+    task="maproj",
+    date="Jan1",
+    folders=None,
+    train_indices=None,
+    test_indices=None,
+):
+    """Build a minimal synthetic multi-animal DLC project under ``root``."""
+    root = Path(root)
+    if folders is None:
+        folders = {"m1": ["img000", "img001"], "m2": ["img000"]}
+    individuals = ["Animal1", "Animal2"]
+    bodyparts = ["A", "B"]
+
+    scorer_cells, ind_cells, bp_cells, coord_cells = [], [], [], []
+    for ind in individuals:
+        for bp in bodyparts:
+            for c in ["x", "y"]:
+                scorer_cells.append(scorer)
+                ind_cells.append(ind)
+                bp_cells.append(bp)
+                coord_cells.append(c)
+    ncol = len(scorer_cells)
+    rows = [
+        "scorer," + ",".join(scorer_cells),
+        "individuals," + ",".join(ind_cells),
+        "bodyparts," + ",".join(bp_cells),
+        "coords," + ",".join(coord_cells),
+    ]
+
+    for folder, imgs in folders.items():
+        d = root / "labeled-data" / folder
+        d.mkdir(parents=True, exist_ok=True)
+        lines = list(rows)
+        for i, img in enumerate(imgs):
+            vals = ",".join(str(v) for v in range(i * 100, i * 100 + ncol))
+            lines.append(f"labeled-data/{folder}/{img}.png,{vals}")
+        (d / f"CollectedData_{scorer}.csv").write_text("\n".join(lines) + "\n")
+        for img in imgs:
+            (d / f"{img}.png").write_text("dummy")
+
+    cfg = {
+        "Task": task,
+        "scorer": scorer,
+        "date": date,
+        "iteration": 0,
+        "multianimalproject": True,
+        "video_sets": {str(root / "videos" / f"{f}.mp4"): {} for f in folders},
+        "individuals": individuals,
+        "multianimalbodyparts": bodyparts,
+        "bodyparts": "MULTI!",
+        "skeleton": [["A", "B"]],
+        "TrainingFraction": [0.8],
+    }
+    (root / "config.yaml").write_text(yaml.safe_dump(cfg))
+
+    if train_indices is not None and test_indices is not None:
+        tdir = (
+            root
+            / "training-datasets"
+            / "iteration-0"
+            / f"UnaugmentedDataSet_{task}{date}"
+        )
+        tdir.mkdir(parents=True)
+        with open(tdir / f"Documentation_data-{task}_80shuffle1.pickle", "wb") as f:
+            pickle.dump(
+                [[], list(train_indices), list(test_indices), 0.8],
+                f,
+                pickle.HIGHEST_PROTOCOL,
+            )
+    return root / "config.yaml"
+
+
+def test_load_dlc_csv_shared_skeleton_default_tracks(tmp_path):
+    """_load_dlc_csv with a shared skeleton but no tracks defaults tracks to []."""
+    make_dlc_project(tmp_path, folders={"vid1": ["img000"]})
+    skel = sio.Skeleton(nodes=["leftear", "rightear", "snout"])
+    csv = tmp_path / "labeled-data" / "vid1" / "CollectedData_LM.csv"
+    labels = dlc._load_dlc_csv(csv, skeleton=skel)
+    assert labels.skeleton is skel
+    assert labels.tracks == []
+
+
+def test_load_dlc_project_multianimal(tmp_path):
+    """A multi-animal project loads with shared skeleton, edges, and tracks."""
+    config_path = make_dlc_ma_project(tmp_path)
+    labels = sio.load_dlc_project(config_path)
+    assert len(labels.skeletons) == 1
+    assert set(labels.skeleton.node_names) == {"A", "B"}
+    assert labels.skeleton.edge_names == [("A", "B")]
+    assert {t.name for t in labels.tracks} == {"Animal1", "Animal2"}
+    assert len(labels.videos) == 2
+
+
+def test_load_dlc_splits_multianimal(tmp_path):
+    """Splits work for a multi-animal project."""
+    # Merged order: 0:(m1,img000) 1:(m1,img001) 2:(m2,img000)
+    config_path = make_dlc_ma_project(tmp_path, train_indices=[0, 2], test_indices=[1])
+    splits = sio.load_dlc_splits(config_path)
+    assert _frame_keys(splits["train"]) == [("m1", "img000.png"), ("m2", "img000.png")]
+    assert _frame_keys(splits["test"]) == [("m1", "img001.png")]
+
+
+def test_load_dlc_splits_fallback_when_stems_mismatch(tmp_path):
+    """When video_sets stems match no folder, merged order falls back to CSVs."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vidA": ["img000", "img001"]},
+        video_sets={str(tmp_path / "videos" / "unrelated.mp4"): {}},
+        train_indices=[0],
+        test_indices=[1],
+    )
+    splits = sio.load_dlc_splits(config_path)
+    assert _frame_keys(splits["train"]) == [("vidA", "img000.png")]
+    assert _frame_keys(splits["test"]) == [("vidA", "img001.png")]
+
+
+def test_load_dlc_splits_select_by_train_fraction(tmp_path):
+    """A train_fraction selector filters the available pickles."""
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        train_indices=[0],
+        test_indices=[1],
+        train_fraction=0.8,
+    )
+    splits = sio.load_dlc_splits(config_path, train_fraction=0.8)
+    assert _frame_keys(splits["train"]) == [("vid1", "img000.png")]
+
+
+def test_select_documentation_pickle_unparseable_single(tmp_path):
+    """A single pickle with an unparseable name is returned as-is."""
+    config_path = make_dlc_project(tmp_path, folders={"vid1": ["img000"]})
+    cfg = dlc._read_dlc_config(config_path)
+    tdir = (
+        tmp_path / "training-datasets" / "iteration-0" / "UnaugmentedDataSet_projJan1"
+    )
+    tdir.mkdir(parents=True)
+    p = tdir / "Documentation_data-weirdname.pickle"
+    with open(p, "wb") as f:
+        pickle.dump([[], [0], [], 0.8], f)
+    assert dlc._select_documentation_pickle(tmp_path, cfg, None, None, None) == p
+
+
+def test_select_documentation_pickle_unparseable_ambiguous(tmp_path):
+    """Multiple pickles with unparseable names raise a clear error."""
+    config_path = make_dlc_project(tmp_path, folders={"vid1": ["img000"]})
+    cfg = dlc._read_dlc_config(config_path)
+    tdir = (
+        tmp_path / "training-datasets" / "iteration-0" / "UnaugmentedDataSet_projJan1"
+    )
+    tdir.mkdir(parents=True)
+    for name in ["Documentation_data-a.pickle", "Documentation_data-b.pickle"]:
+        with open(tdir / name, "wb") as f:
+            pickle.dump([[], [0], [], 0.8], f)
+    with pytest.raises(ValueError, match="Could not parse"):
+        dlc._select_documentation_pickle(tmp_path, cfg, None, None, None)
+
+
+def test_find_project_csvs_fallback_nonstandard_name(tmp_path):
+    """A DLC CSV not named CollectedData_<scorer> is found via glob fallback."""
+    config_path = make_dlc_project(tmp_path, folders={"vid1": ["img000"]})
+    d = tmp_path / "labeled-data" / "vid2"
+    d.mkdir()
+    (d / "img000.png").write_text("dummy")
+    (d / "mydata.csv").write_text(
+        "scorer,LM,LM,LM,LM,LM,LM\n"
+        "bodyparts,snout,snout,leftear,leftear,rightear,rightear\n"
+        "coords,x,y,x,y,x,y\n"
+        "labeled-data/vid2/img000.png,0,1,2,3,4,5\n"
+    )
+    labels = sio.load_dlc_project(config_path)
+    assert len(labels.videos) == 2
+
+
+def test_find_project_csvs_skips_files_in_labeled_data(tmp_path):
+    """Stray files directly under labeled-data/ are ignored."""
+    config_path = make_dlc_project(tmp_path, folders={"vid1": ["img000"]})
+    (tmp_path / "labeled-data" / "stray.txt").write_text("ignore me")
+    labels = sio.load_dlc_project(config_path)
+    assert len(labels.videos) == 1
+
+
+def test_load_dlc_project_unreadable_config(tmp_path):
+    """A config.yaml that is not a mapping raises a clear error."""
+    (tmp_path / "labeled-data").mkdir()
+    (tmp_path / "config.yaml").write_text("- a\n- b\n")
+    with pytest.warns(UserWarning):
+        with pytest.raises(ValueError, match="Could not read DLC config"):
+            sio.load_dlc_project(tmp_path / "config.yaml")
+
+
+def test_load_dlc_project_no_labeled_data_dir(tmp_path):
+    """A project with no labeled-data directory raises a clear error."""
+    (tmp_path / "config.yaml").write_text(
+        yaml.safe_dump({"Task": "t", "scorer": "LM", "video_sets": {}, "bodyparts": []})
+    )
+    with pytest.raises(ValueError, match="No DLC annotation CSVs"):
+        sio.load_dlc_project(tmp_path / "config.yaml")
+
+
+def test_load_dlc_splits_unreadable_config(tmp_path):
+    """load_dlc_splits raises a clear error when the config is not a mapping."""
+    (tmp_path / "labeled-data").mkdir()
+    (tmp_path / "config.yaml").write_text("- a\n- b\n")
+    with pytest.warns(UserWarning):
+        with pytest.raises(ValueError, match="Could not read DLC config"):
+            sio.load_dlc_splits(tmp_path / "config.yaml")
+
+
+def test_load_dlc_image_resolved_from_parent_dir(tmp_path):
+    """Images one directory above the CSV are resolved (parent-path fallback)."""
+    # CSV lives in a subdir; images live under <project>/labeled-data/session1/.
+    (tmp_path / "labeled-data" / "session1").mkdir(parents=True)
+    for i in range(2):
+        (tmp_path / "labeled-data" / "session1" / f"img{i:03d}.png").write_text("x")
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+    csv = subdir / "data.csv"
+    csv.write_text(
+        "scorer,S,S,S,S,S,S\n"
+        "bodyparts,A,A,B,B,C,C\n"
+        "coords,x,y,x,y,x,y\n"
+        "labeled-data/session1/img000.png,0,1,2,3,4,5\n"
+        "labeled-data/session1/img001.png,6,7,8,9,10,11\n"
+    )
+    labels = sio.load_dlc(csv, config=False)
+    assert len(labels.labeled_frames) == 2
+    assert len(labels.videos) == 1

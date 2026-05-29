@@ -430,13 +430,21 @@ def save_jabs(labels: Labels, pose_version: int, root_folder: str | None = None)
 
 
 def load_dlc(
-    filename: str, video_search_paths: list[str | Path] | None = None, **kwargs
+    filename: str,
+    video_search_paths: list[str | Path] | None = None,
+    config: str | Path | bool | None = None,
+    **kwargs,
 ) -> Labels:
     """Read DeepLabCut annotations from a CSV file and return a `Labels` object.
 
     Args:
         filename: Path to DLC CSV file with annotations.
         video_search_paths: Optional list of paths to search for video files.
+        config: Path to a DLC project ``config.yaml``. When provided (or
+            auto-discovered), skeleton edges and source-video links are imported.
+            Pass `None` (the default) to auto-discover ``config.yaml`` by walking
+            up from the CSV, an explicit path to force a specific config, or
+            `False` to disable config use entirely (strict legacy output).
         **kwargs: Additional arguments passed to DLC loader.
 
     Returns:
@@ -444,7 +452,66 @@ def load_dlc(
     """
     from sleap_io.io import dlc
 
-    return dlc.load_dlc(filename, video_search_paths=video_search_paths, **kwargs)
+    return dlc.load_dlc(
+        filename, video_search_paths=video_search_paths, config=config, **kwargs
+    )
+
+
+def load_dlc_project(
+    config: str | Path,
+    video_search_paths: list[str | Path] | None = None,
+    **kwargs,
+) -> Labels:
+    """Read an entire DeepLabCut project from its ``config.yaml``.
+
+    All ``labeled-data/<video>/`` folders are loaded and merged into a single
+    `Labels` sharing one `Skeleton` (with edges from the config) and one set of
+    `Track`s, with each video linked back to its original via
+    `Video.source_video`.
+
+    Args:
+        config: Path to a DLC project ``config.yaml`` (or the project directory
+            containing one).
+        video_search_paths: Optional list of paths to search for video files.
+        **kwargs: Additional arguments passed to the DLC project loader.
+
+    Returns:
+        Parsed labels as a `Labels` instance.
+    """
+    from sleap_io.io import dlc
+
+    return dlc.load_dlc_project(config, video_search_paths=video_search_paths, **kwargs)
+
+
+def load_dlc_splits(
+    config: str | Path,
+    shuffle: int | None = None,
+    train_fraction: float | None = None,
+    iteration: int | None = None,
+    video_search_paths: list[str | Path] | None = None,
+) -> "LabelsSet":
+    """Read DeepLabCut train/test splits from a project's Documentation pickle.
+
+    Args:
+        config: Path to a DLC project ``config.yaml`` (or the project directory).
+        shuffle: The shuffle index to load. Required if more than one exists.
+        train_fraction: The training fraction to load (e.g. ``0.95``). Required
+            if more than one exists.
+        iteration: The project iteration. Defaults to ``cfg['iteration']``.
+        video_search_paths: Optional list of paths to search for video files.
+
+    Returns:
+        A `LabelsSet` with ``"train"`` and ``"test"`` keys.
+    """
+    from sleap_io.io import dlc
+
+    return dlc.load_dlc_splits(
+        config,
+        shuffle=shuffle,
+        train_fraction=train_fraction,
+        iteration=iteration,
+        video_search_paths=video_search_paths,
+    )
 
 
 def load_trackmate(
@@ -1068,6 +1135,11 @@ def load_file(
             Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()
         ):
             format = "ultralytics"
+        elif filename.endswith("config.yaml") or Path(filename).is_dir():
+            from sleap_io.io import dlc
+
+            if dlc._is_dlc_project_path(filename):
+                format = "dlc_project"
         elif filename.lower().endswith(".csv"):
             from sleap_io.io import dlc, trackmate
 
@@ -1105,6 +1177,8 @@ def load_file(
             return load_jabs(filename, **kwargs)
     elif format == "dlc":
         return load_dlc(filename, **kwargs)
+    elif format == "dlc_project":
+        return load_dlc_project(filename, **kwargs)
     elif format == "csv":
         return load_csv(filename, **kwargs)
     elif format == "trackmate":
