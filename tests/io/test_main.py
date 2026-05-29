@@ -1,14 +1,18 @@
 """Tests for functions in the sleap_io.io.main file."""
 
+import io
+import json
 import shutil
 from pathlib import Path
 
+import h5py
 import numpy as np
 import pytest
 
 from sleap_io import Labels, LabelsSet, RemoteIOError, Video, clear_remote_cache
 from sleap_io.io._remote import _require_package
 from sleap_io.io.main import (
+    _gdrive_format_from_bytes,
     load_file,
     load_jabs,
     load_labels_set,
@@ -772,3 +776,244 @@ def test_imports_clear_remote_cache_at_top_level():
     assert sio.RemoteIOError is RemoteIOError
     assert issubclass(RemoteIOError, OSError)
     assert callable(clear_remote_cache)
+
+
+# ---------------------------------------------------------------------------
+# Google Drive URL loading (PR 3)
+#
+# These simulate Drive's two-hop interstitial flow on the loopback
+# pytest-httpserver and repoint the resolver at it by overriding the
+# `_gdrive._UC_URL_TEMPLATE` constant. No request reaches real Google Drive.
+# ---------------------------------------------------------------------------
+
+
+def _serve_gdrive_slp(httpserver, slp_path):
+    """Wire a two-hop Drive flow serving a real `.slp` fixture's bytes.
+
+    Args:
+        httpserver: The `pytest-httpserver` instance to configure.
+        slp_path: Path to a `.slp` fixture whose bytes are served at the
+            usercontent `/download` hop.
+    """
+    from werkzeug.wrappers import Response
+
+    file_bytes = Path(slp_path).read_bytes()
+    download_url = httpserver.url_for("/download")
+    form = (
+        f'<html><body><form id="download-form" action="{download_url}" '
+        'method="get">'
+        '<input type="hidden" name="id" value="FILEID">'
+        '<input type="hidden" name="export" value="download">'
+        '<input type="hidden" name="confirm" value="t">'
+        "</form></body></html>"
+    )
+
+    def _download_handler(request):
+        resp = Response(file_bytes, status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="labels.slp"'
+        return resp
+
+    httpserver.expect_request("/uc").respond_with_data(form, content_type="text/html")
+    httpserver.expect_request("/download").respond_with_handler(_download_handler)
+
+
+@pytest.fixture
+def gdrive_uc_template(monkeypatch, httpserver):
+    """Repoint the Drive resolver's start URL at the loopback test server.
+
+    Overrides the `_gdrive._UC_URL_TEMPLATE` module constant so the resolver
+    starts its GET loop at the local `/uc` endpoint. No real Drive request is
+    made.
+
+    Yields:
+        The httpserver (already installed as the resolver start host).
+    """
+    import sleap_io.io._gdrive as gdrive_mod
+
+    template = httpserver.url_for("/uc") + "?id={file_id}"
+    monkeypatch.setattr(gdrive_mod, "_UC_URL_TEMPLATE", template)
+    return httpserver
+
+
+def test_load_slp_gdrive_url(gdrive_uc_template, slp_minimal):
+    """`load_slp(<drive /file/d/ID/view url>)` returns a `Labels` object.
+
+    The `.slp` bytes are served at the usercontent hop; `load_slp` resolves the
+    Drive share link, downloads, and parses it like any other URL.
+    """
+    _serve_gdrive_slp(gdrive_uc_template, slp_minimal)
+
+    labels = load_slp("https://drive.google.com/file/d/FILEID/view")
+    assert type(labels) is Labels
+    assert len(labels) == 1
+
+
+def test_load_slp_gdrive_open_id_url(gdrive_uc_template, slp_minimal):
+    """`load_slp` also accepts the `/open?id=` Drive share shape."""
+    _serve_gdrive_slp(gdrive_uc_template, slp_minimal)
+
+    labels = load_slp("https://drive.google.com/open?id=FILEID")
+    assert type(labels) is Labels
+    assert len(labels) == 1
+
+
+def test_load_file_gdrive_url_sniffs_slp(gdrive_uc_template, slp_minimal):
+    """`load_file` resolves a Drive URL, sniffs the bytes, and routes to slp."""
+    _serve_gdrive_slp(gdrive_uc_template, slp_minimal)
+
+    labels = load_file("https://drive.google.com/file/d/FILEID/view")
+    assert type(labels) is Labels
+    assert len(labels) == 1
+
+
+def test_load_file_gdrive_url_explicit_format(gdrive_uc_template, slp_minimal):
+    """An explicit `format='slp'` dispatches a Drive URL without a sniff fetch."""
+    _serve_gdrive_slp(gdrive_uc_template, slp_minimal)
+
+    labels = load_file("https://drive.google.com/file/d/FILEID/view", format="slp")
+    assert type(labels) is Labels
+    assert len(labels) == 1
+
+
+def test_load_file_gdrive_url_sniff_false_raises(slp_minimal):
+    """`load_file(drive_url, sniff=False)` raises (no extension to fall back on)."""
+    with pytest.raises(ValueError, match="Cannot infer format for a Google Drive"):
+        load_file("https://drive.google.com/file/d/FILEID/view", sniff=False)
+
+
+def test_load_slp_gdrive_folder_url_raises(slp_minimal):
+    """A Drive folder share link raises a clear ValueError."""
+    with pytest.raises(ValueError, match="folder URLs are not supported"):
+        load_slp("https://drive.google.com/drive/folders/FOLDERID")
+
+
+def test_load_video_gdrive_url_not_supported():
+    """`load_video` on a Drive URL raises a clear NotImplementedError."""
+    with pytest.raises(NotImplementedError, match="Google Drive"):
+        load_video("https://drive.google.com/file/d/FILEID/view")
+
+
+def _serve_gdrive_bytes(httpserver, body):
+    """Wire a two-hop Drive flow serving arbitrary ``body`` bytes.
+
+    Args:
+        httpserver: The `pytest-httpserver` instance to configure.
+        body: The raw bytes served at the usercontent `/download` hop.
+    """
+    from werkzeug.wrappers import Response
+
+    download_url = httpserver.url_for("/download")
+    form = (
+        f'<html><body><form id="download-form" action="{download_url}" '
+        'method="get">'
+        '<input type="hidden" name="id" value="FILEID">'
+        '<input type="hidden" name="export" value="download">'
+        '<input type="hidden" name="confirm" value="t">'
+        "</form></body></html>"
+    )
+
+    def _download_handler(request):
+        resp = Response(body, status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="data.bin"'
+        return resp
+
+    httpserver.expect_request("/uc").respond_with_data(form, content_type="text/html")
+    httpserver.expect_request("/download").respond_with_handler(_download_handler)
+
+
+def test_load_file_gdrive_url_unsupported_format_message(gdrive_uc_template):
+    """A Drive file sniffed as a non-slp/video format raises a Drive-specific error.
+
+    The bytes are already fully downloaded to sniff the format, so the generic
+    "Download the file locally first." wording would be misleading. The
+    Drive-sniff path must instead say the download cost was already paid and
+    point at saving the bytes locally.
+    """
+    buf = io.BytesIO()
+    with h5py.File(buf, "w") as f:
+        f.create_dataset("track_occupancy", data=np.zeros((1, 1)))
+    _serve_gdrive_bytes(gdrive_uc_template, buf.getvalue())
+
+    with pytest.raises(NotImplementedError) as ei:
+        load_file("https://drive.google.com/file/d/FILEID/view")
+
+    msg = str(ei.value)
+    assert "analysis_h5" in msg
+    assert "after a full download" in msg
+    # Must not reuse the misleading generic "Download the file locally first."
+    # wording (the user already paid the download cost).
+    assert "Download the file locally first." not in msg
+
+
+def test_gdrive_format_from_bytes_hdf5_slp():
+    """An HDF5 body with a `metadata` group is classified as slp."""
+    buf = io.BytesIO()
+    with h5py.File(buf, "w") as f:
+        f.create_group("metadata")
+    assert _gdrive_format_from_bytes(buf.getvalue()) == "slp"
+
+
+def test_gdrive_format_from_bytes_hdf5_analysis():
+    """An HDF5 body with `track_occupancy` is classified as analysis_h5."""
+    buf = io.BytesIO()
+    with h5py.File(buf, "w") as f:
+        f.create_dataset("track_occupancy", data=np.zeros((1, 1)))
+    assert _gdrive_format_from_bytes(buf.getvalue()) == "analysis_h5"
+
+
+def test_gdrive_format_from_bytes_hdf5_jabs():
+    """A bare HDF5 body (no slp/analysis markers) falls back to jabs."""
+    buf = io.BytesIO()
+    with h5py.File(buf, "w") as f:
+        f.create_group("poseest")
+    assert _gdrive_format_from_bytes(buf.getvalue()) == "jabs"
+
+
+def test_gdrive_format_from_bytes_json_labelstudio():
+    """A generic JSON object is classified as labelstudio."""
+    assert _gdrive_format_from_bytes(b'{"some": "labelstudio"}') == "labelstudio"
+
+
+def test_gdrive_format_from_bytes_json_coco():
+    """A COCO-pose JSON object is classified as coco."""
+    coco = json.dumps(
+        {
+            "images": [],
+            "annotations": [],
+            "categories": [{"keypoints": ["a", "b"]}],
+        }
+    ).encode()
+    assert _gdrive_format_from_bytes(coco) == "coco"
+
+
+def test_gdrive_format_from_bytes_json_alphatracker():
+    """An AlphaTracker JSON array is classified as alphatracker."""
+    at = json.dumps(
+        [
+            {
+                "filename": "f.png",
+                "class": "image",
+                "annotations": [
+                    {"class": "Face"},
+                    {"class": "point", "x": 1, "y": 2},
+                ],
+            }
+        ]
+    ).encode()
+    assert _gdrive_format_from_bytes(at) == "alphatracker"
+
+
+def test_gdrive_format_from_bytes_json_malformed_is_labelstudio():
+    """Malformed JSON (starts with `{`) is not alphatracker/coco -> labelstudio."""
+    assert _gdrive_format_from_bytes(b"{not valid json") == "labelstudio"
+
+
+def test_gdrive_format_from_bytes_csv():
+    """CSV-looking bytes are classified as csv."""
+    assert _gdrive_format_from_bytes(b"a,b,c\n1,2,3\n") == "csv"
+
+
+def test_gdrive_format_from_bytes_unknown_raises():
+    """Unrecognizable bytes raise a clear ValueError."""
+    with pytest.raises(ValueError, match="Could not determine the format"):
+        _gdrive_format_from_bytes(b"\x00\x01\x02\xff\xfe")

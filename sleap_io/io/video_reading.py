@@ -477,6 +477,22 @@ class VideoBackend:
 
         is_url = type(filename) is str and _remote._is_url(filename)
 
+        if is_url:
+            from sleap_io.io._gdrive import _is_gdrive_url
+
+            if _is_gdrive_url(filename):
+                # Drive download URLs carry no extension and Drive rejects the
+                # range/HEAD requests video decoding relies on, so streaming a
+                # Drive video is not supported. Drive *labels* (.slp) loading is
+                # supported via load_slp/load_file.
+                raise NotImplementedError(
+                    "Loading videos directly from Google Drive URLs is not "
+                    "supported (Drive download links carry no file extension and "
+                    "reject the range requests video decoding needs). Download "
+                    "the video file first, or load Drive .slp label files with "
+                    f"load_slp/load_file. (URL: {_remote._redact_url(filename)})"
+                )
+
         # Skip local-filesystem dir detection for URLs (``Path.is_dir`` on a URL
         # is meaningless and would just return False, but avoid the syscall).
         if type(filename) is str and not is_url and Path(filename).is_dir():
