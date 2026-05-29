@@ -531,9 +531,23 @@ class VideoBackend:
             media_kwargs = _get_valid_kwargs(MediaVideo, kwargs)
             if is_url:
                 # Remote media videos are read via pyav (imageio's pyav plugin
-                # forwards http(s) URIs to ``av.open`` natively). Default to it
-                # when the caller did not request a specific plugin, and require
-                # the ``av`` package up front for a clear error.
+                # forwards http(s) URIs to ``av.open`` natively). Enforce the
+                # documented contract that only http/https URLs are supported:
+                # cloud schemes (s3/gs/gcs/az/abfs) are recognized as remote by
+                # ``_is_url`` but are not safe to hand to ``av.open``, so reject
+                # them cleanly here rather than letting the raw URL reach the
+                # decoder.
+                scheme = urllib.parse.urlparse(filename).scheme.lower()
+                if scheme not in ("http", "https"):
+                    raise NotImplementedError(
+                        "Remote video loading only supports http/https URLs; "
+                        f"got scheme '{scheme}' for "
+                        f"{_remote._redact_url(filename)}. Download the file "
+                        "locally first."
+                    )
+                # Default to pyav when the caller did not request a specific
+                # plugin, and require the ``av`` package up front for a clear
+                # error.
                 if media_kwargs.get("plugin") is None:
                     media_kwargs["plugin"] = "pyav"
                 if (
@@ -889,13 +903,20 @@ class MediaVideo(VideoBackend):
         if self._fps is not None:
             return self._fps
 
-        # Read from container metadata
+        # Read from container metadata and cache the result so repeated access
+        # is O(1). This matters most for the remote (URL) path: ``av.open`` over
+        # http does not use Range requests, so each uncached read re-streams the
+        # entire video. Public helpers such as ``Video.frame_to_seconds`` read
+        # ``fps`` multiple times per call, which would otherwise re-download the
+        # whole video each time. Container fps is immutable for a given file, and
+        # the cache slot is cleared when the filename changes (see
+        # ``Video.replace_filename``), so caching is safe.
         try:
             if self.plugin == "opencv":
                 fps = self.reader.get(cv2.CAP_PROP_FPS)
-                return fps if fps > 0 else None
+                rate = fps if fps > 0 else None
             elif _remote._is_url(self.filename):
-                return _fps_from_av_container(self.filename)
+                rate = _fps_from_av_container(self.filename)
             else:
                 # Use imageio v2 API to get metadata (v3 improps doesn't include fps)
                 import imageio.v2 as iio_v2
@@ -904,9 +925,11 @@ class MediaVideo(VideoBackend):
                 meta = reader.get_meta_data()
                 reader.close()
                 fps = meta.get("fps")
-                return float(fps) if fps is not None else None
+                rate = float(fps) if fps is not None else None
         except Exception:
             return None
+        self._fps = rate
+        return rate
 
     @fps.setter
     def fps(self, value: float | None) -> None:

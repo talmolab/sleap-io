@@ -1278,10 +1278,16 @@ def _load_file_url(
             f"URL: '{_remote._redact_url(filename)}'. Pass an explicit format=."
         )
 
-    # Video extension fallback (the genuine video extensions).
-    for vid_ext in Video.EXTS:
-        if filename.lower().endswith(vid_ext.lower()):
-            return _dispatch_url_format(filename, "video", **kwargs)
+    # Video extension fallback (the genuine video extensions). Match against the
+    # already-parsed, path-stripped ``ext`` (computed above, e.g. ``".mp4"``)
+    # rather than the raw URL, so query-stringed/fragment URLs (e.g. presigned
+    # S3/GCS links with a ``?token=`` or ``#fragment``) still match. ``ext``
+    # carries a leading dot while ``Video.EXTS`` entries do not, so compare with
+    # ``endswith``. This mirrors the ``_extension_token`` path-stripping in
+    # ``VideoBackend.from_filename`` so that ``load_file`` and ``load_video``
+    # agree on the same URL.
+    if ext.endswith(tuple(vid_ext.lower() for vid_ext in Video.EXTS)):
+        return _dispatch_url_format(filename, "video", **kwargs)
 
     raise ValueError(
         f"Could not infer format from URL: '{_remote._redact_url(filename)}'."

@@ -1599,6 +1599,73 @@ def test_load_video_url_get_frames(httpserver, centered_pair_low_quality_path):
     assert_equal(remote[:3], local[:3])
 
 
+def test_remote_fps_is_cached(httpserver, centered_pair_low_quality_path):
+    """Reading ``fps`` on a remote video downloads once, then is cached.
+
+    Regression: ``MediaVideo.fps`` previously re-read container metadata on every
+    access, and ``av.open`` over http streams the full body each time (no Range
+    requests), so repeated ``fps`` access re-downloaded the whole video.
+    """
+    data = Path(centered_pair_low_quality_path).read_bytes()
+    get_count = {"n": 0}
+
+    def handler(request):
+        get_count["n"] += 1
+        from werkzeug.wrappers import Response
+
+        return Response(data, content_type="video/mp4")
+
+    httpserver.expect_request("/video.mp4").respond_with_handler(handler)
+    url = httpserver.url_for("/video.mp4")
+
+    video = sio.load_video(url)
+    assert video.backend.fps == 15.0
+    downloads_after_first = get_count["n"]
+    assert downloads_after_first == 1
+
+    # A second access (and any helper that reads fps repeatedly) is free.
+    assert video.backend.fps == 15.0
+    assert video.frame_to_seconds(15) == 1.0
+    assert get_count["n"] == downloads_after_first
+    assert video.backend._fps == 15.0
+
+
+def test_from_filename_cloud_scheme_video_raises(centered_pair_low_quality_path):
+    """A cloud-scheme media URL is rejected before reaching the decoder.
+
+    Only http/https remote video is supported; cloud schemes (s3/gs/...) are
+    recognized as remote by ``_is_url`` but must not be handed to ``av.open``.
+    """
+    for url in ("s3://bucket/video.mp4", "gs://bucket/clip.mov"):
+        with pytest.raises(NotImplementedError, match="http/https"):
+            VideoBackend.from_filename(url)
+
+
+def test_from_filename_cloud_scheme_video_does_not_leak_credentials():
+    """The cloud-scheme rejection redacts credentials in its error message."""
+    url = "s3://AKIA:secretkey@bucket/video.mp4?X-Amz-Security-Token=topsecret"
+    with pytest.raises(NotImplementedError) as exc_info:
+        VideoBackend.from_filename(url)
+    message = str(exc_info.value)
+    assert "secretkey" not in message
+    assert "topsecret" not in message
+
+
+def test_remote_video_open_error_redacts_url():
+    """A failed open of a tokenized remote video redacts the URL in the error.
+
+    Regression: ``Video.open`` raised ``FileNotFoundError`` with the raw URL,
+    leaking ``?token=`` credentials into tracebacks/logs.
+    """
+    url = "https://host.invalid/video.mp4?token=supersecret"
+    video = sio.load_video(url)
+    with pytest.raises(FileNotFoundError) as exc_info:
+        video[0]
+    message = str(exc_info.value)
+    assert "supersecret" not in message
+    assert "token=%2A%2A%2A" in message
+
+
 def test_is_pyav_available_when_installed():
     """``_is_pyav_available`` reports True in the test environment (av installed).
 

@@ -566,6 +566,54 @@ def test_load_file_url_routes_to_video(httpserver, centered_pair_low_quality_pat
     assert video[0].shape == (384, 384, 1)
 
 
+def test_load_file_url_video_with_query_string(
+    httpserver, centered_pair_low_quality_path
+):
+    """`load_file` routes a query-stringed `.mp4` URL to `load_video`.
+
+    Regression: the video-extension fallback previously matched against the raw
+    URL, so a presigned/CDN-tokenized URL (which does not end in ``.mp4``) fell
+    through to a `ValueError`, while `load_video` on the same URL succeeded.
+    """
+    file_bytes = Path(centered_pair_low_quality_path).read_bytes()
+    httpserver.expect_request("/movie.mp4").respond_with_data(
+        file_bytes, content_type="video/mp4"
+    )
+    url = httpserver.url_for("/movie.mp4") + "?token=secret&x=1"
+
+    video = load_file(url)
+    assert isinstance(video, Video)
+    assert video[0].shape == (384, 384, 1)
+
+
+def test_load_file_url_video_with_fragment(httpserver, centered_pair_low_quality_path):
+    """`load_file` routes a fragment-bearing `.mp4` URL to `load_video`."""
+    file_bytes = Path(centered_pair_low_quality_path).read_bytes()
+    httpserver.expect_request("/movie.mp4").respond_with_data(
+        file_bytes, content_type="video/mp4"
+    )
+    url = httpserver.url_for("/movie.mp4") + "#t=5"
+
+    video = load_file(url)
+    assert isinstance(video, Video)
+
+
+def test_load_file_url_cloud_scheme_video_raises_not_implemented():
+    """A cloud-scheme media URL is rejected with a clean `NotImplementedError`.
+
+    The documented contract is http/https-only for remote video; cloud schemes
+    must not reach the decoder. No network request is issued.
+    """
+    url = "s3://AKIA:secretkey@bucket/video.mp4?X-Amz-Security-Token=topsecret"
+    with pytest.raises(NotImplementedError) as exc_info:
+        load_file(url)
+    message = str(exc_info.value)
+    assert "http/https" in message
+    # The raw credentials/token must not leak in the error message.
+    assert "secretkey" not in message
+    assert "topsecret" not in message
+
+
 def test_load_file_url_nwb_raises_not_implemented():
     """A `.nwb` URL raises a clean `NotImplementedError`, not a raw `OSError`.
 

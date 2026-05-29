@@ -547,9 +547,17 @@ class Video:
                     grayscale = self.backend_metadata["shape"][-1] == 1
 
         if not self.exists(dataset=dataset):
-            msg = (
-                f"Video does not exist or cannot be opened for reading: {self.filename}"
+            from sleap_io.io._remote import _is_url, _redact_url
+
+            # Redact credential-bearing URLs (e.g. presigned ``?token=`` links)
+            # so they never surface in tracebacks/logs. Local paths are shown
+            # verbatim.
+            name = (
+                _redact_url(self.filename)
+                if isinstance(self.filename, str) and _is_url(self.filename)
+                else self.filename
             )
+            msg = f"Video does not exist or cannot be opened for reading: {name}"
             if dataset is not None:
                 msg += f" (dataset: {dataset})"
             raise FileNotFoundError(msg)
