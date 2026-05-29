@@ -1144,6 +1144,16 @@ class HDF5Video(VideoBackend):
             "FFMPEG". If None, uses the global default or auto-detects based on
             available packages. Note that "pyav" is automatically mapped to "FFMPEG"
             since PyAV doesn't support image decoding.
+
+    Notes:
+        Concurrent reads of a single remote (URL-backed) `HDF5Video` from
+        multiple threads are safe: although all reads share one cached fsspec
+        file-like (a single byte position), h5py serializes every HDF5 C-library
+        call under a global recursive lock (`h5py._objects.phil`), so the
+        seek+read pair a frame read performs is never interleaved across threads.
+        For true read *parallelism* (rather than just safety), construct
+        independent `Video`/`HDF5Video` instances per worker; each gets its own
+        fsspec file and block cache.
     """
 
     dataset: str | None = None
