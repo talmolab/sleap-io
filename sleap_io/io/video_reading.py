@@ -450,12 +450,15 @@ class VideoBackend:
         self._open_reader = None
         if reader is None:
             return
+        # Every real reader is an h5py.File / imageio reader (``.close()``) or an
+        # OpenCV VideoCapture (``.release()``); the None case is purely defensive.
         closer = getattr(reader, "close", None) or getattr(reader, "release", None)
-        if closer is not None:
-            try:
-                closer()
-            except Exception:  # pragma: no cover - defensive: close should not raise
-                pass
+        if closer is None:  # pragma: no cover - defensive: reader always closeable
+            return
+        try:
+            closer()
+        except Exception:  # pragma: no cover - defensive: close should not raise
+            pass
 
     @classmethod
     def from_filename(
