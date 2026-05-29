@@ -128,7 +128,7 @@ markers = [
 skip = '.git*,*.css'
 check-hidden = true
 # ignore-regex = ''
-ignore-words-list = 'THW,HWT,THWC,CHWT'
+ignore-words-list = 'THW,HWT,THWC,CHWT,reencode'
 
 [tool.coverage.run]
 branch = true
