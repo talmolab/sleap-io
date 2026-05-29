@@ -14,7 +14,14 @@ imported:
   to its original video file (from the config ``video_sets``) via
   `Video.source_video`, matched by filename stem.
 
-Cropping/ROI metadata (``video_sets[...].crop``) is not yet imported.
+DLC's ``video_sets[...].crop`` is a *virtual* read-time crop (an ROI sliced out
+of each full frame by DLC's video reader). When a project uses cropping, the
+``labeled-data`` images are the cropped region and labels are in cropped-frame
+coordinates, while the linked ``source_video`` is the original, *uncropped*
+video -- so labels are offset from the source video by the crop origin. This
+crop is not yet applied on import; reconciling the two coordinate systems
+requires virtual ROI-cropping of a `Video` on read, which is planned future
+work. With no cropping (the DLC default), there is no offset.
 """
 
 from __future__ import annotations

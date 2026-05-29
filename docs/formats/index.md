@@ -379,8 +379,19 @@ up from the CSV — the following extra metadata is imported:
   mismatch or missing file.
 
 Pass `config=False` to disable config use entirely and reproduce the legacy,
-config-free output. Cropping/ROI metadata (`video_sets[...].crop`) is not yet
-imported.
+config-free output.
+
+!!! note "Cropping is not yet applied"
+    DeepLabCut's `video_sets[...].crop` is a *virtual* read-time crop (an ROI
+    that DLC's video reader slices out of each full frame on the fly). When a
+    project uses cropping, the images under `labeled-data/<video>/` are the
+    cropped region and the labels are stored in **cropped-frame coordinates**,
+    whereas the linked `source_video` points at the original, **uncropped**
+    video. sleap-io does not yet apply this crop, so for cropped projects the
+    labels are offset from the source video by the crop origin `(x1, y1)`.
+    Reconciling the two requires virtual ROI-cropping of a `Video` on read,
+    which is planned future work. For the common case of no cropping (the DLC
+    default is the full frame), there is no offset and the link is exact.
 
 ```python
 import sleap_io as sio
