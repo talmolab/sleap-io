@@ -1491,6 +1491,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/sleap_io/io/_remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    _remote
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/sleap_io/io/alphatracker/" class="md-nav__link">
         
   
@@ -3473,49 +3501,49 @@ class-stacked layouts.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1202" name="__codelineno-0-1202"></a><a href="#__codelineno-0-1202"><span class="linenos" data-linenos="1202 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_label_images</span><span class="p">(</span>
-<a id="__codelineno-0-1203" name="__codelineno-0-1203"></a><a href="#__codelineno-0-1203"><span class="linenos" data-linenos="1203 "></span></a>    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
-<a id="__codelineno-0-1204" name="__codelineno-0-1204"></a><a href="#__codelineno-0-1204"><span class="linenos" data-linenos="1204 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="n">Video</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1205" name="__codelineno-0-1205"></a><a href="#__codelineno-0-1205"><span class="linenos" data-linenos="1205 "></span></a>    <span class="n">tracks</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1206" name="__codelineno-0-1206"></a><a href="#__codelineno-0-1206"><span class="linenos" data-linenos="1206 "></span></a>    <span class="n">categories</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1207" name="__codelineno-0-1207"></a><a href="#__codelineno-0-1207"><span class="linenos" data-linenos="1207 "></span></a>    <span class="n">pages_as</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-1208" name="__codelineno-0-1208"></a><a href="#__codelineno-0-1208"><span class="linenos" data-linenos="1208 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelImage</span><span class="p">]:</span>
-<a id="__codelineno-0-1209" name="__codelineno-0-1209"></a><a href="#__codelineno-0-1209"><span class="linenos" data-linenos="1209 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load label images from TIFF file(s) or directory.</span>
-<a id="__codelineno-0-1210" name="__codelineno-0-1210"></a><a href="#__codelineno-0-1210"><span class="linenos" data-linenos="1210 "></span></a>
-<a id="__codelineno-0-1211" name="__codelineno-0-1211"></a><a href="#__codelineno-0-1211"><span class="linenos" data-linenos="1211 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1212" name="__codelineno-0-1212"></a><a href="#__codelineno-0-1212"><span class="linenos" data-linenos="1212 "></span></a><span class="sd">        path: Path to a TIFF file (single or multi-page stack) or a directory</span>
-<a id="__codelineno-0-1213" name="__codelineno-0-1213"></a><a href="#__codelineno-0-1213"><span class="linenos" data-linenos="1213 "></span></a><span class="sd">            of per-frame TIFFs.</span>
-<a id="__codelineno-0-1214" name="__codelineno-0-1214"></a><a href="#__codelineno-0-1214"><span class="linenos" data-linenos="1214 "></span></a><span class="sd">        video: Video to associate with all frames.</span>
-<a id="__codelineno-0-1215" name="__codelineno-0-1215"></a><a href="#__codelineno-0-1215"><span class="linenos" data-linenos="1215 "></span></a><span class="sd">        tracks: Global ``{label_id: Track}`` mapping. If ``None``, auto-creates</span>
-<a id="__codelineno-0-1216" name="__codelineno-0-1216"></a><a href="#__codelineno-0-1216"><span class="linenos" data-linenos="1216 "></span></a><span class="sd">            one Track per unique ID found across all frames. Ignored for</span>
-<a id="__codelineno-0-1217" name="__codelineno-0-1217"></a><a href="#__codelineno-0-1217"><span class="linenos" data-linenos="1217 "></span></a><span class="sd">            class-stacked layouts.</span>
-<a id="__codelineno-0-1218" name="__codelineno-0-1218"></a><a href="#__codelineno-0-1218"><span class="linenos" data-linenos="1218 "></span></a><span class="sd">        categories: Category strings.</span>
-<a id="__codelineno-0-1219" name="__codelineno-0-1219"></a><a href="#__codelineno-0-1219"><span class="linenos" data-linenos="1219 "></span></a>
-<a id="__codelineno-0-1220" name="__codelineno-0-1220"></a><a href="#__codelineno-0-1220"><span class="linenos" data-linenos="1220 "></span></a><span class="sd">            - ``dict[int, str]`` keyed by label ID (time mode).</span>
-<a id="__codelineno-0-1221" name="__codelineno-0-1221"></a><a href="#__codelineno-0-1221"><span class="linenos" data-linenos="1221 "></span></a><span class="sd">            - ``list[str]`` positional, one per class (class mode).</span>
-<a id="__codelineno-0-1222" name="__codelineno-0-1222"></a><a href="#__codelineno-0-1222"><span class="linenos" data-linenos="1222 "></span></a><span class="sd">            - ``None`` to read from sidecar if present.</span>
-<a id="__codelineno-0-1223" name="__codelineno-0-1223"></a><a href="#__codelineno-0-1223"><span class="linenos" data-linenos="1223 "></span></a>
-<a id="__codelineno-0-1224" name="__codelineno-0-1224"></a><a href="#__codelineno-0-1224"><span class="linenos" data-linenos="1224 "></span></a><span class="sd">        pages_as: How to interpret multi-page TIFFs.</span>
-<a id="__codelineno-0-1225" name="__codelineno-0-1225"></a><a href="#__codelineno-0-1225"><span class="linenos" data-linenos="1225 "></span></a>
-<a id="__codelineno-0-1226" name="__codelineno-0-1226"></a><a href="#__codelineno-0-1226"><span class="linenos" data-linenos="1226 "></span></a><span class="sd">            - ``&quot;auto&quot;`` (default): consult sidecar ``&quot;axes&quot;``, then TIFF</span>
-<a id="__codelineno-0-1227" name="__codelineno-0-1227"></a><a href="#__codelineno-0-1227"><span class="linenos" data-linenos="1227 "></span></a><span class="sd">              metadata (OME-XML / ImageJ hyperstack). Falls back to</span>
-<a id="__codelineno-0-1228" name="__codelineno-0-1228"></a><a href="#__codelineno-0-1228"><span class="linenos" data-linenos="1228 "></span></a><span class="sd">              ``&quot;time&quot;`` for plain multi-page files with a one-time warning.</span>
-<a id="__codelineno-0-1229" name="__codelineno-0-1229"></a><a href="#__codelineno-0-1229"><span class="linenos" data-linenos="1229 "></span></a><span class="sd">            - ``&quot;time&quot;``: force each page to be one frame.</span>
-<a id="__codelineno-0-1230" name="__codelineno-0-1230"></a><a href="#__codelineno-0-1230"><span class="linenos" data-linenos="1230 "></span></a><span class="sd">            - ``&quot;classes&quot;``: force pages to be per-class binary masks for a</span>
-<a id="__codelineno-0-1231" name="__codelineno-0-1231"></a><a href="#__codelineno-0-1231"><span class="linenos" data-linenos="1231 "></span></a><span class="sd">              single frame (N pages -&gt; 1 ``LabelImage`` with label IDs 1..N).</span>
-<a id="__codelineno-0-1232" name="__codelineno-0-1232"></a><a href="#__codelineno-0-1232"><span class="linenos" data-linenos="1232 "></span></a>
-<a id="__codelineno-0-1233" name="__codelineno-0-1233"></a><a href="#__codelineno-0-1233"><span class="linenos" data-linenos="1233 "></span></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1234" name="__codelineno-0-1234"></a><a href="#__codelineno-0-1234"><span class="linenos" data-linenos="1234 "></span></a><span class="sd">        List of ``LabelImage``, one per frame, sorted by frame index.</span>
-<a id="__codelineno-0-1235" name="__codelineno-0-1235"></a><a href="#__codelineno-0-1235"><span class="linenos" data-linenos="1235 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1236" name="__codelineno-0-1236"></a><a href="#__codelineno-0-1236"><span class="linenos" data-linenos="1236 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">tiff</span>
-<a id="__codelineno-0-1237" name="__codelineno-0-1237"></a><a href="#__codelineno-0-1237"><span class="linenos" data-linenos="1237 "></span></a>
-<a id="__codelineno-0-1238" name="__codelineno-0-1238"></a><a href="#__codelineno-0-1238"><span class="linenos" data-linenos="1238 "></span></a>    <span class="k">return</span> <span class="n">tiff</span><span class="o">.</span><span class="n">read_label_images</span><span class="p">(</span>
-<a id="__codelineno-0-1239" name="__codelineno-0-1239"></a><a href="#__codelineno-0-1239"><span class="linenos" data-linenos="1239 "></span></a>        <span class="n">path</span><span class="p">,</span>
-<a id="__codelineno-0-1240" name="__codelineno-0-1240"></a><a href="#__codelineno-0-1240"><span class="linenos" data-linenos="1240 "></span></a>        <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span>
-<a id="__codelineno-0-1241" name="__codelineno-0-1241"></a><a href="#__codelineno-0-1241"><span class="linenos" data-linenos="1241 "></span></a>        <span class="n">tracks</span><span class="o">=</span><span class="n">tracks</span><span class="p">,</span>
-<a id="__codelineno-0-1242" name="__codelineno-0-1242"></a><a href="#__codelineno-0-1242"><span class="linenos" data-linenos="1242 "></span></a>        <span class="n">categories</span><span class="o">=</span><span class="n">categories</span><span class="p">,</span>
-<a id="__codelineno-0-1243" name="__codelineno-0-1243"></a><a href="#__codelineno-0-1243"><span class="linenos" data-linenos="1243 "></span></a>        <span class="n">pages_as</span><span class="o">=</span><span class="n">pages_as</span><span class="p">,</span>
-<a id="__codelineno-0-1244" name="__codelineno-0-1244"></a><a href="#__codelineno-0-1244"><span class="linenos" data-linenos="1244 "></span></a>    <span class="p">)</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1586" name="__codelineno-0-1586"></a><a href="#__codelineno-0-1586"><span class="linenos" data-linenos="1586 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_label_images</span><span class="p">(</span>
+<a id="__codelineno-0-1587" name="__codelineno-0-1587"></a><a href="#__codelineno-0-1587"><span class="linenos" data-linenos="1587 "></span></a>    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-1588" name="__codelineno-0-1588"></a><a href="#__codelineno-0-1588"><span class="linenos" data-linenos="1588 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="n">Video</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1589" name="__codelineno-0-1589"></a><a href="#__codelineno-0-1589"><span class="linenos" data-linenos="1589 "></span></a>    <span class="n">tracks</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1590" name="__codelineno-0-1590"></a><a href="#__codelineno-0-1590"><span class="linenos" data-linenos="1590 "></span></a>    <span class="n">categories</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1591" name="__codelineno-0-1591"></a><a href="#__codelineno-0-1591"><span class="linenos" data-linenos="1591 "></span></a>    <span class="n">pages_as</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-1592" name="__codelineno-0-1592"></a><a href="#__codelineno-0-1592"><span class="linenos" data-linenos="1592 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelImage</span><span class="p">]:</span>
+<a id="__codelineno-0-1593" name="__codelineno-0-1593"></a><a href="#__codelineno-0-1593"><span class="linenos" data-linenos="1593 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load label images from TIFF file(s) or directory.</span>
+<a id="__codelineno-0-1594" name="__codelineno-0-1594"></a><a href="#__codelineno-0-1594"><span class="linenos" data-linenos="1594 "></span></a>
+<a id="__codelineno-0-1595" name="__codelineno-0-1595"></a><a href="#__codelineno-0-1595"><span class="linenos" data-linenos="1595 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1596" name="__codelineno-0-1596"></a><a href="#__codelineno-0-1596"><span class="linenos" data-linenos="1596 "></span></a><span class="sd">        path: Path to a TIFF file (single or multi-page stack) or a directory</span>
+<a id="__codelineno-0-1597" name="__codelineno-0-1597"></a><a href="#__codelineno-0-1597"><span class="linenos" data-linenos="1597 "></span></a><span class="sd">            of per-frame TIFFs.</span>
+<a id="__codelineno-0-1598" name="__codelineno-0-1598"></a><a href="#__codelineno-0-1598"><span class="linenos" data-linenos="1598 "></span></a><span class="sd">        video: Video to associate with all frames.</span>
+<a id="__codelineno-0-1599" name="__codelineno-0-1599"></a><a href="#__codelineno-0-1599"><span class="linenos" data-linenos="1599 "></span></a><span class="sd">        tracks: Global ``{label_id: Track}`` mapping. If ``None``, auto-creates</span>
+<a id="__codelineno-0-1600" name="__codelineno-0-1600"></a><a href="#__codelineno-0-1600"><span class="linenos" data-linenos="1600 "></span></a><span class="sd">            one Track per unique ID found across all frames. Ignored for</span>
+<a id="__codelineno-0-1601" name="__codelineno-0-1601"></a><a href="#__codelineno-0-1601"><span class="linenos" data-linenos="1601 "></span></a><span class="sd">            class-stacked layouts.</span>
+<a id="__codelineno-0-1602" name="__codelineno-0-1602"></a><a href="#__codelineno-0-1602"><span class="linenos" data-linenos="1602 "></span></a><span class="sd">        categories: Category strings.</span>
+<a id="__codelineno-0-1603" name="__codelineno-0-1603"></a><a href="#__codelineno-0-1603"><span class="linenos" data-linenos="1603 "></span></a>
+<a id="__codelineno-0-1604" name="__codelineno-0-1604"></a><a href="#__codelineno-0-1604"><span class="linenos" data-linenos="1604 "></span></a><span class="sd">            - ``dict[int, str]`` keyed by label ID (time mode).</span>
+<a id="__codelineno-0-1605" name="__codelineno-0-1605"></a><a href="#__codelineno-0-1605"><span class="linenos" data-linenos="1605 "></span></a><span class="sd">            - ``list[str]`` positional, one per class (class mode).</span>
+<a id="__codelineno-0-1606" name="__codelineno-0-1606"></a><a href="#__codelineno-0-1606"><span class="linenos" data-linenos="1606 "></span></a><span class="sd">            - ``None`` to read from sidecar if present.</span>
+<a id="__codelineno-0-1607" name="__codelineno-0-1607"></a><a href="#__codelineno-0-1607"><span class="linenos" data-linenos="1607 "></span></a>
+<a id="__codelineno-0-1608" name="__codelineno-0-1608"></a><a href="#__codelineno-0-1608"><span class="linenos" data-linenos="1608 "></span></a><span class="sd">        pages_as: How to interpret multi-page TIFFs.</span>
+<a id="__codelineno-0-1609" name="__codelineno-0-1609"></a><a href="#__codelineno-0-1609"><span class="linenos" data-linenos="1609 "></span></a>
+<a id="__codelineno-0-1610" name="__codelineno-0-1610"></a><a href="#__codelineno-0-1610"><span class="linenos" data-linenos="1610 "></span></a><span class="sd">            - ``&quot;auto&quot;`` (default): consult sidecar ``&quot;axes&quot;``, then TIFF</span>
+<a id="__codelineno-0-1611" name="__codelineno-0-1611"></a><a href="#__codelineno-0-1611"><span class="linenos" data-linenos="1611 "></span></a><span class="sd">              metadata (OME-XML / ImageJ hyperstack). Falls back to</span>
+<a id="__codelineno-0-1612" name="__codelineno-0-1612"></a><a href="#__codelineno-0-1612"><span class="linenos" data-linenos="1612 "></span></a><span class="sd">              ``&quot;time&quot;`` for plain multi-page files with a one-time warning.</span>
+<a id="__codelineno-0-1613" name="__codelineno-0-1613"></a><a href="#__codelineno-0-1613"><span class="linenos" data-linenos="1613 "></span></a><span class="sd">            - ``&quot;time&quot;``: force each page to be one frame.</span>
+<a id="__codelineno-0-1614" name="__codelineno-0-1614"></a><a href="#__codelineno-0-1614"><span class="linenos" data-linenos="1614 "></span></a><span class="sd">            - ``&quot;classes&quot;``: force pages to be per-class binary masks for a</span>
+<a id="__codelineno-0-1615" name="__codelineno-0-1615"></a><a href="#__codelineno-0-1615"><span class="linenos" data-linenos="1615 "></span></a><span class="sd">              single frame (N pages -&gt; 1 ``LabelImage`` with label IDs 1..N).</span>
+<a id="__codelineno-0-1616" name="__codelineno-0-1616"></a><a href="#__codelineno-0-1616"><span class="linenos" data-linenos="1616 "></span></a>
+<a id="__codelineno-0-1617" name="__codelineno-0-1617"></a><a href="#__codelineno-0-1617"><span class="linenos" data-linenos="1617 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1618" name="__codelineno-0-1618"></a><a href="#__codelineno-0-1618"><span class="linenos" data-linenos="1618 "></span></a><span class="sd">        List of ``LabelImage``, one per frame, sorted by frame index.</span>
+<a id="__codelineno-0-1619" name="__codelineno-0-1619"></a><a href="#__codelineno-0-1619"><span class="linenos" data-linenos="1619 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1620" name="__codelineno-0-1620"></a><a href="#__codelineno-0-1620"><span class="linenos" data-linenos="1620 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">tiff</span>
+<a id="__codelineno-0-1621" name="__codelineno-0-1621"></a><a href="#__codelineno-0-1621"><span class="linenos" data-linenos="1621 "></span></a>
+<a id="__codelineno-0-1622" name="__codelineno-0-1622"></a><a href="#__codelineno-0-1622"><span class="linenos" data-linenos="1622 "></span></a>    <span class="k">return</span> <span class="n">tiff</span><span class="o">.</span><span class="n">read_label_images</span><span class="p">(</span>
+<a id="__codelineno-0-1623" name="__codelineno-0-1623"></a><a href="#__codelineno-0-1623"><span class="linenos" data-linenos="1623 "></span></a>        <span class="n">path</span><span class="p">,</span>
+<a id="__codelineno-0-1624" name="__codelineno-0-1624"></a><a href="#__codelineno-0-1624"><span class="linenos" data-linenos="1624 "></span></a>        <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span>
+<a id="__codelineno-0-1625" name="__codelineno-0-1625"></a><a href="#__codelineno-0-1625"><span class="linenos" data-linenos="1625 "></span></a>        <span class="n">tracks</span><span class="o">=</span><span class="n">tracks</span><span class="p">,</span>
+<a id="__codelineno-0-1626" name="__codelineno-0-1626"></a><a href="#__codelineno-0-1626"><span class="linenos" data-linenos="1626 "></span></a>        <span class="n">categories</span><span class="o">=</span><span class="n">categories</span><span class="p">,</span>
+<a id="__codelineno-0-1627" name="__codelineno-0-1627"></a><a href="#__codelineno-0-1627"><span class="linenos" data-linenos="1627 "></span></a>        <span class="n">pages_as</span><span class="o">=</span><span class="n">pages_as</span><span class="p">,</span>
+<a id="__codelineno-0-1628" name="__codelineno-0-1628"></a><a href="#__codelineno-0-1628"><span class="linenos" data-linenos="1628 "></span></a>    <span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
@@ -3603,23 +3631,23 @@ a directory (<code>False</code>).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1247" name="__codelineno-0-1247"></a><a href="#__codelineno-0-1247"><span class="linenos" data-linenos="1247 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_label_images</span><span class="p">(</span>
-<a id="__codelineno-0-1248" name="__codelineno-0-1248"></a><a href="#__codelineno-0-1248"><span class="linenos" data-linenos="1248 "></span></a>    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
-<a id="__codelineno-0-1249" name="__codelineno-0-1249"></a><a href="#__codelineno-0-1249"><span class="linenos" data-linenos="1249 "></span></a>    <span class="n">label_images</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelImage</span><span class="p">],</span>
-<a id="__codelineno-0-1250" name="__codelineno-0-1250"></a><a href="#__codelineno-0-1250"><span class="linenos" data-linenos="1250 "></span></a>    <span class="n">stack</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-1251" name="__codelineno-0-1251"></a><a href="#__codelineno-0-1251"><span class="linenos" data-linenos="1251 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1252" name="__codelineno-0-1252"></a><a href="#__codelineno-0-1252"><span class="linenos" data-linenos="1252 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save label images to TIFF.</span>
-<a id="__codelineno-0-1253" name="__codelineno-0-1253"></a><a href="#__codelineno-0-1253"><span class="linenos" data-linenos="1253 "></span></a>
-<a id="__codelineno-0-1254" name="__codelineno-0-1254"></a><a href="#__codelineno-0-1254"><span class="linenos" data-linenos="1254 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1255" name="__codelineno-0-1255"></a><a href="#__codelineno-0-1255"><span class="linenos" data-linenos="1255 "></span></a><span class="sd">        path: Output path. If ``stack=True``, writes a single multi-page TIFF.</span>
-<a id="__codelineno-0-1256" name="__codelineno-0-1256"></a><a href="#__codelineno-0-1256"><span class="linenos" data-linenos="1256 "></span></a><span class="sd">            If ``stack=False``, writes per-frame files to this directory.</span>
-<a id="__codelineno-0-1257" name="__codelineno-0-1257"></a><a href="#__codelineno-0-1257"><span class="linenos" data-linenos="1257 "></span></a><span class="sd">        label_images: ``LabelImage`` objects to write.</span>
-<a id="__codelineno-0-1258" name="__codelineno-0-1258"></a><a href="#__codelineno-0-1258"><span class="linenos" data-linenos="1258 "></span></a><span class="sd">        stack: Write as multi-page TIFF stack (``True``) or per-frame files in</span>
-<a id="__codelineno-0-1259" name="__codelineno-0-1259"></a><a href="#__codelineno-0-1259"><span class="linenos" data-linenos="1259 "></span></a><span class="sd">            a directory (``False``).</span>
-<a id="__codelineno-0-1260" name="__codelineno-0-1260"></a><a href="#__codelineno-0-1260"><span class="linenos" data-linenos="1260 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1261" name="__codelineno-0-1261"></a><a href="#__codelineno-0-1261"><span class="linenos" data-linenos="1261 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">tiff</span>
-<a id="__codelineno-0-1262" name="__codelineno-0-1262"></a><a href="#__codelineno-0-1262"><span class="linenos" data-linenos="1262 "></span></a>
-<a id="__codelineno-0-1263" name="__codelineno-0-1263"></a><a href="#__codelineno-0-1263"><span class="linenos" data-linenos="1263 "></span></a>    <span class="n">tiff</span><span class="o">.</span><span class="n">write_label_images</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">label_images</span><span class="p">,</span> <span class="n">stack</span><span class="o">=</span><span class="n">stack</span><span class="p">)</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1631" name="__codelineno-0-1631"></a><a href="#__codelineno-0-1631"><span class="linenos" data-linenos="1631 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_label_images</span><span class="p">(</span>
+<a id="__codelineno-0-1632" name="__codelineno-0-1632"></a><a href="#__codelineno-0-1632"><span class="linenos" data-linenos="1632 "></span></a>    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-1633" name="__codelineno-0-1633"></a><a href="#__codelineno-0-1633"><span class="linenos" data-linenos="1633 "></span></a>    <span class="n">label_images</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelImage</span><span class="p">],</span>
+<a id="__codelineno-0-1634" name="__codelineno-0-1634"></a><a href="#__codelineno-0-1634"><span class="linenos" data-linenos="1634 "></span></a>    <span class="n">stack</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-1635" name="__codelineno-0-1635"></a><a href="#__codelineno-0-1635"><span class="linenos" data-linenos="1635 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1636" name="__codelineno-0-1636"></a><a href="#__codelineno-0-1636"><span class="linenos" data-linenos="1636 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save label images to TIFF.</span>
+<a id="__codelineno-0-1637" name="__codelineno-0-1637"></a><a href="#__codelineno-0-1637"><span class="linenos" data-linenos="1637 "></span></a>
+<a id="__codelineno-0-1638" name="__codelineno-0-1638"></a><a href="#__codelineno-0-1638"><span class="linenos" data-linenos="1638 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1639" name="__codelineno-0-1639"></a><a href="#__codelineno-0-1639"><span class="linenos" data-linenos="1639 "></span></a><span class="sd">        path: Output path. If ``stack=True``, writes a single multi-page TIFF.</span>
+<a id="__codelineno-0-1640" name="__codelineno-0-1640"></a><a href="#__codelineno-0-1640"><span class="linenos" data-linenos="1640 "></span></a><span class="sd">            If ``stack=False``, writes per-frame files to this directory.</span>
+<a id="__codelineno-0-1641" name="__codelineno-0-1641"></a><a href="#__codelineno-0-1641"><span class="linenos" data-linenos="1641 "></span></a><span class="sd">        label_images: ``LabelImage`` objects to write.</span>
+<a id="__codelineno-0-1642" name="__codelineno-0-1642"></a><a href="#__codelineno-0-1642"><span class="linenos" data-linenos="1642 "></span></a><span class="sd">        stack: Write as multi-page TIFF stack (``True``) or per-frame files in</span>
+<a id="__codelineno-0-1643" name="__codelineno-0-1643"></a><a href="#__codelineno-0-1643"><span class="linenos" data-linenos="1643 "></span></a><span class="sd">            a directory (``False``).</span>
+<a id="__codelineno-0-1644" name="__codelineno-0-1644"></a><a href="#__codelineno-0-1644"><span class="linenos" data-linenos="1644 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1645" name="__codelineno-0-1645"></a><a href="#__codelineno-0-1645"><span class="linenos" data-linenos="1645 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">tiff</span>
+<a id="__codelineno-0-1646" name="__codelineno-0-1646"></a><a href="#__codelineno-0-1646"><span class="linenos" data-linenos="1646 "></span></a>
+<a id="__codelineno-0-1647" name="__codelineno-0-1647"></a><a href="#__codelineno-0-1647"><span class="linenos" data-linenos="1647 "></span></a>    <span class="n">tiff</span><span class="o">.</span><span class="n">write_label_images</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">label_images</span><span class="p">,</span> <span class="n">stack</span><span class="o">=</span><span class="n">stack</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
