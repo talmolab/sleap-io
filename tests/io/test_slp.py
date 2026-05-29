@@ -7992,3 +7992,63 @@ def test_slp_undistributed_annotations_roundtrip(tmp_path):
     assert len(lf0.centroids) == 0
     assert len(lf0.bboxes) == 0
     assert len(lf0.masks) == 0
+
+
+def test_read_tracks_with_open_file(slp_typical):
+    """`read_tracks` reads from a passed-in open handle without closing it."""
+    with h5py.File(slp_typical, "r") as f:
+        tracks_passed = read_tracks(slp_typical, _hdf5_file=f)
+        # Handle must remain usable after the read (helper must not close it).
+        assert f.id.valid
+        assert "tracks_json" in f
+
+    tracks_default = read_tracks(slp_typical)
+    assert [t.name for t in tracks_passed] == [t.name for t in tracks_default]
+
+
+def test_read_metadata_with_open_file(slp_typical):
+    """`read_metadata` reads from a passed-in open handle without closing it."""
+    with h5py.File(slp_typical, "r") as f:
+        md_passed = read_metadata(slp_typical, _hdf5_file=f)
+        assert f.id.valid
+
+    md_default = read_metadata(slp_typical)
+    assert isinstance(md_passed, dict)
+    assert md_passed == md_default
+
+
+def test_read_videos_with_open_file(slp_minimal_pkg):
+    """`read_videos` reads (and threads the handle into make_video) correctly."""
+    with h5py.File(slp_minimal_pkg, "r") as f:
+        videos_passed = read_videos(slp_minimal_pkg, open_backend=False, _hdf5_file=f)
+        # Handle must remain usable after the read.
+        assert f.id.valid
+
+    videos_default = read_videos(slp_minimal_pkg, open_backend=False)
+    assert len(videos_passed) == len(videos_default)
+    assert [str(v.filename) for v in videos_passed] == [
+        str(v.filename) for v in videos_default
+    ]
+
+
+def test_read_labels_threads_single_open(slp_minimal_pkg):
+    """`read_labels` opens the backing HDF5 file only a small number of times.
+
+    Counts real `h5py.File` opens during a single `read_labels` call. Because the
+    orchestrator opens once and threads that handle through every helper, the only
+    extra open is `read_label_images`' long-lived second handle (when present), so
+    the total must be small (<= 3).
+    """
+    real_h5py_file = h5py.File
+    open_count = 0
+
+    def counting_h5py_file(*args, **kwargs):
+        nonlocal open_count
+        open_count += 1
+        return real_h5py_file(*args, **kwargs)
+
+    with mock.patch("sleap_io.io.slp.h5py.File", side_effect=counting_h5py_file):
+        labels = read_labels(slp_minimal_pkg)
+
+    assert type(labels) is Labels
+    assert open_count <= 3

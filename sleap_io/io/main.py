@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
@@ -23,27 +24,115 @@ if TYPE_CHECKING:
     from sleap_io.model.labels_set import LabelsSet
 
 
-def load_slp(filename: str, open_videos: bool = True, lazy: bool = False) -> Labels:
-    """Load a SLEAP dataset.
+def load_slp(
+    filename: str | os.PathLike,
+    open_videos: bool = True,
+    lazy: bool = False,
+    *,
+    headers: dict[str, str] | None = None,
+    stream_mode: str = "auto",
+    cache_storage: str | os.PathLike | None = None,
+    cache_expiry: float | None = None,
+    block_size: int = 1 << 20,
+    max_blocks: int = 32,
+    retries: int = 3,
+) -> Labels:
+    """Load a SLEAP dataset from a local path or HTTP/cloud URL.
+
+    For local paths, all URL-specific keyword arguments are ignored.
 
     Args:
-        filename: Path to a SLEAP labels file (`.slp`).
+        filename: Path to a SLEAP labels file (`.slp`), or a URL. Supported URL
+            schemes: `http`, `https`, `s3`, `gs`, `gcs`, `az`, `abfs`. Cloud
+            schemes require `pip install 'sleap-io[cloud]'`.
         open_videos: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened (useful for reading metadata
             when the video files are not available).
         lazy: If `True`, defer instance materialization for faster loading.
             Lazy-loaded Labels support read operations and fast numpy/save.
             To modify, call `labels.materialize()` first. Default is `False`.
+        headers: HTTP headers (e.g. `{"Authorization": "Bearer ..."}`) forwarded
+            to fsspec for URL loads. Stripped on cross-origin redirect. Ignored
+            for local paths.
+        stream_mode: Remote streaming strategy (ignored for local paths). One of:
+            `"auto"` (default; uses fsspec `blockcache` for lazy range reads),
+            `"blockcache"`, `"cache"` (full download via `simplecache`),
+            `"filecache"` (download with ETag revalidation), or `"download"`
+            (ephemeral full download into memory).
+        cache_storage: Override fsspec's cache directory for `cache`/`filecache`
+            modes. Ignored for local paths.
+        cache_expiry: TTL (seconds) for `filecache` revalidation. Defaults to
+            3600 (1h) when not given. Ignored for other modes and local paths.
+        block_size: Range block size in bytes for `blockcache` mode. Default:
+            1 MiB. Ignored for local paths.
+        max_blocks: Max blocks kept in the in-memory LRU per open file. Default:
+            32 (32 MiB cap per open file). Ignored for local paths.
+        retries: Retry count for transient HTTP errors. Default: 3. Ignored for
+            local paths.
 
     Returns:
         The dataset as a `Labels` object.
+
+    Raises:
+        RemoteIOError: For HTTP errors against URLs (404, 416, 5xx after
+            retries, connection failures).
+        ImportError: For cloud schemes when the corresponding extra is not
+            installed.
+        ValueError: For an unrecognized `stream_mode`.
 
     See Also:
         Labels.is_lazy: Check if Labels is lazy-loaded.
         Labels.materialize: Convert lazy Labels to eager.
     """
-    from sleap_io.io import slp
+    import h5py
 
+    from sleap_io.io import _remote, slp
+
+    if _remote._is_url(filename):
+        url = os.fspath(filename) if isinstance(filename, os.PathLike) else filename
+        file_like = _remote.open_url(
+            url,
+            headers=headers,
+            stream_mode=stream_mode,
+            cache_storage=cache_storage,
+            cache_expiry=cache_expiry,
+            block_size=block_size,
+            max_blocks=max_blocks,
+            retries=retries,
+        )
+        resolved_mode = "blockcache" if stream_mode == "auto" else stream_mode
+        try:
+            with h5py.File(file_like, "r") as f:
+                if lazy:
+                    labels = slp._read_labels_lazy_from_open_file(
+                        url,
+                        f,
+                        open_videos=open_videos,
+                        _url_headers=headers,
+                        _url_stream_mode=resolved_mode,
+                    )
+                else:
+                    labels = slp._read_labels_from_open_file(
+                        url,
+                        f,
+                        open_videos=open_videos,
+                        _url_headers=headers,
+                        _url_stream_mode=resolved_mode,
+                    )
+        finally:
+            file_like.close()
+
+        # Propagate URL config to embedded HDF5Video backends so they can reopen
+        # the remote file lazily on frame reads.
+        from sleap_io.io.video_reading import HDF5Video
+
+        for video in labels.videos:
+            if isinstance(video.backend, HDF5Video):
+                object.__setattr__(video.backend, "_url_headers", headers)
+                object.__setattr__(video.backend, "_url_stream_mode", resolved_mode)
+        return labels
+
+    # Local path - UNCHANGED behaviour; URL-specific kwargs are no-ops.
     if lazy:
         return slp._read_labels_lazy(filename, open_videos=open_videos)
     return slp.read_labels(filename, open_videos=open_videos)
@@ -462,6 +551,73 @@ def save_geojson(rois: list, filename: str) -> None:
     geojson.write_rois(rois, filename)
 
 
+def _is_alphatracker_data(data: object) -> bool:
+    """Classify already-parsed JSON data as AlphaTracker format.
+
+    Args:
+        data: The parsed JSON object.
+
+    Returns:
+        True if the data matches the AlphaTracker schema, False otherwise.
+    """
+    # AlphaTracker format is a list of frame objects
+    if not isinstance(data, list):
+        return False
+
+    if len(data) == 0:
+        return False
+
+    # Check first frame structure
+    first_frame = data[0]
+    if not isinstance(first_frame, dict):
+        return False
+
+    # AlphaTracker frames have "filename", "class": "image", and "annotations"
+    has_required = (
+        "filename" in first_frame
+        and first_frame.get("class") == "image"
+        and "annotations" in first_frame
+    )
+
+    if not has_required:
+        return False
+
+    # Check annotations structure
+    annotations = first_frame.get("annotations", [])
+    if not isinstance(annotations, list):
+        return False
+
+    # Check for Face and point classes
+    has_face = any(a.get("class") == "Face" for a in annotations)
+    has_point = any(a.get("class") == "point" for a in annotations)
+
+    return has_face and has_point
+
+
+def _is_coco_data(data: object) -> bool:
+    """Classify already-parsed JSON data as COCO (pose) format.
+
+    Args:
+        data: The parsed JSON object.
+
+    Returns:
+        True if the data matches the COCO pose schema, False otherwise.
+    """
+    if not isinstance(data, dict):
+        return False
+
+    # COCO format has specific top-level fields
+    coco_fields = {"images", "annotations", "categories"}
+    has_coco_fields = all(field in data for field in coco_fields)
+
+    # Check if categories have keypoints (pose data)
+    has_keypoints = False
+    if "categories" in data:
+        has_keypoints = any("keypoints" in cat for cat in data["categories"])
+
+    return has_coco_fields and has_keypoints
+
+
 def _detect_alphatracker_format(json_path: str) -> bool:
     """Detect if a JSON file is in AlphaTracker format.
 
@@ -476,42 +632,9 @@ def _detect_alphatracker_format(json_path: str) -> bool:
 
         with open(json_path, "r") as f:
             data = json.load(f)
-
-        # AlphaTracker format is a list of frame objects
-        if not isinstance(data, list):
-            return False
-
-        if len(data) == 0:
-            return False
-
-        # Check first frame structure
-        first_frame = data[0]
-        if not isinstance(first_frame, dict):
-            return False
-
-        # AlphaTracker frames have "filename", "class": "image", and "annotations"
-        has_required = (
-            "filename" in first_frame
-            and first_frame.get("class") == "image"
-            and "annotations" in first_frame
-        )
-
-        if not has_required:
-            return False
-
-        # Check annotations structure
-        annotations = first_frame.get("annotations", [])
-        if not isinstance(annotations, list):
-            return False
-
-        # Check for Face and point classes
-        has_face = any(a.get("class") == "Face" for a in annotations)
-        has_point = any(a.get("class") == "point" for a in annotations)
-
-        return has_face and has_point
-
     except Exception:
         return False
+    return _is_alphatracker_data(data)
 
 
 def _detect_coco_format(json_path: str) -> bool:
@@ -528,19 +651,9 @@ def _detect_coco_format(json_path: str) -> bool:
 
         with open(json_path, "r") as f:
             data = json.load(f)
-
-        # COCO format has specific top-level fields
-        coco_fields = {"images", "annotations", "categories"}
-        has_coco_fields = all(field in data for field in coco_fields)
-
-        # Check if categories have keypoints (pose data)
-        has_keypoints = False
-        if "categories" in data:
-            has_keypoints = any("keypoints" in cat for cat in data["categories"])
-
-        return has_coco_fields and has_keypoints
     except Exception:
         return False
+    return _is_coco_data(data)
 
 
 def load_leap(
@@ -773,6 +886,15 @@ def load_video(filename: str, **kwargs) -> Video:
         set_default_video_plugin: Set the default video plugin globally.
         get_default_video_plugin: Get the current default video plugin.
     """
+    from sleap_io.io import _remote
+
+    if _remote._is_url(filename):
+        raise NotImplementedError(
+            "Remote video loading is not yet implemented "
+            f"(URL: {_remote._redact_url(str(filename))}). Tracked as a "
+            "follow-up PR in the remote loaders feature stack. For now, "
+            "download the file locally before calling load_video()."
+        )
     return Video.from_filename(filename, **kwargs)
 
 
@@ -826,16 +948,27 @@ def save_video(
 
 
 def load_file(
-    filename: str | Path, format: str | None = None, **kwargs
+    filename: str | Path,
+    format: str | None = None,
+    *,
+    sniff: bool | None = None,
+    **kwargs,
 ) -> Labels | Video:
     """Load a file and return the appropriate object.
 
     Args:
-        filename: Path to a file.
+        filename: Path to a file, or a URL (`http`, `https`, `s3`, `gs`, `gcs`,
+            `az`, `abfs`).
         format: Optional format to load as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "geojson",
             "alphatracker", "labelstudio", "coco", "jabs", "analysis_h5", "dlc",
             "trackmate", "ultralytics", "leap", and "video".
+        sniff: Controls magic-byte sniffing for URLs with ambiguous extensions
+            (`.h5`, `.json`, `.csv`). If `True`, fetch the first bytes via a
+            Range request to disambiguate. If `None` (default), sniff only for
+            URLs with ambiguous extensions (never for local paths, where opening
+            the file is cheap). If `False`, never sniff; raise `ValueError` on an
+            ambiguous URL extension when no explicit `format` is given.
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.
             - For "nwb" format: No additional arguments.
@@ -862,6 +995,11 @@ def load_file(
     """
     if isinstance(filename, Path):
         filename = filename.as_posix()
+
+    from sleap_io.io import _remote
+
+    if _remote._is_url(filename):
+        return _load_file_url(filename, format=format, sniff=sniff, **kwargs)
 
     if format is None:
         if filename.lower().endswith(".slp"):
@@ -939,6 +1077,252 @@ def load_file(
         return Labels(rois=load_geojson(filename))
     elif format == "video":
         return load_video(filename, **kwargs)
+
+
+#: Loaders for unambiguous URL extensions that need no magic-byte sniffing.
+_URL_UNAMBIGUOUS_EXTS: dict[str, str] = {
+    ".slp": "slp",
+    ".nwb": "nwb",
+    ".mat": "leap",
+    ".geojson": "geojson",
+}
+
+#: URL extensions that map to multiple formats and require sniffing.
+_URL_AMBIGUOUS_EXTS = frozenset({".h5", ".json", ".csv"})
+
+
+#: URL-loadable formats. Only `.slp` (and `.pkg.slp`) loading is implemented
+#: for remote URLs in this PR; every other format's loader opens the path
+#: locally and would fail with a cryptic `OSError` over a URL, so those are
+#: gated behind a clean `NotImplementedError` (mirroring `load_video(url)`).
+_URL_IMPLEMENTED_FORMATS = frozenset({"slp"})
+
+
+def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video:
+    """Dispatch a URL to a concrete loader given a resolved format string.
+
+    Only the `slp` format is URL-aware in this PR; every other format's loader
+    opens the path with a local file `open()` and would fail with a cryptic
+    `OSError` over a URL, so those are gated behind a clean `NotImplementedError`
+    (mirroring `load_video(url)`).
+
+    Args:
+        filename: The URL to load.
+        format: The resolved format name (e.g. ``"slp"``, ``"coco"``).
+        **kwargs: Forwarded to the underlying loader.
+
+    Returns:
+        The loaded `Labels` or `Video` object.
+
+    Raises:
+        ValueError: If `format` is not a recognized format.
+        NotImplementedError: If `format` is recognized but remote loading for it
+            is not yet implemented (every format other than `slp`).
+    """
+    from sleap_io.io import _remote
+
+    known_formats = {
+        "slp",
+        "nwb",
+        "leap",
+        "alphatracker",
+        "coco",
+        "labelstudio",
+        "analysis_h5",
+        "jabs",
+        "dlc",
+        "csv",
+        "trackmate",
+        "ultralytics",
+        "video",
+        "geojson",
+    }
+    if format not in known_formats:
+        raise ValueError(
+            f"Unsupported format '{format}' for URL: '{_remote._redact_url(filename)}'."
+        )
+
+    if format not in _URL_IMPLEMENTED_FORMATS:
+        raise NotImplementedError(
+            f"Remote {format} loading is not yet implemented "
+            f"(URL: {_remote._redact_url(filename)}); tracked as a follow-up. "
+            "Download the file locally first."
+        )
+
+    return load_slp(filename, **kwargs)
+
+
+def _resolve_hdf5_url_format(
+    url: str,
+    headers: dict[str, str] | None,
+    *,
+    stream_mode: str = "auto",
+) -> str:
+    """Disambiguate an HDF5 URL into ``slp``/``analysis_h5``/``jabs``.
+
+    Opens the remote file via fsspec and inspects its top-level group
+    structure: a `track_occupancy` dataset marks an Analysis HDF5 file, a
+    `metadata` group marks a `.slp` file, and anything else falls back to JABS.
+
+    Args:
+        url: The HDF5 URL to inspect.
+        headers: Optional HTTP headers for the probe.
+        stream_mode: Streaming strategy for the probe (mirrors the value that
+            will be used for the full load).
+
+    Returns:
+        One of ``"slp"``, ``"analysis_h5"``, or ``"jabs"``.
+    """
+    import h5py
+
+    from sleap_io.io import _remote
+
+    file_like = _remote.open_url(url, headers=headers, stream_mode=stream_mode)
+    try:
+        with h5py.File(file_like, "r") as f:
+            if "track_occupancy" in f:
+                return "analysis_h5"
+            if "metadata" in f:
+                return "slp"
+            return "jabs"
+    finally:
+        file_like.close()
+
+
+def _load_file_url(
+    filename: str,
+    *,
+    format: str | None = None,
+    sniff: bool | None = None,
+    **kwargs,
+) -> Labels | Video:
+    """Load a labels/video file from a URL with extension + magic-byte routing.
+
+    The local content-detectors used by `load_file` call `open()` on the path,
+    which breaks for URLs, so URL routing relies on the extension plus (for
+    ambiguous extensions) a magic-byte sniff via a ranged read.
+
+    Args:
+        filename: The URL to load.
+        format: Explicit format. If given, dispatch directly.
+        sniff: Sniff control (see `load_file`). For ambiguous extensions,
+            `True`/`None` sniff via fsspec; `False` raises without a format.
+        **kwargs: Forwarded to the underlying loader (URL streaming kwargs such
+            as `headers`/`stream_mode` flow through to `load_slp`).
+
+    Returns:
+        The loaded `Labels` or `Video` object.
+
+    Raises:
+        ValueError: If the format cannot be inferred and sniffing is disabled,
+            or the sniffed magic bytes are unsupported/unrecognized.
+    """
+    import urllib.parse
+
+    from sleap_io.io import _remote
+
+    # Explicit format always wins, bypassing detection entirely.
+    if format is not None:
+        return _dispatch_url_format(filename, format, **kwargs)
+
+    parsed = urllib.parse.urlparse(filename)
+    ext = "".join(Path(parsed.path).suffixes[-1:]).lower()
+
+    # Unambiguous labels extension: dispatch by extension exactly like local.
+    if ext in _URL_UNAMBIGUOUS_EXTS:
+        return _dispatch_url_format(filename, _URL_UNAMBIGUOUS_EXTS[ext], **kwargs)
+
+    # Ambiguous extension (.h5/.json/.csv): sniff unless explicitly disabled.
+    # Checked before the video-extension fallback because `Video.EXTS` also
+    # lists `h5`/`hdf5`, which here mean a labels file, not a video.
+    if ext in _URL_AMBIGUOUS_EXTS:
+        if sniff is False:
+            raise ValueError(
+                f"Cannot infer format for URL with ambiguous extension "
+                f"'{ext}' when sniff=False: '{_remote._redact_url(filename)}'. "
+                "Pass an explicit format= (e.g. 'analysis_h5', 'jabs', 'coco', "
+                "'labelstudio', 'alphatracker', 'dlc', 'trackmate', 'csv')."
+            )
+        headers = kwargs.get("headers")
+        stream_mode = kwargs.get("stream_mode", "auto")
+        family = _remote._sniff_format(filename, headers=headers)
+        if family == "hdf5":
+            resolved = _resolve_hdf5_url_format(
+                filename, headers, stream_mode=stream_mode
+            )
+            return _dispatch_url_format(filename, resolved, **kwargs)
+        if family == "json":
+            if _detect_alphatracker_url(filename, headers):
+                return _dispatch_url_format(filename, "alphatracker", **kwargs)
+            if _detect_coco_url(filename, headers):
+                return _dispatch_url_format(filename, "coco", **kwargs)
+            return _dispatch_url_format(filename, "labelstudio", **kwargs)
+        if family == "csv":
+            # Without downloading the full CSV we cannot cheaply distinguish
+            # DLC/TrackMate from a generic SLEAP CSV; default to the generic
+            # reader. Pass an explicit format= to force dlc/trackmate.
+            return _dispatch_url_format(filename, "csv", **kwargs)
+        raise ValueError(
+            f"Unsupported or unrecognized content (sniffed '{family}') for "
+            f"URL: '{_remote._redact_url(filename)}'. Pass an explicit format=."
+        )
+
+    # Video extension fallback (the genuine video extensions).
+    for vid_ext in Video.EXTS:
+        if filename.lower().endswith(vid_ext.lower()):
+            return _dispatch_url_format(filename, "video", **kwargs)
+
+    raise ValueError(
+        f"Could not infer format from URL: '{_remote._redact_url(filename)}'."
+    )
+
+
+def _detect_alphatracker_url(url: str, headers: dict[str, str] | None) -> bool:
+    """Return True if a JSON URL is in AlphaTracker format.
+
+    Args:
+        url: The JSON URL to inspect.
+        headers: Optional HTTP headers.
+
+    Returns:
+        True if the content matches the AlphaTracker schema, else False.
+    """
+    import json
+
+    from sleap_io.io import _remote
+
+    file_like = _remote.open_url(url, headers=headers, stream_mode="download")
+    try:
+        data = json.loads(file_like.read())
+    except Exception:
+        return False
+    finally:
+        file_like.close()
+    return _is_alphatracker_data(data)
+
+
+def _detect_coco_url(url: str, headers: dict[str, str] | None) -> bool:
+    """Return True if a JSON URL is in COCO format.
+
+    Args:
+        url: The JSON URL to inspect.
+        headers: Optional HTTP headers.
+
+    Returns:
+        True if the content matches the COCO schema, else False.
+    """
+    import json
+
+    from sleap_io.io import _remote
+
+    file_like = _remote.open_url(url, headers=headers, stream_mode="download")
+    try:
+        data = json.loads(file_like.read())
+    except Exception:
+        return False
+    finally:
+        file_like.close()
+    return _is_coco_data(data)
 
 
 def save_file(

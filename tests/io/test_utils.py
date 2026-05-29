@@ -31,6 +31,26 @@ def test_read_hdf5_dataset(hdf5_file):
     np.testing.assert_array_equal(read_hdf5_dataset(hdf5_file, "ds1"), [0, 1, 2])
 
 
+def test_read_hdf5_dataset_positional_still_works(hdf5_file):
+    """Test `read_hdf5_dataset` still works with positional args (backcompat)."""
+    np.testing.assert_array_equal(read_hdf5_dataset(hdf5_file, "ds1"), [0, 1, 2])
+    np.testing.assert_array_equal(read_hdf5_dataset(hdf5_file, "grp/ds2"), [3, 4, 5])
+
+
+def test_read_hdf5_dataset_with_open_file(hdf5_file):
+    """Test `read_hdf5_dataset` reads from a passed open file and leaves it open."""
+    with h5py.File(hdf5_file, "r") as f:
+        np.testing.assert_array_equal(
+            read_hdf5_dataset(hdf5_file, "ds1", _hdf5_file=f), [0, 1, 2]
+        )
+        np.testing.assert_array_equal(
+            read_hdf5_dataset(hdf5_file, "grp/ds2", _hdf5_file=f), [3, 4, 5]
+        )
+        # The passed handle must remain usable (i.e. not closed by the call).
+        assert f.id.valid
+        np.testing.assert_array_equal(f["ds1"][()], [0, 1, 2])
+
+
 def test_write_hdf5_dataset(hdf5_file):
     """Test `write_hdf5_dataset` can write hdf5 datasets."""
 
@@ -53,6 +73,18 @@ def test_read_hdf5_group(hdf5_file):
     np.testing.assert_array_equal(data["/ds1"], [0, 1, 2])
     np.testing.assert_array_equal(data["/grp/ds2"], [3, 4, 5])
     assert len(data.keys()) == 2
+
+
+def test_read_hdf5_group_with_open_file(hdf5_file):
+    """Test `read_hdf5_group` reads from a passed open file and leaves it open."""
+    with h5py.File(hdf5_file, "r") as f:
+        data = read_hdf5_group(hdf5_file, group="/", _hdf5_file=f)
+        np.testing.assert_array_equal(data["/ds1"], [0, 1, 2])
+        np.testing.assert_array_equal(data["/grp/ds2"], [3, 4, 5])
+        assert len(data.keys()) == 2
+        # The passed handle must remain usable (i.e. not closed by the call).
+        assert f.id.valid
+        np.testing.assert_array_equal(f["ds1"][()], [0, 1, 2])
 
 
 def test_write_hdf5_group(hdf5_file):
@@ -116,6 +148,24 @@ def test_read_hdf5_attrs(hdf5_file):
     assert read_hdf5_attrs(hdf5_file, dataset="/", attribute="attr2") == 1
     attrs = read_hdf5_attrs(hdf5_file, dataset="/")
     assert attrs == {"attr1": 0, "attr2": 1}
+
+
+def test_read_hdf5_attrs_with_open_file(hdf5_file):
+    """Test `read_hdf5_attrs` reads from a passed open file and leaves it open."""
+    with h5py.File(hdf5_file, "r") as f:
+        assert (
+            read_hdf5_attrs(hdf5_file, dataset="/", attribute="attr1", _hdf5_file=f)
+            == 0
+        )
+        assert (
+            read_hdf5_attrs(hdf5_file, dataset="/", attribute="attr2", _hdf5_file=f)
+            == 1
+        )
+        attrs = read_hdf5_attrs(hdf5_file, dataset="/", _hdf5_file=f)
+        assert attrs == {"attr1": 0, "attr2": 1}
+        # The passed handle must remain usable (i.e. not closed by the call).
+        assert f.id.valid
+        assert dict(f["/"].attrs) == {"attr1": 0, "attr2": 1}
 
 
 def test_write_hdf5_attrs(hdf5_file):

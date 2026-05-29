@@ -345,6 +345,27 @@ class VideoBackend:
             raise ValueError(f"FPS must be positive, got {value}")
         self._fps = value
 
+    def __getstate__(self) -> dict:
+        """Return state for pickling/deepcopy, dropping the open reader handle.
+
+        The cached ``_open_reader`` (e.g. an ``h5py.File`` or video container) is
+        not picklable and is reopened lazily on next access, so it is excluded.
+        """
+        import attr
+
+        state = {a.name: getattr(self, a.name) for a in attr.fields(type(self))}
+        state["_open_reader"] = None
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        """Restore state from pickling/deepcopy.
+
+        attrs slotted classes need ``object.__setattr__`` to set slots directly.
+        Validators are skipped, which is safe since state came from a valid object.
+        """
+        for key, value in state.items():
+            object.__setattr__(self, key, value)
+
     @classmethod
     def from_filename(
         cls,
@@ -955,82 +976,156 @@ class HDF5Video(VideoBackend):
     image_format: str = "hdf5"
     channel_order: str = "RGB"
     plugin: str | None = None
+    _url_file: object | None = attrs.field(
+        init=False, default=None, repr=False, eq=False
+    )
+    _url_headers: dict[str, str] | None = attrs.field(
+        init=False, default=None, repr=False, eq=False
+    )
+    _url_stream_mode: str = attrs.field(
+        init=False, default="blockcache", repr=False, eq=False
+    )
 
     EXTS = ("h5", "hdf5", "slp")
+
+    def _open_h5(self) -> h5py.File:
+        """Open the backing HDF5 file as an ``h5py.File`` in read mode.
+
+        For local paths this opens ``self.filename`` directly. For URLs it lazily
+        opens (and caches on ``self._url_file``) an fsspec-backed file-like object
+        via :func:`sleap_io.io._remote.open_url` and wraps it with ``h5py``.
+
+        Returns:
+            An open ``h5py.File`` handle. The caller owns closing the returned
+            handle; the cached ``self._url_file`` is reused across reads and
+            dropped on pickling.
+        """
+        from sleap_io.io import _remote
+
+        if _remote._is_url(self.filename):
+            if self._url_file is None:
+                self._url_file = _remote.open_url(
+                    self.filename,
+                    headers=self._url_headers,
+                    stream_mode=self._url_stream_mode,
+                )
+            return h5py.File(self._url_file, "r")
+        return h5py.File(self.filename, "r")
+
+    def _release_probe_url_file(self, preexisting: bool) -> None:
+        """Close and drop ``self._url_file`` if a probe opened it.
+
+        Used by :meth:`__attrs_post_init__` so that a remote handle opened just
+        to sniff the dataset/frame-map does not leak and is not reused by later
+        (possibly authenticated) reads. A no-op for local files and when the
+        cached file-like already existed before the probe.
+
+        Args:
+            preexisting: Whether ``self._url_file`` was already set before the
+                probe opened the file (in which case it is left untouched).
+        """
+        if preexisting or self._url_file is None:
+            return
+        try:
+            self._url_file.close()
+        except Exception:  # pragma: no cover - defensive: close() should not raise
+            pass
+        self._url_file = None
+
+    def __getstate__(self) -> dict:
+        """Return state for pickling/deepcopy, dropping unpicklable handles.
+
+        Extends :meth:`VideoBackend.__getstate__` to also drop the cached
+        fsspec-backed ``_url_file`` (reopened lazily by :meth:`_open_h5`).
+        """
+        state = super().__getstate__()
+        state["_url_file"] = None
+        return state
 
     def __attrs_post_init__(self):
         """Auto-detect dataset and frame map heuristically."""
         # Check if the file accessible before applying heuristics.
+        # For URLs, track whether this probe opened the cached fsspec file-like
+        # so it can be released afterwards (it would otherwise leak the handle on
+        # an early return / exception, and a probe-time open may predate the
+        # final auth headers being applied).
+        url_file_preexisting = self._url_file is not None
         try:
-            f = h5py.File(self.filename, "r")
+            f = self._open_h5()
         except OSError:
+            self._release_probe_url_file(url_file_preexisting)
             return
 
-        if self.dataset is None:
-            # Iterate through datasets to find a rank 4 array.
-            def find_movies(name, obj):
-                if isinstance(obj, h5py.Dataset) and obj.ndim == 4:
-                    self.dataset = name
-                    return True
+        try:
+            if self.dataset is None:
+                # Iterate through datasets to find a rank 4 array.
+                def find_movies(name, obj):
+                    if isinstance(obj, h5py.Dataset) and obj.ndim == 4:
+                        self.dataset = name
+                        return True
 
-            f.visititems(find_movies)
+                f.visititems(find_movies)
 
-        if self.dataset is None:
-            # Iterate through datasets to find an embedded video dataset.
-            def find_embedded(name, obj):
-                if isinstance(obj, h5py.Dataset) and name.endswith("/video"):
-                    self.dataset = name
-                    return True
+            if self.dataset is None:
+                # Iterate through datasets to find an embedded video dataset.
+                def find_embedded(name, obj):
+                    if isinstance(obj, h5py.Dataset) and name.endswith("/video"):
+                        self.dataset = name
+                        return True
 
-            f.visititems(find_embedded)
+                f.visititems(find_embedded)
 
-        if self.dataset is None:
-            # Couldn't find video datasets.
-            return
+            if self.dataset is None:
+                # Couldn't find video datasets.
+                return
 
-        if isinstance(f[self.dataset], h5py.Group):
-            # If this is a group, assume it's an embedded video dataset.
-            if "video" in f[self.dataset]:
-                self.dataset = f"{self.dataset}/video"
+            if isinstance(f[self.dataset], h5py.Group):
+                # If this is a group, assume it's an embedded video dataset.
+                if "video" in f[self.dataset]:
+                    self.dataset = f"{self.dataset}/video"
 
-        if self.dataset.split("/")[-1] == "video":
-            # This may be an embedded video dataset. Check for frame map.
-            ds = f[self.dataset]
+            if self.dataset.split("/")[-1] == "video":
+                # This may be an embedded video dataset. Check for frame map.
+                ds = f[self.dataset]
 
-            if "format" in ds.attrs:
-                self.image_format = ds.attrs["format"]
+                if "format" in ds.attrs:
+                    self.image_format = ds.attrs["format"]
 
-            # Read channel_order, with backwards compatibility
-            if "channel_order" in ds.attrs:
-                self.channel_order = ds.attrs["channel_order"]
-            else:
-                # Backwards compatibility: Check format_id for older files
-                # Prior to format 1.4, embedded images were primarily encoded with
-                # OpenCV which uses BGR, so default to BGR for older formats
-                if "metadata" in f and "format_id" in f["metadata"].attrs:
-                    format_id = f["metadata"].attrs["format_id"]
-                    if format_id < 1.4:
-                        self.channel_order = "BGR"  # Legacy default
-                # If no format_id found, assume BGR (safest legacy default)
-                # since most embedded images before this change used OpenCV
+                # Read channel_order, with backwards compatibility
+                if "channel_order" in ds.attrs:
+                    self.channel_order = ds.attrs["channel_order"]
+                else:
+                    # Backwards compatibility: Check format_id for older files
+                    # Prior to format 1.4, embedded images were primarily encoded
+                    # with OpenCV which uses BGR, so default to BGR for older
+                    # formats
+                    if "metadata" in f and "format_id" in f["metadata"].attrs:
+                        format_id = f["metadata"].attrs["format_id"]
+                        if format_id < 1.4:
+                            self.channel_order = "BGR"  # Legacy default
+                    # If no format_id found, assume BGR (safest legacy default)
+                    # since most embedded images before this change used OpenCV
 
-            if "frame_numbers" in ds.parent:
-                frame_numbers = ds.parent["frame_numbers"][:].astype(int)
-                self.frame_map = {frame: idx for idx, frame in enumerate(frame_numbers)}
-                self.source_inds = frame_numbers
+                if "frame_numbers" in ds.parent:
+                    frame_numbers = ds.parent["frame_numbers"][:].astype(int)
+                    self.frame_map = {
+                        frame: idx for idx, frame in enumerate(frame_numbers)
+                    }
+                    self.source_inds = frame_numbers
 
-            if "source_video" in ds.parent:
-                self.source_filename = json.loads(
-                    ds.parent["source_video"].attrs["json"]
-                )["backend"]["filename"]
+                if "source_video" in ds.parent:
+                    self.source_filename = json.loads(
+                        ds.parent["source_video"].attrs["json"]
+                    )["backend"]["filename"]
 
-            # Read FPS from attributes if present
-            if "fps" in ds.attrs:
-                self._fps = float(ds.attrs["fps"])
-            elif "fps" in ds.parent.attrs:
-                self._fps = float(ds.parent.attrs["fps"])
-
-        f.close()
+                # Read FPS from attributes if present
+                if "fps" in ds.attrs:
+                    self._fps = float(ds.attrs["fps"])
+                elif "fps" in ds.parent.attrs:
+                    self._fps = float(ds.parent.attrs["fps"])
+        finally:
+            f.close()
+            self._release_probe_url_file(url_file_preexisting)
 
         # Set default plugin if not specified (use image plugin, not video plugin)
         if self.plugin is None:
@@ -1046,13 +1141,13 @@ class HDF5Video(VideoBackend):
     @property
     def num_frames(self) -> int:
         """Number of frames in the video."""
-        with h5py.File(self.filename, "r") as f:
+        with self._open_h5() as f:
             return f[self.dataset].shape[0]
 
     @property
     def img_shape(self) -> tuple[int, int, int]:
         """Shape of a single frame in the video as `(height, width, channels)`."""
-        with h5py.File(self.filename, "r") as f:
+        with self._open_h5() as f:
             ds = f[self.dataset]
 
             img_shape = None
@@ -1181,10 +1276,10 @@ class HDF5Video(VideoBackend):
         # Read directly from dataset
         if self.keep_open:
             if self._open_reader is None:
-                self._open_reader = h5py.File(self.filename, "r")
+                self._open_reader = self._open_h5()
             f = self._open_reader
         else:
-            f = h5py.File(self.filename, "r")
+            f = self._open_h5()
 
         ds = f[self.dataset]
         raw_bytes = ds[internal_idx]
@@ -1218,10 +1313,10 @@ class HDF5Video(VideoBackend):
         """
         if self.keep_open:
             if self._open_reader is None:
-                self._open_reader = h5py.File(self.filename, "r")
+                self._open_reader = self._open_h5()
             f = self._open_reader
         else:
-            f = h5py.File(self.filename, "r")
+            f = self._open_h5()
 
         ds = f[self.dataset]
 
@@ -1255,10 +1350,10 @@ class HDF5Video(VideoBackend):
         """
         if self.keep_open:
             if self._open_reader is None:
-                self._open_reader = h5py.File(self.filename, "r")
+                self._open_reader = self._open_h5()
             f = self._open_reader
         else:
-            f = h5py.File(self.filename, "r")
+            f = self._open_h5()
 
         if self.frame_map:
             frame_inds = [self.frame_map[idx] for idx in frame_inds]

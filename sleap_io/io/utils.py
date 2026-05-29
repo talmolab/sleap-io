@@ -10,11 +10,40 @@ import h5py  # type: ignore[import]
 import numpy as np
 
 
-def read_hdf5_dataset(filename: str, dataset: str) -> np.ndarray:
+def read_hdf5_dataset(
+    filename: str,
+    dataset: str,
+    *,
+    _hdf5_file: h5py.File | None = None,
+) -> np.ndarray:
     """Read data from an HDF5 file.
 
     Args:
         filename: Path to an HDF5 file.
+        dataset: Path to a dataset.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (which is left open for the caller
+            to close); otherwise `filename` is opened and closed internally. This
+            is a private argument used to thread a single open handle (e.g. an
+            fsspec-backed remote file) through multiple reads.
+
+    Returns:
+        The data as an array. If the dataset is a flat 2D array with a
+        ``"field_names"`` JSON attribute (as written by h5wasm), it will be
+        converted to a structured array so that field-name access works
+        identically to compound-dtype datasets written by h5py.
+    """
+    if _hdf5_file is not None:
+        return _read_dataset_from_open_file(_hdf5_file, dataset)
+    with h5py.File(filename, "r") as f:
+        return _read_dataset_from_open_file(f, dataset)
+
+
+def _read_dataset_from_open_file(f: h5py.File, dataset: str) -> np.ndarray:
+    """Read a dataset from an already-open HDF5 file.
+
+    Args:
+        f: An open `h5py.File` handle.
         dataset: Path to a dataset.
 
     Returns:
@@ -23,23 +52,22 @@ def read_hdf5_dataset(filename: str, dataset: str) -> np.ndarray:
         converted to a structured array so that field-name access works
         identically to compound-dtype datasets written by h5py.
     """
-    with h5py.File(filename, "r") as f:
-        ds = f[dataset]
-        data = ds[()]
-        # h5wasm writes flat 2D arrays with column names in a "field_names"
-        # JSON attribute instead of compound dtypes. Convert to a structured
-        # array so downstream code can use field-name access unchanged.
-        if data.ndim == 2 and data.dtype.names is None:
-            field_names_raw = ds.attrs.get("field_names", None)
-            if field_names_raw is not None:
-                if isinstance(field_names_raw, (bytes, np.bytes_)):
-                    field_names_raw = field_names_raw.decode()
-                field_names = json.loads(field_names_raw)
-                dtype = [(name, data.dtype) for name in field_names]
-                structured = np.empty(data.shape[0], dtype=dtype)
-                for i, name in enumerate(field_names):
-                    structured[name] = data[:, i]
-                return structured
+    ds = f[dataset]
+    data = ds[()]
+    # h5wasm writes flat 2D arrays with column names in a "field_names"
+    # JSON attribute instead of compound dtypes. Convert to a structured
+    # array so downstream code can use field-name access unchanged.
+    if data.ndim == 2 and data.dtype.names is None:
+        field_names_raw = ds.attrs.get("field_names", None)
+        if field_names_raw is not None:
+            if isinstance(field_names_raw, (bytes, np.bytes_)):
+                field_names_raw = field_names_raw.decode()
+            field_names = json.loads(field_names_raw)
+            dtype = [(name, data.dtype) for name in field_names]
+            structured = np.empty(data.shape[0], dtype=dtype)
+            for i, name in enumerate(field_names):
+                structured[name] = data[:, i]
+            return structured
     return data
 
 
@@ -70,13 +98,40 @@ def write_hdf5_dataset(filename: str, dataset: str, data: np.ndarray):
         _overwrite_hdf5_dataset(f, dataset, data)
 
 
-def read_hdf5_group(filename: str, group: str = "/") -> dict[str, np.ndarray]:
+def read_hdf5_group(
+    filename: str,
+    group: str = "/",
+    *,
+    _hdf5_file: h5py.File | None = None,
+) -> dict[str, np.ndarray]:
     """Read an entire group from an HDF5 file.
 
     Args:
         filename: Path an HDF5 file.
         group: Path to a group within the HDF5 file. Defaults to "/" (read the entire
             file).
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (which is left open for the caller
+            to close); otherwise `filename` is opened and closed internally. This
+            is a private argument used to thread a single open handle (e.g. an
+            fsspec-backed remote file) through multiple reads.
+
+    Returns:
+        A flat dictionary with keys corresponding to dataset paths and values
+        corresponding to the datasets as arrays.
+    """
+    if _hdf5_file is not None:
+        return _read_group_from_open_file(_hdf5_file, group)
+    with h5py.File(filename, "r") as f:
+        return _read_group_from_open_file(f, group)
+
+
+def _read_group_from_open_file(f: h5py.File, group: str) -> dict[str, np.ndarray]:
+    """Read an entire group from an already-open HDF5 file.
+
+    Args:
+        f: An open `h5py.File` handle.
+        group: Path to a group within the HDF5 file.
 
     Returns:
         A flat dictionary with keys corresponding to dataset paths and values
@@ -88,8 +143,7 @@ def read_hdf5_group(filename: str, group: str = "/") -> dict[str, np.ndarray]:
         if type(v) is h5py.Dataset:
             data[v.name] = v[()]
 
-    with h5py.File(filename, "r") as f:
-        f[group].visititems(read_datasets)
+    f[group].visititems(read_datasets)
 
     return data
 
@@ -139,7 +193,11 @@ def write_hdf5_group(filename: str, data: dict[str, np.ndarray]):
 
 
 def read_hdf5_attrs(
-    filename: str, dataset: str = "/", attribute: str | None = None
+    filename: str,
+    dataset: str = "/",
+    attribute: str | None = None,
+    *,
+    _hdf5_file: h5py.File | None = None,
 ) -> Any | dict[str, Any]:
     """Read attributes from an HDF5 dataset.
 
@@ -148,18 +206,41 @@ def read_hdf5_attrs(
         dataset: Path to a dataset or group from which attributes will be read.
         attribute: If specified, the attribute name to read. If `None` (the default),
             all attributes for the dataset will be returned.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (which is left open for the caller
+            to close); otherwise `filename` is opened and closed internally. This
+            is a private argument used to thread a single open handle (e.g. an
+            fsspec-backed remote file) through multiple reads.
 
     Returns:
         The attributes in a dictionary, or the attribute field if `attribute` was
         provided.
     """
+    if _hdf5_file is not None:
+        return _read_attrs_from_open_file(_hdf5_file, dataset, attribute)
     with h5py.File(filename, "r") as f:
-        ds = f[dataset]
-        if attribute is None:
-            data = dict(ds.attrs)
-        else:
-            data = ds.attrs[attribute]
-    return data
+        return _read_attrs_from_open_file(f, dataset, attribute)
+
+
+def _read_attrs_from_open_file(
+    f: h5py.File, dataset: str, attribute: str | None
+) -> Any | dict[str, Any]:
+    """Read attributes from a dataset in an already-open HDF5 file.
+
+    Args:
+        f: An open `h5py.File` handle.
+        dataset: Path to a dataset or group from which attributes will be read.
+        attribute: If specified, the attribute name to read. If `None`, all
+            attributes for the dataset will be returned.
+
+    Returns:
+        The attributes in a dictionary, or the attribute field if `attribute` was
+        provided.
+    """
+    ds = f[dataset]
+    if attribute is None:
+        return dict(ds.attrs)
+    return ds.attrs[attribute]
 
 
 def write_hdf5_attrs(filename: str, dataset: str, attributes: dict[str, Any]):
@@ -226,7 +307,16 @@ def sanitize_filename(
     Returns:
         A sanitized filename as a string (or list of strings if a list was provided)
         with forward slashes and posix-formatted.
+
+    Notes:
+        URLs (e.g. ``https://...``, ``s3://...``) are returned unchanged. Passing a
+        URL through ``Path`` would collapse the ``//`` after the scheme (turning
+        ``https://host/x`` into ``https:/host/x``), corrupting the URL.
     """
     if isinstance(filename, list):
         return [sanitize_filename(f) for f in filename]
+    from sleap_io.io._remote import _is_url
+
+    if isinstance(filename, str) and _is_url(filename):
+        return filename
     return Path(filename).as_posix().replace("\\", "/")
