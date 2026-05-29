@@ -653,12 +653,60 @@ backends reopen the remote file lazily when you read frames, reusing the same
 streaming configuration.
 
 !!! info "What is and isn't supported"
-    URL loading currently covers `.slp`/`.pkg.slp` only (including through the
-    universal [`load_file`][sleap_io.load_file]). Other labels formats (NWB,
-    COCO, Label Studio, JABS, DLC, TrackMate, LEAP, GeoJSON, Ultralytics) and
-    remote *video* loading (`sio.load_video("https://.../movie.mp4")`) are not
-    yet implemented over URLs and raise `NotImplementedError`; download the file
-    locally first. These are tracked as follow-ups.
+    URL loading currently covers `.slp`/`.pkg.slp` (including through the
+    universal [`load_file`][sleap_io.load_file]) and remote *media video* over
+    `http`/`https` (see [Remote video](#remote-video) below). Other *labels*
+    formats (NWB, COCO, Label Studio, JABS, DLC, TrackMate, LEAP, GeoJSON,
+    Ultralytics) are not yet implemented over URLs and raise
+    `NotImplementedError`; download the file locally first. These are tracked
+    as follow-ups.
+
+### Remote video
+
+[`load_video`][sleap_io.load_video] (and [`load_file`][sleap_io.load_file] for
+video extensions) can read a media video directly from an `http`/`https` URL:
+
+```python
+import sleap_io as sio
+
+# Reads frames lazily over the network; needs the [pyav] extra
+video = sio.load_video("https://example.com/path/video.mp4")
+frame = video[0]  # frames are decoded on demand
+```
+
+Supported container extensions are the same as for local media videos
+(`mp4`, `avi`, `mov`, `mj2`, `mkv`). Only `http` and `https` URLs are accepted
+for video — cloud schemes (`s3://`, `gs://`, …) are not supported for video
+loading. The URL's query string and fragment are ignored when detecting the
+extension, so pre-signed/tokenized URLs like
+`https://host/video.mp4?token=...` route correctly.
+
+Remote video requires the `pyav` extra, which is selected automatically as the
+backend for URLs:
+
+```bash
+pip install "sleap-io[pyav]"   # remote video support (provides `av`)
+```
+
+If the `av` package is missing, `load_video(url)` raises an `ImportError` with
+the install hint above.
+
+!!! danger "Security: remote video hands untrusted data to FFmpeg"
+    Decoding a remote video streams bytes from the URL into FFmpeg (via pyav).
+    FFmpeg's demuxers and decoders are a large, historically
+    vulnerability-prone attack surface (the CVE history for media parsers is
+    extensive), so a malicious URL or stream can attempt to exploit the
+    decoder running in your process.
+
+    To limit risk, sleap-io only ever passes `http`/`https` URLs through to the
+    decoder (no other schemes, no shell/protocol indirection). You should:
+
+    - **Load remote video only from sources you trust.** Treat an arbitrary
+      third-party URL the same as running untrusted code.
+    - **Sandbox untrusted inputs.** If you must decode video from an untrusted
+      source, do it in an isolated environment (container/VM with no
+      credentials, restricted network, and a non-privileged user) and keep
+      FFmpeg/pyav up to date.
 
 ### Supported schemes and install matrix
 
@@ -795,12 +843,15 @@ labels = sio.load_slp(url, stream_mode="filecache", cache_storage=cache_dir)
 - **`RuntimeWarning` about `aiohttp`** — remote loading needs
   `aiohttp >= 3.13.5` for safe cross-origin header stripping. If you see this
   warning, upgrade with `pip install --upgrade 'aiohttp>=3.13.5'`.
-- **`NotImplementedError` from `load_video(url)`** — remote video loading is not
-  supported yet; download the file locally first.
+- **`ImportError` from `load_video(url)`** — remote video loading needs the
+  `pyav` extra; install it with `pip install 'sleap-io[pyav]'`. Only `http`/
+  `https` URLs are supported for video. See [Remote video](#remote-video) for
+  the security considerations of decoding untrusted remote video.
 
 !!! note "See also"
     - [`load_slp`][sleap_io.load_slp]: Full URL keyword-argument reference
     - [`load_file`][sleap_io.load_file]: Universal loader with URL sniffing
+    - [`load_video`][sleap_io.load_video]: Loads remote media video over http/https
     - [`clear_remote_cache`][sleap_io.clear_remote_cache]: Cache cleanup helper
     - [`RemoteIOError`][sleap_io.RemoteIOError]: Remote I/O error surface
     - [SLP Format](formats/slp.md): The on-disk `.slp` layout that URL loading streams
