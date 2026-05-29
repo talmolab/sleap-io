@@ -30,6 +30,7 @@ from html.parser import HTMLParser
 
 from sleap_io.io._remote import (
     _GDRIVE_HOSTS,
+    _SENSITIVE_HEADERS,
     RemoteIOError,
     _is_gdrive_url,
     _redact_url,
@@ -58,6 +59,17 @@ _BROWSER_UA = (
 #: module-level constant so tests can repoint the resolver at a local
 #: ``pytest-httpserver`` without touching real Google Drive.
 _UC_URL_TEMPLATE = "https://drive.google.com/uc?id={file_id}"
+
+#: Exact hostnames a resolved download URL is permitted to target. Drive serves
+#: the interstitial from ``drive.google.com``/``docs.google.com`` and the actual
+#: bytes from ``drive.usercontent.google.com``.
+_DOWNLOAD_HOSTS = frozenset(
+    {"drive.google.com", "docs.google.com", "drive.usercontent.google.com"}
+)
+
+#: The file often downloads from a per-region ``*.googleusercontent.com`` host,
+#: so any subdomain of this suffix is also permitted.
+_DOWNLOAD_HOST_SUFFIX = ".googleusercontent.com"
 
 #: Maximum number of interstitial hops to follow before giving up.
 _MAX_HOPS = 4
@@ -139,6 +151,66 @@ def _parse_gdrive(url: str) -> tuple[str, bool]:
         "Could not parse a Google Drive file ID from the URL; expected an "
         "'id=' query parameter or a '/file/d/<FILE_ID>/view' path "
         f"(got: {_redact_url(url)})."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Download-host allowlist (SSRF guard for scraped next-hop URLs)
+# ---------------------------------------------------------------------------
+
+
+def _allowed_download_hosts() -> frozenset[str]:
+    """Return the set of exact hostnames a download hop may target.
+
+    This is :data:`_DOWNLOAD_HOSTS` unioned with the hostname of the current
+    :data:`_UC_URL_TEMPLATE`. In production the template host is
+    ``drive.google.com`` (already in :data:`_DOWNLOAD_HOSTS`), so the union is a
+    no-op. The tests, however, repoint :data:`_UC_URL_TEMPLATE` at a loopback
+    ``pytest-httpserver`` that serves both the interstitial and the download
+    form-action on the same host; including the template host keeps that test
+    seam working without exposing a second seam or hardcoding a loopback address.
+
+    Returns:
+        The frozenset of permitted exact hostnames.
+    """
+    template_host = urllib.parse.urlparse(_UC_URL_TEMPLATE).hostname
+    if template_host is None:  # pragma: no cover - template always has a host
+        return _DOWNLOAD_HOSTS
+    return _DOWNLOAD_HOSTS | {template_host}
+
+
+def _check_download_host(url: str) -> None:
+    """Reject a download/next-hop URL that does not target a Google host.
+
+    Guards against SSRF and credential exfiltration: the resolution loop follows
+    URLs scraped out of attacker-influenceable interstitial HTML (the
+    ``#download-form`` action and the ``"downloadUrl"`` JSON variant). Without
+    this check, a malicious or compromised interstitial could redirect the
+    cookie- and header-carrying session at an arbitrary host.
+
+    A URL is permitted only when its scheme is ``http``/``https`` and its
+    hostname is in :func:`_allowed_download_hosts` or is a subdomain of
+    :data:`_DOWNLOAD_HOST_SUFFIX`.
+
+    Args:
+        url: The candidate URL to validate before issuing a GET.
+
+    Raises:
+        RemoteIOError: If the URL's scheme or host is not allowed. The URL is
+            redacted by :class:`~sleap_io.io._remote.RemoteIOError` before
+            display.
+    """
+    parsed = urllib.parse.urlparse(url)
+    hostname = parsed.hostname
+    if parsed.scheme in ("http", "https") and hostname is not None:
+        if hostname in _allowed_download_hosts() or hostname.endswith(
+            _DOWNLOAD_HOST_SUFFIX
+        ):
+            return
+    raise RemoteIOError(
+        "Refusing to follow a Google Drive redirect to an unexpected host "
+        "(only Google download hosts are allowed).",
+        url=url,
     )
 
 
@@ -301,7 +373,13 @@ async def _resolve_and_fetch(file_id: str, headers: dict[str, str] | None) -> by
     """
     import aiohttp
 
-    request_headers = {"User-Agent": _BROWSER_UA, **(headers or {})}
+    # Public Drive-link downloads never need credentials; strip any sensitive
+    # user headers (Authorization/Cookie/Proxy-Authorization) before they can be
+    # attached to the session and sent to a scraped next-hop host.
+    safe = {
+        k: v for k, v in (headers or {}).items() if k.lower() not in _SENSITIVE_HEADERS
+    }
+    request_headers = {"User-Agent": _BROWSER_UA, **safe}
     url = _UC_URL_TEMPLATE.format(file_id=file_id)
 
     # ``unsafe=True`` lets the jar keep cookies set by IP-address hosts (Drive
@@ -312,6 +390,9 @@ async def _resolve_and_fetch(file_id: str, headers: dict[str, str] | None) -> by
         headers=request_headers, cookie_jar=cookie_jar
     ) as session:
         for _ in range(_MAX_HOPS):
+            # Validate the initial uc URL and every scraped next-hop before
+            # issuing a GET that carries the session's cookies/headers.
+            _check_download_host(url)
             async with session.get(url, allow_redirects=True) as resp:
                 resp.raise_for_status()
                 content_type = resp.headers.get("Content-Type", "")
@@ -351,7 +432,7 @@ def _open_gdrive(url: str, *, headers: dict[str, str] | None = None) -> io.Bytes
         An :class:`io.BytesIO` positioned at the start of the downloaded bytes.
 
     Raises:
-        ValueError: For folder URLs, unparseable file IDs, or confirmation
+        ValueError: For folder URLs, unparsable file IDs, or confirmation
             pages with no download link.
         RemoteIOError: For HTTP failures, quota/permission pages, or
             non-convergent resolution.

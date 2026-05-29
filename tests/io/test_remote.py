@@ -22,6 +22,7 @@ import aiohttp
 import pytest
 from aiohttp.client_reqrep import ConnectionKey
 from multidict import CIMultiDict
+from pytest_httpserver import HTTPServer
 from werkzeug.wrappers import Response
 from yarl import URL
 
@@ -1289,14 +1290,14 @@ def test_parse_gdrive_folder_raises(url):
         "https://drive.google.com/file/d/ABC/view/extra",
     ],
 )
-def test_parse_gdrive_unparseable_raises(url):
+def test_parse_gdrive_unparsable_raises(url):
     """A URL with no recoverable file ID raises a clear ValueError."""
     with pytest.raises(ValueError, match="Could not parse a Google Drive file ID"):
         _parse_gdrive(url)
 
 
 def test_parse_gdrive_redacts_credentials_in_error():
-    """A token in an unparseable URL is redacted in the raised error."""
+    """A token in an unparsable URL is redacted in the raised error."""
     with pytest.raises(ValueError) as ei:
         _parse_gdrive("https://drive.google.com/nope?token=SECRET")
     assert "SECRET" not in str(ei.value)
@@ -1577,6 +1578,111 @@ def test_open_gdrive_non_convergent_raises(gdrive_uc_template):
 
     with pytest.raises(RemoteIOError, match="did not converge"):
         _open_gdrive("https://drive.google.com/file/d/FILEID/view")
+
+
+def test_gdrive_rejects_foreign_host_next_hop(gdrive_uc_template):
+    """A scraped `#download-form` action on a foreign host is refused (SSRF).
+
+    The `/uc` interstitial (served on the allowed loopback template host) points
+    its download form at a *different* host. The resolver must reject the hop
+    with a `RemoteIOError` before issuing any GET, and the foreign host must
+    never receive the user's `Authorization` header.
+    """
+    # A second server bound to `127.0.0.1` -- a different *hostname* than the
+    # `localhost` template host, so it is NOT in the download-host allowlist.
+    foreign = HTTPServer(host="127.0.0.1", port=0)
+    foreign.start()
+    auth_seen_at_foreign: list[str | None] = []
+
+    def _foreign_handler(request):
+        auth_seen_at_foreign.append(request.headers.get("Authorization"))
+        return Response(_HDF5_BODY, status=200)
+
+    try:
+        foreign.expect_request("/steal").respond_with_handler(_foreign_handler)
+        foreign_url = foreign.url_for("/steal")
+        form = (
+            f'<html><body><form id="download-form" action="{foreign_url}" '
+            'method="get"><input type="hidden" name="id" value="FILEID"></form>'
+            "</body></html>"
+        )
+        gdrive_uc_template.expect_request("/uc").respond_with_data(
+            form, content_type="text/html"
+        )
+
+        with pytest.raises(RemoteIOError, match="unexpected host"):
+            _open_gdrive(
+                "https://drive.google.com/file/d/FILEID/view",
+                headers={"Authorization": "Bearer SECRET"},
+            )
+
+        assert auth_seen_at_foreign == [], (
+            "the foreign host was contacted; the SSRF guard did not fire"
+        )
+    finally:
+        foreign.clear()
+        if foreign.is_running():
+            foreign.stop()
+
+
+def test_gdrive_strips_sensitive_user_headers(gdrive_uc_template):
+    """Authorization/Cookie are stripped; a non-sensitive header is forwarded.
+
+    Drives a successful two-hop resolve with sensitive user headers and asserts
+    neither the `/uc` interstitial nor the `/download` hop on the loopback Drive
+    server received `Authorization`/`Cookie`, while a custom `X-Test` header is
+    forwarded to both hops.
+    """
+    seen_auth: list[str | None] = []
+    seen_cookie: list[str | None] = []
+    seen_xtest: list[str | None] = []
+
+    def _record(request):
+        seen_auth.append(request.headers.get("Authorization"))
+        seen_cookie.append(request.headers.get("Cookie"))
+        seen_xtest.append(request.headers.get("X-Test"))
+
+    download_url = gdrive_uc_template.url_for("/download")
+    form = (
+        f'<html><body><form id="download-form" action="{download_url}" '
+        'method="get"><input type="hidden" name="id" value="FILEID">'
+        '<input type="hidden" name="confirm" value="t"></form></body></html>'
+    )
+
+    def _uc_handler(request):
+        _record(request)
+        return Response(form, status=200, content_type="text/html")
+
+    def _download_handler(request):
+        _record(request)
+        resp = Response(_HDF5_BODY, status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="data.bin"'
+        return resp
+
+    gdrive_uc_template.expect_request("/uc").respond_with_handler(_uc_handler)
+    gdrive_uc_template.expect_request("/download").respond_with_handler(
+        _download_handler
+    )
+
+    bio = _open_gdrive(
+        "https://drive.google.com/file/d/FILEID/view",
+        headers={
+            "Authorization": "Bearer SECRET",
+            "Cookie": "x=1",
+            "X-Test": "keep-me",
+        },
+    )
+
+    assert bio.read() == _HDF5_BODY
+    assert seen_auth and all(a is None for a in seen_auth), (
+        "Authorization was forwarded to the Drive server (not stripped)"
+    )
+    assert seen_cookie and all(c is None for c in seen_cookie), (
+        "Cookie was forwarded to the Drive server (not stripped)"
+    )
+    assert seen_xtest == ["keep-me", "keep-me"], (
+        "a non-sensitive custom header should be forwarded to both hops"
+    )
 
 
 @pytest.mark.live
