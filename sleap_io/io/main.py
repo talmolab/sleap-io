@@ -1100,20 +1100,20 @@ _URL_UNAMBIGUOUS_EXTS: dict[str, str] = {
 _URL_AMBIGUOUS_EXTS = frozenset({".h5", ".json", ".csv"})
 
 
-#: URL-loadable formats. Only `.slp` (and `.pkg.slp`) loading is implemented
-#: for remote URLs in this PR; every other format's loader opens the path
-#: locally and would fail with a cryptic `OSError` over a URL, so those are
-#: gated behind a clean `NotImplementedError` (mirroring `load_video(url)`).
-_URL_IMPLEMENTED_FORMATS = frozenset({"slp"})
+#: URL-loadable formats. Only `slp` (`.slp`/`.pkg.slp`) and `video` (remote
+#: media via pyav) loading are implemented for remote URLs; every other
+#: format's loader opens the path locally and would fail with a cryptic
+#: `OSError` over a URL, so those are gated behind a clean `NotImplementedError`.
+_URL_IMPLEMENTED_FORMATS = frozenset({"slp", "video"})
 
 
 def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video:
     """Dispatch a URL to a concrete loader given a resolved format string.
 
-    Only the `slp` format is URL-aware in this PR; every other format's loader
-    opens the path with a local file `open()` and would fail with a cryptic
-    `OSError` over a URL, so those are gated behind a clean `NotImplementedError`
-    (mirroring `load_video(url)`).
+    Only the `slp` (labels) and `video` (media) formats are URL-aware; every
+    other format's loader opens the path with a local file `open()` and would
+    fail with a cryptic `OSError` over a URL, so those are gated behind a clean
+    `NotImplementedError`.
 
     Args:
         filename: The URL to load.
@@ -1126,7 +1126,7 @@ def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video
     Raises:
         ValueError: If `format` is not a recognized format.
         NotImplementedError: If `format` is recognized but remote loading for it
-            is not yet implemented (every format other than `slp`).
+            is not yet implemented (every format other than `slp`/`video`).
     """
     from sleap_io.io import _remote
 
@@ -1158,6 +1158,8 @@ def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video
             "Download the file locally first."
         )
 
+    if format == "video":
+        return load_video(filename, **kwargs)
     return load_slp(filename, **kwargs)
 
 
