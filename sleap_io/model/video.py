@@ -435,7 +435,12 @@ class Video:
         from sleap_io.io._remote import _head_or_range_probe
 
         key = (self.filename, dataset)
-        ttl = float(os.environ.get("SLEAP_IO_EXISTS_TTL", "60"))
+        try:
+            ttl = float(os.environ.get("SLEAP_IO_EXISTS_TTL", "60"))
+        except ValueError:
+            # A malformed env value must not break the never-raise bool
+            # contract of exists()/is_open; fall back to the 60s default.
+            ttl = 60.0
         cached = self._exists_cache.get(key)
         if cached is not None and (time.monotonic() - cached[1]) < ttl:
             return cached[0]

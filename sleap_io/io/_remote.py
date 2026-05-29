@@ -336,6 +336,27 @@ async def _safe_get_client(**client_kwargs: Any):
     return aiohttp.ClientSession(trace_configs=[trace_config], **client_kwargs)
 
 
+def _identity_headers(headers: dict[str, str] | None) -> dict[str, str]:
+    """Merge user headers but force ``Accept-Encoding: identity`` to win.
+
+    Identity encoding is required on every ranged HTTP request to avoid the
+    gzip/content-length ambiguity. Any user-supplied ``Accept-Encoding`` (in any
+    casing, since aiohttp coalesces header keys case-insensitively) is dropped so
+    the identity guarantee cannot be silently weakened.
+
+    Args:
+        headers: Optional user-supplied HTTP headers.
+
+    Returns:
+        A new header mapping with ``Accept-Encoding`` forced to ``identity``.
+    """
+    merged = {
+        k: v for k, v in (headers or {}).items() if k.lower() != "accept-encoding"
+    }
+    merged["Accept-Encoding"] = "identity"
+    return merged
+
+
 def _build_fsspec_filesystem(
     scheme: str,
     *,
@@ -369,8 +390,8 @@ def _build_fsspec_filesystem(
         from fsspec.implementations.http import HTTPFileSystem
 
         # Always set identity encoding to avoid the gzip/content-length
-        # ambiguity for ranged reads.
-        merged = {"Accept-Encoding": "identity", **(headers or {})}
+        # ambiguity for ranged reads (user headers cannot override it).
+        merged = _identity_headers(headers)
         return HTTPFileSystem(
             client_kwargs={"headers": merged},
             get_client=_safe_get_client,
@@ -390,7 +411,7 @@ def _http_inner_options(headers: dict[str, str] | None) -> dict[str, Any]:
     Returns:
         A mapping suitable for the ``http=`` kwarg of ``fsspec.open``.
     """
-    merged = {"Accept-Encoding": "identity", **(headers or {})}
+    merged = _identity_headers(headers)
     return {"client_kwargs": {"headers": merged}, "get_client": _safe_get_client}
 
 

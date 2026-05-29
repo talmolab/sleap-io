@@ -529,6 +529,70 @@ def test_load_file_url_explicit_format_skips_sniff(httpserver, slp_minimal):
     assert len(labels) == 1
 
 
+def test_load_file_url_unsupported_format_redacts_credentials():
+    """An explicit unsupported `format` on a URL raises with a redacted URL.
+
+    The `ValueError` from the URL dispatcher must not leak userinfo or
+    token-like query parameters (S4).
+    """
+    url = "https://user:s3cr3t@example.com/data.slp?token=TOPSECRET"
+    with pytest.raises(ValueError) as exc_info:
+        load_file(url, format="not_a_real_format")
+    message = str(exc_info.value)
+    assert "s3cr3t" not in message
+    assert "TOPSECRET" not in message
+    assert "example.com" in message
+
+
+def test_load_file_url_ambiguous_sniff_false_redacts_credentials():
+    """`load_file(url, sniff=False)` on an ambiguous extension redacts the URL.
+
+    No network request is issued: the error is raised before any I/O.
+    """
+    url = "https://user:s3cr3t@example.com/data.h5?token=TOPSECRET"
+    with pytest.raises(ValueError) as exc_info:
+        load_file(url, sniff=False)
+    message = str(exc_info.value)
+    assert "s3cr3t" not in message
+    assert "TOPSECRET" not in message
+    assert "example.com" in message
+
+
+def test_load_file_url_unknown_extension_redacts_credentials():
+    """A URL with an unrecognized extension raises with a redacted URL.
+
+    No network request is issued: the error is raised before any I/O.
+    """
+    url = "https://user:s3cr3t@example.com/data.unknownext?token=TOPSECRET"
+    with pytest.raises(ValueError) as exc_info:
+        load_file(url)
+    message = str(exc_info.value)
+    assert "s3cr3t" not in message
+    assert "TOPSECRET" not in message
+    assert "example.com" in message
+
+
+def test_load_file_url_unrecognized_content_redacts_credentials(httpserver):
+    """A sniffed-but-unsupported body raises with a redacted URL (S4).
+
+    The body is binary that the magic sniffer classifies as `unknown`, so the
+    ambiguous-extension sniff path reaches the unsupported-content branch.
+    """
+    httpserver.expect_request("/data.h5").respond_with_data(
+        b"\xff\xfe\x00\x01nonsense-binary-body",
+        content_type="application/octet-stream",
+    )
+    base = httpserver.url_for("/data.h5")
+    # Inject credentials + token into the loopback URL the loader surfaces.
+    scheme, rest = base.split("://", 1)
+    url = f"{scheme}://user:s3cr3t@{rest}?token=TOPSECRET"
+    with pytest.raises(ValueError) as exc_info:
+        load_file(url)
+    message = str(exc_info.value)
+    assert "s3cr3t" not in message
+    assert "TOPSECRET" not in message
+
+
 def test_load_slp_url_cloud_missing_extra():
     """A missing cloud adapter raises `ImportError` with the `[cloud]` hint.
 

@@ -30,7 +30,9 @@ from sleap_io.io._remote import (
     _build_fsspec_filesystem,
     _find_response_error,
     _head_or_range_probe,
+    _http_inner_options,
     _identify_magic,
+    _identity_headers,
     _is_url,
     _mark_cache_dir,
     _raise_remote,
@@ -973,6 +975,27 @@ def test_build_fsspec_filesystem_http_sets_identity_encoding(httpserver):
 
     assert encodings_seen
     assert all(enc == "identity" for enc in encodings_seen)
+
+
+def test_identity_headers_user_cannot_override_accept_encoding():
+    """User-supplied Accept-Encoding (any casing) cannot weaken identity (S5)."""
+    # Exact-case override.
+    assert _identity_headers({"Accept-Encoding": "gzip"}) == {
+        "Accept-Encoding": "identity"
+    }
+    # Different casing (aiohttp coalesces header keys case-insensitively).
+    merged = _identity_headers({"accept-encoding": "gzip, br", "X-Custom": "1"})
+    assert merged["Accept-Encoding"] == "identity"
+    assert "accept-encoding" not in merged
+    assert merged["X-Custom"] == "1"
+    # None headers still yields the identity guarantee.
+    assert _identity_headers(None) == {"Accept-Encoding": "identity"}
+
+
+def test_http_inner_options_forces_identity_encoding():
+    """`_http_inner_options` forces identity even if the user passes gzip (S5)."""
+    opts = _http_inner_options({"Accept-Encoding": "gzip"})
+    assert opts["client_kwargs"]["headers"]["Accept-Encoding"] == "identity"
 
 
 def test_open_url_download_mode_returns_bytesio(httpserver):

@@ -1115,6 +1115,8 @@ def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video
     Raises:
         ValueError: If `format` is not a recognized format.
     """
+    from sleap_io.io import _remote
+
     if format != "slp":
         kwargs = {k: v for k, v in kwargs.items() if k not in _URL_STREAM_KWARGS}
     dispatch: dict[str, Callable[..., Labels | Video]] = {
@@ -1136,7 +1138,9 @@ def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video
         return Labels(rois=load_geojson(filename, **kwargs))
     loader = dispatch.get(format)
     if loader is None:
-        raise ValueError(f"Unsupported format '{format}' for URL: '{filename}'.")
+        raise ValueError(
+            f"Unsupported format '{format}' for URL: '{_remote._redact_url(filename)}'."
+        )
     return loader(filename, **kwargs)
 
 
@@ -1227,9 +1231,9 @@ def _load_file_url(
         if sniff is False:
             raise ValueError(
                 f"Cannot infer format for URL with ambiguous extension "
-                f"'{ext}' when sniff=False: '{filename}'. Pass an explicit "
-                "format= (e.g. 'analysis_h5', 'jabs', 'coco', 'labelstudio', "
-                "'alphatracker', 'dlc', 'trackmate', 'csv')."
+                f"'{ext}' when sniff=False: '{_remote._redact_url(filename)}'. "
+                "Pass an explicit format= (e.g. 'analysis_h5', 'jabs', 'coco', "
+                "'labelstudio', 'alphatracker', 'dlc', 'trackmate', 'csv')."
             )
         headers = kwargs.get("headers")
         stream_mode = kwargs.get("stream_mode", "auto")
@@ -1252,7 +1256,7 @@ def _load_file_url(
             return _dispatch_url_format(filename, "csv", **kwargs)
         raise ValueError(
             f"Unsupported or unrecognized content (sniffed '{family}') for "
-            f"URL: '{filename}'. Pass an explicit format=."
+            f"URL: '{_remote._redact_url(filename)}'. Pass an explicit format=."
         )
 
     # Video extension fallback (the genuine video extensions).
@@ -1260,7 +1264,9 @@ def _load_file_url(
         if filename.lower().endswith(vid_ext.lower()):
             return _dispatch_url_format(filename, "video", **kwargs)
 
-    raise ValueError(f"Could not infer format from URL: '{filename}'.")
+    raise ValueError(
+        f"Could not infer format from URL: '{_remote._redact_url(filename)}'."
+    )
 
 
 def _detect_alphatracker_url(url: str, headers: dict[str, str] | None) -> bool:

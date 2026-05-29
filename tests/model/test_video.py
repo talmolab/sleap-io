@@ -242,6 +242,24 @@ def test_video_exists_replace_filename_clears_cache(httpserver, monkeypatch):
     assert _count_requests(httpserver, "/labels.slp") == 2
 
 
+def test_video_exists_url_malformed_ttl_env(httpserver, monkeypatch):
+    """A malformed `SLEAP_IO_EXISTS_TTL` must not break the never-raise contract.
+
+    `exists()` (and `is_open`, which a GUI render loop polls) is contractually a
+    bool predicate; a bad env value should fall back to the default TTL rather
+    than raising `ValueError`.
+    """
+    monkeypatch.setenv("SLEAP_IO_EXISTS_TTL", "notanumber")
+    httpserver.expect_request("/labels.slp").respond_with_data(
+        b"hello world data", content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.slp")
+
+    video = Video(filename=url, open_backend=False)
+    # Must return a bool, not raise.
+    assert video.exists() is True
+
+
 def test_video_set_plugin(centered_pair_low_quality_path):
     """Test Video.set_video_plugin() method."""
     import sleap_io as sio
