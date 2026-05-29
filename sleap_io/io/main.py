@@ -825,11 +825,29 @@ def save_coco(
 def load_video(filename: str, **kwargs) -> Video:
     """Load a video file.
 
+    Remote media videos can be loaded from ``http``/``https`` URLs (see the
+    ``filename`` argument). Only ``http``/``https`` URLs are supported for video
+    (cloud schemes are not), and the ``av`` package is required (install with
+    ``pip install 'sleap-io[pyav]'``).
+
+    Warning:
+        Decoding a remote video streams bytes from the URL into FFmpeg (via
+        pyav), whose demuxers/decoders are a large, historically
+        vulnerability-prone attack surface. Load remote video only from trusted
+        sources, and sandbox untrusted inputs (e.g. decode in an isolated
+        container/VM with no credentials and a restricted network). sleap-io
+        only passes ``http``/``https`` URLs through to the decoder.
+
     Args:
         filename: The filename(s) of the video. Supported extensions: "mp4", "avi",
             "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
             "tiff", "bmp", "seq". If the filename is a list, a list of image filenames
             are expected. If filename is a folder, it will be searched for images.
+            May also be an ``http(s)://`` URL pointing to a remote media video
+            (one of "mp4", "avi", "mov", "mj2", "mkv"). Remote videos are read
+            with the pyav plugin, which is selected automatically for URLs; it
+            requires the ``av`` package (install with
+            ``pip install 'sleap-io[pyav]'``). See the security warning above.
         **kwargs: Additional arguments passed to `Video.from_filename`.
             Currently supports:
             - dataset: Name of dataset in HDF5 file.
@@ -886,15 +904,6 @@ def load_video(filename: str, **kwargs) -> Video:
         set_default_video_plugin: Set the default video plugin globally.
         get_default_video_plugin: Get the current default video plugin.
     """
-    from sleap_io.io import _remote
-
-    if _remote._is_url(filename):
-        raise NotImplementedError(
-            "Remote video loading is not yet implemented "
-            f"(URL: {_remote._redact_url(str(filename))}). Tracked as a "
-            "follow-up PR in the remote loaders feature stack. For now, "
-            "download the file locally before calling load_video()."
-        )
     return Video.from_filename(filename, **kwargs)
 
 
@@ -1091,20 +1100,20 @@ _URL_UNAMBIGUOUS_EXTS: dict[str, str] = {
 _URL_AMBIGUOUS_EXTS = frozenset({".h5", ".json", ".csv"})
 
 
-#: URL-loadable formats. Only `.slp` (and `.pkg.slp`) loading is implemented
-#: for remote URLs in this PR; every other format's loader opens the path
-#: locally and would fail with a cryptic `OSError` over a URL, so those are
-#: gated behind a clean `NotImplementedError` (mirroring `load_video(url)`).
-_URL_IMPLEMENTED_FORMATS = frozenset({"slp"})
+#: URL-loadable formats. Only `slp` (`.slp`/`.pkg.slp`) and `video` (remote
+#: media via pyav) loading are implemented for remote URLs; every other
+#: format's loader opens the path locally and would fail with a cryptic
+#: `OSError` over a URL, so those are gated behind a clean `NotImplementedError`.
+_URL_IMPLEMENTED_FORMATS = frozenset({"slp", "video"})
 
 
 def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video:
     """Dispatch a URL to a concrete loader given a resolved format string.
 
-    Only the `slp` format is URL-aware in this PR; every other format's loader
-    opens the path with a local file `open()` and would fail with a cryptic
-    `OSError` over a URL, so those are gated behind a clean `NotImplementedError`
-    (mirroring `load_video(url)`).
+    Only the `slp` (labels) and `video` (media) formats are URL-aware; every
+    other format's loader opens the path with a local file `open()` and would
+    fail with a cryptic `OSError` over a URL, so those are gated behind a clean
+    `NotImplementedError`.
 
     Args:
         filename: The URL to load.
@@ -1117,7 +1126,7 @@ def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video
     Raises:
         ValueError: If `format` is not a recognized format.
         NotImplementedError: If `format` is recognized but remote loading for it
-            is not yet implemented (every format other than `slp`).
+            is not yet implemented (every format other than `slp`/`video`).
     """
     from sleap_io.io import _remote
 
@@ -1149,6 +1158,8 @@ def _dispatch_url_format(filename: str, format: str, **kwargs) -> Labels | Video
             "Download the file locally first."
         )
 
+    if format == "video":
+        return load_video(filename, **kwargs)
     return load_slp(filename, **kwargs)
 
 
@@ -1267,10 +1278,16 @@ def _load_file_url(
             f"URL: '{_remote._redact_url(filename)}'. Pass an explicit format=."
         )
 
-    # Video extension fallback (the genuine video extensions).
-    for vid_ext in Video.EXTS:
-        if filename.lower().endswith(vid_ext.lower()):
-            return _dispatch_url_format(filename, "video", **kwargs)
+    # Video extension fallback (the genuine video extensions). Match against the
+    # already-parsed, path-stripped ``ext`` (computed above, e.g. ``".mp4"``)
+    # rather than the raw URL, so query-stringed/fragment URLs (e.g. presigned
+    # S3/GCS links with a ``?token=`` or ``#fragment``) still match. ``ext``
+    # carries a leading dot while ``Video.EXTS`` entries do not, so compare with
+    # ``endswith``. This mirrors the ``_extension_token`` path-stripping in
+    # ``VideoBackend.from_filename`` so that ``load_file`` and ``load_video``
+    # agree on the same URL.
+    if ext.endswith(tuple(vid_ext.lower() for vid_ext in Video.EXTS)):
+        return _dispatch_url_format(filename, "video", **kwargs)
 
     raise ValueError(
         f"Could not infer format from URL: '{_remote._redact_url(filename)}'."

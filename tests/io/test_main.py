@@ -3,9 +3,10 @@
 import shutil
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-from sleap_io import Labels, LabelsSet, RemoteIOError, clear_remote_cache
+from sleap_io import Labels, LabelsSet, RemoteIOError, Video, clear_remote_cache
 from sleap_io.io._remote import _require_package
 from sleap_io.io.main import (
     load_file,
@@ -533,22 +534,84 @@ def test_load_slp_url_label_image_roundtrip(httpserver, tmp_path, lazy):
     np.testing.assert_array_equal(rli.data, data)
 
 
-def test_load_video_url_raises_not_implemented():
-    """`load_video(url)` raises `NotImplementedError` with a redacted URL.
+def test_load_video_url_reads_first_frame(httpserver, centered_pair_low_quality_path):
+    """`load_video(url)` reads a first frame matching the local file's frame."""
+    file_bytes = Path(centered_pair_low_quality_path).read_bytes()
+    httpserver.expect_request("/movie.mp4").respond_with_data(
+        file_bytes, content_type="video/mp4"
+    )
+    url = httpserver.url_for("/movie.mp4")
 
-    The message must mention the follow-up PR and must not leak credentials.
+    local = load_video(centered_pair_low_quality_path)
+    remote = load_video(url)
+    assert isinstance(remote, Video)
+
+    local_frame = local[0]
+    remote_frame = remote[0]
+    assert remote_frame.shape == local_frame.shape
+    assert remote_frame.dtype == local_frame.dtype
+    assert np.array_equal(remote_frame, local_frame)
+
+
+def test_load_file_url_routes_to_video(httpserver, centered_pair_low_quality_path):
+    """`load_file` routes a `.mp4` URL to `load_video`, returning a `Video`."""
+    file_bytes = Path(centered_pair_low_quality_path).read_bytes()
+    httpserver.expect_request("/movie.mp4").respond_with_data(
+        file_bytes, content_type="video/mp4"
+    )
+    url = httpserver.url_for("/movie.mp4")
+
+    video = load_file(url)
+    assert isinstance(video, Video)
+    assert video[0].shape == (384, 384, 1)
+
+
+def test_load_file_url_video_with_query_string(
+    httpserver, centered_pair_low_quality_path
+):
+    """`load_file` routes a query-stringed `.mp4` URL to `load_video`.
+
+    Regression: the video-extension fallback previously matched against the raw
+    URL, so a presigned/CDN-tokenized URL (which does not end in ``.mp4``) fell
+    through to a `ValueError`, while `load_video` on the same URL succeeded.
     """
-    url = "https://user:secret@example.com/movie.mp4?token=abc123"
-    with pytest.raises(NotImplementedError) as exc_info:
-        load_video(url)
+    file_bytes = Path(centered_pair_low_quality_path).read_bytes()
+    httpserver.expect_request("/movie.mp4").respond_with_data(
+        file_bytes, content_type="video/mp4"
+    )
+    url = httpserver.url_for("/movie.mp4") + "?token=secret&x=1"
 
+    video = load_file(url)
+    assert isinstance(video, Video)
+    assert video[0].shape == (384, 384, 1)
+
+
+def test_load_file_url_video_with_fragment(httpserver, centered_pair_low_quality_path):
+    """`load_file` routes a fragment-bearing `.mp4` URL to `load_video`."""
+    file_bytes = Path(centered_pair_low_quality_path).read_bytes()
+    httpserver.expect_request("/movie.mp4").respond_with_data(
+        file_bytes, content_type="video/mp4"
+    )
+    url = httpserver.url_for("/movie.mp4") + "#t=5"
+
+    video = load_file(url)
+    assert isinstance(video, Video)
+
+
+def test_load_file_url_cloud_scheme_video_raises_not_implemented():
+    """A cloud-scheme media URL is rejected with a clean `NotImplementedError`.
+
+    The documented contract is http/https-only for remote video; cloud schemes
+    must not reach the decoder. No network request is issued.
+    """
+    url = "s3://AKIA:secretkey@bucket/video.mp4?X-Amz-Security-Token=topsecret"
+    with pytest.raises(NotImplementedError) as exc_info:
+        load_file(url)
     message = str(exc_info.value)
-    # Follow-up PR is mentioned.
-    assert "follow-up" in message.lower()
-    # Credentials are redacted out of the surfaced URL.
-    assert "secret" not in message
-    assert "abc123" not in message
-    assert "example.com" in message
+    assert "http/https" in message
+    # The raw credentials/token must not leak in the error message.
+    assert "secretkey" not in message
+    assert "topsecret" not in message
 
 
 def test_load_file_url_nwb_raises_not_implemented():

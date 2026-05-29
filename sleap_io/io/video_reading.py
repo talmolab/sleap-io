@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import urllib.parse
 from io import BytesIO
 from pathlib import Path
 
@@ -11,6 +12,8 @@ import h5py
 import imageio.v3 as iio
 import numpy as np
 import simplejson as json
+
+from sleap_io.io import _remote
 
 try:
     import cv2
@@ -291,6 +294,72 @@ def _get_valid_kwargs(cls, kwargs: dict) -> dict:
     return {k: v for k, v in kwargs.items() if k in valid_fields}
 
 
+def _extension_token(filename: str) -> str:
+    """Return the lowercased path portion used for extension matching.
+
+    For local paths this is just the lowercased filename. For URLs it is the
+    lowercased URL *path* (with any ``?query`` / ``#fragment`` stripped) so that
+    a query-stringed URL such as ``https://h/v.mp4?token=x`` still matches the
+    ``mp4`` extension via ``str.endswith``.
+
+    Args:
+        filename: A local path or remote URL.
+
+    Returns:
+        A lowercased string whose suffix is the resource's file extension.
+    """
+    if _remote._is_url(filename):
+        return urllib.parse.urlparse(filename).path.lower()
+    return filename.lower()
+
+
+def _is_pyav_available() -> bool:
+    """Return True if the ``av`` (pyav) package can be imported.
+
+    Used to gate remote (URL) video loading, which relies on pyav. Checks the
+    already-imported module first (the module attempts a top-level ``import av``)
+    and otherwise attempts a fresh import so availability is detected even if the
+    top-level import was skipped.
+
+    Returns:
+        True if ``av`` is importable, else False.
+    """
+    if "av" in sys.modules:
+        return True
+    # Defensive: the module attempts a top-level ``import av``, so in any
+    # environment with the ``[pyav]`` extra (including CI) ``av`` is already in
+    # ``sys.modules`` and the lines below are not reached.
+    import importlib.util  # pragma: no cover
+
+    return importlib.util.find_spec("av") is not None  # pragma: no cover
+
+
+def _fps_from_av_container(filename: str) -> float | None:
+    """Read the frame rate of a (possibly remote) media video via pyav.
+
+    ``av.open`` natively supports ``http(s)://`` URIs, so this works for both
+    local paths and remote URLs without requiring ``imageio-ffmpeg``.
+
+    Args:
+        filename: A local path or remote URL of a media video.
+
+    Returns:
+        The average frame rate as a float, falling back to the stream base rate,
+        or None if no usable rate is present on the video stream.
+    """
+    import av
+
+    container = av.open(filename)
+    try:
+        stream = container.streams.video[0]
+        rate = stream.average_rate
+        if rate is None:  # pragma: no cover - defensive: VFR/odd containers
+            rate = stream.base_rate
+        return float(rate) if rate is not None else None
+    finally:
+        container.close()
+
+
 @attrs.define
 class VideoBackend:
     """Base class for video backends.
@@ -406,15 +475,23 @@ class VideoBackend:
         if isinstance(filename, Path):
             filename = filename.as_posix()
 
-        if type(filename) is str and Path(filename).is_dir():
+        is_url = type(filename) is str and _remote._is_url(filename)
+
+        # Skip local-filesystem dir detection for URLs (``Path.is_dir`` on a URL
+        # is meaningless and would just return False, but avoid the syscall).
+        if type(filename) is str and not is_url and Path(filename).is_dir():
             filename = ImageVideo.find_images(filename)
+
+        # Match extensions against the URL *path* (query/fragment stripped) for
+        # URLs, and the lowercased filename otherwise.
+        ext_token = _extension_token(filename) if type(filename) is str else ""
 
         if type(filename) is list:
             filename = [Path(f).as_posix() for f in filename]
             return ImageVideo(
                 filename, grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
             )
-        elif filename.lower().endswith(("tif", "tiff")):
+        elif ext_token.endswith(("tif", "tiff")):
             # Detect TIFF format
             format_type, metadata = TiffVideo.detect_format(filename)
 
@@ -437,11 +514,11 @@ class VideoBackend:
                     grayscale=grayscale,
                     **_get_valid_kwargs(ImageVideo, kwargs),
                 )
-        elif filename.lower().endswith(tuple(ext.lower() for ext in ImageVideo.EXTS)):
+        elif ext_token.endswith(tuple(ext.lower() for ext in ImageVideo.EXTS)):
             return ImageVideo(
                 [filename], grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
             )
-        elif filename.lower().endswith(".seq"):
+        elif ext_token.endswith(".seq"):
             from sleap_io.io.seq import SeqVideo
 
             return SeqVideo(
@@ -450,14 +527,48 @@ class VideoBackend:
                 keep_open=keep_open,
                 **_get_valid_kwargs(SeqVideo, kwargs),
             )
-        elif filename.lower().endswith(tuple(ext.lower() for ext in MediaVideo.EXTS)):
+        elif ext_token.endswith(tuple(ext.lower() for ext in MediaVideo.EXTS)):
+            media_kwargs = _get_valid_kwargs(MediaVideo, kwargs)
+            if is_url:
+                # Remote media videos are read via pyav (imageio's pyav plugin
+                # forwards http(s) URIs to ``av.open`` natively). Enforce the
+                # documented contract that only http/https URLs are supported:
+                # cloud schemes (s3/gs/gcs/az/abfs) are recognized as remote by
+                # ``_is_url`` but are not safe to hand to ``av.open``, so reject
+                # them cleanly here rather than letting the raw URL reach the
+                # decoder.
+                scheme = urllib.parse.urlparse(filename).scheme.lower()
+                if scheme not in ("http", "https"):
+                    raise NotImplementedError(
+                        "Remote video loading only supports http/https URLs; "
+                        f"got scheme '{scheme}' for "
+                        f"{_remote._redact_url(filename)}. Download the file "
+                        "locally first."
+                    )
+                # Default to pyav when the caller did not request a specific
+                # plugin, and require the ``av`` package up front for a clear
+                # error.
+                if media_kwargs.get("plugin") is None:
+                    media_kwargs["plugin"] = "pyav"
+                if (
+                    normalize_plugin_name(media_kwargs["plugin"]) == "pyav"
+                    and not _is_pyav_available()
+                ):
+                    # Defensive: ``av`` is required for remote loading and is
+                    # always present in the test/CI environment, so this guard
+                    # only fires for an install lacking the ``[pyav]`` extra.
+                    raise ImportError(  # pragma: no cover
+                        "Loading videos from URLs requires the 'av' package "
+                        "(pyav). Install with: pip install 'sleap-io[pyav]'. "
+                        f"(URL: {_remote._redact_url(filename)})"
+                    )
             return MediaVideo(
                 filename,
                 grayscale=grayscale,
                 keep_open=keep_open,
-                **_get_valid_kwargs(MediaVideo, kwargs),
+                **media_kwargs,
             )
-        elif filename.lower().endswith(tuple(ext.lower() for ext in HDF5Video.EXTS)):
+        elif ext_token.endswith(tuple(ext.lower() for ext in HDF5Video.EXTS)):
             return HDF5Video(
                 filename,
                 dataset=dataset,
@@ -781,16 +892,31 @@ class MediaVideo(VideoBackend):
             method for the current plugin:
             - OpenCV: cv2.CAP_PROP_FPS
             - FFMPEG/pyav: imageio metadata
+
+            For remote (URL) filenames the FPS is read directly from the pyav
+            container via ``av.open(url)``. imageio's v2 FFMPEG reader (used for
+            local files) requires the ``imageio-ffmpeg`` package and an ffmpeg
+            executable, which are not guaranteed in a pyav-only install, whereas
+            ``av`` is already required for remote loading.
         """
         # Return cached/explicit value if set
         if self._fps is not None:
             return self._fps
 
-        # Read from container metadata
+        # Read from container metadata and cache the result so repeated access
+        # is O(1). This matters most for the remote (URL) path: ``av.open`` over
+        # http does not use Range requests, so each uncached read re-streams the
+        # entire video. Public helpers such as ``Video.frame_to_seconds`` read
+        # ``fps`` multiple times per call, which would otherwise re-download the
+        # whole video each time. Container fps is immutable for a given file, and
+        # the cache slot is cleared when the filename changes (see
+        # ``Video.replace_filename``), so caching is safe.
         try:
             if self.plugin == "opencv":
                 fps = self.reader.get(cv2.CAP_PROP_FPS)
-                return fps if fps > 0 else None
+                rate = fps if fps > 0 else None
+            elif _remote._is_url(self.filename):
+                rate = _fps_from_av_container(self.filename)
             else:
                 # Use imageio v2 API to get metadata (v3 improps doesn't include fps)
                 import imageio.v2 as iio_v2
@@ -799,9 +925,11 @@ class MediaVideo(VideoBackend):
                 meta = reader.get_meta_data()
                 reader.close()
                 fps = meta.get("fps")
-                return float(fps) if fps is not None else None
+                rate = float(fps) if fps is not None else None
         except Exception:
             return None
+        self._fps = rate
+        return rate
 
     @fps.setter
     def fps(self, value: float | None) -> None:
