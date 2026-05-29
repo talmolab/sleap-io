@@ -474,9 +474,15 @@ def _build_fsspec_filesystem(
         # Always set identity encoding to avoid the gzip/content-length
         # ambiguity for ranged reads (user headers cannot override it).
         merged = _identity_headers(headers)
+        # ``skip_instance_cache`` opts out of fsspec's ``_Cached`` metaclass
+        # instance cache. That cache keys on the constructor kwargs (including
+        # the per-request ``headers`` dict) and never evicts, so a long-lived
+        # process loading many URLs with rotating tokens would otherwise
+        # accumulate one filesystem instance per distinct header set.
         return HTTPFileSystem(
             client_kwargs={"headers": merged},
             get_client=_safe_get_client,
+            skip_instance_cache=True,
         )
 
     # s3 / gs / gcs / az / abfs: fsspec's per-scheme registry handles auth via
@@ -494,7 +500,14 @@ def _http_inner_options(headers: dict[str, str] | None) -> dict[str, Any]:
         A mapping suitable for the ``http=`` kwarg of ``fsspec.open``.
     """
     merged = _identity_headers(headers)
-    return {"client_kwargs": {"headers": merged}, "get_client": _safe_get_client}
+    # ``skip_instance_cache`` keeps the inner http filesystem of a chained
+    # ``simplecache::``/``filecache::`` open out of fsspec's never-evicting
+    # per-args instance cache (see :func:`_build_fsspec_filesystem`).
+    return {
+        "client_kwargs": {"headers": merged},
+        "get_client": _safe_get_client,
+        "skip_instance_cache": True,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -659,7 +672,11 @@ def open_url(
         def _open():
             import fsspec
 
-            simplecache_opts: dict[str, Any] = {}
+            # ``skip_instance_cache`` on the outer cache filesystem too: the
+            # chained ``fsspec.open`` builds (and caches) a SimpleCacheFileSystem
+            # eagerly, so without this the outer cache grows per distinct header
+            # set even though the inner http fs is already skipped.
+            simplecache_opts: dict[str, Any] = {"skip_instance_cache": True}
             if cache_storage is not None:
                 _mark_cache_dir(cache_storage)
                 simplecache_opts["cache_storage"] = str(cache_storage)
@@ -676,7 +693,11 @@ def open_url(
             import fsspec
 
             options: dict[str, Any] = {
-                "expiry_time": cache_expiry if cache_expiry is not None else 3600
+                "expiry_time": cache_expiry if cache_expiry is not None else 3600,
+                # See the ``cache`` branch above: skip fsspec's instance cache on
+                # the outer WholeFileCacheFileSystem so it does not grow per
+                # distinct header set in a long-lived process.
+                "skip_instance_cache": True,
             }
             if cache_storage is not None:
                 _mark_cache_dir(cache_storage)

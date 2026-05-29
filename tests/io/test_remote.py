@@ -21,6 +21,11 @@ from pathlib import Path
 import aiohttp
 import pytest
 from aiohttp.client_reqrep import ConnectionKey
+from fsspec.implementations.cached import (
+    SimpleCacheFileSystem,
+    WholeFileCacheFileSystem,
+)
+from fsspec.implementations.http import HTTPFileSystem
 from multidict import CIMultiDict
 from pytest_httpserver import HTTPServer
 from werkzeug.wrappers import Response
@@ -1213,6 +1218,104 @@ def test_open_url_blockcache_explicit_max_blocks(httpserver):
         assert file_like.read(8) == b"\x89HDF\r\n\x1a\n"
     finally:
         file_like.close()
+
+
+# ---------------------------------------------------------------------------
+# fsspec instance-cache growth guard (skip_instance_cache on header-bearing
+# filesystems so rotating per-request tokens do not accumulate fs instances).
+# ---------------------------------------------------------------------------
+
+
+def test_build_fsspec_filesystem_http_skips_instance_cache(httpserver):
+    """Distinct per-request headers do not grow `HTTPFileSystem._cache`."""
+    httpserver.expect_request("/data").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/data")
+
+    before = len(HTTPFileSystem._cache)
+    for i in range(5):
+        fs = _build_fsspec_filesystem("https", headers={"Authorization": f"Bearer t{i}"})
+        # The filesystem still works: a ranged read returns the served body.
+        with fs.open(url, mode="rb") as f:
+            assert f.read(8) == b"\x89HDF\r\n\x1a\n"
+    assert len(HTTPFileSystem._cache) == before
+
+
+def test_http_inner_options_marks_skip_instance_cache():
+    """`_http_inner_options` opts the inner http fs out of the instance cache."""
+    opts = _http_inner_options({"Authorization": "x"})
+    assert opts["skip_instance_cache"] is True
+    # The identity-encoding guarantee and client wiring are still present.
+    assert opts["client_kwargs"]["headers"]["Accept-Encoding"] == "identity"
+    assert "get_client" in opts
+
+
+def test_open_url_cache_mode_does_not_grow_instance_cache(httpserver, tmp_path):
+    """`cache` mode keeps both the SimpleCache and inner HTTP caches flat."""
+    httpserver.expect_request("/data.slp").respond_with_data(
+        _HDF5_BODY, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/data.slp")
+
+    simple_before = len(SimpleCacheFileSystem._cache)
+    http_before = len(HTTPFileSystem._cache)
+    for i in range(3):
+        file_like = open_url(
+            url,
+            stream_mode="cache",
+            cache_storage=tmp_path,
+            headers={"Authorization": f"Bearer c{i}"},
+        )
+        try:
+            assert file_like.read(8) == b"\x89HDF\r\n\x1a\n"
+        finally:
+            file_like.close()
+    # Both halves of the chained simplecache::http open must stay bounded; an
+    # outer-only skip would leak the inner HTTP filesystem cache.
+    assert len(SimpleCacheFileSystem._cache) == simple_before
+    assert len(HTTPFileSystem._cache) == http_before
+
+
+def test_open_url_filecache_mode_does_not_grow_instance_cache(httpserver, tmp_path):
+    """`filecache` mode keeps the WholeFileCache and inner HTTP caches flat."""
+    httpserver.expect_request("/data.slp").respond_with_data(
+        _HDF5_BODY, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/data.slp")
+
+    whole_before = len(WholeFileCacheFileSystem._cache)
+    http_before = len(HTTPFileSystem._cache)
+    for i in range(3):
+        file_like = open_url(
+            url,
+            stream_mode="filecache",
+            cache_storage=tmp_path,
+            headers={"Authorization": f"Bearer f{i}"},
+        )
+        try:
+            assert file_like.read(8) == b"\x89HDF\r\n\x1a\n"
+        finally:
+            file_like.close()
+    assert len(WholeFileCacheFileSystem._cache) == whole_before
+    assert len(HTTPFileSystem._cache) == http_before
+
+
+def test_open_url_blockcache_does_not_grow_instance_cache(httpserver):
+    """`blockcache` (auto) mode does not grow the HTTP instance cache."""
+    httpserver.expect_request("/data.slp").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/data.slp")
+
+    before = len(HTTPFileSystem._cache)
+    for i in range(3):
+        file_like = open_url(url, headers={"Authorization": f"Bearer b{i}"})
+        try:
+            assert file_like.read(8) == b"\x89HDF\r\n\x1a\n"
+        finally:
+            file_like.close()
+    assert len(HTTPFileSystem._cache) == before
 
 
 # ---------------------------------------------------------------------------
