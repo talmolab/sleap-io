@@ -14,6 +14,11 @@ sleap-io provides a unified interface for reading and writing pose tracking data
 
 ::: sleap_io.io.main.save_video
 
+Media videos can also be read from `http`/`https` URLs with
+[`load_video`][sleap_io.load_video] (requires the `pyav` extra; cloud schemes
+and Google Drive are not supported for video). See
+[Remote video](../examples.md#loading-from-urls).
+
 ### Norpix .seq Format
 
 The `.seq` format is used by StreamPix / Norpix for high-speed video recording, commonly used in behavioral neuroscience. sleap-io provides native read support for `.seq` files via the [`SeqVideo`][sleap_io.SeqVideo] backend.
@@ -42,6 +47,8 @@ sio reencode recording.seq -o recording.mp4
 ### SLEAP Native Format (.slp)
 
 The native SLEAP format stores complete pose tracking projects including videos, skeletons, and annotations. SLP is the primary format with full round-trip support for bounding boxes (format 1.7+), regions of interest (ROIs), and segmentation masks (format 1.5+).
+
+`.slp` and `.pkg.slp` files can also be loaded directly from `http`/`https`, cloud (`s3://`, `gs://`, `az://`), and Google Drive URLs with lazy range-based streaming via [`load_slp`][sleap_io.load_slp] — see [Loading from URLs](../examples.md#loading-from-urls).
 
 !!! tip "Detailed Format Specification"
     For comprehensive documentation of the SLP file format including HDF5 layout, data structures, and version history, see the **[SLP File Format Reference](slp.md)**.
@@ -580,6 +587,8 @@ sleap-io automatically detects file formats based on:
 2. **File content**: For ambiguous extensions like `.h5` (JABS vs DLC) or `.json` (Label Studio vs COCO)
 3. **Explicit format**: Pass `format` parameter to override auto-detection
 
+For URLs, ambiguous extensions (`.h5`, `.json`, `.csv`) are disambiguated with a magic-byte sniff via a Range request, controllable with [`load_file`][sleap_io.load_file]'s `sniff=` argument. See [Loading from URLs](../examples.md#loading-from-urls).
+
 ## Format Conversion Examples
 
 ### Convert Between Formats
@@ -657,6 +666,9 @@ Different formats have varying capabilities:
 *****TIFF tracks via `.meta.json` sidecar
 ******Ultralytics segmentation polygons stored as ROIs
 *******TrackMate auto-detects sibling `.tif`/`.tiff` video files
+
+!!! note "Remote URL loading"
+    Loading from a URL is currently supported only for SLEAP `.slp`/`.pkg.slp` (labels) and `http`/`https` media video; all other labels formats raise `NotImplementedError` over a URL — download the file locally first. See [Loading from URLs](../examples.md#loading-from-urls).
 
 ## See Also
 
