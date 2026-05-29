@@ -347,6 +347,104 @@ def test_hdf5video_post_init_releases_probe_url_file(httpserver, slp_minimal_pkg
     # ...but did not leave the cached fsspec file-like dangling.
     assert backend._url_file is None
 
+
+def test_hdf5video_close_releases_url_file(httpserver, slp_minimal_pkg):
+    """`HDF5Video.close()` closes and drops the cached fsspec URL file-like."""
+    file_bytes = Path(slp_minimal_pkg).read_bytes()
+    httpserver.expect_request("/labels.pkg.slp").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.pkg.slp")
+
+    backend = HDF5Video(
+        filename=url, dataset=None, keep_open=True, url_stream_mode="download"
+    )
+    _ = backend[0]
+    assert backend._url_file is not None
+    assert backend._open_reader is not None
+    url_file = backend._url_file
+
+    backend.close()
+    assert backend._url_file is None
+    assert backend._open_reader is None
+    # The fsspec/BytesIO handle is deterministically closed, not left to GC.
+    assert url_file.closed is True
+
+
+def test_hdf5video_close_idempotent(httpserver, slp_minimal_pkg):
+    """`HDF5Video.close()` is safe to call twice (no raise, stays released)."""
+    file_bytes = Path(slp_minimal_pkg).read_bytes()
+    httpserver.expect_request("/labels.pkg.slp").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.pkg.slp")
+
+    backend = HDF5Video(
+        filename=url, dataset=None, keep_open=True, url_stream_mode="download"
+    )
+    _ = backend[0]
+    backend.close()
+    backend.close()  # second call must not raise
+    assert backend._url_file is None
+    assert backend._open_reader is None
+
+
+def test_hdf5video_close_local_releases_reader(slp_minimal_pkg):
+    """`HDF5Video.close()` releases the local reader; reopens lazily."""
+    backend = HDF5Video(filename=slp_minimal_pkg, dataset="video0/video")
+    _ = backend[0]
+    assert backend._open_reader is not None
+    assert backend._url_file is None  # local files have no URL file-like
+
+    backend.close()
+    assert backend._open_reader is None
+    assert backend._url_file is None
+    # The reader is lazily reopened on the next read.
+    assert backend[0].shape == (384, 384, 1)
+
+
+def test_hdf5video_close_preserves_url_context(httpserver, slp_minimal_pkg):
+    """`close()` releases handles but keeps the URL auth/stream context.
+
+    The auth headers and stream mode must survive a close so a reopened read
+    stays authenticated.
+    """
+    file_bytes = Path(slp_minimal_pkg).read_bytes()
+    httpserver.expect_request("/labels.pkg.slp").respond_with_data(
+        file_bytes, content_type="application/octet-stream"
+    )
+    url = httpserver.url_for("/labels.pkg.slp")
+
+    backend = HDF5Video(
+        filename=url,
+        dataset=None,
+        keep_open=True,
+        url_headers={"Authorization": "Bearer x"},
+        url_stream_mode="download",
+    )
+    _ = backend[0]
+    backend.close()
+    assert backend._url_headers == {"Authorization": "Bearer x"}
+    assert backend._url_stream_mode == "download"
+
+
+def test_mediavideo_close_releases_reader(centered_pair_low_quality_path):
+    """`VideoBackend.close()` releases a MediaVideo reader (close or release)."""
+    backend = VideoBackend.from_filename(centered_pair_low_quality_path, keep_open=True)
+    assert type(backend) is MediaVideo
+    _ = backend[0]
+    assert backend._open_reader is not None
+    reader = backend._open_reader
+
+    backend.close()
+    assert backend._open_reader is None
+    # An OpenCV VideoCapture is genuinely released (no longer opened); an
+    # imageio reader is closed. The duck-typed closer handles both.
+    if hasattr(reader, "isOpened"):
+        assert reader.isOpened() is False
+    # Reopens lazily on the next read.
+    assert backend[0] is not None
+
     # A subsequent read still works (reopens the URL lazily).
     frame = backend[0]
     assert frame.shape == (384, 384, 1)

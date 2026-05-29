@@ -630,6 +630,14 @@ class Video:
             except Exception:
                 pass
 
+            # Deterministically release the backend's open handles (the cached
+            # reader and, for a remote HDF5Video, the fsspec URL file-like)
+            # rather than relying on garbage collection.
+            try:
+                self.backend.close()
+            except Exception:
+                pass
+
             del self.backend
             self.backend = None
 

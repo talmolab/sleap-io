@@ -591,6 +591,55 @@ def test_load_slp_url_embedded_pkg_wrong_token_raises(httpserver, slp_minimal_pk
         load_slp(url, headers={"Authorization": "Bearer WRONG"})
 
 
+def test_video_close_releases_remote_url_file(httpserver, slp_minimal_pkg):
+    """`Video.close()` deterministically closes the backend's URL file-like."""
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range(httpserver, "/minimal.pkg.slp", data)
+    url = httpserver.url_for("/minimal.pkg.slp")
+
+    labels = load_slp(url)
+    video = labels.videos[0]
+    assert video[0].shape == (384, 384, 1)  # opens reader + caches _url_file
+    url_file = video.backend._url_file
+    assert url_file is not None
+
+    video.close()
+    assert video.backend is None
+    assert url_file.closed is True
+
+
+def test_video_close_then_reopen_remote(httpserver, slp_minimal_pkg):
+    """After `Video.close()`, a remote video reopens and reads again."""
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range(httpserver, "/minimal.pkg.slp", data)
+    url = httpserver.url_for("/minimal.pkg.slp")
+
+    labels = load_slp(url)
+    video = labels.videos[0]
+    assert video[0].shape == (384, 384, 1)
+
+    video.close()
+    assert video.backend is None
+    # Reading again forces Video.open() to rebuild the backend over the URL.
+    frame = video[0]
+    assert frame.shape == (384, 384, 1)
+    assert video.backend._url_file is not None
+
+
+def test_video_close_twice_is_noop(httpserver, slp_minimal_pkg):
+    """Calling `Video.close()` twice does not raise."""
+    data = Path(slp_minimal_pkg).read_bytes()
+    _serve_with_range(httpserver, "/minimal.pkg.slp", data)
+    url = httpserver.url_for("/minimal.pkg.slp")
+
+    labels = load_slp(url)
+    video = labels.videos[0]
+    assert video[0].shape == (384, 384, 1)
+    video.close()
+    video.close()  # second call must be a no-op
+    assert video.backend is None
+
+
 def _make_label_image_pkg(tmp_path):
     """Build a `.pkg.slp` containing a single `UserLabelImage` and return path.
 

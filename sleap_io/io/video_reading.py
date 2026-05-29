@@ -435,6 +435,28 @@ class VideoBackend:
         for key, value in state.items():
             object.__setattr__(self, key, value)
 
+    def close(self) -> None:
+        """Release the cached open reader handle, if any.
+
+        Closes (``.close()``) or releases (``.release()`` for an OpenCV
+        ``VideoCapture``) the cached ``_open_reader`` and drops the reference so
+        a long-lived backend does not leak the underlying file/container handle.
+        The reader is lazily reopened on the next read, so this is safe to call
+        between reads. A no-op when nothing is cached. Subclasses that hold
+        additional handles (e.g. :class:`HDF5Video`'s URL file-like) override
+        this and call ``super().close()``.
+        """
+        reader = self._open_reader
+        self._open_reader = None
+        if reader is None:
+            return
+        closer = getattr(reader, "close", None) or getattr(reader, "release", None)
+        if closer is not None:
+            try:
+                closer()
+            except Exception:  # pragma: no cover - defensive: close should not raise
+                pass
+
     @classmethod
     def from_filename(
         cls,
@@ -1177,6 +1199,20 @@ class HDF5Video(VideoBackend):
             return h5py.File(self._url_file, "r")
         return h5py.File(self.filename, "r")
 
+    def _close_url_file(self) -> None:
+        """Close and drop the cached fsspec URL file-like, if any (idempotent).
+
+        A no-op for local files (where ``_url_file`` is never set) and when it
+        has already been closed/dropped.
+        """
+        if self._url_file is None:
+            return
+        try:
+            self._url_file.close()
+        except Exception:  # pragma: no cover - defensive: close() should not raise
+            pass
+        self._url_file = None
+
     def _release_probe_url_file(self, preexisting: bool) -> None:
         """Close and drop ``self._url_file`` if a probe opened it.
 
@@ -1189,13 +1225,20 @@ class HDF5Video(VideoBackend):
             preexisting: Whether ``self._url_file`` was already set before the
                 probe opened the file (in which case it is left untouched).
         """
-        if preexisting or self._url_file is None:
+        if preexisting:
             return
-        try:
-            self._url_file.close()
-        except Exception:  # pragma: no cover - defensive: close() should not raise
-            pass
-        self._url_file = None
+        self._close_url_file()
+
+    def close(self) -> None:
+        """Release the cached HDF5 reader and the cached fsspec URL file-like.
+
+        Extends :meth:`VideoBackend.close` (which drops the cached ``h5py.File``
+        reader) by also closing the fsspec-backed ``_url_file`` shared across
+        reads, which ``h5py.File.close()`` does not close on its own. Both are
+        lazily reopened on the next read, so this is safe to call between reads.
+        """
+        super().close()
+        self._close_url_file()
 
     def __getstate__(self) -> dict:
         """Return state for pickling/deepcopy, dropping unpicklable handles.
