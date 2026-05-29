@@ -7785,6 +7785,55 @@ def test_slp_bbox_tracking_score_none_roundtrip(tmp_path):
     assert loaded.bboxes[0].tracking_score is None
 
 
+def test_duplicate_track_name_roundtrip(tmp_path):
+    """Two distinct same-named tracks round-trip losslessly through SLP.
+
+    The identity-default merge makes duplicate-name Labels more common, so verify
+    that the SLP reader/writer (which keys tracks by positional index, with Track
+    eq=False) preserves two distinct ``track_0`` tracks rather than collapsing
+    them into one.
+    """
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    track_a = Track(name="track_0")
+    track_b = Track(name="track_0")  # Same name, distinct object.
+
+    inst_a = Instance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skeleton, track=track_a
+    )
+    inst_b = Instance.from_numpy(
+        np.array([[3.0, 4.0]]), skeleton=skeleton, track=track_b
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst_a, inst_b])
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_a, track_b],
+    )
+
+    path = str(tmp_path / "dup_track_names.slp")
+    save_slp(labels, path)
+    loaded = load_slp(path)
+
+    # Both distinct tracks survive with the same name.
+    assert len(loaded.tracks) == 2
+    assert [t.name for t in loaded.tracks] == ["track_0", "track_0"]
+
+    # Per-instance track references resolve to distinct positional indices.
+    loaded_lf = loaded.labeled_frames[0]
+    track_indices = sorted(
+        loaded.tracks.index(inst.track) for inst in loaded_lf.instances
+    )
+    assert track_indices == [0, 1]
+
+    # Points are exact and correctly associated with their (distinct) track.
+    by_index = {loaded.tracks.index(inst.track): inst for inst in loaded_lf.instances}
+    np.testing.assert_allclose(by_index[0].numpy(), np.array([[1.0, 2.0]]))
+    np.testing.assert_allclose(by_index[1].numpy(), np.array([[3.0, 4.0]]))
+
+
 def test_slp_centroid_low_level(tmp_path):
     """Test low-level read_centroids/write_centroids."""
     video = Video(filename="test.mp4")

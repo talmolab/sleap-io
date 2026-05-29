@@ -4880,7 +4880,10 @@ def test_labels_match_track_matching():
     gt_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_gt])
     pred_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_pred])
 
-    result = gt_labels.match(pred_labels)
+    # Opt in to name-based matching: these are two distinct Track objects with
+    # the same name, which only coalesce under track="name" (the identity
+    # default would keep them as separate tracks).
+    result = gt_labels.match(pred_labels, track="name")
 
     # Track should match by name
     assert result.all_tracks_matched
@@ -7331,7 +7334,9 @@ def test_merge_remaps_annotation_tracks():
         labeled_frames=[lf], videos=[video], skeletons=[skeleton], tracks=[track_other]
     )
 
-    self_labels.merge(other_labels)
+    # track="name" so the two distinct same-named Track objects coalesce and the
+    # annotation track is remapped (the identity default would keep them separate).
+    self_labels.merge(other_labels, track="name")
 
     # The centroid's track should now reference track_self (the matched track)
     merged_lf = self_labels.find(video, 0)[0]
@@ -7375,7 +7380,9 @@ def test_merge_remaps_annotations_existing_frame():
         tracks=[track_other],
     )
 
-    self_labels.merge(other_labels, frame="keep_both")
+    # track="name" so the two distinct same-named Track objects coalesce and the
+    # incoming centroid's track is remapped (the identity default would not).
+    self_labels.merge(other_labels, frame="keep_both", track="name")
 
     # Both centroids should be on the frame
     assert len(lf0.centroids) == 2
@@ -7407,11 +7414,122 @@ def test_merge_remaps_label_image_tracks():
         tracks=[track_other],
     )
 
-    self_labels.merge(other_labels)
+    # track="name" so the two distinct same-named Track objects coalesce and the
+    # label_image track reference is remapped (the identity default would not).
+    self_labels.merge(other_labels, track="name")
 
     merged_lf = self_labels.find(video, 0)[0]
     assert len(merged_lf.label_images) == 1
     assert merged_lf.label_images[0].objects[1].track is track_self
+
+
+def test_merge_default_keeps_same_named_distinct_tracks_separate():
+    """Default merge (identity) keeps distinct same-named tracks as separate tracks.
+
+    This locks in the correctness-first identity default: two independently loaded
+    files often have positionally-named tracks (e.g. "track_0") that are *different*
+    animals, so the default must NOT collapse them by name.
+    """
+    skeleton = Skeleton(["A"])
+    video = Video(filename="v.mp4", open_backend=False)
+
+    track_self = Track(name="track_0")
+    track_other = Track(name="track_0")  # Same name, distinct object.
+
+    inst_self = Instance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skeleton, track=track_self
+    )
+    self_labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst_self])],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_self],
+    )
+
+    inst_other = Instance.from_numpy(
+        np.array([[3.0, 4.0]]), skeleton=skeleton, track=track_other
+    )
+    other_labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=1, instances=[inst_other])],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_other],
+    )
+
+    self_labels.merge(other_labels)
+
+    # No silent collapse: both distinct tracks survive as the original objects.
+    assert len(self_labels.tracks) == 2
+    assert self_labels.tracks[0] is track_self
+    assert self_labels.tracks[1] is track_other
+    # The incoming instance keeps its own (distinct) track; nothing was rebound.
+    assert inst_other.track is track_other
+
+
+def test_merge_track_name_opt_in_collapses_and_warns():
+    """track="name" still collapses same-named tracks and still warns on divergence.
+
+    Mirrors the divergence-warning fixture: two distinct ``track_0`` tracks whose
+    instances are spatially far apart. The explicit name opt-in must (a) coalesce
+    them into a single track and (b) emit the spatial-divergence warning.
+    """
+    skeleton = Skeleton(["head", "tail"])
+    video = Video(filename="v.mp4", open_backend=False)
+
+    track_self = Track(name="track_0")
+    track_other = Track(name="track_0")
+
+    inst_self = Instance.from_numpy(
+        np.array([[10.0, 10.0], [20.0, 20.0]]), skeleton=skeleton, track=track_self
+    )
+    self_labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst_self])],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_self],
+    )
+
+    inst_other = Instance.from_numpy(
+        np.array([[500.0, 500.0], [510.0, 510.0]]), skeleton=skeleton, track=track_other
+    )
+    other_labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst_other])],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track_other],
+    )
+
+    with pytest.warns(UserWarning, match=r"track_0.*diverge spatially"):
+        self_labels.merge(other_labels, frame="keep_both", track="name")
+
+    # Opt-in name matching collapses the two same-named tracks into one.
+    assert len(self_labels.tracks) == 1
+
+
+def test_match_default_keeps_same_named_distinct_tracks_unmatched():
+    """match() default (identity) does not match distinct same-named tracks.
+
+    Locks match()/merge() consistency: both resolve ``track=None`` to a bare
+    ``TrackMatcher()`` and therefore share the identity default. ``track="name"``
+    is the opt-in that matches by name.
+    """
+    skeleton = Skeleton(["A"])
+    video = Video(filename="v.mp4", open_backend=False)
+
+    track_gt = Track(name="track_0")
+    track_pred = Track(name="track_0")  # Same name, distinct object.
+
+    gt_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_gt])
+    pred_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_pred])
+
+    # Default identity: distinct objects do not match (track_map maps to None).
+    result = gt_labels.match(pred_labels)
+    assert result.track_map[track_pred] is not track_gt
+    assert result.track_map[track_pred] is None
+
+    # Opt-in name matching: they match.
+    result_named = gt_labels.match(pred_labels, track="name")
+    assert result_named.track_map[track_pred] is track_gt
 
 
 def test_clean_removes_orphaned_annotation_tracks():
@@ -7573,7 +7691,9 @@ def test_merge_remaps_annotations_with_different_videos():
         tracks=[track_other],
     )
 
-    self_labels.merge(other_labels, frame="keep_both")
+    # track="name" so the two distinct same-named Track objects coalesce and the
+    # incoming label_image track is remapped (the identity default would not).
+    self_labels.merge(other_labels, frame="keep_both", track="name")
 
     # Both label_images should be on the frame
     assert len(lf0.label_images) == 2

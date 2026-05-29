@@ -3083,8 +3083,15 @@ class Labels:
             skeleton: Skeleton matching method. Can be a string ("structure",
                 "subset", "overlap", "exact") or a SkeletonMatcher object.
                 Default is "structure".
-            track: Track matching method. Can be a string ("name", "identity") or
-                a TrackMatcher object. Default is "name".
+            track: Track matching method. Can be a string ("identity", "name") or
+                a TrackMatcher object. Default is "identity", which matches tracks
+                only by object identity (the same Track instance) and appends all
+                other tracks as new -- a correctness-first default that never
+                collapses distinct tracks by their (often arbitrary,
+                tracker-assigned) names. Pass "name" to match tracks by their name
+                attribute instead, for cases where track names are semantically
+                meaningful (e.g. user-assigned identities or identity-classification
+                model outputs).
 
         Returns:
             MatchResult object containing correspondence maps.
@@ -3213,8 +3220,15 @@ class Labels:
             video: Video matching method. Can be a string ("auto", "path",
                 "basename", "content", "shape", "image_dedup") or a VideoMatcher
                 object for advanced configuration. Default is "auto".
-            track: Track matching method. Can be a string ("name", "identity") or
-                a TrackMatcher object. Default is "name".
+            track: Track matching method. Can be a string ("identity", "name") or
+                a TrackMatcher object. Default is "identity", which matches tracks
+                only by object identity (the same Track instance) and appends all
+                other tracks as new -- a correctness-first default that never
+                collapses distinct tracks by their (often arbitrary,
+                tracker-assigned) names. Pass "name" to match tracks by their name
+                attribute instead, for cases where track names are semantically
+                meaningful (e.g. user-assigned identities or identity-classification
+                model outputs).
             frame: Frame merge strategy. One of "auto", "keep_original",
                 "keep_new", "keep_both", "update_tracks", "replace_predictions".
                 Default is "auto".
