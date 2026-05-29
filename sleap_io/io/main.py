@@ -1273,31 +1273,27 @@ def _dispatch_gdrive_url_format(filename: str, **kwargs) -> Labels | Video:
         data = file_like.read()
         fmt = _gdrive_format_from_bytes(data)
 
-        # The bytes were already fully downloaded to sniff the format above, so
-        # the generic `_dispatch_url_format` "Download the file locally first."
-        # message would be misleading here (the download cost was already paid).
-        # Raise a Drive-specific message instead for unsupported formats.
-        if fmt not in _URL_IMPLEMENTED_FORMATS:
+        # A Drive byte-sniff only classifies labels/annotation formats, and among
+        # those only `.slp` is loadable over a URL today (Drive video is rejected
+        # earlier; video bytes are never classified as a loadable format here).
+        # The bytes were already fully downloaded to sniff, so the generic
+        # `_dispatch_url_format` "Download the file locally first." wording would
+        # misstate the cost already paid -- raise a Drive-specific message.
+        if fmt != "slp":
             raise NotImplementedError(
                 f"The Google Drive file was detected as '{fmt}' after a full "
-                f"download, but remote loading for '{fmt}' is not yet "
-                f"implemented (URL: {_remote._redact_url(filename)}); only 'slp' "
-                "and 'video' are supported over URLs. Save the bytes to a local "
-                "file and load that path instead."
+                f"download, but only '.slp' labels can be loaded over a URL "
+                f"(URL: {_remote._redact_url(filename)}). Save the bytes to a "
+                "local file and load that path instead."
             )
 
-        if fmt == "slp":
-            # Reuse the already-downloaded bytes instead of re-resolving the
-            # Drive link in load_slp (which would be a second download against
-            # Drive's per-file quota). The buffer is closed in the finally below,
-            # after load_slp has fully read it (lazy pixel/label-image access
-            # uses independent in-memory handles, not this one).
-            file_like.seek(0)
-            return load_slp(filename, _file_like=file_like, **kwargs)
-
-        # fmt == "video": Drive video is unsupported and raises cleanly in
-        # load_video; no buffer reuse is possible (decoders need range reads).
-        return _dispatch_url_format(filename, fmt, **kwargs)
+        # Reuse the already-downloaded bytes instead of re-resolving the Drive
+        # link in load_slp (which would be a second download against Drive's
+        # per-file quota). The buffer is closed in the finally below, after
+        # load_slp has fully read it (lazy pixel/label-image access uses
+        # independent in-memory handles, not this one).
+        file_like.seek(0)
+        return load_slp(filename, _file_like=file_like, **kwargs)
     finally:
         file_like.close()
 
