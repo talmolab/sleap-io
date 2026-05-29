@@ -5414,6 +5414,55 @@ def test_read_metadata_ndarray(tmp_path):
     assert result == metadata
 
 
+def test_read_metadata_missing_json_attr_raises_valueerror(tmp_path):
+    """Test read_metadata raises ValueError when 'json' attr is missing."""
+    path = str(tmp_path / "missing_json.slp")
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("metadata")
+        # Group exists but has no 'json' attribute (only an unrelated attr).
+        grp.attrs["format_id"] = 1.1
+
+    with pytest.raises(ValueError, match="missing its required metadata JSON blob"):
+        read_metadata(path)
+
+
+def test_read_labels_missing_json_attr_raises_valueerror(slp_minimal, tmp_path):
+    """Test ValueError propagates to read_labels when 'json' attr is missing."""
+    # Start from a real .slp file so all other datasets are present, then
+    # corrupt a copy by deleting only the 'metadata/json' attribute.
+    path = str(tmp_path / "corrupt.slp")
+    shutil.copy(slp_minimal, path)
+    with h5py.File(path, "a") as f:
+        del f["metadata"].attrs["json"]
+
+    with pytest.raises(ValueError, match="likely corrupt"):
+        read_labels(path)
+
+
+def test_read_metadata_missing_metadata_group_raises_valueerror(tmp_path):
+    """Test read_metadata raises ValueError when 'metadata' group is absent."""
+    path = str(tmp_path / "no_metadata_group.slp")
+    with h5py.File(path, "w") as f:
+        # No 'metadata' group at all.
+        f.require_group("other")
+
+    with pytest.raises(ValueError, match="likely corrupt"):
+        read_metadata(path)
+
+
+def test_read_metadata_malformed_json_not_remasked(tmp_path):
+    """Test malformed (present) JSON surfaces as a decode error, not corruption."""
+    path = str(tmp_path / "malformed_json.slp")
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("metadata")
+        grp.attrs["json"] = b"{not valid json"
+
+    # The corruption message must NOT be raised here; json parsing should fail.
+    with pytest.raises(ValueError) as exc_info:
+        read_metadata(path)
+    assert "missing its required metadata JSON blob" not in str(exc_info.value)
+
+
 def test_read_h5wasm_instances_float64_indices(tmp_path):
     """Test that float64 index values from h5wasm are handled in read_instances."""
     path = str(tmp_path / "instances.h5")

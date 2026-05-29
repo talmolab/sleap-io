@@ -1496,8 +1496,28 @@ def read_metadata(labels_path: str, *, _hdf5_file: h5py.File | None = None) -> d
 
     Returns:
         A dict containing the metadata from a SLEAP labels file.
+
+    Raises:
+        ValueError: If the ``metadata`` group is missing its ``json`` attribute
+            (or the group itself is absent), indicating the file is likely
+            corrupt.
     """
-    md = read_hdf5_attrs(labels_path, "metadata", "json", _hdf5_file=_hdf5_file)
+    try:
+        md = read_hdf5_attrs(labels_path, "metadata", "json", _hdf5_file=_hdf5_file)
+    except KeyError as e:
+        raise ValueError(
+            f"The SLEAP labels file {labels_path!r} is missing its required "
+            "metadata JSON blob (the 'metadata' HDF5 group has no readable 'json' "
+            "attribute) and is likely corrupt. If you have a working .slp file "
+            "with the same skeleton, you can copy the attribute into a BACKUP "
+            "COPY of the corrupt file with h5py (back up first):\n"
+            "    import h5py\n"
+            "    with h5py.File('working.slp', 'r') as src, "
+            "h5py.File('corrupt_copy.slp', 'a') as dst:\n"
+            "        dst['metadata'].attrs['json'] = src['metadata'].attrs['json']\n"
+            "Only do this if the skeletons match exactly, otherwise the loaded "
+            "data will be wrong."
+        ) from e
     if isinstance(md, bytes):
         md = md.decode()
     elif isinstance(md, np.ndarray):
