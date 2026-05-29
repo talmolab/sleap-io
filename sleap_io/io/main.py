@@ -125,14 +125,11 @@ def load_slp(
         finally:
             file_like.close()
 
-        # Propagate URL config to embedded HDF5Video backends so they can reopen
-        # the remote file lazily on frame reads.
-        from sleap_io.io.video_reading import HDF5Video
-
-        for video in labels.videos:
-            if isinstance(video.backend, HDF5Video):
-                object.__setattr__(video.backend, "_url_headers", headers)
-                object.__setattr__(video.backend, "_url_stream_mode", resolved_mode)
+        # The URL auth context (headers/resolved_mode) is threaded into each
+        # video backend at construction time and persisted on the Video by
+        # `make_video` (via `_read_labels_*_from_open_file` -> `read_videos`), so
+        # the embedded HDF5Video probe is authenticated and later frame reads /
+        # existence probes / reopens stay authenticated. No post-hoc backfill.
         return labels
 
     # Local path - UNCHANGED behaviour; URL-specific kwargs are no-ops.

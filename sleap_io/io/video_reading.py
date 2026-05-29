@@ -442,6 +442,8 @@ class VideoBackend:
         dataset: str | None = None,
         grayscale: bool | None = None,
         keep_open: bool = True,
+        url_headers: dict[str, str] | None = None,
+        url_stream_mode: str = "blockcache",
         **kwargs,
     ) -> "VideoBackend":
         """Create a VideoBackend from a filename.
@@ -455,6 +457,13 @@ class VideoBackend:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            url_headers: HTTP headers forwarded to the remote backend when
+                ``filename`` is a URL (HDF5Video only). Set at construction so the
+                metadata probe is authenticated; ignored for local files and other
+                backends.
+            url_stream_mode: Remote streaming strategy for a URL-backed HDF5Video
+                (one of ``"blockcache"``/``"cache"``/``"filecache"``/``"download"``).
+                Ignored for local files and other backends.
             **kwargs: Additional backend-specific arguments. These are filtered to only
                 include parameters that are valid for the specific backend being
                 created:
@@ -585,11 +594,17 @@ class VideoBackend:
                 **media_kwargs,
             )
         elif ext_token.endswith(tuple(ext.lower() for ext in HDF5Video.EXTS)):
+            # Pass ``url_headers`` / ``url_stream_mode`` explicitly (not via
+            # ``_get_valid_kwargs``, which keys on the underscored field *name*
+            # and would drop the alias) so the construction-time probe in
+            # ``HDF5Video.__attrs_post_init__`` is authenticated for remote URLs.
             return HDF5Video(
                 filename,
                 dataset=dataset,
                 grayscale=grayscale,
                 keep_open=keep_open,
+                url_headers=url_headers,
+                url_stream_mode=url_stream_mode,
                 **_get_valid_kwargs(HDF5Video, kwargs),
             )
         else:
@@ -1123,12 +1138,18 @@ class HDF5Video(VideoBackend):
     _url_file: object | None = attrs.field(
         init=False, default=None, repr=False, eq=False
     )
+    # ``_url_headers`` / ``_url_stream_mode`` are ``init=True`` (attrs derives the
+    # constructor aliases ``url_headers`` / ``url_stream_mode`` by stripping the
+    # leading underscore) so the metadata probe in ``__attrs_post_init__`` runs
+    # *authenticated*: an embedded ``pkg.slp`` over an auth-gated URL would
+    # otherwise probe with no headers and silently lose the embedded-image
+    # metadata. They remain ``repr=False, eq=False`` and, because the attribute
+    # names keep the leading underscore, the name-based ``__getstate__`` pickle
+    # contract is unchanged.
     _url_headers: dict[str, str] | None = attrs.field(
-        init=False, default=None, repr=False, eq=False
+        default=None, repr=False, eq=False
     )
-    _url_stream_mode: str = attrs.field(
-        init=False, default="blockcache", repr=False, eq=False
-    )
+    _url_stream_mode: str = attrs.field(default="blockcache", repr=False, eq=False)
 
     EXTS = ("h5", "hdf5", "slp")
 
