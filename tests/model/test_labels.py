@@ -335,6 +335,27 @@ def test_register_skeleton_no_op_on_same_object():
     assert inst.skeleton is labels.skeletons[0]
 
 
+def test_explicitly_registered_compatible_skeletons_preserved():
+    """Distinct-but-compatible skeletons added explicitly are not auto-merged."""
+    skel1 = Skeleton(nodes=["A", "B"], edges=[("A", "B")])
+    skel2 = Skeleton(nodes=["A", "B"], edges=[("A", "B")])
+
+    video = Video.from_filename("fake.mp4")
+    labels = Labels(skeletons=[skel1, skel2], videos=[video])
+
+    inst1 = Instance.from_numpy(np.array([[0, 0], [1, 1]]), skeleton=skel1)
+    inst2 = Instance.from_numpy(np.array([[2, 2], [3, 3]]), skeleton=skel2)
+    labels.append(LabeledFrame(video=video, frame_idx=0, instances=[inst1]))
+    labels.append(LabeledFrame(video=video, frame_idx=1, instances=[inst2]))
+
+    # Both skeletons were explicitly registered, so neither instance is rebound
+    # and both skeletons are preserved (compatible skeletons stay distinct for
+    # workflows like `fix --consolidate-skeletons`).
+    assert len(labels.skeletons) == 2
+    assert inst1.skeleton is skel1
+    assert inst2.skeleton is skel2
+
+
 def test_labels_numpy(labels_predictions: Labels):
     """Test the numpy method and its inverse update_from_numpy."""
     # Test conversion to numpy array

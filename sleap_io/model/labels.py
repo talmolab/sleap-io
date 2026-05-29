@@ -445,15 +445,28 @@ class Labels:
                 ``Instance`` and ``PredictedInstance`` are supported.
 
         Notes:
+            A skeleton that is already registered (by object identity, since
+            ``Skeleton`` is ``eq=False``) is left untouched. This deliberately
+            preserves distinct-but-compatible skeletons that a caller added
+            explicitly (e.g. via ``Labels(skeletons=[...])``), so workflows that
+            reason about them separately -- such as ``fix --consolidate-skeletons``
+            -- keep working; only newly-discovered duplicates are canonicalized.
+
             Matching uses ``Skeleton.matches(..., require_same_order=True)``, so a
-            skeleton is only treated as a duplicate when its node names, edges,
-            symmetries, *and* node order all match an existing skeleton. Because
-            the node order is identical, the instance's positional points array is
-            already aligned to the canonical skeleton, so rebinding
+            newly-seen skeleton is only treated as a duplicate when its node names,
+            edges, symmetries, *and* node order all match an existing skeleton.
+            Because the node order is identical, the instance's positional points
+            array is already aligned to the canonical skeleton, so rebinding
             ``inst.skeleton`` never moves any point data. Two structurally-equal
             skeletons with *different* node order are intentionally kept distinct,
             since their positional point semantics genuinely differ.
         """
+        # Already registered (identity check; Skeleton is eq=False) -> keep as-is.
+        if inst.skeleton in self.skeletons:
+            return
+
+        # Newly-seen skeleton: canonicalize to a structurally-equal, same-order
+        # one already registered, otherwise register it as a new skeleton.
         canonical = next(
             (
                 s
@@ -464,7 +477,7 @@ class Labels:
         )
         if canonical is None:
             self.skeletons.append(inst.skeleton)
-        elif canonical is not inst.skeleton:
+        else:
             inst.skeleton = canonical
 
     def update(self):
