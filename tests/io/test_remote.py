@@ -1235,7 +1235,9 @@ def test_build_fsspec_filesystem_http_skips_instance_cache(httpserver):
 
     before = len(HTTPFileSystem._cache)
     for i in range(5):
-        fs = _build_fsspec_filesystem("https", headers={"Authorization": f"Bearer t{i}"})
+        fs = _build_fsspec_filesystem(
+            "https", headers={"Authorization": f"Bearer t{i}"}
+        )
         # The filesystem still works: a ranged read returns the served body.
         with fs.open(url, mode="rb") as f:
             assert f.read(8) == b"\x89HDF\r\n\x1a\n"
@@ -1665,9 +1667,7 @@ def test_open_gdrive_accepts_body_within_cap(gdrive_uc_template):
     """A body at or under the cap downloads byte-exact (chunked reassembly)."""
     _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
 
-    bio = _open_gdrive(
-        "https://drive.google.com/file/d/FILEID/view", max_bytes=10_000
-    )
+    bio = _open_gdrive("https://drive.google.com/file/d/FILEID/view", max_bytes=10_000)
     assert bio.read() == _HDF5_BODY
 
 
@@ -1684,9 +1684,7 @@ def test_open_gdrive_cap_boundary_exact_passes(gdrive_uc_template):
     body = b"z" * 256
     _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=body)
 
-    bio = _open_gdrive(
-        "https://drive.google.com/file/d/FILEID/view", max_bytes=256
-    )
+    bio = _open_gdrive("https://drive.google.com/file/d/FILEID/view", max_bytes=256)
     assert bio.read() == body
 
 
@@ -1696,9 +1694,7 @@ def test_open_gdrive_cap_boundary_off_by_one_fails(gdrive_uc_template):
     _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=body)
 
     with pytest.raises(RemoteIOError, match="exceeds the maximum"):
-        _open_gdrive(
-            "https://drive.google.com/file/d/FILEID/view", max_bytes=256
-        )
+        _open_gdrive("https://drive.google.com/file/d/FILEID/view", max_bytes=256)
 
 
 def test_open_gdrive_quota_page_raises(gdrive_uc_template):
