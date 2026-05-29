@@ -167,6 +167,174 @@ def test_append_extend():
     assert labels.tracks == [new_track, new_track2]
 
 
+def test_update_dedupes_same_order_skeletons():
+    """Structurally-equal, same-order skeletons collapse to one on update."""
+    skel1 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+    skel2 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+    assert skel1 is not skel2
+
+    video = Video.from_filename("fake.mp4")
+    inst1 = Instance.from_numpy(np.array([[0, 0], [1, 1], [2, 2]]), skeleton=skel1)
+    inst2 = Instance.from_numpy(np.array([[0, 0], [1, 1], [2, 2]]), skeleton=skel2)
+    lf1 = LabeledFrame(video=video, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video, frame_idx=1, instances=[inst2])
+
+    labels = Labels(labeled_frames=[lf1, lf2])
+
+    assert len(labels.skeletons) == 1
+    canonical = labels.skeletons[0]
+    assert inst1.skeleton is canonical
+    assert inst2.skeleton is canonical
+
+
+def test_append_dedupes_same_order_skeletons():
+    """`append` deduplicates structurally-equal, same-order skeletons."""
+    skel1 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+    skel2 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+
+    video = Video.from_filename("fake.mp4")
+    inst1 = Instance.from_numpy(np.array([[0, 0], [1, 1], [2, 2]]), skeleton=skel1)
+    inst2 = Instance.from_numpy(np.array([[0, 0], [1, 1], [2, 2]]), skeleton=skel2)
+
+    labels = Labels()
+    labels.append(LabeledFrame(video=video, frame_idx=0, instances=[inst1]))
+    labels.append(LabeledFrame(video=video, frame_idx=1, instances=[inst2]))
+
+    assert len(labels.skeletons) == 1
+    canonical = labels.skeletons[0]
+    assert inst1.skeleton is canonical
+    assert inst2.skeleton is canonical
+
+
+def test_extend_dedupes_same_order_skeletons():
+    """`extend` deduplicates structurally-equal, same-order skeletons."""
+    skel1 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+    skel2 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+
+    video = Video.from_filename("fake.mp4")
+    inst1 = Instance.from_numpy(np.array([[0, 0], [1, 1], [2, 2]]), skeleton=skel1)
+    inst2 = Instance.from_numpy(np.array([[0, 0], [1, 1], [2, 2]]), skeleton=skel2)
+
+    labels = Labels()
+    labels.extend(
+        [
+            LabeledFrame(video=video, frame_idx=0, instances=[inst1]),
+            LabeledFrame(video=video, frame_idx=1, instances=[inst2]),
+        ]
+    )
+
+    assert len(labels.skeletons) == 1
+    canonical = labels.skeletons[0]
+    assert inst1.skeleton is canonical
+    assert inst2.skeleton is canonical
+
+
+def test_dedup_preserves_per_node_xy():
+    """Reassigning to a same-order canonical skeleton moves no point data."""
+    skel1 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+    skel2 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+
+    video = Video.from_filename("fake.mp4")
+    inst1 = Instance.from_numpy(np.array([[0, 0], [1, 1], [2, 2]]), skeleton=skel1)
+    inst2 = Instance.from_numpy(np.array([[3, 3], [4, 4], [5, 5]]), skeleton=skel2)
+
+    before = {n: inst2[n]["xy"].copy() for n in ["A", "B", "C"]}
+    orig = inst2.numpy().copy()
+
+    labels = Labels(
+        labeled_frames=[
+            LabeledFrame(video=video, frame_idx=0, instances=[inst1]),
+            LabeledFrame(video=video, frame_idx=1, instances=[inst2]),
+        ]
+    )
+
+    assert len(labels.skeletons) == 1
+    canonical = labels.skeletons[0]
+    assert inst2.skeleton is canonical
+    for node in ["A", "B", "C"]:
+        assert_equal(inst2[node]["xy"], before[node])
+    assert_equal(inst2.numpy(), orig)
+    assert inst2.points["name"].tolist() == canonical.node_names
+
+
+def test_dedup_predicted_instance():
+    """Dedup preserves xy, per-node scores and instance score for predictions."""
+    skel1 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+    skel2 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+
+    video = Video.from_filename("fake.mp4")
+    inst1 = Instance.from_numpy(np.array([[0, 0], [1, 1], [2, 2]]), skeleton=skel1)
+    pred = PredictedInstance.from_numpy(
+        points_data=np.array([[3, 3], [4, 4], [5, 5]]),
+        skeleton=skel2,
+        point_scores=np.array([0.1, 0.2, 0.3]),
+        score=0.9,
+    )
+
+    before_xy = {n: pred[n]["xy"].copy() for n in ["A", "B", "C"]}
+    before_score = {n: float(pred[n]["score"]) for n in ["A", "B", "C"]}
+
+    labels = Labels(
+        labeled_frames=[
+            LabeledFrame(video=video, frame_idx=0, instances=[inst1]),
+            LabeledFrame(video=video, frame_idx=1, instances=[pred]),
+        ]
+    )
+
+    assert len(labels.skeletons) == 1
+    assert pred.skeleton is labels.skeletons[0]
+    for node in ["A", "B", "C"]:
+        assert_equal(pred[node]["xy"], before_xy[node])
+        assert float(pred[node]["score"]) == before_score[node]
+    assert pred.score == 0.9
+
+
+def test_reordered_equal_skeletons_not_merged():
+    """Structurally-equal but reordered skeletons are kept distinct and safe."""
+    skel_abc = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+    skel_cba = Skeleton(nodes=["C", "B", "A"], edges=[("A", "B"), ("B", "C")])
+
+    assert skel_abc.matches(skel_cba) is True
+    assert skel_abc.matches(skel_cba, require_same_order=True) is False
+
+    video = Video.from_filename("fake.mp4")
+    inst_abc = Instance.from_numpy(
+        np.array([[0, 0], [1, 1], [2, 2]]), skeleton=skel_abc
+    )
+    inst_cba = Instance.from_numpy(
+        np.array([[9, 9], [1, 1], [7, 7]]), skeleton=skel_cba
+    )
+
+    labels = Labels(
+        labeled_frames=[
+            LabeledFrame(video=video, frame_idx=0, instances=[inst_abc]),
+            LabeledFrame(video=video, frame_idx=1, instances=[inst_cba]),
+        ]
+    )
+
+    # Reordered-equal skeletons are intentionally NOT merged.
+    assert len(labels.skeletons) == 2
+    # No silent corruption: node "A" still maps to its original positional value.
+    assert_equal(inst_abc["A"]["xy"], [0, 0])
+    assert not np.array_equal(inst_abc["A"]["xy"], [2, 2])
+
+
+def test_register_skeleton_no_op_on_same_object():
+    """Re-running update with one skeleton instance does not duplicate it."""
+    skel = Skeleton(nodes=["A", "B"], edges=[("A", "B")])
+    video = Video.from_filename("fake.mp4")
+    inst = Instance.from_numpy(np.array([[0, 0], [1, 1]]), skeleton=skel)
+
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst])]
+    )
+    assert len(labels.skeletons) == 1
+
+    labels.update()
+    assert len(labels.skeletons) == 1
+    assert inst.skeleton is labels.skeletons[0]
+
+
 def test_labels_numpy(labels_predictions: Labels):
     """Test the numpy method and its inverse update_from_numpy."""
     # Test conversion to numpy array

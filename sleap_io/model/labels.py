@@ -432,6 +432,41 @@ class Labels:
             return
         self.update()
 
+    def _register_skeleton(self, inst: Instance) -> None:
+        """Register an instance's skeleton, deduplicating structurally-equal ones.
+
+        If a skeleton with the same structure *and* the same node order already
+        exists in ``self.skeletons``, the instance is rebound to that canonical
+        object instead of leaking a duplicate. If no match exists, the instance's
+        skeleton is appended as a new canonical skeleton.
+
+        Args:
+            inst: The instance whose skeleton should be registered. Both
+                ``Instance`` and ``PredictedInstance`` are supported.
+
+        Notes:
+            Matching uses ``Skeleton.matches(..., require_same_order=True)``, so a
+            skeleton is only treated as a duplicate when its node names, edges,
+            symmetries, *and* node order all match an existing skeleton. Because
+            the node order is identical, the instance's positional points array is
+            already aligned to the canonical skeleton, so rebinding
+            ``inst.skeleton`` never moves any point data. Two structurally-equal
+            skeletons with *different* node order are intentionally kept distinct,
+            since their positional point semantics genuinely differ.
+        """
+        canonical = next(
+            (
+                s
+                for s in self.skeletons
+                if s.matches(inst.skeleton, require_same_order=True)
+            ),
+            None,
+        )
+        if canonical is None:
+            self.skeletons.append(inst.skeleton)
+        elif canonical is not inst.skeleton:
+            inst.skeleton = canonical
+
     def update(self):
         """Update data structures based on contents.
 
@@ -443,8 +478,7 @@ class Labels:
                 self.videos.append(lf.video)
 
             for inst in lf:
-                if inst.skeleton not in self.skeletons:
-                    self.skeletons.append(inst.skeleton)
+                self._register_skeleton(inst)
 
                 if inst.track is not None and inst.track not in self.tracks:
                     self.tracks.append(inst.track)
@@ -851,8 +885,7 @@ class Labels:
                 self.videos.append(lf.video)
 
             for inst in lf:
-                if inst.skeleton not in self.skeletons:
-                    self.skeletons.append(inst.skeleton)
+                self._register_skeleton(inst)
 
                 if inst.track is not None and inst.track not in self.tracks:
                     self.tracks.append(inst.track)
@@ -880,8 +913,7 @@ class Labels:
                     self.videos.append(lf.video)
 
                 for inst in lf:
-                    if inst.skeleton not in self.skeletons:
-                        self.skeletons.append(inst.skeleton)
+                    self._register_skeleton(inst)
 
                     if inst.track is not None and inst.track not in self.tracks:
                         self.tracks.append(inst.track)
