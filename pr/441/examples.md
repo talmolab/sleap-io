@@ -653,10 +653,13 @@ backends reopen the remote file lazily when you read frames, reusing the same
 streaming configuration.
 
 !!! info "What is and isn't supported"
-    URL loading covers `.slp`/`.pkg.slp` and the other labels formats through
-    [`load_file`][sleap_io.load_file]. Remote *media video* loading over
-    `http`/`https` is also supported via the [`pyav`](#remote-video) extra
-    (see [Remote video](#remote-video) below).
+    URL loading currently covers `.slp`/`.pkg.slp` (including through the
+    universal [`load_file`][sleap_io.load_file]) and remote *media video* over
+    `http`/`https` (see [Remote video](#remote-video) below). Other *labels*
+    formats (NWB, COCO, Label Studio, JABS, DLC, TrackMate, LEAP, GeoJSON,
+    Ultralytics) are not yet implemented over URLs and raise
+    `NotImplementedError`; download the file locally first. These are tracked
+    as follow-ups.
 
 ### Remote video
 
