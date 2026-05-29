@@ -2674,8 +2674,10 @@ def unsplit(
         frames_before = len(labels)
 
         # Merge with automatic video matching (uses original_video provenance)
-        # and keep_both frame strategy (splits have no overlapping frames)
-        labels.merge(other, video="auto", frame="keep_both")
+        # and keep_both frame strategy (splits have no overlapping frames).
+        # Splits provably originate from one project, so name-coalescing is the
+        # correct intent (track="name"); the library default is "identity".
+        labels.merge(other, video="auto", frame="keep_both", track="name")
 
         frames_added = len(labels) - frames_before
         click.echo(f"  +{frames_added} frames -> {len(labels)} total")
@@ -2748,7 +2750,7 @@ def unsplit(
 @click.option(
     "--track",
     type=click.Choice(["name", "identity"]),
-    default="name",
+    default="identity",
     show_default=True,
     help="Track matching method.",
 )

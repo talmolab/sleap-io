@@ -32,7 +32,7 @@ These options are controlled via parameters to [`Labels.merge()`](#sleap_io.mode
 |-----------|----------|---------|
 | `skeleton` | How skeletons are matched | [`"structure"`](#skeleton-matching) (default), [`"subset"`](#skeleton-matching), [`"overlap"`](#skeleton-matching), [`"exact"`](#skeleton-matching) |
 | `video` | How videos are matched | [`"auto"`](#how-auto-matching-works) (default), [`"path"`](#other-video-matching-methods), [`"basename"`](#other-video-matching-methods), [`"content"`](#other-video-matching-methods), [`"shape"`](#other-video-matching-methods), [`"image_dedup"`](#other-video-matching-methods) |
-| `track` | How tracks are matched | [`"name"`](#track-matching) (default), [`"identity"`](#track-matching) |
+| `track` | How tracks are matched | [`"identity"`](#track-matching) (default), [`"name"`](#track-matching) (opt-in) |
 | `frame` | How overlapping frames are combined | [`"auto"`](#auto-default) (default), [`"replace_predictions"`](#replace_predictions), [`"keep_original"`](#other-frame-strategies), [`"keep_new"`](#other-frame-strategies), [`"keep_both"`](#other-frame-strategies), [`"update_tracks"`](#other-frame-strategies) |
 | `instance` | How instances are paired within frames | [`"spatial"`](#instance-matching) (default), [`"identity"`](#instance-matching), [`"iou"`](#instance-matching) |
 
@@ -381,19 +381,27 @@ Tracks represent identities (e.g., individual animals) that persist across frame
 
 | Method | Behavior | Use case |
 |--------|----------|----------|
-| `"name"` | Match tracks with identical names | **Default.** Named individuals |
-| `"identity"` | Match by track object identity | Same `Track` object in memory |
+| `"identity"` | Match by track object identity (same `Track` instance). **Default** — correctness-first; never collapses distinct tracks by arbitrary tracker-assigned names | Independently loaded files whose track names (e.g. `"track_0"`) are positional/arbitrary |
+| `"name"` | Match tracks with identical names. Opt-in for semantically meaningful names (user-assigned or identity-classification models) | Named individuals; identity-model outputs |
 
 If no match is found, the track is added as new to the base dataset.
+
+!!! note "Asymmetry of errors"
+    Name-based **over-merge** (gluing two different animals together because both
+    happen to be named `"track_0"`) is silent and unrecoverable, while
+    identity-based **under-merge** (keeping tracks separate that you wanted
+    combined) is visible and recoverable. The default therefore favors
+    under-merge; opt in to `"name"` only when track names are meaningful.
 
 ### String configuration
 
 ```python
-# Default: match by track name
-base.merge(other, track="name")
+# Default: match by track object identity (same Track instance).
+base.merge(other)
+base.merge(other, track="identity")  # explicit default
 
-# Match by object identity (same Track instance)
-base.merge(other, track="identity")
+# Opt-in: match by track name (collapses distinct same-named tracks).
+base.merge(other, track="name")
 ```
 
 ### Object configuration

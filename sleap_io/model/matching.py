@@ -777,11 +777,13 @@ class TrackMatcher:
 
     Attributes:
         method: The matching method to use. Can be a TrackMatchMethod enum value
-            or a string that will be converted to the enum. Default is NAME.
+            or a string that will be converted to the enum. Default is IDENTITY
+            (matches only the same Track object; correctness-first). Use NAME to
+            match by track name.
     """
 
     method: TrackMatchMethod | str = attrs.field(
-        default=TrackMatchMethod.NAME,
+        default=TrackMatchMethod.IDENTITY,
         converter=lambda x: TrackMatchMethod(x) if isinstance(x, str) else x,
     )
 

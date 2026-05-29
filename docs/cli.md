@@ -1043,7 +1043,7 @@ Merged 2 files:
 | `-o, --output` | (required) | Output labels file |
 | `--skeleton` | `structure` | Skeleton matching method |
 | `--video` | `auto` | Video matching method |
-| `--track` | `name` | Track matching method |
+| `--track` | `identity` | Track matching method |
 | `--frame` | `auto` | Frame merge strategy |
 | `--instance` | `spatial` | Instance matching method |
 | `--embed` | (none) | Embed frames in output (`user`, `all`, `suggestions`, `source`) |
@@ -1091,8 +1091,8 @@ How to match track identities:
 
 | Method | Behavior |
 |--------|----------|
-| `name` | Match tracks with identical names (default) |
-| `identity` | Match by track object identity |
+| `identity` | Match by track object identity (default). Correctness-first: never collapses distinct tracks by arbitrary tracker-assigned names |
+| `name` | Match tracks with identical names. Opt-in for semantically meaningful names (user-assigned identities or identity-classification model outputs) |
 
 #### Frame Strategy (`--frame`)
 
