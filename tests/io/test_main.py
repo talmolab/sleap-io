@@ -1039,6 +1039,103 @@ def test_load_file_gdrive_url_explicit_format(gdrive_uc_template, slp_minimal):
     assert len(labels) == 1
 
 
+def _serve_gdrive_slp_counting(httpserver, slp_path):
+    """Like `_serve_gdrive_slp` but records each `/download` hit.
+
+    Returns a list appended to on every download hop so a test can assert how
+    many times the Drive file was actually downloaded.
+    """
+    from werkzeug.wrappers import Response
+
+    file_bytes = Path(slp_path).read_bytes()
+    download_url = httpserver.url_for("/download")
+    form = (
+        f'<html><body><form id="download-form" action="{download_url}" '
+        'method="get">'
+        '<input type="hidden" name="id" value="FILEID">'
+        '<input type="hidden" name="export" value="download">'
+        '<input type="hidden" name="confirm" value="t">'
+        "</form></body></html>"
+    )
+    hits: list[int] = []
+
+    def _download_handler(request):
+        hits.append(1)
+        resp = Response(file_bytes, status=200)
+        resp.headers["Content-Disposition"] = 'attachment; filename="labels.slp"'
+        return resp
+
+    httpserver.expect_request("/uc").respond_with_data(form, content_type="text/html")
+    httpserver.expect_request("/download").respond_with_handler(_download_handler)
+    return hits
+
+
+def test_load_file_gdrive_url_single_download(gdrive_uc_template, slp_minimal):
+    """`load_file` auto-detect on a Drive .slp downloads exactly once (was 2x)."""
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, slp_minimal)
+
+    labels = load_file("https://drive.google.com/file/d/FILEID/view")
+    assert type(labels) is Labels
+    assert len(hits) == 1
+
+
+def test_load_slp_gdrive_url_single_download(gdrive_uc_template, slp_minimal):
+    """Direct `load_slp` on a Drive .slp downloads exactly once."""
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, slp_minimal)
+
+    labels = load_slp("https://drive.google.com/file/d/FILEID/view")
+    assert type(labels) is Labels
+    assert len(hits) == 1
+
+
+def test_load_file_gdrive_url_explicit_format_single_download(
+    gdrive_uc_template, slp_minimal
+):
+    """`format='slp'` on a Drive URL downloads exactly once (no sniff fetch)."""
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, slp_minimal)
+
+    labels = load_file("https://drive.google.com/file/d/FILEID/view", format="slp")
+    assert type(labels) is Labels
+    assert len(hits) == 1
+
+
+def test_load_file_gdrive_url_label_image_single_download(gdrive_uc_template, tmp_path):
+    """A Drive label-image .slp via `load_file` downloads once (was 3x).
+
+    The third download came from `read_label_images` re-resolving the URL for
+    its long-lived lazy-pixel handle; it now reuses the already-downloaded bytes.
+    """
+    from sleap_io.io.main import save_slp
+    from tests.fixtures.labels import make_labels_all_annotations
+
+    path = str(tmp_path / "label_images.slp")
+    save_slp(make_labels_all_annotations(), path, embed=False)
+    with h5py.File(path, "r") as f:
+        assert "label_images" in f  # fixture must actually exercise the LI path
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, path)
+
+    labels = load_file("https://drive.google.com/file/d/FILEID/view")
+    assert type(labels) is Labels
+    assert len(hits) == 1
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_load_slp_gdrive_url_label_image_single_download(
+    gdrive_uc_template, tmp_path, lazy
+):
+    """Direct `load_slp` on a Drive label-image .slp downloads once (was 2x)."""
+    from sleap_io.io.main import save_slp
+    from tests.fixtures.labels import make_labels_all_annotations
+
+    path = str(tmp_path / "label_images.slp")
+    save_slp(make_labels_all_annotations(), path, embed=False)
+    hits = _serve_gdrive_slp_counting(gdrive_uc_template, path)
+
+    labels = load_slp("https://drive.google.com/file/d/FILEID/view", lazy=lazy)
+    assert type(labels) is Labels
+    assert len(hits) == 1
+
+
 def test_load_file_gdrive_url_sniff_false_raises(slp_minimal):
     """`load_file(drive_url, sniff=False)` raises (no extension to fall back on)."""
     with pytest.raises(ValueError, match="Cannot infer format for a Google Drive"):

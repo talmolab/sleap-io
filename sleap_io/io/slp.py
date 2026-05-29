@@ -2694,6 +2694,7 @@ def _read_labels_lazy_from_open_file(
     open_videos: bool = True,
     _url_headers: dict[str, str] | None = None,
     _url_stream_mode: str = "blockcache",
+    _url_bytes: bytes | None = None,
 ) -> Labels:
     """Build a lazy `Labels` from an already-open `h5py.File`.
 
@@ -2711,6 +2712,10 @@ def _read_labels_lazy_from_open_file(
             handle when `labels_path` is a URL. Ignored for local paths.
         _url_stream_mode: Streaming strategy for the long-lived label-image
             handle when `labels_path` is a URL. Ignored for local paths.
+        _url_bytes: Already-downloaded file bytes to reuse for the long-lived
+            label-image handle instead of re-opening `labels_path` over the
+            network (used for Google Drive, where a re-resolve is a re-download
+            against the per-file quota). Ignored for local paths.
 
     Returns:
         Labels with LazyFrameList for labeled_frames.
@@ -2775,6 +2780,7 @@ def _read_labels_lazy_from_open_file(
         _hdf5_file=f,
         _url_headers=_url_headers,
         _url_stream_mode=_url_stream_mode,
+        _url_bytes=_url_bytes,
     )
 
     # Build per-frame annotation dicts for lazy materialization
@@ -3962,6 +3968,7 @@ def read_label_images(
     _hdf5_file: h5py.File | None = None,
     _url_headers: dict[str, str] | None = None,
     _url_stream_mode: str = "blockcache",
+    _url_bytes: bytes | None = None,
 ) -> tuple[list[tuple[LabelImage, int, int]], "h5py.File | None"]:
     """Read label image annotations from a SLEAP labels file.
 
@@ -3989,6 +3996,10 @@ def read_label_images(
             Ignored for local paths.
         _url_stream_mode: Streaming strategy for the long-lived lazy-access
             handle when ``labels_path`` is a URL. Ignored for local paths.
+        _url_bytes: Already-downloaded file bytes to wrap in a fresh in-memory
+            handle for lazy pixel access, instead of re-opening ``labels_path``
+            over the network. Used for Google Drive (where a re-resolve is a
+            re-download against the per-file quota). Ignored for local paths.
 
     Returns:
         A tuple of ``(label_image_tuples, h5py_file)`` where
@@ -4012,9 +4023,15 @@ def read_label_images(
     # below capture it), so it cannot reuse `_hdf5_file`. For URL loads,
     # ``labels_path`` is the raw URL string, which ``h5py.File`` cannot open
     # directly; open a FRESH, independent fsspec file-like instead.
+    import io
+
     from sleap_io.io import _remote
 
-    if _remote._is_url(labels_path):
+    if _url_bytes is not None:
+        # Reuse already-downloaded bytes (e.g. a Google Drive prefetch) in a
+        # fresh, independent in-memory handle instead of re-resolving the URL.
+        f = h5py.File(io.BytesIO(_url_bytes), "r")
+    elif _remote._is_url(labels_path):
         f = h5py.File(
             _remote.open_url(
                 labels_path,
@@ -5355,6 +5372,7 @@ def _read_labels_from_open_file(
     open_videos: bool = True,
     _url_headers: dict[str, str] | None = None,
     _url_stream_mode: str = "blockcache",
+    _url_bytes: bytes | None = None,
 ) -> Labels:
     """Build a `Labels` from an already-open `h5py.File`.
 
@@ -5373,6 +5391,10 @@ def _read_labels_from_open_file(
             handle when `labels_path` is a URL. Ignored for local paths.
         _url_stream_mode: Streaming strategy for the long-lived label-image
             handle when `labels_path` is a URL. Ignored for local paths.
+        _url_bytes: Already-downloaded file bytes to reuse for the long-lived
+            label-image handle instead of re-opening `labels_path` over the
+            network (used for Google Drive, where a re-resolve is a re-download
+            against the per-file quota). Ignored for local paths.
 
     Returns:
         The processed `Labels` object.
@@ -5476,6 +5498,7 @@ def _read_labels_from_open_file(
         _hdf5_file=f,
         _url_headers=_url_headers,
         _url_stream_mode=_url_stream_mode,
+        _url_bytes=_url_bytes,
     )
 
     # Attach annotations to their corresponding LabeledFrames
