@@ -458,6 +458,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote loading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../codecs/" class="md-nav__link">
         
   
@@ -3349,6 +3377,11 @@
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># or</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="o">.</span><span class="n">from_filename</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">)</span>
 </code></pre></div>
+<p>A media video can also be loaded from an <code>http</code>/<code>https</code> URL with
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;load_video&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kwargs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../../reference/sleap_io/#sleap_io.load_video"><code>load_video</code></a> (requires the <code>pyav</code> extra; cloud schemes
+and Google Drive are not supported for video — see <a href="../../examples/#loading-from-urls">Remote video</a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;https://example.com/clip.mp4&quot;</span><span class="p">)</span>
+</code></pre></div>
 <p>You can also create a minimal <code>Video</code> object without opening a backend. This is useful when you need to reference a video file that may not be available on the current system:</p>
 <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="s2">&quot;experiment.mp4&quot;</span><span class="p">,</span> <span class="n">open_backend</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -3356,25 +3389,25 @@
 <span class="go">experiment.mp4</span>
 </code></pre></div>
 <p>For image sequences, pass a list of filenames:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;frame_000.png&quot;</span><span class="p">,</span> <span class="s2">&quot;frame_001.png&quot;</span><span class="p">,</span> <span class="s2">&quot;frame_002.png&quot;</span><span class="p">])</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;frame_000.png&quot;</span><span class="p">,</span> <span class="s2">&quot;frame_001.png&quot;</span><span class="p">,</span> <span class="s2">&quot;frame_002.png&quot;</span><span class="p">])</span>
 </code></pre></div>
 <p>You can also point to a directory of images, which will be automatically expanded:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="o">.</span><span class="n">from_filename</span><span class="p">(</span><span class="s2">&quot;path/to/frames/&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="o">.</span><span class="n">from_filename</span><span class="p">(</span><span class="s2">&quot;path/to/frames/&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="accessing-frames">Accessing frames<a class="headerlink" href="#accessing-frames" title="Permanent link">&para;</a></h2>
 <p><code>Video</code> supports array-like indexing to read frames as NumPy arrays:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>          <span class="c1"># First frame as numpy array</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">frame</span><span class="o">.</span><span class="n">shape</span>               <span class="c1"># (height, width, channels)</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">frames</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">10</span><span class="p">]</span>      <span class="c1"># Slice of frames</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">frames</span><span class="o">.</span><span class="n">shape</span>              <span class="c1"># (10, height, width, channels)</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">video</span><span class="o">.</span><span class="n">shape</span>               <span class="c1"># (n_frames, height, width, channels)</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nb">len</span><span class="p">(</span><span class="n">video</span><span class="p">)</span>                <span class="c1"># Number of frames</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>          <span class="c1"># First frame as numpy array</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">frame</span><span class="o">.</span><span class="n">shape</span>               <span class="c1"># (height, width, channels)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">frames</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">10</span><span class="p">]</span>      <span class="c1"># Slice of frames</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">frames</span><span class="o">.</span><span class="n">shape</span>              <span class="c1"># (10, height, width, channels)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">video</span><span class="o">.</span><span class="n">shape</span>               <span class="c1"># (n_frames, height, width, channels)</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="nb">len</span><span class="p">(</span><span class="n">video</span><span class="p">)</span>                <span class="c1"># Number of frames</span>
 </code></pre></div>
 <p>If the backend is not yet open (e.g., when <code>open_backend=False</code>), accessing a frame will automatically open the backend if the file exists:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">,</span> <span class="n">open_backend</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># Backend opens automatically on first access</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">,</span> <span class="n">open_backend</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># Backend opens automatically on first access</span>
 </code></pre></div>
 <h2 id="video-properties">Video properties<a class="headerlink" href="#video-properties" title="Permanent link">&para;</a></h2>
 <table>
@@ -3424,12 +3457,12 @@
 </tbody>
 </table>
 <p>The <code>fps</code> property can also be set, which is useful for backends that do not store frame rate information (e.g., image sequences):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">video</span><span class="o">.</span><span class="n">fps</span> <span class="o">=</span> <span class="mf">30.0</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">video</span><span class="o">.</span><span class="n">fps</span> <span class="o">=</span> <span class="mf">30.0</span>
 </code></pre></div>
 <p>Time conversion helpers are available when FPS is known:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">video</span><span class="o">.</span><span class="n">fps</span> <span class="o">=</span> <span class="mf">30.0</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">video</span><span class="o">.</span><span class="n">frame_to_seconds</span><span class="p">(</span><span class="mi">150</span><span class="p">)</span>   <span class="c1"># 5.0</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">video</span><span class="o">.</span><span class="n">seconds_to_frame</span><span class="p">(</span><span class="mf">5.0</span><span class="p">)</span>   <span class="c1"># 150</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">video</span><span class="o">.</span><span class="n">fps</span> <span class="o">=</span> <span class="mf">30.0</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">video</span><span class="o">.</span><span class="n">frame_to_seconds</span><span class="p">(</span><span class="mi">150</span><span class="p">)</span>   <span class="c1"># 5.0</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">video</span><span class="o">.</span><span class="n">seconds_to_frame</span><span class="p">(</span><span class="mf">5.0</span><span class="p">)</span>   <span class="c1"># 150</span>
 </code></pre></div>
 <h2 id="backends">Backends<a class="headerlink" href="#backends" title="Permanent link">&para;</a></h2>
 <p>The <code>Video</code> class delegates frame reading to a backend that matches the file type:</p>
@@ -3472,19 +3505,19 @@
 <div class="admonition info">
 <p class="admonition-title">Norpix <code>.seq</code> extras</p>
 <p>The <code>SeqVideo</code> backend exposes per-frame timestamps and an auto-computed FPS derived from the timestamp stream (handy when the header FPS is wrong, as is common for high-speed recordings):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;recording.seq&quot;</span><span class="p">)</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">seq</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">backend</span>   <span class="c1"># SeqVideo</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nb">print</span><span class="p">(</span><span class="n">seq</span><span class="o">.</span><span class="n">fps</span><span class="p">)</span>                  <span class="c1"># auto-computed from timestamps</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">ts</span> <span class="o">=</span> <span class="n">seq</span><span class="o">.</span><span class="n">get_timestamps</span><span class="p">()</span>       <span class="c1"># seconds-since-epoch, shape (num_frames,)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;recording.seq&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">seq</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">backend</span>   <span class="c1"># SeqVideo</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nb">print</span><span class="p">(</span><span class="n">seq</span><span class="o">.</span><span class="n">fps</span><span class="p">)</span>                  <span class="c1"># auto-computed from timestamps</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">ts</span> <span class="o">=</span> <span class="n">seq</span><span class="o">.</span><span class="n">get_timestamps</span><span class="p">()</span>       <span class="c1"># seconds-since-epoch, shape (num_frames,)</span>
 </code></pre></div>
 <p><code>sio show recording.seq</code> surfaces the Norpix header (codec, bit depth, description, FPS), and <code>sio reencode recording.seq -o recording.mp4</code> uses the Python path to transcode.</p>
 </div>
 <p>For media videos, you can choose which reading plugin to use:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Set per-video</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">video</span><span class="o">.</span><span class="n">set_video_plugin</span><span class="p">(</span><span class="s2">&quot;opencv&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Or set a global default</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">set_default_video_plugin</span><span class="p">(</span><span class="s2">&quot;FFMPEG&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Set per-video</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">video</span><span class="o">.</span><span class="n">set_video_plugin</span><span class="p">(</span><span class="s2">&quot;opencv&quot;</span><span class="p">)</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Or set a global default</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">set_default_video_plugin</span><span class="p">(</span><span class="s2">&quot;FFMPEG&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p>Available plugins and their aliases:</p>
 <table>
@@ -3511,40 +3544,47 @@
 </table>
 <h2 id="embedded-videos">Embedded videos<a class="headerlink" href="#embedded-videos" title="Permanent link">&para;</a></h2>
 <p>When <a href="../labels/"><code>Labels</code></a> are saved as <code>.pkg.slp</code> files with embedded frames, the video data is stored inside the HDF5 file. In this case, the <code>Video</code> will have an <code>HDF5Video</code> backend pointing to the embedded dataset, and the <code>source_video</code> attribute will reference the original video:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;labels.pkg.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">video</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">videos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># The embedded video points to the .pkg.slp file</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">video</span><span class="o">.</span><span class="n">filename</span>   <span class="c1"># &quot;labels.pkg.slp&quot;</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">video</span><span class="o">.</span><span class="n">backend</span>    <span class="c1"># HDF5Video</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># The original video path is preserved</span>
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="n">video</span><span class="o">.</span><span class="n">source_video</span><span class="o">.</span><span class="n">filename</span>  <span class="c1"># &quot;original_recording.mp4&quot;</span>
-<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
-<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Traverse the full provenance chain</span>
-<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="n">video</span><span class="o">.</span><span class="n">original_video</span>  <span class="c1"># Root video in the chain</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;labels.pkg.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">video</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">videos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># The embedded video points to the .pkg.slp file</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">video</span><span class="o">.</span><span class="n">filename</span>   <span class="c1"># &quot;labels.pkg.slp&quot;</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="n">video</span><span class="o">.</span><span class="n">backend</span>    <span class="c1"># HDF5Video</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># The original video path is preserved</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="n">video</span><span class="o">.</span><span class="n">source_video</span><span class="o">.</span><span class="n">filename</span>  <span class="c1"># &quot;original_recording.mp4&quot;</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># Traverse the full provenance chain</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="n">video</span><span class="o">.</span><span class="n">original_video</span>  <span class="c1"># Root video in the chain</span>
 </code></pre></div>
 <p>This provenance chain enables restoring original video paths when extracting labels from packaged files.</p>
 <h2 id="file-management">File management<a class="headerlink" href="#file-management" title="Permanent link">&para;</a></h2>
 <h3 id="checking-existence">Checking existence<a class="headerlink" href="#checking-existence" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">video</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span>                    <span class="c1"># Check if file is accessible</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">video</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">check_all</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>      <span class="c1"># For image sequences, check all files</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">video</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;video0&quot;</span><span class="p">)</span>    <span class="c1"># For HDF5, check specific dataset</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">video</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span>                    <span class="c1"># Check if file is accessible</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">video</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">check_all</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>      <span class="c1"># For image sequences, check all files</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">video</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;video0&quot;</span><span class="p">)</span>    <span class="c1"># For HDF5, check specific dataset</span>
 </code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Remote URLs</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;exists&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;check_all&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;False&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dataset&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="#sleap_io.Video.exists"><code>Video.exists()</code></a> also works for remote URL
+filenames — it issues a <code>HEAD</code> (falling back to a one-byte Range) probe and
+briefly caches the result so repeated polls (e.g. from a GUI) do not
+re-hit the network.</p>
+</div>
 <h3 id="opening-and-closing">Opening and closing<a class="headerlink" href="#opening-and-closing" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">video</span><span class="o">.</span><span class="n">open</span><span class="p">()</span>                      <span class="c1"># Open backend for reading</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">video</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>                     <span class="c1"># Close backend and free resources</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">video</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">plugin</span><span class="o">=</span><span class="s2">&quot;opencv&quot;</span><span class="p">)</span>       <span class="c1"># Reopen with a different plugin</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">video</span><span class="o">.</span><span class="n">open</span><span class="p">()</span>                      <span class="c1"># Open backend for reading</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">video</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>                     <span class="c1"># Close backend and free resources</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">video</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">plugin</span><span class="o">=</span><span class="s2">&quot;opencv&quot;</span><span class="p">)</span>       <span class="c1"># Reopen with a different plugin</span>
 </code></pre></div>
 <p>The <code>open</code> and <code>close</code> methods remember backend settings (dataset, grayscale, plugin) across cycles.</p>
 <h3 id="replacing-filenames">Replacing filenames<a class="headerlink" href="#replacing-filenames" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">video</span><span class="o">.</span><span class="n">replace_filename</span><span class="p">(</span><span class="s2">&quot;/new/path/to/video.mp4&quot;</span><span class="p">)</span>  <span class="c1"># Updates and reopens</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">video</span><span class="o">.</span><span class="n">replace_filename</span><span class="p">(</span><span class="s2">&quot;/new/path.mp4&quot;</span><span class="p">,</span> <span class="nb">open</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># Update without opening</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">video</span><span class="o">.</span><span class="n">replace_filename</span><span class="p">(</span><span class="s2">&quot;/new/path/to/video.mp4&quot;</span><span class="p">)</span>  <span class="c1"># Updates and reopens</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">video</span><span class="o">.</span><span class="n">replace_filename</span><span class="p">(</span><span class="s2">&quot;/new/path.mp4&quot;</span><span class="p">,</span> <span class="nb">open</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># Update without opening</span>
 </code></pre></div>
 <h3 id="saving-to-a-new-file">Saving to a new file<a class="headerlink" href="#saving-to-a-new-file" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">new_video</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>                <span class="c1"># Save all frames</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">new_video</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;clip.mp4&quot;</span><span class="p">,</span> <span class="n">frame_inds</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">])</span>  <span class="c1"># Save specific frames</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">new_video</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>         <span class="c1"># Override output FPS</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">new_video</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>                <span class="c1"># Save all frames</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">new_video</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;clip.mp4&quot;</span><span class="p">,</span> <span class="n">frame_inds</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">])</span>  <span class="c1"># Save specific frames</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">new_video</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>         <span class="c1"># Override output FPS</span>
 </code></pre></div>
 <h2 id="supported-formats">Supported formats<a class="headerlink" href="#supported-formats" title="Permanent link">&para;</a></h2>
 <table>
@@ -5048,7 +5088,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h3 id="sleap_io.Video.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f3c6cc8a160</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7feaaf6ae160</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>

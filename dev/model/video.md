@@ -16,6 +16,14 @@ video = sio.load_video("test.mp4")
 video = sio.Video.from_filename("test.mp4")
 ```
 
+A media video can also be loaded from an `http`/`https` URL with
+[`load_video`][sleap_io.load_video] (requires the `pyav` extra; cloud schemes
+and Google Drive are not supported for video — see [Remote video](../examples.md#loading-from-urls)):
+
+```python
+video = sio.load_video("https://example.com/clip.mp4")
+```
+
 You can also create a minimal `Video` object without opening a backend. This is useful when you need to reference a video file that may not be available on the current system:
 
 ```pycon
@@ -162,6 +170,12 @@ video.exists()                    # Check if file is accessible
 video.exists(check_all=True)      # For image sequences, check all files
 video.exists(dataset="video0")    # For HDF5, check specific dataset
 ```
+
+!!! note "Remote URLs"
+    [`Video.exists()`][sleap_io.Video.exists] also works for remote URL
+    filenames — it issues a `HEAD` (falling back to a one-byte Range) probe and
+    briefly caches the result so repeated polls (e.g. from a GUI) do not
+    re-hit the network.
 
 ### Opening and closing
 

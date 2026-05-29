@@ -582,6 +582,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote loading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../codecs/" class="md-nav__link">
         
   
@@ -3368,7 +3396,9 @@
 <p>The <code>[all]</code> extra includes faster video backends (OpenCV, PyAV) and additional format support. You can omit it for a minimal installation:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>sleap-io<span class="w">  </span><span class="c1"># Basic installation</span>
 </code></pre></div>
-<p>Video support via imageio-ffmpeg is always included.</p>
+<p>Video support via imageio-ffmpeg is always included. The <code>[all]</code> extra also
+includes the cloud-storage adapters (<code>s3fs</code>, <code>gcsfs</code>, <code>adlfs</code>) needed to
+load <code>.slp</code> files from <code>s3://</code>/<code>gs://</code>/<code>az://</code> URLs.</p>
 </div>
 <p>See the <a href="../cli/">CLI documentation</a> for a complete command reference.</p>
 <hr />
@@ -3581,7 +3611,12 @@
 <tr>
 <td><code>pyav</code></td>
 <td><code>av</code></td>
-<td>Balanced speed/features video backend</td>
+<td>Balanced speed/features video backend; required for loading remote media video over <code>http</code>/<code>https</code></td>
+</tr>
+<tr>
+<td><code>cloud</code></td>
+<td><code>s3fs</code>, <code>gcsfs</code>, <code>adlfs</code></td>
+<td>Load <code>.slp</code> from cloud-storage URLs (<code>s3://</code>, <code>gs://</code>/<code>gcs://</code>, <code>az://</code>/<code>abfs://</code>)</td>
 </tr>
 <tr>
 <td><code>mat</code></td>
@@ -3600,6 +3635,9 @@
 </tr>
 </tbody>
 </table>
+<p><code>http</code>/<code>https</code> URLs work with the base install; cloud-storage URLs need the
+<code>cloud</code> extra and remote media video needs the <code>pyav</code> extra. See
+<a href="../examples/#loading-from-urls">Loading from URLs</a>.</p>
 <p>Install specific extras:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[opencv]&quot;</span><span class="w">      </span><span class="c1"># Just OpenCV</span>
 <a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[opencv,mat]&quot;</span><span class="w">  </span><span class="c1"># Multiple extras</span>

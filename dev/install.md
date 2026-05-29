@@ -128,7 +128,9 @@ sio --version
     uv tool install sleap-io  # Basic installation
     ```
 
-    Video support via imageio-ffmpeg is always included.
+    Video support via imageio-ffmpeg is always included. The `[all]` extra also
+    includes the cloud-storage adapters (`s3fs`, `gcsfs`, `adlfs`) needed to
+    load `.slp` files from `s3://`/`gs://`/`az://` URLs.
 
 See the [CLI documentation](cli.md) for a complete command reference.
 
@@ -380,10 +382,15 @@ sleap-io uses optional dependencies for specific features:
 | Extra | Packages | Purpose |
 |-------|----------|---------|
 | `opencv` | `opencv-python` | Fastest video backend (2-3x faster) |
-| `pyav` | `av` | Balanced speed/features video backend |
+| `pyav` | `av` | Balanced speed/features video backend; required for loading remote media video over `http`/`https` |
+| `cloud` | `s3fs`, `gcsfs`, `adlfs` | Load `.slp` from cloud-storage URLs (`s3://`, `gs://`/`gcs://`, `az://`/`abfs://`) |
 | `mat` | `pymatreader` | LEAP `.mat` file support |
 | `polars` | `polars`, `pyarrow` | Fast dataframe operations |
 | `all` | All of the above | Everything included |
+
+`http`/`https` URLs work with the base install; cloud-storage URLs need the
+`cloud` extra and remote media video needs the `pyav` extra. See
+[Loading from URLs](examples.md#loading-from-urls).
 
 Install specific extras:
 
