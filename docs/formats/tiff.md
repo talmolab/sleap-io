@@ -21,13 +21,16 @@ When writing, a JSON sidecar file is created alongside the TIFF at `{path}.meta.
 ```json
 {
   "format": "sleap-io-label-image-meta",
-  "version": 1,
+  "version": 3,
+  "axes": "YX",
   "objects": {
     "1": {"track": "cell_1", "category": "neuron"},
     "2": {"track": "cell_2", "category": "glia"}
   }
 }
 ```
+
+`axes` is `"YX"` for a single label image and `"TYX"` for a multi-frame stack; the reader uses it as the authoritative layout hint. Optional `scale` and `offset` keys are added when any label image carries a spatial transform.
 
 On read, the sidecar is loaded automatically if present. Without it, tracks are auto-created with the label ID as the name and categories are left empty.
 
@@ -68,7 +71,7 @@ sio.save_label_images("output.tif", label_images, stack=True)
 
 # Write as per-frame files in a directory
 sio.save_label_images("output_dir/", label_images, stack=False)
-# Creates: output_dir/0.tif, output_dir/1.tif, ... + output_dir/.meta.json
+# Creates: output_dir/0.tif, output_dir/1.tif, ... + output_dir.meta.json (sibling of the dir)
 ```
 
 ## Cellpose Workflow Example

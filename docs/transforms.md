@@ -683,7 +683,7 @@ This saves a preview PNG to `/tmp/sio_preview.png` showing the transformed frame
 
 ## Metadata & Provenance
 
-By default, transform metadata is automatically embedded in the output SLP file. This preserves a record of how the data was transformed for reproducibility and debugging.
+By default, the `sio transform` **CLI** embeds transform metadata in the output SLP file, preserving a record of how the data was transformed for reproducibility and debugging. The Python [`transform_labels()`][sleap_io.transform_labels] API does **not** populate this automatically (see the note below).
 
 ### Embedded provenance format
 
@@ -725,6 +725,14 @@ source_path = transform_info["source"]
 # Get transform matrix for coordinate conversion
 matrix = transform_info["videos"]["0"]["coordinate_transform"]["matrix"]
 ```
+
+!!! note "CLI vs. Python API"
+    The `transform` provenance key is written by the `sio transform` CLI (enabled
+    by default; disable with `--no-embed-provenance`). The Python
+    `sio.transform_labels()` does **not** embed provenance, so
+    `labels.provenance.get("transform")` returns `None` for API-produced output —
+    set it yourself before saving if you need it (e.g.
+    `labels.provenance["transform"] = {...}`).
 
 To disable provenance embedding:
 

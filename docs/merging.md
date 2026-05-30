@@ -377,6 +377,13 @@ base.merge(other, video="basename")  # Match by filename only
 
 Tracks represent identities (e.g., individual animals) that persist across frames. During merge, tracks from the incoming dataset are matched to tracks in the base dataset.
 
+!!! warning "Breaking change in 0.8.0"
+    The default track matching changed from `"name"` to `"identity"` in v0.8.0.
+    Independently loaded files no longer collapse tracks that merely share a name
+    (e.g. an arbitrary `"track_0"`). **To restore the pre-0.8.0 behavior, pass
+    `track="name"`** (Python) or `--track name` (CLI). This also affects
+    [`Labels.match()`](#matching-without-merging), `TrackMatcher`, and `sio merge`.
+
 ### Matching methods
 
 | Method | Behavior | Use case |
@@ -388,10 +395,13 @@ If no match is found, the track is added as new to the base dataset.
 
 !!! note "Asymmetry of errors"
     Name-based **over-merge** (gluing two different animals together because both
-    happen to be named `"track_0"`) is silent and unrecoverable, while
+    happen to be named `"track_0"`) is harder to detect and undo than
     identity-based **under-merge** (keeping tracks separate that you wanted
-    combined) is visible and recoverable. The default therefore favors
-    under-merge; opt in to `"name"` only when track names are meaningful.
+    combined), which is visible and recoverable. The default therefore favors
+    under-merge; opt in to `"name"` only when track names are meaningful. When you
+    do use `"name"`, `merge()` emits a
+    [divergence warning](#divergence-warning-for-name-based-merges) if same-named
+    tracks appear to be distinct animals.
 
 ### String configuration
 
@@ -415,6 +425,24 @@ from sleap_io.model.matching import TrackMatcher
 matcher = TrackMatcher(method="name")
 base.merge(other, track=matcher)
 ```
+
+### Divergence warning for name-based merges {#divergence-warning-for-name-based-merges}
+
+When matching by name (`track="name"`), `merge()` emits a `UserWarning` if two
+same-named tracks collide on a shared `(video, frame)` yet their instances fail
+to correspond spatially on **every** overlapping frame — a strong signal that
+name-based matching is about to glue distinct tracks together:
+
+```text
+UserWarning: Track 'track_0' was merged by name across labels that share video
+'...', but instances on that track diverge spatially on all N overlapping
+frame(s) ... name-based merging may glue distinct tracks together. Review the
+merge or resolve tracks at the instance level.
+```
+
+The warning is diagnostic only — the merge still proceeds. It fires at most once
+per colliding track, requires a spatial/IoU instance matcher (it is skipped for
+`instance="identity"`), and never fires for the default `track="identity"`.
 
 ---
 

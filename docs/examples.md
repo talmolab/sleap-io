@@ -121,9 +121,9 @@ bbox = sio.UserBoundingBox(x1=10, y1=20, x2=100, y2=200, category="mouse")
 bbox = sio.UserBoundingBox.from_xywh(10, 20, 90, 180)  # same box
 
 # Query geometric properties
-bbox.xyxy         # (10.0, 20.0, 100.0, 200.0)
-bbox.xywh         # (10.0, 20.0, 90.0, 180.0)
-bbox.area         # 16200.0
+bbox.xyxy         # (10, 20, 100, 200)  (ints preserved from int inputs)
+bbox.xywh         # (10, 20, 90, 180)
+bbox.area         # 16200
 bbox.centroid_xy  # (55.0, 110.0)
 
 # Predictions carry a score (and optional tracking_score)
