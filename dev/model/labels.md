@@ -56,6 +56,16 @@ You do not need to manually specify `videos` and `skeletons` — they are automa
 >>> print(labels.skeletons)
 ```
 
+!!! tip "Structural skeleton deduplication"
+    When you add frames with [`Labels.update()`](#sleap_io.Labels.update),
+    [`Labels.append()`](#sleap_io.Labels.append), or
+    [`Labels.extend()`](#sleap_io.Labels.extend), a skeleton that is
+    *structurally equal* (same nodes and edges, in the same order) to one already
+    on the `Labels` is deduplicated — the existing `Skeleton` is reused and the
+    duplicate is dropped (no point data moves). Skeletons that differ in node or
+    edge order are kept distinct. See
+    [`Skeleton.matches`](poses.md#sleap_io.Skeleton.matches).
+
 ### Loading from file
 
 Load labels from any supported format. The format is detected automatically from the file extension:

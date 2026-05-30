@@ -315,7 +315,7 @@ uv sync --all-extras
 
 This installs:
 
-- All optional dependencies (`opencv`, `pyav`, `mat`, `polars`)
+- All optional dependencies (`opencv`, `pyav`, `mat`, `polars`, `cloud`)
 - Development tools (`pytest`, `ruff`, `mkdocs`)
 - The package in editable mode
 
@@ -324,8 +324,15 @@ This installs:
 === "pip editable install"
 
     ```bash
-    pip install -e .[dev,all]
+    pip install -e ".[all]"   # runtime + optional extras
+    pip install --group dev   # dev tools (pytest, ruff, mkdocs)
     ```
+
+    !!! note
+        `dev` is a [PEP 735](https://peps.python.org/pep-0735/) dependency-group,
+        not a pip extra — `pip install -e ".[dev,all]"` installs `[all]` but
+        silently skips the dev tools (pip warns and ignores the unknown `dev`
+        extra). Install the group separately with `pip install --group dev`.
 
 === "conda + pip"
 

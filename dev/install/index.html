@@ -3628,7 +3628,7 @@ load <code>.slp</code> files from <code>s3://</code>/<code>gs://</code>/<code>az
 </code></pre></div>
 <p>This installs:</p>
 <ul>
-<li>All optional dependencies (<code>opencv</code>, <code>pyav</code>, <code>mat</code>, <code>polars</code>)</li>
+<li>All optional dependencies (<code>opencv</code>, <code>pyav</code>, <code>mat</code>, <code>polars</code>, <code>cloud</code>)</li>
 <li>Development tools (<code>pytest</code>, <code>ruff</code>, <code>mkdocs</code>)</li>
 <li>The package in editable mode</li>
 </ul>
@@ -3636,8 +3636,16 @@ load <code>.slp</code> files from <code>s3://</code>/<code>gs://</code>/<code>az
 <div class="tabbed-set tabbed-alternate" data-tabs="8:2"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">pip editable install</label><label for="__tabbed_8_2">conda + pip</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>dev,all<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[all]&quot;</span><span class="w">   </span><span class="c1"># runtime + optional extras</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>pip<span class="w"> </span>install<span class="w"> </span>--group<span class="w"> </span>dev<span class="w">   </span><span class="c1"># dev tools (pytest, ruff, mkdocs)</span>
 </code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code>dev</code> is a <a href="https://peps.python.org/pep-0735/">PEP 735</a> dependency-group,
+not a pip extra — <code>pip install -e ".[dev,all]"</code> installs <code>[all]</code> but
+silently skips the dev tools (pip warns and ignores the unknown <code>dev</code>
+extra). Install the group separately with <code>pip install --group dev</code>.</p>
+</div>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-f<span class="w"> </span>environment.yml

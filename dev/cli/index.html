@@ -4970,6 +4970,12 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 </tr>
 </tbody>
 </table>
+<div class="admonition warning">
+<p class="admonition-title">Breaking change in 0.8.0</p>
+<p>The default changed from <code>name</code> to <code>identity</code> in v0.8.0 — tracks that merely
+share an arbitrary name (e.g. <code>track_0</code>) are no longer merged. Pass
+<code>--track name</code> to restore the pre-0.8.0 behavior.</p>
+</div>
 <h4 id="frame-strategy-frame">Frame Strategy (<code>--frame</code>)<a class="headerlink" href="#frame-strategy-frame" title="Permanent link">&para;</a></h4>
 <p>How to handle overlapping frames (same video and frame index in both files):</p>
 <table>
@@ -7002,7 +7008,7 @@ temporal context).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-140-1" name="__codelineno-140-1" href="#__codelineno-140-1"></a>sio<span class="w"> </span>--version
 </code></pre></div>
 <p><strong>Example output:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a>sleap-io 0.6.0
+<div class="highlight"><pre><span></span><code><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a>sleap-io 0.8.0
 <a id="__codelineno-141-2" name="__codelineno-141-2" href="#__codelineno-141-2"></a>python 3.12.11
 <a id="__codelineno-141-3" name="__codelineno-141-3" href="#__codelineno-141-3"></a>
 <a id="__codelineno-141-4" name="__codelineno-141-4" href="#__codelineno-141-4"></a>Core:

@@ -3482,17 +3482,26 @@
 <a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>├── track_names               # Dataset: Track name strings
 <a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>├── node_names                # Dataset: Node/keypoint name strings
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>├── video_path                # Dataset: Source video path
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>├── @format                   # Attribute: &quot;analysis&quot; (format identifier)
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>├── @sleap_io_version         # Attribute: sleap-io package version
-<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>├── @preset                   # Attribute: Axis ordering preset
-<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>├── @provenance               # Attribute: Source file provenance (JSON)
-<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>├── @skeleton_name            # Attribute: Skeleton name
-<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>├── @skeleton_edges           # Attribute: Edge list (JSON)
-<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>├── @skeleton_symmetries      # Attribute: Symmetry pairs (JSON)
-<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>└── @labels_path              # Attribute: Original labels file path
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>├── edge_names                # Dataset: Skeleton edge name pairs
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>├── edge_inds                 # Dataset: Skeleton edge node-index pairs
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>├── video_path                # Dataset: Source video path
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>├── video_ind                 # Dataset: Source video index
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>├── labels_path               # Dataset: Original labels file path
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>├── provenance                # Dataset: Source file provenance (JSON)
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>│
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>├── @format                   # Attribute: &quot;analysis&quot; (format identifier)
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>├── @sleap_io_version         # Attribute: sleap-io package version
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>├── @preset                   # Attribute: Axis ordering preset
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>├── @skeleton_name            # Attribute: Skeleton name (save_metadata=True)
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>├── @skeleton_symmetries      # Attribute: Symmetry pairs, JSON (save_metadata=True)
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>└── @video_backend_metadata   # Attribute: Video backend metadata, JSON (save_metadata=True)
 </code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title"><code>provenance</code>, <code>labels_path</code>, and the skeleton edges are datasets, not attributes</p>
+<p>Read them as <code>f["provenance"]</code>, <code>f["labels_path"]</code>, <code>f["edge_names"]</code>, and
+<code>f["edge_inds"]</code> — <strong>not</strong> <code>f.attrs[...]</code>. There is no <code>skeleton_edges</code>
+attribute.</p>
+</div>
 <h2 id="axis-ordering-presets">Axis Ordering Presets<a class="headerlink" href="#axis-ordering-presets" title="Permanent link">&para;</a></h2>
 <p>The <code>preset</code> parameter controls the axis ordering of arrays. This is critical for compatibility with different analysis environments.</p>
 <h3 id="matlab-preset-default"><code>matlab</code> Preset (Default)<a class="headerlink" href="#matlab-preset-default" title="Permanent link">&para;</a></h3>
@@ -3620,7 +3629,7 @@
 </table>
 <p><strong>Coordinate system:</strong> Pixel center at (0, 0). X increases rightward, Y increases downward.</p>
 <h3 id="track_occupancy"><code>track_occupancy</code><a class="headerlink" href="#track_occupancy" title="Permanent link">&para;</a></h3>
-<p>Boolean array indicating which tracks have valid data per frame.</p>
+<p>Array indicating which tracks have valid data per frame (values are <code>0</code>/<code>1</code>).</p>
 <table>
 <thead>
 <tr>
@@ -3631,7 +3640,7 @@
 <tbody>
 <tr>
 <td>Dtype</td>
-<td><code>bool</code></td>
+<td><code>uint8</code></td>
 </tr>
 <tr>
 <td>Shape</td>
@@ -3651,7 +3660,7 @@
 <tbody>
 <tr>
 <td>Dtype</td>
-<td><code>float32</code></td>
+<td><code>float64</code></td>
 </tr>
 <tr>
 <td>Range</td>
@@ -3675,7 +3684,7 @@
 <tbody>
 <tr>
 <td>Dtype</td>
-<td><code>float32</code></td>
+<td><code>float64</code></td>
 </tr>
 <tr>
 <td>Range</td>
@@ -3699,15 +3708,15 @@
 <tbody>
 <tr>
 <td>Dtype</td>
-<td><code>float32</code></td>
+<td><code>float64</code></td>
 </tr>
 <tr>
 <td>Range</td>
 <td>0.0 to 1.0</td>
 </tr>
 <tr>
-<td>Default</td>
-<td>0.0 for user instances</td>
+<td>Missing/default</td>
+<td><code>NaN</code> (including user instances without a tracking score)</td>
 </tr>
 </tbody>
 </table>
@@ -3803,32 +3812,23 @@ exists — consistent with <code>to_numpy(untracked=True)</code>.</p>
 <td>Axis ordering: <code>"matlab"</code>, <code>"standard"</code>, or <code>"custom"</code></td>
 </tr>
 <tr>
-<td><code>provenance</code></td>
-<td>JSON string</td>
-<td>Source file and creation metadata</td>
-</tr>
-<tr>
 <td><code>skeleton_name</code></td>
 <td>string</td>
-<td>Skeleton name</td>
-</tr>
-<tr>
-<td><code>skeleton_edges</code></td>
-<td>JSON string</td>
-<td>Edge list as <code>[[src, dst], ...]</code></td>
+<td>Skeleton name (written only when <code>save_metadata=True</code>, the default)</td>
 </tr>
 <tr>
 <td><code>skeleton_symmetries</code></td>
 <td>JSON string</td>
-<td>Symmetry pairs as <code>[["left", "right"], ...]</code></td>
+<td>Symmetry pairs as <code>[["left", "right"], ...]</code> (written only when <code>save_metadata=True</code>)</td>
 </tr>
 <tr>
-<td><code>labels_path</code></td>
-<td>string</td>
-<td>Original labels file path (optional)</td>
+<td><code>video_backend_metadata</code></td>
+<td>JSON string</td>
+<td>Per-video backend metadata (written only when <code>save_metadata=True</code>)</td>
 </tr>
 </tbody>
 </table>
+<p><code>provenance</code>, <code>labels_path</code>, and the skeleton edges (<code>edge_names</code>, <code>edge_inds</code>) are stored as <strong>datasets</strong>, not attributes — see the <a href="#hdf5-layout">HDF5 Layout</a> above.</p>
 <div class="admonition note">
 <p class="admonition-title"><code>sleap_io_version</code> is a provenance stamp, not a format gate</p>
 <p>This attribute records the <code>sleap-io</code> package version that wrote the file (the value of <code>sleap_io.__version__</code> at save time). It is <strong>not</strong> a file-format version — the Analysis HDF5 layout itself is not versioned. Downstream tools should not use this value as a semver gate for structural changes; check the presence of specific datasets or <code>@preset</code> instead.</p>

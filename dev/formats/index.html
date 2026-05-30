@@ -6840,6 +6840,13 @@ default is the full frame), there is no offset and the link is exact.</p>
 <a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># Strict legacy output (no edges/links), even inside a project.</span>
 <a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_dlc</span><span class="p">(</span><span class="s2">&quot;project/labeled-data/vid1/CollectedData_Scorer.csv&quot;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Unannotated rows become empty frames</p>
+<p>Every CSV row (image) is loaded as a <code>LabeledFrame</code>, including rows with no
+labeled bodyparts (all-NaN) — these become <strong>empty</strong> <code>LabeledFrame</code>s, so the
+frame count matches the input. Drop them with
+<a href="../model/labels/"><code>Labels.clean()</code></a> if you don't want them.</p>
+</div>
 
 
 <div class="doc doc-object doc-function">
@@ -8110,6 +8117,15 @@ from the data in the file.</p>
 
 </div><h3 id="coco-format-json">COCO Format (.json)<a class="headerlink" href="#coco-format-json" title="Permanent link">&para;</a></h3>
 <p><a href="https://cocodataset.org/">COCO</a> (Common Objects in Context) format is widely used in computer vision and pose estimation. sleap-io provides full read and write support, making it compatible with tools like <a href="https://github.com/open-mmlab/mmpose">mmpose</a>, <a href="https://www.cvat.ai/">CVAT</a>, and other COCO-compatible frameworks.</p>
+<div class="admonition note">
+<p class="admonition-title">Unannotated images become empty frames</p>
+<p><code>load_coco</code> creates a <code>LabeledFrame</code> for every entry in the <code>images</code> array,
+including images with zero annotations — these become <strong>empty</strong>
+<code>LabeledFrame</code>s, so the frame count matches the input and unannotated images
+round-trip losslessly. One caveat: an image whose file path cannot be resolved
+is skipped, so a 0-annotation image with a missing file is dropped rather than
+preserved.</p>
+</div>
 
 
 <div class="doc doc-object doc-function">
