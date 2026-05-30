@@ -1020,6 +1020,66 @@ class TestVideoTransforms:
         expected_dir = output_path.with_name("output.videos")
         assert expected_dir.exists()
 
+    def test_transform_labels_str_output_path(self, tmp_path, slp_real_data):
+        """A str output_path is coerced to Path (regression for with_name)."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_labels
+
+        labels = sio.load_slp(slp_real_data)
+        transform = Transform(scale=(0.5, 0.5))
+
+        # A bare str previously raised AttributeError at
+        # output_path.with_name(...) when video_output_dir defaulted.
+        result = transform_labels(
+            labels=labels,
+            transforms=transform,
+            output_path=str(tmp_path / "output.slp"),
+            video_output_dir=None,
+            dry_run=True,
+        )
+
+        assert result is not None
+        assert len(result.labeled_frames) > 0
+
+    def test_transform_labels_str_video_output_dir(self, tmp_path, slp_real_data):
+        """A str output_path and video_output_dir are both coerced to Path."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_labels
+
+        labels = sio.load_slp(slp_real_data)
+        transform = Transform(scale=(0.5, 0.5))
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transform,
+            output_path=str(tmp_path / "output.slp"),
+            video_output_dir=str(tmp_path / "videos"),
+            crf=35,
+        )
+
+        assert result is not None
+        assert (tmp_path / "videos").exists()
+
+    def test_transform_video_str_output_path(
+        self, tmp_path, centered_pair_low_quality_path
+    ):
+        """A str output_path is coerced to Path in transform_video."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_video
+
+        video = sio.load_video(str(centered_pair_low_quality_path))
+        transform = Transform(scale=(0.5, 0.5))
+
+        result = transform_video(
+            video=video,
+            output_path=str(tmp_path / "output.mp4"),
+            transform=transform,
+            crf=35,
+        )
+
+        # Returned value is the coerced Path; the file should exist.
+        assert result.exists()
+
     def test_transform_labels_per_video_transforms(self, tmp_path, slp_real_data):
         """Test transform_labels with per-video transforms dict."""
         import sleap_io as sio
