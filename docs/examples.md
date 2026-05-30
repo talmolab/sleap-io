@@ -37,7 +37,7 @@ video = sio.load_video("test.mp4")
 
 # Create instance from numpy array
 instance = sio.Instance.from_numpy(
-    points=np.array([
+    points_data=np.array([
         [10.2, 20.4],  # head
         [5.8, 15.1],   # thorax
         [0.3, 10.6],   # abdomen

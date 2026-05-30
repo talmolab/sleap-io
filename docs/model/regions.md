@@ -732,13 +732,19 @@ Use `label_ids` to control pixel values explicitly — useful when objects
 appear/disappear across frames and you need consistent values per track:
 
 ```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> mask_a = np.zeros((64, 64), dtype=bool)
+>>> mask_b = np.zeros((64, 64), dtype=bool)
+>>> mask_a[10:30, 10:30] = True
+>>> mask_b[40:60, 40:60] = True
 >>> li = sio.PredictedLabelImage.from_binary_masks(
 ...     [mask_a, mask_b],
 ...     label_ids=[5, 10],
 ...     scores=[0.95, 0.87],
 ... )
 >>> print(li.label_ids)
-array([ 5, 10])
+[ 5 10]
 
 ```
 
@@ -806,9 +812,17 @@ Index with a `Track` to get the binary mask for that object:
 Test containment, iterate objects, or get a union mask by category:
 
 ```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> data = np.zeros((64, 64), dtype=np.int32)
+>>> data[10:30, 10:30] = 1
+>>> track = sio.Track(name="cell_A")
+>>> li = sio.UserLabelImage.from_numpy(data, tracks={1: track})
 >>> print(track in li)
+True
 >>> for track, category, mask in li.items():
 ...     print(f"{track.name}: {category}, {mask.sum()} px")
+cell_A: , 400 px
 
 ```
 
