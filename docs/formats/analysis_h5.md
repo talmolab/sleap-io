@@ -37,17 +37,25 @@ analysis.h5
 │
 ├── track_names               # Dataset: Track name strings
 ├── node_names                # Dataset: Node/keypoint name strings
+├── edge_names                # Dataset: Skeleton edge name pairs
+├── edge_inds                 # Dataset: Skeleton edge node-index pairs
 ├── video_path                # Dataset: Source video path
+├── video_ind                 # Dataset: Source video index
+├── labels_path               # Dataset: Original labels file path
+├── provenance                # Dataset: Source file provenance (JSON)
 │
 ├── @format                   # Attribute: "analysis" (format identifier)
 ├── @sleap_io_version         # Attribute: sleap-io package version
 ├── @preset                   # Attribute: Axis ordering preset
-├── @provenance               # Attribute: Source file provenance (JSON)
-├── @skeleton_name            # Attribute: Skeleton name
-├── @skeleton_edges           # Attribute: Edge list (JSON)
-├── @skeleton_symmetries      # Attribute: Symmetry pairs (JSON)
-└── @labels_path              # Attribute: Original labels file path
+├── @skeleton_name            # Attribute: Skeleton name (save_metadata=True)
+├── @skeleton_symmetries      # Attribute: Symmetry pairs, JSON (save_metadata=True)
+└── @video_backend_metadata   # Attribute: Video backend metadata, JSON (save_metadata=True)
 ```
+
+!!! warning "`provenance`, `labels_path`, and the skeleton edges are datasets, not attributes"
+    Read them as `f["provenance"]`, `f["labels_path"]`, `f["edge_names"]`, and
+    `f["edge_inds"]` — **not** `f.attrs[...]`. There is no `skeleton_edges`
+    attribute.
 
 ## Axis Ordering Presets
 
@@ -121,11 +129,11 @@ Dense array of pose coordinates. Missing data is represented as `NaN`.
 
 ### `track_occupancy`
 
-Boolean array indicating which tracks have valid data per frame.
+Array indicating which tracks have valid data per frame (values are `0`/`1`).
 
 | Property | Value |
 |----------|-------|
-| Dtype | `bool` |
+| Dtype | `uint8` |
 | Shape | `(n_frames, n_tracks)` |
 
 ### `point_scores`
@@ -134,7 +142,7 @@ Per-point confidence scores from the pose estimation model.
 
 | Property | Value |
 |----------|-------|
-| Dtype | `float32` |
+| Dtype | `float64` |
 | Range | 0.0 to 1.0 |
 | Missing | `NaN` |
 
@@ -144,7 +152,7 @@ Per-instance confidence scores (average of point scores).
 
 | Property | Value |
 |----------|-------|
-| Dtype | `float32` |
+| Dtype | `float64` |
 | Range | 0.0 to 1.0 |
 | Missing | `NaN` |
 
@@ -154,9 +162,9 @@ Per-instance tracking confidence (from identity tracking models).
 
 | Property | Value |
 |----------|-------|
-| Dtype | `float32` |
+| Dtype | `float64` |
 | Range | 0.0 to 1.0 |
-| Default | 0.0 for user instances |
+| Missing/default | `NaN` (including user instances without a tracking score) |
 
 ### `track_names`
 
@@ -201,11 +209,11 @@ Source video file path.
 | `format` | string | Always `"analysis"` |
 | `sleap_io_version` | string | sleap-io package version that wrote the file |
 | `preset` | string | Axis ordering: `"matlab"`, `"standard"`, or `"custom"` |
-| `provenance` | JSON string | Source file and creation metadata |
-| `skeleton_name` | string | Skeleton name |
-| `skeleton_edges` | JSON string | Edge list as `[[src, dst], ...]` |
-| `skeleton_symmetries` | JSON string | Symmetry pairs as `[["left", "right"], ...]` |
-| `labels_path` | string | Original labels file path (optional) |
+| `skeleton_name` | string | Skeleton name (written only when `save_metadata=True`, the default) |
+| `skeleton_symmetries` | JSON string | Symmetry pairs as `[["left", "right"], ...]` (written only when `save_metadata=True`) |
+| `video_backend_metadata` | JSON string | Per-video backend metadata (written only when `save_metadata=True`) |
+
+`provenance`, `labels_path`, and the skeleton edges (`edge_names`, `edge_inds`) are stored as **datasets**, not attributes — see the [HDF5 Layout](#hdf5-layout) above.
 
 !!! note "`sleap_io_version` is a provenance stamp, not a format gate"
     This attribute records the `sleap-io` package version that wrote the file (the value of `sleap_io.__version__` at save time). It is **not** a file-format version — the Analysis HDF5 layout itself is not versioned. Downstream tools should not use this value as a semver gate for structural changes; check the presence of specific datasets or `@preset` instead.

@@ -180,38 +180,35 @@ sio.save_csv(labels, "data.csv", save_metadata=True)
 
 ```json
 {
-    "format_version": "1.0",
-    "csv_format": "frames",
-    "skeleton": {
-        "name": "Skeleton-0",
-        "nodes": ["nose", "head", "neck", "tail"],
-        "edges": [[0, 1], [1, 2], [2, 3]],
-        "symmetries": []
-    },
+    "version": "1.0",
     "videos": [
         {
             "filename": "video.mp4",
-            "shape": [1000, 480, 640, 3]
+            "backend_metadata": {}
+        }
+    ],
+    "skeletons": [
+        {
+            "name": "Skeleton-0",
+            "nodes": ["nose", "head", "neck", "tail"],
+            "edges": [[0, 1], [1, 2], [2, 3]],
+            "symmetries": []
         }
     ],
     "tracks": ["mouse_1", "mouse_2"],
     "suggestions": [],
-    "provenance": {
-        "source_file": "labels.slp",
-        "sleap_io_version": "0.6.0"
-    }
+    "provenance": {}
 }
 ```
 
 | Field | Description |
 |-------|-------------|
-| `format_version` | Metadata format version |
-| `csv_format` | CSV format used (`sleap`, `dlc`, `points`, etc.) |
-| `skeleton` | Full skeleton definition with nodes, edges, symmetries |
-| `videos` | Video metadata (filename, shape) |
+| `version` | Metadata schema version (currently `"1.0"`) |
+| `videos` | Video metadata; each entry has `filename` and a backend-specific `backend_metadata` object (e.g. `shape`, `dataset`, `grayscale`) |
+| `skeletons` | List of skeleton definitions, each with `nodes`, `edges`, and `symmetries` |
 | `tracks` | Track names in order |
 | `suggestions` | Suggested frame indices |
-| `provenance` | Source file and version information |
+| `provenance` | Source-file / creation metadata, mirroring `labels.provenance` |
 
 ## Loading CSV Files
 
