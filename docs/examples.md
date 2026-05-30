@@ -151,7 +151,7 @@ labels.save("boxes.slp")
 
 !!! note "See also"
     - [Regions: Bounding boxes](model/boxes.md) — full API and metadata fields
-    - [Formats: COCO](formats/index.md#coco-format-json) and [Ultralytics](formats/index.md#ultralytics-yolo-format) for detection round-trips
+    - [Formats: COCO](formats/coco.md) and [Ultralytics](formats/ultralytics.md) for detection round-trips
 
 ### Centroid tracking and TrackMate import
 
@@ -257,7 +257,7 @@ labels = sio.load_file("regions.geojson")
 ```
 
 !!! note "See also"
-    - [Formats: GeoJSON](formats/index.md#geojson-format-geojson) — schema and movement-library interop
+    - [Formats: GeoJSON](formats/geojson.md) — schema and movement-library interop
     - [Regions: Static vs. temporal ROIs](model/rois.md#static-vs-temporal-rois)
 
 ### Adding annotations to frames (type dispatch)
@@ -544,9 +544,9 @@ nwb_labels.save("converted.slp")
     - Video metadata (when using `annotations_export`)
 
 !!! note "See also"
-    - [NWB Format Documentation](formats/#nwb-format-nwb): Complete NWB format reference
-    - [`load_nwb`](formats/#sleap_io.load_nwb): NWB loading function
-    - [`save_nwb`](formats/#sleap_io.save_nwb): NWB saving function with format options
+    - [NWB Format Documentation](formats/nwb.md): Complete NWB format reference
+    - [`load_nwb`](formats/nwb.md#sleap_io.load_nwb): NWB loading function
+    - [`save_nwb`](formats/nwb.md#sleap_io.save_nwb): NWB saving function with format options
 
 ### Convert to Ultralytics YOLO format
 
@@ -622,9 +622,9 @@ sio.save_coco(
     - Integration with COCO-compatible evaluation tools
 
 !!! note "See also"
-    - [`save_coco`](formats/#sleap_io.save_coco): Full COCO export documentation
-    - [`load_coco`](formats/#sleap_io.load_coco): COCO import documentation
-    - [COCO Format](formats/#coco-format-json): COCO format details
+    - [`save_coco`](formats/coco.md#sleap_io.save_coco): Full COCO export documentation
+    - [`load_coco`](formats/coco.md#sleap_io.load_coco): COCO import documentation
+    - [COCO Format](formats/coco.md): COCO format details
 
 ## Loading from URLs
 

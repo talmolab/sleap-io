@@ -761,7 +761,7 @@ The `/negative_frames` dataset is optional. Files without negative frames will n
 For large SLP files with hundreds of thousands of frames, sleap-io provides a lazy loading mode that defers [`Labels`][sleap_io.Labels] object creation until needed.
 
 !!! tip "Streaming from a URL"
-    `.slp`/`.pkg.slp` files can be opened straight from `http`/`https`, cloud, or Google Drive URLs via [`load_slp`][sleap_io.load_slp] with lazy range-based reads (embedded `pkg.slp` frames reopen the remote file on demand). See [Loading from URLs](../examples.md#loading-from-urls).
+    `.slp`/`.pkg.slp` files can be opened straight from `http`/`https`, cloud, or Google Drive URLs via [`load_slp`][sleap_io.load_slp] with lazy range-based reads (embedded `pkg.slp` frames reopen the remote file on demand). See [Loading from URLs](../remote.md).
 
 ### Architecture
 

@@ -18,7 +18,7 @@ video = sio.Video.from_filename("test.mp4")
 
 A media video can also be loaded from an `http`/`https` URL with
 [`load_video`][sleap_io.load_video] (requires the `pyav` extra; cloud schemes
-and Google Drive are not supported for video — see [Remote video](../examples.md#loading-from-urls)):
+and Google Drive are not supported for video — see [Remote video](../remote.md#remote-video)):
 
 ```python
 video = sio.load_video("https://example.com/clip.mp4")

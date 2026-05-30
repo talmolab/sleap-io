@@ -154,6 +154,7 @@ nav:
   - Changelog: changelog.md
   - Releases: https://github.com/talmolab/sleap-io/releases
   - Guides:
+    - guides.md
     - Examples: examples.md
     - Remote loading: remote.md
     - Codecs: codecs.md
@@ -174,9 +175,14 @@ nav:
     - Formats:
       - formats/index.md
       - SLP Format: formats/slp.md
-      - CSV Format: formats/csv.md
+      - NWB: formats/nwb.md
       - Analysis HDF5: formats/analysis_h5.md
+      - DeepLabCut: formats/dlc.md
+      - CSV Format: formats/csv.md
+      - COCO: formats/coco.md
       - TIFF: formats/tiff.md
+      - Ultralytics: formats/ultralytics.md
+      - GeoJSON: formats/geojson.md
       - TrackMate: formats/trackmate.md
     - CLI: cli.md
     - Full API: reference/
