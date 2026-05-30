@@ -166,7 +166,10 @@ nav:
       - Video: model/video.md
       - Poses: model/poses.md
       - 3D: model/3d.md
-      - Regions: model/regions.md
+      - Centroids: model/centroids.md
+      - Boxes: model/boxes.md
+      - ROIs: model/rois.md
+      - Segmentation: model/segmentation.md
     - Formats:
       - formats/index.md
       - SLP Format: formats/slp.md
