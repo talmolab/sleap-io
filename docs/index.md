@@ -17,7 +17,7 @@ does *not* include labeling, training, or inference.
 
 - **Multi-format I/O** -- Read and write [SLEAP](formats/index.md#sleap-native-format-slp), [NWB](formats/index.md#nwb-format-nwb), [COCO](formats/index.md#coco-format-json), [DeepLabCut](formats/index.md#deeplabcut-format-h5-csv), [Ultralytics YOLO](formats/index.md#ultralytics-yolo-format), [JABS](formats/index.md#jabs-format-h5), [Label Studio](formats/index.md#label-studio-format-json), [CSV](formats/index.md#csv-format-csv), [Analysis HDF5](formats/index.md#sleap-analysis-hdf5-format-h5), [AlphaTracker](formats/index.md#alphatracker-format), and [LEAP](formats/index.md#leap-format-mat) formats
 - **CLI tools** -- Inspect, convert, render, and transform data from the command line ([reference](cli.md))
-- **Rendering** -- Produce publication-quality videos and images with pose overlays, customizable colors, markers, and presets ([guide](rendering.md))
+- **Rendering** -- Produce publication-quality videos and images with pose overlays, customizable colors, markers, motion trails, and presets ([guide](rendering.md))
 - **Transforms** -- Crop, scale, rotate, pad, and flip videos with automatic coordinate adjustment ([guide](transforms.md))
 - **Merging** -- Combine annotations from multiple sources with flexible matching strategies ([guide](merging.md))
 - **Codecs** -- Convert to/from NumPy arrays, DataFrames (pandas/polars), and dictionaries ([guide](codecs.md))
