@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
@@ -27,6 +28,13 @@ jobs:
               - 'tests/**'
               - '.github/workflows/ci.yml'
               - 'pyproject.toml'
+            docs:
+              - 'docs/**'
+              - 'hooks/**'
+              - 'mkdocs.yml'
+              - 'scripts/**'
+              - 'tests/test_docs.py'
+              - '.github/workflows/ci.yml'
 
   # Lint with ruff
   lint:
@@ -111,12 +119,35 @@ jobs:
           verbose: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # Fast guard: every docs ``pycon`` block must render without a traceback, so the
+  # published docs never ship a NameError/exception. Runs on docs changes (the full
+  # test matrix above only runs on code changes), keeping doc-only PRs cheap.
+  docs-guard:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+    name: Docs guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run docs pycon guard
+        run: uv run pytest tests/test_docs.py -q
+
   # This job aggregates all CI results into a single check for branch protection.
   # It succeeds if all jobs passed OR were correctly skipped (e.g., docs-only changes).
   ci:
     name: CI
     if: always()
-    needs: [changes, lint, tests]
+    needs: [changes, lint, tests, docs-guard]
     runs-on: ubuntu-latest
     steps:
       - name: Check CI status
@@ -124,6 +155,7 @@ jobs:
           echo "changes: ${{ needs.changes.result }}"
           echo "lint: ${{ needs.lint.result }}"
           echo "tests: ${{ needs.tests.result }}"
+          echo "docs-guard: ${{ needs.docs-guard.result }}"
 
           # Fail if any job failed or was cancelled
           if [[ "${{ needs.changes.result }}" == "failure" || "${{ needs.changes.result }}" == "cancelled" ]]; then
@@ -136,6 +168,10 @@ jobs:
           fi
           if [[ "${{ needs.tests.result }}" == "failure" || "${{ needs.tests.result }}" == "cancelled" ]]; then
             echo "::error::tests job failed or was cancelled"
+            exit 1
+          fi
+          if [[ "${{ needs.docs-guard.result }}" == "failure" || "${{ needs.docs-guard.result }}" == "cancelled" ]]; then
+            echo "::error::docs-guard job failed or was cancelled"
             exit 1
           fi
 
