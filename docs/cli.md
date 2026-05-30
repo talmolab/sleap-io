@@ -1094,6 +1094,11 @@ How to match track identities:
 | `identity` | Match by track object identity (default). Correctness-first: never collapses distinct tracks by arbitrary tracker-assigned names |
 | `name` | Match tracks with identical names. Opt-in for semantically meaningful names (user-assigned identities or identity-classification model outputs) |
 
+!!! warning "Breaking change in 0.8.0"
+    The default changed from `name` to `identity` in v0.8.0 — tracks that merely
+    share an arbitrary name (e.g. `track_0`) are no longer merged. Pass
+    `--track name` to restore the pre-0.8.0 behavior.
+
 #### Frame Strategy (`--frame`)
 
 How to handle overlapping frames (same video and frame index in both files):
