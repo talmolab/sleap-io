@@ -1371,6 +1371,30 @@ sio render -i predictions.slp --preset preview
 sio render -i predictions.slp --lf 0  # Single frame
 ```
 
+### Motion trails
+
+Draw fading trajectory trails behind each instance to visualize movement over time:
+
+```python title="render_trails.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+
+# Trails follow track identities, so the data should be tracked.
+sio.render_video(
+    labels,
+    "trails.mp4",
+    show_trails=True,
+    trail_length=10,      # frames of history per trail
+    trail_node="centroid",  # or a node name / list of node names
+)
+```
+
+!!! note "Trails need tracks"
+    Trails are drawn per track, so untracked data produces little or no trail.
+    Run tracking first, or merge with `track="name"` if your tracks are named.
+    See [Rendering → Motion trails](rendering.md) for all `trail_*` options.
+
 ### Segmentation overlay rendering
 
 Render pose predictions on top of a segmentation mask (or render masks on bare images, no labels file needed). The overlay pipeline accepts 2-D label images, 3-D label stacks, or a directory of per-frame TIFFs.

@@ -1816,6 +1816,7 @@ sio render --images frames/ --overlay masks.tif -o output.mp4
 | `--fps` | source FPS | Output video FPS. Change to slow down or speed up playback. |
 | `--crf` | 25 | Video quality (2-32, lower=better quality, larger file) |
 | `--x264-preset` | superfast | H.264 encoding speed trade-off (ultrafast to slow) |
+| `--progress` / `--no-progress` | on | Show a progress bar during video rendering |
 
 #### Appearance Options
 

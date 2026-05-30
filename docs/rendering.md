@@ -29,7 +29,10 @@ This produces an MP4 video file with skeleton overlays on all labeled frames.
 
 ## Color Schemes
 
-Color scheme determines how poses are colored across instances and frames.
+Color scheme determines how poses are colored across instances and frames. The
+`color_by` parameter defaults to `"auto"`, which resolves to `"track"` when tracks
+are present, otherwise `"instance"` for a single image and `"node"` for a video or
+multi-image render. Pass an explicit value to override:
 
 ### Color by track
 
@@ -482,6 +485,9 @@ img = sio.render_image(lf, crop=(140, 120, 240, 220), scale=2.0)
 ## Background Control
 
 Control the background when rendering poses. Use `background="video"` (default) to load video frames, or specify a color to render with a solid background.
+
+!!! note "Remote video backgrounds"
+    With `background="video"`, frames are read from the underlying [`Video`](model/video.md) backend, which can be a remote/cloud/Google-Drive source (see [Remote loading](remote.md)). Rendering then incurs the same network fetch, caching, and [`RemoteIOError`](remote.md) behavior as any other frame access.
 
 ### Named color
 
