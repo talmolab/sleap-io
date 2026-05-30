@@ -108,7 +108,7 @@ Every bounding box can carry optional metadata:
 
     - **[Centroids](centroids.md)**, **[ROIs](rois.md)**, **[Segmentation](segmentation.md)** — the other spatial annotation types.
     - **[Labels & Frames](labels.md)**: Accessing boxes via `labels.bboxes` and filtered queries with `get_bboxes()`.
-    - **[Formats: COCO](../formats/index.md#coco-format-json)** and **[Ultralytics YOLO](../formats/index.md#ultralytics-yolo-format)**: Bounding-box detection round-trips.
+    - **[Formats: COCO](../formats/coco.md)** and **[Ultralytics YOLO](../formats/ultralytics.md)**: Bounding-box detection round-trips.
     - **[Converting between annotation types](segmentation.md#converting-between-annotation-types)**: `bbox.to_roi()`, `bbox.to_mask()`, and more.
 
 ---

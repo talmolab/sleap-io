@@ -17,7 +17,7 @@ sleap-io provides a unified interface for reading and writing pose tracking data
 Media videos can also be read from `http`/`https` URLs with
 [`load_video`][sleap_io.load_video] (requires the `pyav` extra; cloud schemes
 and Google Drive are not supported for video). See
-[Remote video](../examples.md#loading-from-urls).
+[Remote video](../remote.md#remote-video).
 
 ### Norpix .seq Format
 
@@ -48,7 +48,7 @@ sio reencode recording.seq -o recording.mp4
 
 The native SLEAP format stores complete pose tracking projects including videos, skeletons, and annotations. SLP is the primary format with full round-trip support for bounding boxes (format 1.7+), regions of interest (ROIs), and segmentation masks (format 1.5+).
 
-`.slp` and `.pkg.slp` files can also be loaded directly from `http`/`https`, cloud (`s3://`, `gs://`, `az://`), and Google Drive URLs with lazy range-based streaming via [`load_slp`][sleap_io.load_slp] — see [Loading from URLs](../examples.md#loading-from-urls).
+`.slp` and `.pkg.slp` files can also be loaded directly from `http`/`https`, cloud (`s3://`, `gs://`, `az://`), and Google Drive URLs with lazy range-based streaming via [`load_slp`][sleap_io.load_slp] — see [Loading from URLs](../remote.md).
 
 !!! tip "Detailed Format Specification"
     For comprehensive documentation of the SLP file format including HDF5 layout, data structures, and version history, see the **[SLP File Format Reference](slp.md)**.
@@ -147,158 +147,10 @@ Lazy loading excels at avoiding unnecessary work. If you need to iterate over al
 
 ### NWB Format (.nwb)
 
-[Neurodata Without Borders (NWB)](https://www.nwb.org/) is a standardized format for neurophysiology data. sleap-io provides comprehensive support for both reading and writing pose tracking data in NWB format.
-
-#### Harmonized NWB I/O
-
-The harmonized API automatically detects and routes to the appropriate NWB backend:
-
-::: sleap_io.io.main.load_nwb
-
-::: sleap_io.io.main.save_nwb
-
-#### NWB Format Types
-
-sleap-io supports multiple NWB format types through the `nwb_format` parameter:
-
-- **`"auto"`** (default): Automatically detect based on data content
-  - Uses `"annotations"` if data contains user-labeled instances
-  - Uses `"predictions"` if data contains only predicted instances
-
-- **`"annotations"`**: Save as PoseTraining format (ndx-pose extension)
-  - Stores manual annotations for training data
-  - Preserves skeleton structure and node names
-  - Includes annotator information
-
-- **`"annotations_export"`**: Export annotations with embedded video frames
-  - Creates self-contained NWB file with video data
-  - Generates MJPEG video with frame provenance tracking
-  - Useful for sharing complete datasets
-
-- **`"predictions"`**: Save as PoseEstimation format (ndx-pose extension)
-  - Stores predicted pose data from inference
-  - Includes confidence scores
-  - Supports multiple animals/tracks
-
-#### Examples
-
-##### Basic NWB Usage
-
-```python
-import sleap_io as sio
-
-# Load any NWB file (auto-detects format)
-labels = sio.load_nwb("pose_data.nwb")
-
-# Save with auto-detection
-sio.save_nwb(labels, "output.nwb")
-
-# Save with specific format
-sio.save_nwb(labels, "training.nwb", nwb_format="annotations")
-sio.save_nwb(labels, "predictions.nwb", nwb_format="predictions")
-```
-
-##### Advanced Annotations API
-
-For more control over NWB training data, use the annotations module directly:
-
-```python
-from sleap_io.io.nwb_annotations import save_labels, load_labels
-
-# Save with custom metadata
-save_labels(
-    labels,
-    "training.nwb",
-    session_description="Mouse reaching task",
-    identifier="mouse_01_session_03",
-    annotator="researcher_name",
-    nwb_kwargs={
-        "session_id": "session_003",
-        "experimenter": ["John Doe", "Jane Smith"],
-        "lab": "Motor Control Lab",
-        "institution": "University",
-        "experiment_description": "Skilled reaching behavior"
-    }
-)
-
-# Load annotations
-labels = load_labels("training.nwb")
-```
-
-##### Export with Video Frames
-
-```python
-from sleap_io.io.nwb_annotations import export_labels, export_labeled_frames
-
-# Export complete dataset with videos
-export_labels(
-    labels,
-    output_dir="export/",
-    nwb_filename="dataset_with_videos.nwb",
-    as_training=True,  # Include manual annotations
-    include_videos=True  # Embed video frames
-)
-
-# Export only labeled frames as video
-export_labeled_frames(
-    labels,
-    output_path="labeled_frames.avi",
-    labels_output_path="labels.nwb",
-    fps=30.0
-)
-```
-
-
-##### Multi-Subject Support
-
-For multi-animal experiments, sleap-io supports the [ndx-multisubjects](https://pypi.org/project/ndx-multisubjects/) NWB extension. This links each tracked animal to a proper NWB Subject entry.
-
-```python
-from sleap_io.io.nwb_annotations import save_labels
-
-# Basic multi-subject export (uses track names as subject IDs)
-save_labels(labels, "output.nwb", use_multisubjects=True)
-
-# With detailed subject metadata
-subjects_metadata = [
-    {"sex": "M", "species": "Mus musculus", "age": "P30D"},
-    {"sex": "F", "species": "Mus musculus", "age": "P45D"},
-]
-save_labels(
-    labels,
-    "output.nwb",
-    use_multisubjects=True,
-    subjects_metadata=subjects_metadata
-)
-```
-
-!!! info "Subject metadata fields"
-    The `subjects_metadata` list should have one entry per track. Each entry can include:
-
-    - `sex`: Subject sex (defaults to "U" for unknown)
-    - `species`: Species name (defaults to "unknown")
-    - `age`: Age in ISO 8601 duration format (e.g., "P30D" for 30 days)
-    - Any other fields supported by NWB Subject
-
-!!! warning "Tracked instances required"
-    Multi-subject export requires all instances to have track assignments. A warning is issued if untracked instances are present.
-
-#### NWB Metadata
-
-The NWB format requires certain metadata fields. sleap-io provides sensible defaults:
-
-- **Required fields** (auto-generated if not provided):
-  - `session_description`: Defaults to "Processed SLEAP pose data"
-  - `identifier`: Auto-generated UUID string
-  - `session_start_time`: Current timestamp
-
-- **Optional fields** (via `nwb_kwargs`):
-  - `session_id`: Unique session identifier
-  - `experimenter`: List of experimenters
-  - `lab`: Laboratory name
-  - `institution`: Institution name
-  - `experiment_description`: Detailed experiment description
-  - Any other valid NWB file fields
+[Neurodata Without Borders (NWB)](https://www.nwb.org/) is a standardized
+neurophysiology format with full read/write support for pose tracking. See
+the **[NWB Format](nwb.md)** page for harmonized I/O, the `nwb_format` types,
+the advanced annotations API, multi-subject export, and metadata handling.
 
 ### JABS Format (.h5)
 
@@ -365,87 +217,10 @@ with h5py.File("output.h5", "r") as f:
 
 ### DeepLabCut Format (.h5, .csv)
 
-Load annotations from [DeepLabCut](http://www.mackenziemathislab.org/deeplabcut), a popular markerless pose estimation tool.
-
-`load_dlc` reads a single DLC annotation CSV. When a project `config.yaml` is
-available — either passed explicitly via `config=` or auto-discovered by walking
-up from the CSV — the following extra metadata is imported:
-
-- **Skeleton edges** from the config `skeleton:` list. Edges that reference
-  bodyparts not present in the labeled data are dropped with a warning.
-- **Source videos**: each `labeled-data/<video>/` image folder is linked back to
-  its original video file (from the config `video_sets`) via `Video.source_video`,
-  matched by filename stem. The link is best-effort and left unset on a stem
-  mismatch or missing file.
-
-Pass `config=False` to disable config use entirely and reproduce the legacy,
-config-free output.
-
-!!! note "Cropping is not yet applied"
-    DeepLabCut's `video_sets[...].crop` is a *virtual* read-time crop (an ROI
-    that DLC's video reader slices out of each full frame on the fly). When a
-    project uses cropping, the images under `labeled-data/<video>/` are the
-    cropped region and the labels are stored in **cropped-frame coordinates**,
-    whereas the linked `source_video` points at the original, **uncropped**
-    video. sleap-io does not yet apply this crop, so for cropped projects the
-    labels are offset from the source video by the crop origin `(x1, y1)`.
-    Reconciling the two requires virtual ROI-cropping of a `Video` on read,
-    which is planned future work. For the common case of no cropping (the DLC
-    default is the full frame), there is no offset and the link is exact.
-
-```python
-import sleap_io as sio
-
-# Single CSV; auto-discovers config.yaml for edges + source-video links.
-labels = sio.load_dlc("project/labeled-data/vid1/CollectedData_Scorer.csv")
-
-# Strict legacy output (no edges/links), even inside a project.
-labels = sio.load_dlc("project/labeled-data/vid1/CollectedData_Scorer.csv", config=False)
-```
-
-!!! note "Unannotated rows become empty frames"
-    Every CSV row (image) is loaded as a `LabeledFrame`, including rows with no
-    labeled bodyparts (all-NaN) — these become **empty** `LabeledFrame`s, so the
-    frame count matches the input. Drop them with
-    [`Labels.clean()`](../model/labels.md) if you don't want them.
-
-::: sleap_io.io.main.load_dlc
-
-#### Loading a whole DLC project
-
-`load_dlc_project` loads every `labeled-data/<video>/` folder in a project at
-once and merges them into a single `Labels` that shares one `Skeleton` (with
-edges) and one set of `Track`s, recording provenance under the `dlc_project`,
-`dlc_scorer`, and `dlc_task` keys. A project directory or its `config.yaml` can
-also be passed to `load_file`, which routes it here automatically.
-
-```python
-labels = sio.load_dlc_project("path/to/dlc_project")  # dir or config.yaml
-labels = sio.load_file("path/to/dlc_project")          # auto-routed
-```
-
-::: sleap_io.io.main.load_dlc_project
-
-#### Importing train/test splits
-
-`load_dlc_splits` recovers the train/test splits created by DLC's
-`create_training_dataset`, reading the positional indices stored in the project's
-`Documentation_data-*.pickle` and reconstructing DLC's globally, lexicographically
-sorted merge of all per-video annotations. It returns a
-[`LabelsSet`](../model/index.md) with `"train"` and `"test"` keys.
-
-Splits require the labeled images to be present on disk. For non-zero-padded
-image filenames a warning is emitted, since DLC's lexicographic ordering (e.g.
-`img10` < `img2`) differs from numeric ordering and could otherwise cause silent
-train/test mis-assignment. If a project has multiple training fractions or
-shuffles, pass `train_fraction=` and/or `shuffle=` to disambiguate.
-
-```python
-splits = sio.load_dlc_splits("path/to/dlc_project", shuffle=1)
-train, test = splits["train"], splits["test"]
-```
-
-::: sleap_io.io.main.load_dlc_splits
+Load annotations from [DeepLabCut](http://www.mackenziemathislab.org/deeplabcut). See the
+**[DeepLabCut Format](dlc.md)** page for single-CSV loading with `config.yaml`
+discovery (skeleton edges + source-video links), whole-project imports with
+`load_dlc_project`, and train/test split recovery with `load_dlc_splits`.
 
 ### CSV Format (.csv)
 
@@ -562,19 +337,10 @@ Load predictions from [LEAP](https://github.com/talmo/leap), a SLEAP predecessor
 
 ### COCO Format (.json)
 
-[COCO](https://cocodataset.org/) (Common Objects in Context) format is widely used in computer vision and pose estimation. sleap-io provides full read and write support, making it compatible with tools like [mmpose](https://github.com/open-mmlab/mmpose), [CVAT](https://www.cvat.ai/), and other COCO-compatible frameworks.
-
-!!! note "Unannotated images become empty frames"
-    `load_coco` creates a `LabeledFrame` for every entry in the `images` array,
-    including images with zero annotations — these become **empty**
-    `LabeledFrame`s, so the frame count matches the input and unannotated images
-    round-trip losslessly. One caveat: an image whose file path cannot be resolved
-    is skipped, so a 0-annotation image with a missing file is dropped rather than
-    preserved.
-
-::: sleap_io.io.main.load_coco
-
-::: sleap_io.io.main.save_coco
+[COCO](https://cocodataset.org/) (Common Objects in Context) is widely used in
+computer vision and pose estimation. See the **[COCO Format](coco.md)** page
+for full read/write support (compatible with mmpose, CVAT, and other COCO-based
+tools) and empty-frame handling.
 
 ### TIFF Label Images (.tif, .tiff)
 
@@ -609,45 +375,16 @@ write_coco_panoptic("output.json", labels, images_dir="output_pngs/")
 
 ### Ultralytics YOLO Format
 
-Support for [Ultralytics YOLO](https://docs.ultralytics.com/) pose format.
-
-::: sleap_io.io.main.load_ultralytics
-
-::: sleap_io.io.main.save_ultralytics
+Read and write the [Ultralytics YOLO](https://docs.ultralytics.com/) pose
+format. See the **[Ultralytics YOLO Format](ultralytics.md)** page for details.
 
 ### GeoJSON Format (.geojson)
 
-[GeoJSON](https://geojson.org/) (RFC 7946) is a JSON-based format for encoding geographic data structures. sleap-io uses it to store ROIs (regions of interest) as a human-readable, standalone format. The output is compatible with the [movement](https://github.com/neuroinformatics-unit/movement) library (v0.15.0+) and the broader geospatial Python ecosystem (Shapely, GeoPandas, QGIS, QuPath).
-
-Each ROI is serialized as a GeoJSON Feature with geometry and metadata properties. The `ROI` class also implements the Python `__geo_interface__` protocol for direct interoperability with Shapely and other geo-aware libraries.
-
-#### Examples
-
-```python
-import sleap_io as sio
-from sleap_io.model.roi import UserROI
-from shapely.geometry import box
-
-# Create some ROIs
-rois = [
-    UserROI(geometry=box(100, 200, 150, 280), name="box1", category="animal"),
-    UserROI.from_polygon([(0, 0), (50, 0), (50, 50)], name="region"),
-]
-
-# Save to GeoJSON
-sio.save_geojson(rois, "rois.geojson")
-
-# Load back
-loaded_rois = sio.load_geojson("rois.geojson")
-
-# Also works with load_file/save_file (wraps in Labels)
-labels = sio.load_file("rois.geojson")  # Returns Labels(rois=...)
-sio.save_file(labels, "rois.geojson")
-```
-
-::: sleap_io.io.main.load_geojson
-
-::: sleap_io.io.main.save_geojson
+[GeoJSON](https://geojson.org/) (RFC 7946) stores ROIs as a human-readable,
+standalone format that interoperates with the
+[movement](https://github.com/neuroinformatics-unit/movement) library and the
+geospatial Python ecosystem (Shapely, GeoPandas, QGIS). See the
+**[GeoJSON Format](geojson.md)** page for the schema and examples.
 
 ## Working with Multiple Datasets
 
@@ -673,7 +410,7 @@ sleap-io automatically detects file formats based on:
 2. **File content**: For ambiguous extensions like `.h5` (JABS vs DLC) or `.json` (Label Studio vs COCO)
 3. **Explicit format**: Pass `format` parameter to override auto-detection
 
-For URLs, ambiguous extensions (`.h5`, `.json`, `.csv`) are disambiguated with a magic-byte sniff via a Range request, controllable with [`load_file`][sleap_io.load_file]'s `sniff=` argument. See [Loading from URLs](../examples.md#loading-from-urls).
+For URLs, ambiguous extensions (`.h5`, `.json`, `.csv`) are disambiguated with a magic-byte sniff via a Range request, controllable with [`load_file`][sleap_io.load_file]'s `sniff=` argument. See [Loading from URLs](../remote.md).
 
 ## Format Conversion Examples
 
@@ -754,7 +491,7 @@ Different formats have varying capabilities:
 *******TrackMate auto-detects sibling `.tif`/`.tiff` video files
 
 !!! note "Remote URL loading"
-    Loading from a URL is currently supported only for SLEAP `.slp`/`.pkg.slp` (labels) and `http`/`https` media video; all other labels formats raise `NotImplementedError` over a URL — download the file locally first. See [Loading from URLs](../examples.md#loading-from-urls).
+    Loading from a URL is currently supported only for SLEAP `.slp`/`.pkg.slp` (labels) and `http`/`https` media video; all other labels formats raise `NotImplementedError` over a URL — download the file locally first. See [Loading from URLs](../remote.md).
 
 ## See Also
 

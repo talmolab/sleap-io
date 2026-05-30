@@ -11,7 +11,7 @@
         <link rel="canonical" href="https://io.sleap.ai/dev/examples/">
       
       
-        <link rel="prev" href="../changelog/">
+        <link rel="prev" href="../guides/">
       
       
         <link rel="next" href="../remote/">
@@ -396,8 +396,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../guides/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -411,8 +412,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
@@ -1621,14 +1628,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../formats/csv/" class="md-nav__link">
+      <a href="../formats/nwb/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CSV Format
+    NWB
   
 
     
@@ -1677,6 +1684,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../formats/dlc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DeepLabCut
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../formats/csv/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSV Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../formats/coco/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COCO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../formats/tiff/" class="md-nav__link">
         
   
@@ -1685,6 +1776,62 @@
     
   
     TIFF
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../formats/ultralytics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ultralytics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../formats/geojson/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GeoJSON
   
 
     
@@ -4449,7 +4596,7 @@ column of the points array:
 <p class="admonition-title">See also</p>
 <ul>
 <li><a href="../model/boxes/">Regions: Bounding boxes</a> — full API and metadata fields</li>
-<li><a href="../formats/#coco-format-json">Formats: COCO</a> and <a href="../formats/#ultralytics-yolo-format">Ultralytics</a> for detection round-trips</li>
+<li><a href="../formats/coco/">Formats: COCO</a> and <a href="../formats/ultralytics/">Ultralytics</a> for detection round-trips</li>
 </ul>
 </div>
 <h3 id="centroid-tracking-and-trackmate-import">Centroid tracking and TrackMate import<a class="headerlink" href="#centroid-tracking-and-trackmate-import" title="Permanent link">&para;</a></h3>
@@ -4546,7 +4693,7 @@ column of the points array:
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../formats/#geojson-format-geojson">Formats: GeoJSON</a> — schema and movement-library interop</li>
+<li><a href="../formats/geojson/">Formats: GeoJSON</a> — schema and movement-library interop</li>
 <li><a href="../model/rois/#static-vs-temporal-rois">Regions: Static vs. temporal ROIs</a></li>
 </ul>
 </div>
@@ -4816,9 +4963,9 @@ public API and may change between versions.</p>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="formats/#nwb-format-nwb">NWB Format Documentation</a>: Complete NWB format reference</li>
-<li><a href="formats/#sleap_io.load_nwb"><code>load_nwb</code></a>: NWB loading function</li>
-<li><a href="formats/#sleap_io.save_nwb"><code>save_nwb</code></a>: NWB saving function with format options</li>
+<li><a href="../formats/nwb/">NWB Format Documentation</a>: Complete NWB format reference</li>
+<li><a href="../formats/nwb/#sleap_io.load_nwb"><code>load_nwb</code></a>: NWB loading function</li>
+<li><a href="../formats/nwb/#sleap_io.save_nwb"><code>save_nwb</code></a>: NWB saving function with format options</li>
 </ul>
 </div>
 <h3 id="convert-to-ultralytics-yolo-format">Convert to Ultralytics YOLO format<a class="headerlink" href="#convert-to-ultralytics-yolo-format" title="Permanent link">&para;</a></h3>
@@ -4897,9 +5044,9 @@ public API and may change between versions.</p>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="formats/#sleap_io.save_coco"><code>save_coco</code></a>: Full COCO export documentation</li>
-<li><a href="formats/#sleap_io.load_coco"><code>load_coco</code></a>: COCO import documentation</li>
-<li><a href="formats/#coco-format-json">COCO Format</a>: COCO format details</li>
+<li><a href="../formats/coco/#sleap_io.save_coco"><code>save_coco</code></a>: Full COCO export documentation</li>
+<li><a href="../formats/coco/#sleap_io.load_coco"><code>load_coco</code></a>: COCO import documentation</li>
+<li><a href="../formats/coco/">COCO Format</a>: COCO format details</li>
 </ul>
 </div>
 <h2 id="loading-from-urls">Loading from URLs<a class="headerlink" href="#loading-from-urls" title="Permanent link">&para;</a></h2>

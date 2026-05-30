@@ -21,6 +21,10 @@
          <lastmod>2026-05-30</lastmod>
     </url>
     <url>
+         <loc>https://io.sleap.ai/dev/guides/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
          <loc>https://io.sleap.ai/dev/install/</loc>
          <lastmod>2026-05-30</lastmod>
     </url>
@@ -49,7 +53,23 @@
          <lastmod>2026-05-30</lastmod>
     </url>
     <url>
+         <loc>https://io.sleap.ai/dev/formats/coco/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
          <loc>https://io.sleap.ai/dev/formats/csv/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/formats/dlc/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/formats/geojson/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/formats/nwb/</loc>
          <lastmod>2026-05-30</lastmod>
     </url>
     <url>
@@ -62,6 +82,10 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/formats/trackmate/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/formats/ultralytics/</loc>
          <lastmod>2026-05-30</lastmod>
     </url>
     <url>
