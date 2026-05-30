@@ -513,7 +513,7 @@ Check installed backends:
 ```bash
 sio --version
 # Or in Python:
-python -c "import sleap_io; print(sleap_io.Video.backend_plugins)"
+python -c "import sleap_io; print(sleap_io.get_available_video_backends())"
 ```
 
 Install missing backends:

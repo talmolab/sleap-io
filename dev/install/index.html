@@ -3722,7 +3722,7 @@ load <code>.slp</code> files from <code>s3://</code>/<code>gs://</code>/<code>az
 <p>Check installed backends:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>sio<span class="w"> </span>--version
 <a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="c1"># Or in Python:</span>
-<a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sleap_io; print(sleap_io.Video.backend_plugins)&quot;</span>
+<a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sleap_io; print(sleap_io.get_available_video_backends())&quot;</span>
 </code></pre></div>
 <p>Install missing backends:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>pip<span class="w"> </span>install<span class="w"> </span>opencv-python<span class="w"> </span>av
