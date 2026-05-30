@@ -130,7 +130,9 @@ sio --version
 
     Video support via imageio-ffmpeg is always included. The `[all]` extra also
     includes the cloud-storage adapters (`s3fs`, `gcsfs`, `adlfs`) needed to
-    load `.slp` files from `s3://`/`gs://`/`az://` URLs.
+    load `.slp` files from `s3://`/`gs://`/`az://` URLs. Loading remote **media
+    video** over `http`/`https` additionally needs a PyAV backend (`[all]` or
+    `[pyav]`) — see [Remote video](remote.md#remote-video).
 
 See the [CLI documentation](cli.md) for a complete command reference.
 
@@ -395,9 +397,9 @@ sleap-io uses optional dependencies for specific features:
 | `polars` | `polars`, `pyarrow` | Fast dataframe operations |
 | `all` | All of the above | Everything included |
 
-`http`/`https` URLs work with the base install; cloud-storage URLs need the
-`cloud` extra and remote media video needs the `pyav` extra. See
-[Loading from URLs](examples.md#loading-from-urls).
+`http`/`https` URLs — including Google Drive share links — work with the base
+install; cloud-storage URLs need the `cloud` extra and remote media video needs
+the `pyav` extra. See the [Remote loading](remote.md) guide.
 
 Install specific extras:
 

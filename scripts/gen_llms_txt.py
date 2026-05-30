@@ -23,6 +23,7 @@ DESCRIPTION = (
 )
 
 GUIDES = [
+    ("Guides overview", "guides.md", "Index of the task-oriented how-to guides"),
     ("Examples", "examples.md", "Practical recipes for common tasks"),
     (
         "Remote loading",
@@ -60,9 +61,14 @@ FORMATS = [
         "All supported I/O formats and their limitations",
     ),
     ("SLP", "formats/slp.md", "Native SLEAP format"),
-    ("CSV", "formats/csv.md", "Flat tabular export/import"),
+    ("NWB", "formats/nwb.md", "Neurodata Without Borders pose data"),
     ("Analysis HDF5", "formats/analysis_h5.md", "SLEAP analysis arrays"),
+    ("DeepLabCut", "formats/dlc.md", "DeepLabCut CSV and project import"),
+    ("CSV", "formats/csv.md", "Flat tabular export/import"),
+    ("COCO", "formats/coco.md", "COCO keypoint detection JSON"),
     ("TIFF", "formats/tiff.md", "Label images"),
+    ("Ultralytics", "formats/ultralytics.md", "Ultralytics YOLO pose format"),
+    ("GeoJSON", "formats/geojson.md", "ROIs as GeoJSON (RFC 7946)"),
     ("TrackMate", "formats/trackmate.md", "ImageJ/Fiji point tracking"),
 ]
 REFERENCE = [
