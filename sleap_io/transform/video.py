@@ -65,7 +65,7 @@ def _get_frame_indices(video: "Video") -> list[int]:
 
 def transform_video(
     video: "Video",
-    output_path: Path,
+    output_path: str | Path,
     transform: Transform,
     fps: float | None = None,
     crf: int = 25,
@@ -78,7 +78,7 @@ def transform_video(
 
     Args:
         video: Source video object.
-        output_path: Path to save transformed video.
+        output_path: Path (or str) to save the transformed video.
         transform: Transform to apply to each frame.
         fps: Output frame rate. If None, uses source FPS.
         crf: Constant rate factor for video quality (0-51, lower is better).
@@ -95,6 +95,8 @@ def transform_video(
         For embedded HDF5 videos, use `transform_embedded_video()` instead.
     """
     from sleap_io.io.video_writing import VideoWriter
+
+    output_path = Path(output_path)
 
     # Get frame indices to iterate over
     frame_inds = _get_frame_indices(video)
@@ -355,8 +357,8 @@ def _update_videos_json(output_path: Path, videos: list["Video"]) -> None:
 def transform_labels(
     labels: "Labels",
     transforms: dict[int, Transform] | Transform,
-    output_path: Path,
-    video_output_dir: Path | None = None,
+    output_path: str | Path,
+    video_output_dir: str | Path | None = None,
     fps: float | None = None,
     crf: int = 25,
     preset: str = "superfast",
@@ -371,8 +373,8 @@ def transform_labels(
         labels: Source Labels object.
         transforms: Either a single Transform to apply to all videos, or a dict
             mapping video indices to their respective Transforms.
-        output_path: Path to save transformed SLP file.
-        video_output_dir: Directory for transformed videos. If None, uses
+        output_path: Path (or str) to save the transformed SLP file.
+        video_output_dir: Directory (str or Path) for transformed videos. If None, uses
             "{output_path.stem}.videos/". Ignored for embedded videos.
         fps: Output frame rate. If None, preserves source FPS. Ignored for embedded.
         crf: Constant rate factor for video quality (0-51, lower is better).
@@ -393,6 +395,10 @@ def transform_labels(
         parameters are ignored for embedded videos.
     """
     from sleap_io.model.video import Video
+
+    output_path = Path(output_path)
+    if video_output_dir is not None:
+        video_output_dir = Path(video_output_dir)
 
     # Normalize transforms to dict
     if isinstance(transforms, Transform):
