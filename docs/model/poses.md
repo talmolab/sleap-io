@@ -199,7 +199,7 @@ A pose `Instance` can be summarized as a single point without losing its metadat
 Centroids can be turned back into single-node instances with
 [`Centroid.to_instance`][sleap_io.Centroid.to_instance], so the two
 representations are fully interchangeable. See
-[Regions → Centroids](regions.md#centroids) for the full data model.
+[Regions → Centroids](centroids.md) for the full data model.
 
 ---
 

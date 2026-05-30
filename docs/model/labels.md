@@ -7,7 +7,7 @@
 The core data structures form a layered hierarchy:
 
 - **[`Labels`](#sleap_io.Labels)** is the top-level container: it owns everything in a project.
-- **[`LabeledFrame`](#sleap_io.LabeledFrame)** groups all annotations for one frame of one video — pose [`instances`](poses.md), [`centroids`](regions.md), [`bboxes`](regions.md), [`masks`](regions.md), [`label_images`](regions.md), and [`rois`](regions.md).
+- **[`LabeledFrame`](#sleap_io.LabeledFrame)** groups all annotations for one frame of one video — pose [`instances`](poses.md), [`centroids`](centroids.md), [`bboxes`](boxes.md), [`masks`](segmentation.md), [`label_images`](segmentation.md), and [`rois`](rois.md).
 - **[`SuggestionFrame`](#sleap_io.SuggestionFrame)** is a lightweight pointer to frames suggested for annotation (no instance data).
 - **[`LabelsSet`](#sleap_io.LabelsSet)** manages named collections of `Labels` (e.g., train/val/test splits).
 
@@ -258,8 +258,9 @@ labels.static_rois.append(arena)
 
 !!! note "See also"
 
-    See [Regions](regions.md) for details on creating spatial annotation objects
-    and [Working with annotations in frames](regions.md#working-with-annotations-in-frames)
+    See [Centroids](centroids.md), [Boxes](boxes.md), [ROIs](rois.md), and
+    [Segmentation](segmentation.md) for details on creating spatial annotation
+    objects, and [Working with annotations in frames](index.md#working-with-annotations-in-frames)
     for more examples.
 
 ### Saving
@@ -281,7 +282,7 @@ labels.save("output.pkg.slp", embed=True)
 
 ## Labeled frames
 
-A [`LabeledFrame`](#sleap_io.LabeledFrame) contains all annotations for a single frame of a [`Video`](video.md). Each frame holds a list of [`Instance`](poses.md) and/or [`PredictedInstance`](poses.md) objects, along with optional spatial annotations: [`centroids`](regions.md), [`bboxes`](regions.md) (bounding boxes), [`masks`](regions.md) (segmentation masks), [`label_images`](regions.md), and [`rois`](regions.md) (regions of interest).
+A [`LabeledFrame`](#sleap_io.LabeledFrame) contains all annotations for a single frame of a [`Video`](video.md). Each frame holds a list of [`Instance`](poses.md) and/or [`PredictedInstance`](poses.md) objects, along with optional spatial annotations: [`centroids`](centroids.md), [`bboxes`](boxes.md) (bounding boxes), [`masks`](segmentation.md) (segmentation masks), [`label_images`](segmentation.md), and [`rois`](rois.md) (regions of interest).
 
 ```pycon
 >>> import sleap_io as sio

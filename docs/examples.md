@@ -150,7 +150,7 @@ labels.save("boxes.slp")
 ```
 
 !!! note "See also"
-    - [Regions: Bounding boxes](model/regions.md#bounding-boxes) — full API and metadata fields
+    - [Regions: Bounding boxes](model/boxes.md) — full API and metadata fields
     - [Formats: COCO](formats/index.md#coco-format-json) and [Ultralytics](formats/index.md#ultralytics-yolo-format) for detection round-trips
 
 ### Centroid tracking and TrackMate import
@@ -192,7 +192,7 @@ print(len(labels.centroids), "centroid detections")
 ```
 
 !!! note "See also"
-    - [Regions: Centroids](model/regions.md#centroids) — full API
+    - [Regions: Centroids](model/centroids.md) — full API
     - [Formats: TrackMate](formats/trackmate.md) — spots/edges/tracks CSV layout
 
 ### Cross-session identity and 3-D instances
@@ -258,7 +258,7 @@ labels = sio.load_file("regions.geojson")
 
 !!! note "See also"
     - [Formats: GeoJSON](formats/index.md#geojson-format-geojson) — schema and movement-library interop
-    - [Regions: Static vs. temporal ROIs](model/regions.md#static-vs-temporal-rois)
+    - [Regions: Static vs. temporal ROIs](model/rois.md#static-vs-temporal-rois)
 
 ### Adding annotations to frames (type dispatch)
 
@@ -293,7 +293,7 @@ labels.static_rois # video-level ROIs (separate from frame-level lf.rois)
 ```
 
 !!! note "See also"
-    [Regions → Working with annotations in frames](model/regions.md#working-with-annotations-in-frames) for more context on the flat-vs-nested views.
+    [Regions → Working with annotations in frames](model/index.md#working-with-annotations-in-frames) for more context on the flat-vs-nested views.
 
 ### Fast O(1) frame and track lookups
 
@@ -1086,6 +1086,9 @@ print(sio.get_default_image_plugin())  # "opencv"
 
 Work with dense per-pixel instance segmentation data (e.g., from [Cellpose](https://www.cellpose.org/) or [StarDist](https://github.com/stardist/stardist)).
 
+!!! tip "Full reference"
+    For the complete `SegmentationMask` / `LabelImage` API — factory methods, streaming writes, TIFF I/O, merging, and lazy loading — see the **[Segmentation](model/segmentation.md)** reference page.
+
 ### Import segmentation masks to SLP
 
 Convert a `(T, H, W)` integer mask array into an SLP file with object metadata.
@@ -1130,9 +1133,9 @@ labels.save("segmentation.slp")
     after tracking). Without `create_tracks`, objects have no cross-frame identity.
 
 !!! note "See also"
-    - [Regions: Label images](model/regions.md#label-images): Full label image data model documentation
-    - [`PredictedLabelImage.from_stack`](model/regions.md#sleap_io.PredictedLabelImage.from_stack): Stack conversion API
-    - [`PredictedLabelImage.from_numpy`](model/regions.md#sleap_io.PredictedLabelImage.from_numpy): Per-frame conversion API
+    - [Regions: Label images](model/segmentation.md#label-images): Full label image data model documentation
+    - [`PredictedLabelImage.from_stack`](model/segmentation.md#sleap_io.PredictedLabelImage.from_stack): Stack conversion API
+    - [`PredictedLabelImage.from_numpy`](model/segmentation.md#sleap_io.PredictedLabelImage.from_numpy): Per-frame conversion API
 
 ### Import per-object binary masks to SLP
 
@@ -1172,8 +1175,8 @@ labels.save("sam_output.slp")
     - **`from_numpy`**: You have a single `(H, W)` integer array for one frame.
 
 !!! note "See also"
-    - [Regions: From binary masks](model/regions.md#from-binary-masks): Full `from_binary_masks` documentation
-    - [`PredictedLabelImage.from_binary_masks`](model/regions.md#sleap_io.PredictedLabelImage.from_binary_masks): API reference
+    - [Regions: From binary masks](model/segmentation.md#from-binary-masks): Full `from_binary_masks` documentation
+    - [`PredictedLabelImage.from_binary_masks`](model/segmentation.md#sleap_io.PredictedLabelImage.from_binary_masks): API reference
 
 ### Stream large segmentation results to SLP
 
@@ -1226,8 +1229,8 @@ with sio.LabelImageWriter("output.slp", video=video) as writer:
     ~60 MB raw to ~0.6 MB in the SLP file.
 
 !!! note "See also"
-    - [Regions: Streaming writes](model/regions.md#streaming-writes): Full `LabelImageWriter` documentation
-    - [`LabelImageWriter`](model/regions.md#sleap_io.LabelImageWriter): API reference
+    - [Regions: Streaming writes](model/segmentation.md#streaming-writes): Full `LabelImageWriter` documentation
+    - [`LabelImageWriter`](model/segmentation.md#sleap_io.LabelImageWriter): API reference
 
 ### Extract segmentation data from SLP
 
@@ -1265,13 +1268,13 @@ for mask in li.to_masks():
     For a dataset with 42 frames at 592x608 with 21 objects:
 
     - `all_masks.shape`: `(42, 592, 608)`, dtype `int32`
-    - `li.to_masks()`: list of 21 [`SegmentationMask`](model/regions.md#segmentation-masks) objects
+    - `li.to_masks()`: list of 21 [`SegmentationMask`](model/segmentation.md#segmentation-masks) objects
     - Each mask: boolean array `(592, 608)` for one object
 
 !!! note "See also"
-    - [Regions: Lazy loading](model/regions.md#lazy-loading): How lazy pixel data access works
+    - [Regions: Lazy loading](model/segmentation.md#lazy-loading): How lazy pixel data access works
     - [TIFF Format](formats/tiff.md): TIFF label image I/O details
-    - [`LabelImage.to_masks`](model/regions.md#sleap_io.LabelImage.to_masks): Decomposition API
+    - [`LabelImage.to_masks`](model/segmentation.md#sleap_io.LabelImage.to_masks): Decomposition API
 
 ### Merge segmentation results
 
@@ -1302,7 +1305,7 @@ print(f"Merged: {len(merged.label_images)} total frames")
 
 !!! note "See also"
     - [Merging: Label images](merging.md#merging-label-images): Full merge documentation
-    - [`merge_label_images`](model/regions.md#sleap_io.merge_label_images): API reference
+    - [`merge_label_images`](model/segmentation.md#sleap_io.merge_label_images): API reference
 
 ### Parallel segmentation pipeline
 
