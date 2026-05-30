@@ -973,14 +973,98 @@
   
   
     <li class="md-nav__item">
-      <a href="../model/regions/" class="md-nav__link">
+      <a href="../model/centroids/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Regions
+    Centroids
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/boxes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boxes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/rois/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ROIs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/segmentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segmentation
   
 
     
@@ -3476,7 +3560,7 @@ column of the points array:
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/regions/#bounding-boxes">Regions: Bounding boxes</a> — full API and metadata fields</li>
+<li><a href="../model/boxes/">Regions: Bounding boxes</a> — full API and metadata fields</li>
 <li><a href="../formats/#coco-format-json">Formats: COCO</a> and <a href="../formats/#ultralytics-yolo-format">Ultralytics</a> for detection round-trips</li>
 </ul>
 </div>
@@ -3514,7 +3598,7 @@ column of the points array:
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/regions/#centroids">Regions: Centroids</a> — full API</li>
+<li><a href="../model/centroids/">Regions: Centroids</a> — full API</li>
 <li><a href="../formats/trackmate/">Formats: TrackMate</a> — spots/edges/tracks CSV layout</li>
 </ul>
 </div>
@@ -3575,7 +3659,7 @@ column of the points array:
 <p class="admonition-title">See also</p>
 <ul>
 <li><a href="../formats/#geojson-format-geojson">Formats: GeoJSON</a> — schema and movement-library interop</li>
-<li><a href="../model/regions/#static-vs-temporal-rois">Regions: Static vs. temporal ROIs</a></li>
+<li><a href="../model/rois/#static-vs-temporal-rois">Regions: Static vs. temporal ROIs</a></li>
 </ul>
 </div>
 <h3 id="adding-annotations-to-frames-type-dispatch">Adding annotations to frames (type dispatch)<a class="headerlink" href="#adding-annotations-to-frames-type-dispatch" title="Permanent link">&para;</a></h3>
@@ -3608,7 +3692,7 @@ column of the points array:
 </code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
-<p><a href="../model/regions/#working-with-annotations-in-frames">Regions → Working with annotations in frames</a> for more context on the flat-vs-nested views.</p>
+<p><a href="../model/#working-with-annotations-in-frames">Regions → Working with annotations in frames</a> for more context on the flat-vs-nested views.</p>
 </div>
 <h3 id="fast-o1-frame-and-track-lookups">Fast O(1) frame and track lookups<a class="headerlink" href="#fast-o1-frame-and-track-lookups" title="Permanent link">&para;</a></h3>
 <p><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;get_frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;video&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;frame_idx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../model/labels/#sleap_io.Labels.get_frame"><code>Labels.get_frame</code></a> and <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;get_track_annotations&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;video&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;track&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../model/labels/#sleap_io.Labels.get_track_annotations"><code>Labels.get_track_annotations</code></a> replace O(n) linear scans with O(1) dictionary lookups backed by lazy indices. Use them when iterating over large datasets or cross-referencing by frame / track.</p>
@@ -4392,6 +4476,10 @@ which provides purpose-built tools for pose trajectory processing.</p>
 </div>
 <h2 id="segmentation">Segmentation<a class="headerlink" href="#segmentation" title="Permanent link">&para;</a></h2>
 <p>Work with dense per-pixel instance segmentation data (e.g., from <a href="https://www.cellpose.org/">Cellpose</a> or <a href="https://github.com/stardist/stardist">StarDist</a>).</p>
+<div class="admonition tip">
+<p class="admonition-title">Full reference</p>
+<p>For the complete <code>SegmentationMask</code> / <code>LabelImage</code> API — factory methods, streaming writes, TIFF I/O, merging, and lazy loading — see the <strong><a href="../model/segmentation/">Segmentation</a></strong> reference page.</p>
+</div>
 <h3 id="import-segmentation-masks-to-slp">Import segmentation masks to SLP<a class="headerlink" href="#import-segmentation-masks-to-slp" title="Permanent link">&para;</a></h3>
 <p>Convert a <code>(T, H, W)</code> integer mask array into an SLP file with object metadata.</p>
 <div class="highlight"><span class="filename">segmentation_to_slp.py</span><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1"></a><a href="#__codelineno-41-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
@@ -4435,9 +4523,9 @@ after tracking). Without <code>create_tracks</code>, objects have no cross-frame
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/regions/#label-images">Regions: Label images</a>: Full label image data model documentation</li>
-<li><a href="../model/regions/#sleap_io.PredictedLabelImage.from_stack"><code>PredictedLabelImage.from_stack</code></a>: Stack conversion API</li>
-<li><a href="../model/regions/#sleap_io.PredictedLabelImage.from_numpy"><code>PredictedLabelImage.from_numpy</code></a>: Per-frame conversion API</li>
+<li><a href="../model/segmentation/#label-images">Regions: Label images</a>: Full label image data model documentation</li>
+<li><a href="../model/segmentation/#sleap_io.PredictedLabelImage.from_stack"><code>PredictedLabelImage.from_stack</code></a>: Stack conversion API</li>
+<li><a href="../model/segmentation/#sleap_io.PredictedLabelImage.from_numpy"><code>PredictedLabelImage.from_numpy</code></a>: Per-frame conversion API</li>
 </ul>
 </div>
 <h3 id="import-per-object-binary-masks-to-slp">Import per-object binary masks to SLP<a class="headerlink" href="#import-per-object-binary-masks-to-slp" title="Permanent link">&para;</a></h3>
@@ -4479,8 +4567,8 @@ after tracking). Without <code>create_tracks</code>, objects have no cross-frame
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/regions/#from-binary-masks">Regions: From binary masks</a>: Full <code>from_binary_masks</code> documentation</li>
-<li><a href="../model/regions/#sleap_io.PredictedLabelImage.from_binary_masks"><code>PredictedLabelImage.from_binary_masks</code></a>: API reference</li>
+<li><a href="../model/segmentation/#from-binary-masks">Regions: From binary masks</a>: Full <code>from_binary_masks</code> documentation</li>
+<li><a href="../model/segmentation/#sleap_io.PredictedLabelImage.from_binary_masks"><code>PredictedLabelImage.from_binary_masks</code></a>: API reference</li>
 </ul>
 </div>
 <h3 id="stream-large-segmentation-results-to-slp">Stream large segmentation results to SLP<a class="headerlink" href="#stream-large-segmentation-results-to-slp" title="Permanent link">&para;</a></h3>
@@ -4531,8 +4619,8 @@ compressed data is in memory at a time. A 42-frame (592x608) dataset compresses 
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/regions/#streaming-writes">Regions: Streaming writes</a>: Full <code>LabelImageWriter</code> documentation</li>
-<li><a href="../model/regions/#sleap_io.LabelImageWriter"><code>LabelImageWriter</code></a>: API reference</li>
+<li><a href="../model/segmentation/#streaming-writes">Regions: Streaming writes</a>: Full <code>LabelImageWriter</code> documentation</li>
+<li><a href="../model/segmentation/#sleap_io.LabelImageWriter"><code>LabelImageWriter</code></a>: API reference</li>
 </ul>
 </div>
 <h3 id="extract-segmentation-data-from-slp">Extract segmentation data from SLP<a class="headerlink" href="#extract-segmentation-data-from-slp" title="Permanent link">&para;</a></h3>
@@ -4568,21 +4656,21 @@ compressed data is in memory at a time. A 42-frame (592x608) dataset compresses 
 <p>For a dataset with 42 frames at 592x608 with 21 objects:</p>
 <ul>
 <li><code>all_masks.shape</code>: <code>(42, 592, 608)</code>, dtype <code>int32</code></li>
-<li><code>li.to_masks()</code>: list of 21 <a href="../model/regions/#segmentation-masks"><code>SegmentationMask</code></a> objects</li>
+<li><code>li.to_masks()</code>: list of 21 <a href="../model/segmentation/#segmentation-masks"><code>SegmentationMask</code></a> objects</li>
 <li>Each mask: boolean array <code>(592, 608)</code> for one object</li>
 </ul>
 </details>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/regions/#lazy-loading">Regions: Lazy loading</a>: How lazy pixel data access works</li>
+<li><a href="../model/segmentation/#lazy-loading">Regions: Lazy loading</a>: How lazy pixel data access works</li>
 <li><a href="../formats/tiff/">TIFF Format</a>: TIFF label image I/O details</li>
-<li><a href="../model/regions/#sleap_io.LabelImage.to_masks"><code>LabelImage.to_masks</code></a>: Decomposition API</li>
+<li><a href="../model/segmentation/#sleap_io.LabelImage.to_masks"><code>LabelImage.to_masks</code></a>: Decomposition API</li>
 </ul>
 </div>
 <h3 id="merge-segmentation-results">Merge segmentation results<a class="headerlink" href="#merge-segmentation-results" title="Permanent link">&para;</a></h3>
 <p>Combine label images from multiple SLP files into one (e.g., after parallel
-batch processing). This uses <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sleap_io&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;merge_label_images&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;source_paths&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dest_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;video&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../model/regions/#sleap_io.merge_label_images"><code>merge_label_images()</code></a>,
+batch processing). This uses <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sleap_io&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;merge_label_images&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;source_paths&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dest_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;video&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../model/segmentation/#sleap_io.merge_label_images"><code>merge_label_images()</code></a>,
 a specialized function that copies compressed HDF5 chunks directly between files
 without decompressing pixel data — much faster than loading everything into
 memory with <a href="../merging/"><code>Labels.merge()</code></a>.</p>
@@ -4608,11 +4696,11 @@ rather than CPU-bound.</p>
 <p class="admonition-title">See also</p>
 <ul>
 <li><a href="../merging/#merging-label-images">Merging: Label images</a>: Full merge documentation</li>
-<li><a href="../model/regions/#sleap_io.merge_label_images"><code>merge_label_images</code></a>: API reference</li>
+<li><a href="../model/segmentation/#sleap_io.merge_label_images"><code>merge_label_images</code></a>: API reference</li>
 </ul>
 </div>
 <h3 id="parallel-segmentation-pipeline">Parallel segmentation pipeline<a class="headerlink" href="#parallel-segmentation-pipeline" title="Permanent link">&para;</a></h3>
-<p>Combine the streaming writer and the zero-decompression merger to build a parallel batch segmentation pipeline. Each worker streams its own shard with <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImageWriter&lt;/code&gt;" href="../model/regions/#sleap_io.LabelImageWriter"><code>LabelImageWriter</code></a>, and a final <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sleap_io&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;merge_label_images&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;source_paths&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dest_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;video&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../model/regions/#sleap_io.merge_label_images"><code>merge_label_images</code></a> call concatenates the shards without decompressing a single pixel.</p>
+<p>Combine the streaming writer and the zero-decompression merger to build a parallel batch segmentation pipeline. Each worker streams its own shard with <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImageWriter&lt;/code&gt;" href="../model/segmentation/#sleap_io.LabelImageWriter"><code>LabelImageWriter</code></a>, and a final <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sleap_io&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;merge_label_images&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;source_paths&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dest_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;video&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../model/segmentation/#sleap_io.merge_label_images"><code>merge_label_images</code></a> call concatenates the shards without decompressing a single pixel.</p>
 <div class="highlight"><span class="filename">parallel_segmentation.py</span><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1"></a><a href="#__codelineno-48-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-48-2" name="__codelineno-48-2"></a><a href="#__codelineno-48-2"><span class="linenos" data-linenos=" 2 "></span></a>
 <a id="__codelineno-48-3" name="__codelineno-48-3"></a><a href="#__codelineno-48-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">run_shard</span><span class="p">(</span><span class="n">video_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">frame_range</span><span class="p">:</span> <span class="nb">range</span><span class="p">,</span> <span class="n">shard_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>

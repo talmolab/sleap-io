@@ -73,6 +73,14 @@
          <lastmod>2026-05-30</lastmod>
     </url>
     <url>
+         <loc>https://io.sleap.ai/dev/model/boxes/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/model/centroids/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
          <loc>https://io.sleap.ai/dev/model/labels/</loc>
          <lastmod>2026-05-30</lastmod>
     </url>
@@ -82,6 +90,14 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/model/regions/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/model/rois/</loc>
+         <lastmod>2026-05-30</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/model/segmentation/</loc>
          <lastmod>2026-05-30</lastmod>
     </url>
     <url>

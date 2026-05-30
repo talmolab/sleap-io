@@ -829,14 +829,98 @@
   
   
     <li class="md-nav__item">
-      <a href="regions/" class="md-nav__link">
+      <a href="centroids/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Regions
+    Centroids
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="boxes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boxes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="rois/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ROIs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="segmentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segmentation
   
 
     
@@ -3088,6 +3172,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#working-with-annotations-in-frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Working with annotations in frames
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#class-diagram" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3138,7 +3233,39 @@
 <p><strong><a href="video/">Video</a></strong>: Lazy array-like access to video data. <code>Video</code> wraps multiple backends (MP4, HDF5, image sequences) behind a unified interface.</p>
 <p><strong><a href="poses/">Poses</a></strong>: The skeleton template and pose instances. A <code>Skeleton</code> declares landmark types (<code>Node</code>), connections (<code>Edge</code>), and symmetries. <code>Instance</code> and <code>PredictedInstance</code> store per-animal coordinates and confidence scores. <code>Track</code> links the same animal across frames.</p>
 <p><strong><a href="3d/">3D</a></strong>: Multi-camera support. <code>Camera</code> stores calibration parameters, <code>RecordingSession</code> links cameras to videos, and <code>FrameGroup</code>/<code>InstanceGroup</code> pair 2D views for 3D reconstruction.</p>
-<p><strong><a href="regions/">Regions</a></strong>: Spatial annotations beyond keypoints. <code>BoundingBox</code> for detection, <code>ROI</code> for vector polygons, <code>SegmentationMask</code> for pixel-level binary masks, and <code>LabelImage</code> for dense instance segmentation.</p>
+<p><strong>Spatial annotations</strong>: Annotation types beyond keypoints — <a href="centroids/">Centroids</a> and <a href="boxes/">Boxes</a> for detection, <a href="rois/">ROIs</a> for vector polygons, and <a href="segmentation/">Segmentation</a> (<code>SegmentationMask</code>, <code>LabelImage</code>) for pixel-level masks.</p>
+<h2 id="working-with-annotations-in-frames">Working with annotations in frames<a class="headerlink" href="#working-with-annotations-in-frames" title="Permanent link">&para;</a></h2>
+<p>Spatial annotations (centroids, boxes, ROIs, masks, label images) are nested in
+<a href="labels/"><code>LabeledFrame</code></a> — you add them directly to a frame's annotation
+lists. <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;append&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;annotation&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="labels/#sleap_io.LabeledFrame.append"><code>LabeledFrame.append</code></a> dispatches on the
+runtime type of the annotation and pushes it onto the correct per-type list — you
+never have to touch <code>lf.instances</code>, <code>lf.bboxes</code>, <code>lf.centroids</code>, <code>lf.masks</code>,
+<code>lf.label_images</code>, or <code>lf.rois</code> directly.</p>
+<div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">shapely.geometry</span><span class="w"> </span><span class="kn">import</span> <span class="n">box</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">,</span> <span class="n">open_backend</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lf</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">LabeledFrame</span><span class="p">(</span><span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">UserBoundingBox</span><span class="p">(</span><span class="n">x1</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">y1</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">x2</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">y2</span><span class="o">=</span><span class="mi">60</span><span class="p">))</span>  <span class="c1"># → lf.bboxes</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">UserCentroid</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">200</span><span class="p">))</span>                    <span class="c1"># → lf.centroids</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">UserSegmentationMask</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="nb">bool</span><span class="p">)))</span>  <span class="c1"># → lf.masks</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">UserLabelImage</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="nb">int</span><span class="p">)))</span>         <span class="c1"># → lf.label_images</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">UserROI</span><span class="p">(</span><span class="n">geometry</span><span class="o">=</span><span class="n">box</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)))</span>            <span class="c1"># → lf.rois</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">labeled_frames</span><span class="o">=</span><span class="p">[</span><span class="n">lf</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">centroids</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">bboxes</span><span class="p">))</span>
+<span class="go">1 1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">masks</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">label_images</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">rois</span><span class="p">))</span>
+<span class="go">1 1 1</span>
+</code></pre></div>
+<p>The <code>labels.centroids</code>, <code>labels.bboxes</code>, <code>labels.masks</code>, <code>labels.label_images</code>,
+and <code>labels.rois</code> properties return flattened read-only views across all frames.
+Static, video-level ROIs (with no frame association) live separately on
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;static_rois&lt;/span&gt;&lt;/code&gt;
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-property&quot;&gt;&lt;code&gt;property&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt;" href="labels/#sleap_io.Labels.static_rois"><code>Labels.static_rois</code></a> — see
+<a href="rois/#static-vs-temporal-rois">Static vs. temporal ROIs</a>.</p>
 <h2 id="class-diagram">Class diagram<a class="headerlink" href="#class-diagram" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>classDiagram
     direction TB
@@ -3455,83 +3582,83 @@
 <td>Model-predicted 3D keypoints with per-point scores</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>Centroid</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="centroids/"><code>Centroid</code></a></td>
+<td><a href="centroids/">Centroids</a></td>
 <td>Abstract base centroid point annotation</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>UserCentroid</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="centroids/"><code>UserCentroid</code></a></td>
+<td><a href="centroids/">Centroids</a></td>
 <td>Human-annotated centroid</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>PredictedCentroid</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="centroids/"><code>PredictedCentroid</code></a></td>
+<td><a href="centroids/">Centroids</a></td>
 <td>Model-predicted centroid with score</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>ROI</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="rois/"><code>ROI</code></a></td>
+<td><a href="rois/">ROIs</a></td>
 <td>Vector geometry annotation (polygon, etc.)</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>SegmentationMask</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="segmentation/"><code>SegmentationMask</code></a></td>
+<td><a href="segmentation/">Segmentation</a></td>
 <td>Run-length encoded pixel mask</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>BoundingBox</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="boxes/"><code>BoundingBox</code></a></td>
+<td><a href="boxes/">Boxes</a></td>
 <td>Axis-aligned or rotated bounding box</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>UserBoundingBox</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="boxes/"><code>UserBoundingBox</code></a></td>
+<td><a href="boxes/">Boxes</a></td>
 <td>Human-annotated bounding box</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>PredictedBoundingBox</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="boxes/"><code>PredictedBoundingBox</code></a></td>
+<td><a href="boxes/">Boxes</a></td>
 <td>Model-predicted bounding box with score</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>UserROI</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="rois/"><code>UserROI</code></a></td>
+<td><a href="rois/">ROIs</a></td>
 <td>Human-annotated region of interest</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>PredictedROI</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="rois/"><code>PredictedROI</code></a></td>
+<td><a href="rois/">ROIs</a></td>
 <td>Model-predicted region of interest with score</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>UserSegmentationMask</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="segmentation/"><code>UserSegmentationMask</code></a></td>
+<td><a href="segmentation/">Segmentation</a></td>
 <td>Human-annotated segmentation mask</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>PredictedSegmentationMask</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="segmentation/"><code>PredictedSegmentationMask</code></a></td>
+<td><a href="segmentation/">Segmentation</a></td>
 <td>Model-predicted segmentation mask with score</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>UserLabelImage</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="segmentation/"><code>UserLabelImage</code></a></td>
+<td><a href="segmentation/">Segmentation</a></td>
 <td>Human-annotated label image</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>PredictedLabelImage</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="segmentation/"><code>PredictedLabelImage</code></a></td>
+<td><a href="segmentation/">Segmentation</a></td>
 <td>Model-predicted label image with score</td>
 </tr>
 <tr>
-<td><a href="regions/"><code>LabelImage</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="segmentation/"><code>LabelImage</code></a></td>
+<td><a href="segmentation/">Segmentation</a></td>
 <td>Dense integer label image for instance segmentation</td>
 </tr>
 <tr>
-<td><a href="regions/#streaming-writes"><code>LabelImageWriter</code></a></td>
-<td><a href="regions/">Regions</a></td>
+<td><a href="segmentation/#streaming-writes"><code>LabelImageWriter</code></a></td>
+<td><a href="segmentation/">Segmentation</a></td>
 <td>Streaming writer for chunked label image SLP files</td>
 </tr>
 </tbody>

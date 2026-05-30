@@ -827,14 +827,98 @@
   
   
     <li class="md-nav__item">
-      <a href="../../model/regions/" class="md-nav__link">
+      <a href="../../model/centroids/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Regions
+    Centroids
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model/boxes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boxes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model/rois/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ROIs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model/segmentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segmentation
   
 
     
@@ -3278,7 +3362,7 @@
 <div class="md-source-file"><a href="../tiff.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="tiff-label-image-format">TIFF Label Image Format<a class="headerlink" href="#tiff-label-image-format" title="Permanent link">&para;</a></h1>
 <p>TIFF files store dense integer label images for instance segmentation. Each pixel value is a non-negative integer: <code>0</code> is background, and positive values identify distinct objects. This is the standard output of cell segmentation tools like <a href="https://www.cellpose.org/">Cellpose</a> and <a href="https://github.com/stardist/stardist">StarDist</a>.</p>
-<p>sleap-io reads and writes these label images as <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImage&lt;/code&gt;" href="../../model/regions/#sleap_io.LabelImage"><code>LabelImage</code></a> objects via the <a href="https://pypi.org/project/tifffile/"><code>tifffile</code></a> library.</p>
+<p>sleap-io reads and writes these label images as <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImage&lt;/code&gt;" href="../../model/segmentation/#sleap_io.LabelImage"><code>LabelImage</code></a> objects via the <a href="https://pypi.org/project/tifffile/"><code>tifffile</code></a> library.</p>
 <h2 id="file-structures">File Structures<a class="headerlink" href="#file-structures" title="Permanent link">&para;</a></h2>
 <p>Three layouts are supported:</p>
 <table>
@@ -3340,7 +3424,7 @@
 <a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="s2">&quot;labels.tif&quot;</span><span class="p">,</span> <span class="n">tracks</span><span class="o">=</span><span class="n">tracks</span><span class="p">,</span> <span class="n">categories</span><span class="o">=</span><span class="n">categories</span>
 <a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="p">)</span>
 </code></pre></div>
-<p>Each returned <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImage&lt;/code&gt;" href="../../model/regions/#sleap_io.LabelImage"><code>LabelImage</code></a> corresponds to one frame in the stack, ordered by position (0, 1, 2, ...).</p>
+<p>Each returned <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImage&lt;/code&gt;" href="../../model/segmentation/#sleap_io.LabelImage"><code>LabelImage</code></a> corresponds to one frame in the stack, ordered by position (0, 1, 2, ...).</p>
 <h2 id="writing">Writing<a class="headerlink" href="#writing" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
@@ -3395,9 +3479,9 @@ downstream analysis.</p>
 <div class="admonition tip">
 <p class="admonition-title">TIFF → SLP follow-ups</p>
 <ul>
-<li><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sleap_io&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;normalize_label_ids&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;label_images&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;by&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;track&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../../model/regions/#sleap_io.normalize_label_ids"><code>sio.normalize_label_ids</code></a> rewrites per-frame label IDs so they are globally consistent across a stack — essential when upstream segmentation assigns different IDs in different frames (e.g., Cellpose without tracking). See <a href="../../model/regions/#normalizing-label-ids">Regions → Normalizing label IDs</a>.</li>
-<li><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sleap_io&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;merge_label_images&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;source_paths&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dest_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;video&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../../model/regions/#sleap_io.merge_label_images"><code>sio.merge_label_images</code></a> concatenates multiple chunked SLP files (e.g., parallel batch segmentation shards) via zero-decompression HDF5 chunk copies. See <a href="../../examples/#parallel-segmentation-pipeline">Examples → Parallel segmentation pipeline</a>.</li>
-<li><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImageWriter&lt;/code&gt;" href="../../model/regions/#sleap_io.LabelImageWriter"><code>sio.LabelImageWriter</code></a> streams <code>LabelImage</code> frames one at a time into SLP with constant memory — ideal for TIFF-stack pipelines that don't fit in memory. See <a href="../../model/regions/#streaming-writes">Regions → Streaming writes</a>.</li>
+<li><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sleap_io&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;normalize_label_ids&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;label_images&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;by&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;track&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../../model/segmentation/#sleap_io.normalize_label_ids"><code>sio.normalize_label_ids</code></a> rewrites per-frame label IDs so they are globally consistent across a stack — essential when upstream segmentation assigns different IDs in different frames (e.g., Cellpose without tracking). See <a href="../../model/segmentation/#normalizing-label-ids">Regions → Normalizing label IDs</a>.</li>
+<li><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sleap_io&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;merge_label_images&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;source_paths&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dest_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;video&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../../model/segmentation/#sleap_io.merge_label_images"><code>sio.merge_label_images</code></a> concatenates multiple chunked SLP files (e.g., parallel batch segmentation shards) via zero-decompression HDF5 chunk copies. See <a href="../../examples/#parallel-segmentation-pipeline">Examples → Parallel segmentation pipeline</a>.</li>
+<li><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabelImageWriter&lt;/code&gt;" href="../../model/segmentation/#sleap_io.LabelImageWriter"><code>sio.LabelImageWriter</code></a> streams <code>LabelImage</code> frames one at a time into SLP with constant memory — ideal for TIFF-stack pipelines that don't fit in memory. See <a href="../../model/segmentation/#streaming-writes">Regions → Streaming writes</a>.</li>
 </ul>
 </div>
 <div class="admonition note">

@@ -14,7 +14,39 @@ The data model is split into five areas, each covered on its own page:
 
 **[3D](3d.md)**: Multi-camera support. `Camera` stores calibration parameters, `RecordingSession` links cameras to videos, and `FrameGroup`/`InstanceGroup` pair 2D views for 3D reconstruction.
 
-**[Regions](regions.md)**: Spatial annotations beyond keypoints. `BoundingBox` for detection, `ROI` for vector polygons, `SegmentationMask` for pixel-level binary masks, and `LabelImage` for dense instance segmentation.
+**Spatial annotations**: Annotation types beyond keypoints — [Centroids](centroids.md) and [Boxes](boxes.md) for detection, [ROIs](rois.md) for vector polygons, and [Segmentation](segmentation.md) (`SegmentationMask`, `LabelImage`) for pixel-level masks.
+
+## Working with annotations in frames
+
+Spatial annotations (centroids, boxes, ROIs, masks, label images) are nested in
+[`LabeledFrame`](labels.md) — you add them directly to a frame's annotation
+lists. [`LabeledFrame.append`][sleap_io.LabeledFrame.append] dispatches on the
+runtime type of the annotation and pushes it onto the correct per-type list — you
+never have to touch `lf.instances`, `lf.bboxes`, `lf.centroids`, `lf.masks`,
+`lf.label_images`, or `lf.rois` directly.
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> from shapely.geometry import box
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> lf = sio.LabeledFrame(video=video, frame_idx=0)
+>>> lf.append(sio.UserBoundingBox(x1=10, y1=20, x2=50, y2=60))  # → lf.bboxes
+>>> lf.append(sio.UserCentroid(x=100, y=200))                    # → lf.centroids
+>>> lf.append(sio.UserSegmentationMask.from_numpy(np.zeros((8, 8), bool)))  # → lf.masks
+>>> lf.append(sio.UserLabelImage.from_numpy(np.zeros((8, 8), int)))         # → lf.label_images
+>>> lf.append(sio.UserROI(geometry=box(0, 0, 10, 10)))            # → lf.rois
+>>> labels = sio.Labels(labeled_frames=[lf])
+>>> print(len(labels.centroids), len(labels.bboxes))
+>>> print(len(labels.masks), len(labels.label_images), len(labels.rois))
+
+```
+
+The `labels.centroids`, `labels.bboxes`, `labels.masks`, `labels.label_images`,
+and `labels.rois` properties return flattened read-only views across all frames.
+Static, video-level ROIs (with no frame association) live separately on
+[`Labels.static_rois`][sleap_io.Labels.static_rois] — see
+[Static vs. temporal ROIs](rois.md#static-vs-temporal-rois).
 
 ## Class diagram
 
@@ -249,22 +281,22 @@ classDiagram
 | [`Identity`](3d.md#identity) | [3D](3d.md) | Cross-session persistent animal identity (distinct from per-video `Track`) |
 | [`Instance3D`](3d.md#instance3d) | [3D](3d.md) | Structured triangulated 3D keypoint storage |
 | [`PredictedInstance3D`](3d.md#instance3d) | [3D](3d.md) | Model-predicted 3D keypoints with per-point scores |
-| [`Centroid`](regions.md) | [Regions](regions.md) | Abstract base centroid point annotation |
-| [`UserCentroid`](regions.md) | [Regions](regions.md) | Human-annotated centroid |
-| [`PredictedCentroid`](regions.md) | [Regions](regions.md) | Model-predicted centroid with score |
-| [`ROI`](regions.md) | [Regions](regions.md) | Vector geometry annotation (polygon, etc.) |
-| [`SegmentationMask`](regions.md) | [Regions](regions.md) | Run-length encoded pixel mask |
-| [`BoundingBox`](regions.md) | [Regions](regions.md) | Axis-aligned or rotated bounding box |
-| [`UserBoundingBox`](regions.md) | [Regions](regions.md) | Human-annotated bounding box |
-| [`PredictedBoundingBox`](regions.md) | [Regions](regions.md) | Model-predicted bounding box with score |
-| [`UserROI`](regions.md) | [Regions](regions.md) | Human-annotated region of interest |
-| [`PredictedROI`](regions.md) | [Regions](regions.md) | Model-predicted region of interest with score |
-| [`UserSegmentationMask`](regions.md) | [Regions](regions.md) | Human-annotated segmentation mask |
-| [`PredictedSegmentationMask`](regions.md) | [Regions](regions.md) | Model-predicted segmentation mask with score |
-| [`UserLabelImage`](regions.md) | [Regions](regions.md) | Human-annotated label image |
-| [`PredictedLabelImage`](regions.md) | [Regions](regions.md) | Model-predicted label image with score |
-| [`LabelImage`](regions.md) | [Regions](regions.md) | Dense integer label image for instance segmentation |
-| [`LabelImageWriter`](regions.md#streaming-writes) | [Regions](regions.md) | Streaming writer for chunked label image SLP files |
+| [`Centroid`](centroids.md) | [Centroids](centroids.md) | Abstract base centroid point annotation |
+| [`UserCentroid`](centroids.md) | [Centroids](centroids.md) | Human-annotated centroid |
+| [`PredictedCentroid`](centroids.md) | [Centroids](centroids.md) | Model-predicted centroid with score |
+| [`ROI`](rois.md) | [ROIs](rois.md) | Vector geometry annotation (polygon, etc.) |
+| [`SegmentationMask`](segmentation.md) | [Segmentation](segmentation.md) | Run-length encoded pixel mask |
+| [`BoundingBox`](boxes.md) | [Boxes](boxes.md) | Axis-aligned or rotated bounding box |
+| [`UserBoundingBox`](boxes.md) | [Boxes](boxes.md) | Human-annotated bounding box |
+| [`PredictedBoundingBox`](boxes.md) | [Boxes](boxes.md) | Model-predicted bounding box with score |
+| [`UserROI`](rois.md) | [ROIs](rois.md) | Human-annotated region of interest |
+| [`PredictedROI`](rois.md) | [ROIs](rois.md) | Model-predicted region of interest with score |
+| [`UserSegmentationMask`](segmentation.md) | [Segmentation](segmentation.md) | Human-annotated segmentation mask |
+| [`PredictedSegmentationMask`](segmentation.md) | [Segmentation](segmentation.md) | Model-predicted segmentation mask with score |
+| [`UserLabelImage`](segmentation.md) | [Segmentation](segmentation.md) | Human-annotated label image |
+| [`PredictedLabelImage`](segmentation.md) | [Segmentation](segmentation.md) | Model-predicted label image with score |
+| [`LabelImage`](segmentation.md) | [Segmentation](segmentation.md) | Dense integer label image for instance segmentation |
+| [`LabelImageWriter`](segmentation.md#streaming-writes) | [Segmentation](segmentation.md) | Streaming writer for chunked label image SLP files |
 
 !!! tip "Hands-on examples"
 
