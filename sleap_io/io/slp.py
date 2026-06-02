@@ -14,6 +14,9 @@ Format version history:
             predicted variants (is_predicted, score) for masks/ROIs/label images;
             instance association for masks; string datasets for metadata
     - 2.0: Columnar bounding box storage (/bboxes group with x1/y1/x2/y2 datasets)
+    - 2.1: Spatial transform metadata on dense annotations (masks/label images)
+    - 2.2: Chunked label image data format (/label_image_data as rank-3 dataset)
+    - 2.3: Virtual on-read video crops (/video_crops dataset)
 """
 
 from __future__ import annotations
@@ -38,6 +41,7 @@ from sleap_io.io.utils import (
     read_hdf5_attrs,
     read_hdf5_dataset,
     sanitize_filename,
+    write_hdf5_dataset,
 )
 from sleap_io.io.video_reading import (
     HDF5Video,
@@ -189,6 +193,7 @@ def make_video(
     _hdf5_file: h5py.File | None = None,
     _url_headers: dict[str, str] | None = None,
     _url_stream_mode: str = "blockcache",
+    _crop_entry: dict | None = None,
 ) -> Video:
     """Create a `Video` object from a JSON dictionary.
 
@@ -206,6 +211,12 @@ def make_video(
             authenticated. Private; ignored for local files.
         _url_stream_mode: Remote streaming strategy for a URL-backed video. Private;
             ignored for local files.
+        _crop_entry: Optional ``{"crop": [x1, y1, x2, y2], "fill": n}`` record from
+            the ``/video_crops`` dataset (see ``read_video_crops``). When present,
+            the reconstructed (uncropped) backend is re-wrapped in a
+            ``CropVideoBackend`` and the crop is seeded into ``backend_metadata`` so
+            both the open and closed paths report the cropped view. Private; mirrors
+            the ``_url_headers`` threading pattern.
     """
     backend_metadata = video_json["backend"]
 
@@ -366,6 +377,68 @@ def make_video(
             sanitize_filename(p) if isinstance(p, Path) else p for p in video_path
         ]
 
+    # Crop reconstruction (D-126, §6.4): the inner/source backend was just rebuilt
+    # from the UNCROPPED ``videos_json`` entry; re-wrap it in a ``CropVideoBackend``
+    # (open path) and ALWAYS seed the crop record on ``backend_metadata`` so the
+    # closed path reports the cropped shape and ``Video.open()`` can re-wrap.
+    if _crop_entry is not None:
+        from sleap_io.io.video_reading import CropVideoBackend
+
+        crop = tuple(_crop_entry["crop"])
+        fill = _crop_entry.get("fill", 0)
+        x1, y1, x2, y2 = crop
+
+        if open_backend and backend is not None:
+            # Optionally reuse the reconstructed source backend as the shared
+            # inner (D-126) so a reloaded mosaic of tiles over one physical file
+            # decodes each frame once (the source Video owns that decoder, so the
+            # tile does not). Only safe when the source reports the SAME shape as
+            # the just-rebuilt inner: an embedded/frame-remapped source has a
+            # different frame index space and must NOT be substituted (it would
+            # read the wrong frame). On any mismatch, wrap the reconstructed inner
+            # directly.
+            reuse_inner = None
+            if (
+                source_video is not None
+                and source_video.backend is not None
+                and not isinstance(source_video.backend, CropVideoBackend)
+            ):
+                try:
+                    # Reuse only when the source is the SAME physical file/dataset
+                    # (not merely the same shape), so two equal-shaped distinct
+                    # sources are never conflated (DI-5).
+                    same_file = source_video.backend.filename == backend.filename and (
+                        getattr(source_video.backend, "dataset", None)
+                        == getattr(backend, "dataset", None)
+                    )
+                    if same_file and source_video.backend.shape == backend.shape:
+                        reuse_inner = source_video.backend
+                except Exception:
+                    reuse_inner = None
+            if reuse_inner is not None:
+                backend = CropVideoBackend.wrap(
+                    inner=reuse_inner, crop=crop, fill=fill, owns_inner=False
+                )
+            else:
+                backend = CropVideoBackend.wrap(inner=backend, crop=crop, fill=fill)
+
+        # Copy before overwriting so a shared dict is never mutated (D-126), then
+        # record the cropped shape derived from the uncropped inner/source shape.
+        backend_metadata = dict(backend_metadata)
+        inner_shape = backend_metadata.get("shape")
+        if inner_shape is not None:
+            # Preserve the uncropped source shape so a closed re-serialize keeps
+            # videos_json describing the full frame (DI-2).
+            backend_metadata["source_shape"] = list(inner_shape)
+            backend_metadata["shape"] = (
+                inner_shape[0],
+                y2 - y1,
+                x2 - x1,
+                inner_shape[3],
+            )
+        backend_metadata["crop"] = list(crop)
+        backend_metadata["crop_fill"] = fill
+
     video = Video(
         filename=video_path,
         backend=backend,
@@ -414,8 +487,10 @@ def read_videos(
     videos = []
 
     def _read_videos(f: h5py.File) -> None:
+        # Read the per-video crop records once (absent on old/uncropped files).
+        video_crops = read_video_crops(labels_path, _hdf5_file=f)
         videos_metadata = f["videos_json"][:]
-        for video_data in videos_metadata:
+        for video_index, video_data in enumerate(videos_metadata):
             video_json = json.loads(video_data)
             video = make_video(
                 labels_path,
@@ -424,6 +499,7 @@ def read_videos(
                 _hdf5_file=f,
                 _url_headers=_url_headers,
                 _url_stream_mode=_url_stream_mode,
+                _crop_entry=video_crops.get(video_index),
             )
             videos.append(video)
 
@@ -448,8 +524,44 @@ def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
     Returns:
         A dictionary containing the video metadata.
     """
+    from sleap_io.io.video_reading import CropVideoBackend
+
     video_filename = sanitize_filename(video.filename)
     result = {"filename": video_filename}
+
+    # Crop unwrap (D-123): a cropped Video serializes as its UNCROPPED source
+    # backend so ``videos_json`` describes the full frame and old readers never
+    # hit a KeyError on an unknown wrapper type. The crop tuple is emitted
+    # separately into ``/video_crops`` by ``write_video_crops``; it must NOT
+    # enter ``videos_json``. Dispatch on ``type(inner)`` through the existing
+    # per-type whitelist below WITHOUT building a throwaway Video (which would
+    # trigger ``exists()``/``open()`` side effects, F-ser-5). The uncropped
+    # source's shape/grayscale/fps come from the inner backend, not the cropped
+    # facade, so ``videos_json`` stays byte-identical to the uncropped save.
+    backend = video.backend
+    if isinstance(backend, CropVideoBackend):
+        inner = backend.inner
+        if isinstance(inner, CropVideoBackend):
+            # A nested (un-flattened) crop-of-crop cannot be represented by the
+            # single-crop-per-video /video_crops schema. wrap() only nests when
+            # fills differ or the outer rect exceeds the inner frame; flatten it
+            # (matching fills, in-bounds rect) or materialize before saving.
+            raise ValueError(
+                "Cannot serialize a nested crop-of-crop video: the /video_crops "
+                "format stores a single crop per video. Flatten the crop (use "
+                "matching fills and an in-bounds region) or materialize it with "
+                "transform_labels before saving."
+            )
+        backend = inner
+        shape = inner.shape
+        grayscale = inner.grayscale
+        fps = inner.fps
+    else:
+        # Uncropped path: read through the Video facade exactly as before so
+        # that uncropped serialization is unchanged (golden byte-identical).
+        shape = video.shape
+        grayscale = video.grayscale
+        fps = video.fps
 
     # Add backend metadata
     if video.backend is None:
@@ -459,21 +571,42 @@ def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
         # with make_video() which expects backend["filename"] to exist
         if "filename" not in result["backend"]:
             result["backend"]["filename"] = video_filename
-    elif type(video.backend) is MediaVideo:
+        # Closed cropped path: the copied metadata carries the CROPPED shape plus
+        # a crop record. Restore the UNCROPPED source shape so videos_json describes
+        # the full frame (old-reader guarantee), then drop the crop keys (the crop
+        # rides /video_crops). Recover the source shape from a live source_video or
+        # the recorded "source_shape"; refuse to emit a self-inconsistent entry
+        # (uncropped frame with cropped dims) when neither is available.
+        if "crop" in result["backend"]:
+            src_shape = None
+            if video.source_video is not None and video.source_video.shape is not None:
+                src_shape = list(video.source_video.shape)
+            elif result["backend"].get("source_shape") is not None:
+                src_shape = list(result["backend"]["source_shape"])
+            if src_shape is None:
+                raise ValueError(
+                    "Cannot serialize closed cropped video: the uncropped source "
+                    "shape is unavailable (no source_video and no recorded "
+                    "source_shape), so videos_json cannot describe the full frame."
+                )
+            result["backend"]["shape"] = src_shape
+        for key in ("crop", "crop_fill", "source_shape"):
+            result["backend"].pop(key, None)
+    elif type(backend) is MediaVideo:
         result["backend"] = {
             "type": "MediaVideo",
-            "shape": video.shape,
+            "shape": shape,
             "filename": video_filename,
-            "grayscale": video.grayscale,
+            "grayscale": grayscale,
             "bgr": True,
             "dataset": "",
             "input_format": "",
-            "fps": video.fps,
+            "fps": fps,
         }
-    elif type(video.backend) is HDF5Video:
+    elif type(backend) is HDF5Video:
         # Determine if we should use self-reference or external reference
         use_self_reference = (
-            video.backend.has_embedded_images
+            backend.has_embedded_images
             and labels_path is not None
             and Path(sanitize_filename(video.filename)).resolve()
             == Path(sanitize_filename(labels_path)).resolve()
@@ -481,40 +614,40 @@ def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
 
         result["backend"] = {
             "type": "HDF5Video",
-            "shape": video.shape,
+            "shape": shape,
             "filename": ("." if use_self_reference else video_filename),
-            "dataset": video.backend.dataset,
-            "input_format": video.backend.input_format,
+            "dataset": backend.dataset,
+            "input_format": backend.input_format,
             "convert_range": False,
-            "has_embedded_images": video.backend.has_embedded_images,
-            "grayscale": video.grayscale,
-            "fps": video.fps,
+            "has_embedded_images": backend.has_embedded_images,
+            "grayscale": grayscale,
+            "fps": fps,
         }
-    elif type(video.backend) is ImageVideo:
-        if video.shape is not None:
-            height, width, channels = video.shape[1:4]
+    elif type(backend) is ImageVideo:
+        if shape is not None:
+            height, width, channels = shape[1:4]
         else:
             height, width, channels = None, None, 3
         result["backend"] = {
             "type": "ImageVideo",
-            "shape": video.shape,
-            "filename": sanitize_filename(video.backend.filename[0]),
-            "filenames": sanitize_filename(video.backend.filename),
+            "shape": shape,
+            "filename": sanitize_filename(backend.filename[0]),
+            "filenames": sanitize_filename(backend.filename),
             "height_": height,
             "width_": width,
             "channels_": channels,
-            "grayscale": video.grayscale,
-            "fps": video.fps,
+            "grayscale": grayscale,
+            "fps": fps,
         }
-    elif type(video.backend) is TiffVideo:
+    elif type(backend) is TiffVideo:
         result["backend"] = {
             "type": "TiffVideo",
-            "shape": video.shape,
+            "shape": shape,
             "filename": video_filename,
-            "grayscale": video.grayscale,
-            "keep_open": video.backend.keep_open,
-            "format": video.backend.format,
-            "fps": video.fps,
+            "grayscale": grayscale,
+            "keep_open": backend.keep_open,
+            "format": backend.format,
+            "fps": fps,
         }
 
     # Add source_video metadata if present
@@ -525,6 +658,71 @@ def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
     # so we don't store it. Legacy files with original_video are handled on load.
 
     return result
+
+
+def read_video_crops(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> dict[int, dict]:
+    """Read the top-level ``/video_crops`` dataset keyed by video index.
+
+    The dataset is a single JSON string holding a list of
+    ``{"video": i, "crop": [x1, y1, x2, y2], "fill": n}`` entries (one per
+    cropped video). It is absent on old/uncropped files, in which case an empty
+    mapping is returned so the loader falls back to the uncropped source.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open ``h5py.File`` handle to read from. If
+            provided, the data is read from this handle (left open for the
+            caller to close); otherwise ``labels_path`` is opened and closed
+            internally. Private, mirrors the other ``read_*`` helpers.
+
+    Returns:
+        A mapping ``{video_index: {"crop": [...], "fill": n}}`` keyed by int.
+        Empty if the ``/video_crops`` dataset is absent.
+    """
+    try:
+        raw = read_hdf5_dataset(labels_path, "video_crops", _hdf5_file=_hdf5_file)
+    except KeyError:
+        return {}
+    if isinstance(raw, (bytes, np.bytes_)):
+        raw = raw.decode()
+    elif isinstance(raw, np.ndarray):
+        raw = raw.item()
+        if isinstance(raw, (bytes, np.bytes_)):
+            raw = raw.decode()
+    return {int(entry["video"]): entry for entry in json.loads(raw)}
+
+
+def write_video_crops(labels_path: str, labels: Labels) -> None:
+    """Write the top-level ``/video_crops`` JSON dataset for cropped videos.
+
+    Emits one ``{"video": i, "crop": [x1, y1, x2, y2], "fill": n}`` entry for
+    each cropped video in ``labels.videos`` (open or closed). The dataset is
+    omitted entirely when no video is cropped, so uncropped files stay
+    byte-identical to today and old readers never see an unknown dataset.
+
+    When a cropped video's frames are embedded, the UNCROPPED source frames are
+    stored (see ``embed_videos``) and the crop is recorded here, so the reader
+    applies it exactly once over the full-frame embedded data.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A ``Labels`` whose videos may carry virtual crops.
+    """
+    crops = []
+    for i, video in enumerate(labels.videos):
+        rect = video._crop_tuple()
+        if rect is None:
+            continue
+        crops.append({"video": i, "crop": list(rect), "fill": video._crop_fill()})
+
+    if crops:
+        write_hdf5_dataset(
+            labels_path,
+            "video_crops",
+            np.bytes_(json.dumps(crops, separators=(",", ":"))),
+        )
 
 
 def prepare_frames_to_embed(
@@ -653,7 +851,7 @@ def process_and_embed_frames(
         ExportCancelled: If the progress_callback returns `False`.
     """
     # Determine which plugin to use for encoding
-    from sleap_io.io.video_reading import get_default_image_plugin
+    from sleap_io.io.video_reading import CropVideoBackend, get_default_image_plugin
 
     if plugin is None:
         plugin = get_default_image_plugin()
@@ -704,8 +902,15 @@ def process_and_embed_frames(
                         raise ExportCancelled("Export cancelled by user")
                 continue
 
-        # Slow path: Load and encode the frame
-        frame = video[frame_idx]
+        # Slow path: Load and encode the frame. For a virtually-cropped video,
+        # embed the UNCROPPED source frame; the crop is preserved separately in
+        # /video_crops and re-applied on load, so it is baked exactly once. This
+        # matches the crop-over-embedded path (which already embeds the uncropped
+        # source) and keeps the reloaded video a CropVideoBackend over full frames.
+        if isinstance(video.backend, CropVideoBackend):
+            frame = video.backend.inner.get_frame(frame_idx)
+        else:
+            frame = video[frame_idx]
 
         # Encode the frame
         if image_format == "hdf5":
@@ -777,7 +982,12 @@ def process_and_embed_frames(
             # Store metadata
             ds.attrs["format"] = image_format
             ds.attrs["channel_order"] = data["channel_order"]
-            video_shape = video.shape
+            # Embedded attrs describe the UNCROPPED frame for a cropped video
+            # (the embedded pixels are the full source frame).
+            if isinstance(video.backend, CropVideoBackend):
+                video_shape = video.backend.inner.shape
+            else:
+                video_shape = video.shape
             (
                 ds.attrs["frames"],
                 ds.attrs["height"],
@@ -799,16 +1009,41 @@ def process_and_embed_frames(
                 source_video = video
 
             # Create embedded video object
-            embedded_video = Video(
-                filename=labels_path,
-                backend=VideoBackend.from_filename(
-                    labels_path,
-                    dataset=f"{group}/video",
-                    grayscale=video.grayscale,
-                    keep_open=False,
-                ),
-                source_video=source_video,
+            embedded_backend = VideoBackend.from_filename(
+                labels_path,
+                dataset=f"{group}/video",
+                grayscale=video.grayscale,
+                keep_open=False,
             )
+            if isinstance(video.backend, CropVideoBackend):
+                # The embedded frames are UNCROPPED; re-wrap so the crop survives
+                # (write_video_crops emits it from labels.videos and reload
+                # re-applies it over the full-frame embedded data).
+                crop = video.backend.crop
+                fill = video.backend.fill
+                x1, y1, x2, y2 = crop
+                src_shape = embedded_backend.shape
+                embedded_video = Video(
+                    filename=labels_path,
+                    backend=CropVideoBackend.wrap(
+                        inner=embedded_backend, crop=crop, fill=fill
+                    ),
+                    source_video=source_video,
+                )
+                embedded_video.backend_metadata = {
+                    "crop": list(crop),
+                    "crop_fill": fill,
+                    "source_shape": list(src_shape) if src_shape is not None else None,
+                    "shape": (src_shape[0], y2 - y1, x2 - x1, src_shape[3])
+                    if src_shape is not None
+                    else None,
+                }
+            else:
+                embedded_video = Video(
+                    filename=labels_path,
+                    backend=embedded_backend,
+                    source_video=source_video,
+                )
 
             # Store source video metadata
             grp = f.require_group(f"{group}/source_video")
@@ -1055,11 +1290,22 @@ def write_videos(
     videos_to_write = []
     videos_to_copy = []  # For embedded videos without backend (raw HDF5 copy)
 
+    from sleap_io.io.video_reading import CropVideoBackend
+
     # First determine which videos need embedding
     for video_ind, video in enumerate(videos):
+        # Crop-over-embedded (D-125): a virtual crop over an embedded HDF5Video
+        # must route through the embed machinery, not the plain-external else
+        # branch. Test embedded-ness / collect source_inds from the INNER backend;
+        # the crop itself still rides /video_crops.
+        inner_backend = (
+            video.backend.inner
+            if isinstance(video.backend, CropVideoBackend)
+            else video.backend
+        )
         # Check if video has an open backend with embedded images
         has_backend_with_embedded = (
-            type(video.backend) is HDF5Video and video.backend.has_embedded_images
+            type(inner_backend) is HDF5Video and inner_backend.has_embedded_images
         )
         # Also detect embedded videos via metadata (when backend is None)
         has_embedded_via_metadata = (
@@ -1088,11 +1334,23 @@ def write_videos(
                 if already_embedded:
                     videos_to_write.append((video_ind, video))
                 else:
-                    # Collect information for embedding
+                    # Collect information for embedding (source_inds live on the
+                    # inner backend for a crop-over-embedded video, D-125). Embed
+                    # the UNCROPPED inner-backed view (``video.source_video`` for a
+                    # crop, else ``video``) so the embedded frames and their
+                    # videos_json entry describe the full frame; the crop rides
+                    # /video_crops and is re-applied on read.
+                    embed_target = (
+                        video.source_video
+                        if isinstance(video.backend, CropVideoBackend)
+                        and video.source_video is not None
+                        else video
+                    )
                     frames_to_embed = [
-                        (video, frame_idx) for frame_idx in video.backend.source_inds
+                        (embed_target, frame_idx)
+                        for frame_idx in inner_backend.source_inds
                     ]
-                    videos_to_embed.append((video_ind, video, frames_to_embed))
+                    videos_to_embed.append((video_ind, embed_target, frames_to_embed))
         elif has_embedded_via_metadata:
             # Video has embedded frames but backend is not open (open_videos=False)
             if reference_mode == VideoReferenceMode.RESTORE_ORIGINAL:
@@ -1646,6 +1904,12 @@ def write_metadata(labels_path: str, labels: Labels):
     )
     if has_spatial_metadata:
         format_id = max(format_id, 2.1)
+
+    # Bump for virtual video crops (new in 2.3). 2.3 does not cross the only
+    # legacy threshold (< 1.4, BGR embedded parsing), so this is purely additive
+    # and only set when a crop is actually present (uncropped files stay <= 2.2).
+    if any(v._crop_tuple() is not None for v in labels.videos):
+        format_id = max(format_id, 2.3)
 
     with h5py.File(labels_path, "a") as f:
         # Bump for chunked label image format (new in 2.2)
@@ -4829,6 +5093,7 @@ class LabelImageWriter:
             videos = [self.video] if self.video is not None else []
             skeletons = [self.skeleton] if self.skeleton is not None else []
             write_videos(self.path, videos)
+            write_video_crops(self.path, Labels(videos=videos))
             write_tracks(self.path, self.tracks)
             _write_metadata_standalone(self.path, skeletons=skeletons)
             return Labels(
@@ -4878,6 +5143,7 @@ class LabelImageWriter:
         videos = [self.video] if self.video is not None else []
         skeletons = [self.skeleton] if self.skeleton is not None else []
         write_videos(self.path, videos)
+        write_video_crops(self.path, Labels(videos=videos))
         write_tracks(self.path, self.tracks)
         _write_metadata_standalone(self.path, skeletons=skeletons)
 
@@ -5331,6 +5597,7 @@ def merge_label_images(
 
         # Write video, track, and metadata info
         write_videos(dest_path, merged_videos)
+        write_video_crops(dest_path, Labels(videos=merged_videos))
         write_tracks(dest_path, merged_tracks)
         _write_metadata_standalone(dest_path)
 
@@ -5722,6 +5989,8 @@ def _write_labels_lazy(
         original_videos=None,
         verbose=verbose,
     )
+    # Emit virtual crop records (after videos_json so indices line up).
+    write_video_crops(labels_path, labels)
 
     # Write other metadata
     write_tracks(labels_path, labels.tracks)
@@ -5953,6 +6222,9 @@ def write_labels(
         original_videos=original_videos,
         verbose=verbose,
     )
+    # Emit virtual crop records (after videos_json so indices line up). Omitted
+    # entirely when no video is cropped (uncropped files stay byte-identical).
+    write_video_crops(labels_path, labels)
     write_tracks(labels_path, labels.tracks)
     write_identities(labels_path, labels.identities)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
