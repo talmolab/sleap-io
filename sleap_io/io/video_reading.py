@@ -2243,7 +2243,13 @@ class CropVideoBackend(VideoBackend):
     crop: tuple[int, int, int, int] = attrs.field(
         kw_only=True, converter=lambda c: tuple(int(v) for v in c)
     )
-    fill: int | tuple[int, ...] = attrs.field(default=0, kw_only=True)
+    fill: int | tuple[int, ...] = attrs.field(
+        default=0,
+        kw_only=True,
+        converter=lambda f: (
+            tuple(int(v) for v in f) if isinstance(f, (list, tuple)) else f
+        ),
+    )
     owns_inner: bool = attrs.field(default=True, kw_only=True)
 
     def __attrs_post_init__(self) -> None:
@@ -2296,7 +2302,13 @@ class CropVideoBackend(VideoBackend):
         Returns:
             A ``CropVideoBackend`` whose ``inner`` is never a crop.
         """
-        if isinstance(inner, CropVideoBackend) and inner.fill == fill:
+
+        # Normalize fills (a list and the equivalent tuple must compare equal so a
+        # crop reloaded from /video_crops still flattens against its tuple fill).
+        def _norm(f):
+            return tuple(int(v) for v in f) if isinstance(f, (list, tuple)) else f
+
+        if isinstance(inner, CropVideoBackend) and _norm(inner.fill) == _norm(fill):
             ix1, iy1, ix2, iy2 = inner.crop
             ox1, oy1, ox2, oy2 = (int(v) for v in crop)
             iw, ih = ix2 - ix1, iy2 - iy1
@@ -2312,10 +2324,15 @@ class CropVideoBackend(VideoBackend):
 
     @property
     def img_shape(self) -> tuple[int, int, int]:
-        """Shape of a single cropped frame as ``(height, width, channels)``."""
+        """Shape of a single cropped frame as ``(height, width, channels)``.
+
+        Mirrors the inner's channel policy without forcing a decode here: when the
+        wrapper's grayscale is unresolved (``None``), inherit the inner's channel
+        count (``inner.img_shape`` resolves it from HDF5 attrs or a single detect),
+        so the cropped channels equal the source and stay stable across an SLP
+        round-trip. An explicit ``grayscale=True`` still collapses to 1 channel.
+        """
         x1, y1, x2, y2 = self.crop
-        if self.grayscale is None:
-            self.detect_grayscale()
         c = 1 if self.grayscale else self.inner.img_shape[2]
         return int(y2 - y1), int(x2 - x1), int(c)
 

@@ -1858,11 +1858,13 @@ def test_crop_backend_grayscale_full_frame_detection(
     cb = CropVideoBackend.wrap(inner, (10, 10, 11, 60))  # 1px wide
     # Construction is lazy: grayscale is unresolved until first access (no decode).
     assert cb.grayscale is None
-    # img_shape resolves grayscale on the inner's full frame and reports the crop.
+    # img_shape mirrors the inner's channel count (1 here) WITHOUT forcing the
+    # wrapper's own grayscale resolution or a decode.
     assert cb.img_shape == (50, 1, 1)
-    assert cb.grayscale is True
+    assert cb.grayscale is None
     # detect_grayscale resolves from the inner full frame, not the crop.
     assert cb.detect_grayscale() is True
+    assert cb.grayscale is True
     # read_test_frame returns the UNCROPPED inner frame.
     assert cb.read_test_frame().shape[0] == inner.read_test_frame().shape[0]
 
@@ -2255,7 +2257,7 @@ def test_hdf5_pushdown_embedded_falls_back(slp_minimal_pkg):
 
     # The crop view still works (full decode + crop_frame), shape/grayscale safe.
     cb = CropVideoBackend.wrap(inner, (5, 5, 55, 55))
-    assert cb.img_shape == (50, 50, 1)
-    assert cb.grayscale is True
+    assert cb.img_shape == (50, 50, 1)  # channel count mirrors the inner
+    assert cb.detect_grayscale() is True
     ref = crop_frame(inner._read_frame(fidx), (5, 5, 55, 55))
     assert_equal(cb[fidx], ref[..., [0]])

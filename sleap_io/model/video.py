@@ -394,25 +394,50 @@ class Video:
         video: "str | Path | Video",
         crop: tuple[int, int, int, int] | None = None,
         *,
+        bbox: tuple[float, float, float, float] | None = None,
+        roi: object | None = None,
+        center: tuple[float, float] | None = None,
+        size: tuple[int, int] | None = None,
+        margin: int = 0,
         fill: int | tuple[int, ...] = 0,
+        share_decode: bool = True,
         **kwargs,
     ) -> "Video":
         """Open ``video`` (path or ``Video``) and return a virtual crop.
 
+        Accepts the same region specs as :meth:`crop` (``crop``/``bbox``/``roi``/
+        ``center``+``size``); extra keyword arguments are forwarded to
+        :meth:`from_filename` when ``video`` is a path (ignored when it is already
+        a ``Video``).
+
         Args:
             video: A path/filename to open, or an existing ``Video`` to crop.
-            crop: Explicit crop region ``(x1, y1, x2, y2)``, ``x2``/``y2``
-                exclusive.
+            crop: Explicit crop region ``(x1, y1, x2, y2)``, ``x2``/``y2`` exclusive.
+            bbox: A bounding box ``(x1, y1, x2, y2)``; bounds may be float.
+            roi: An object exposing axis-aligned ``.bounds`` (e.g. a shapely
+                geometry); ``margin`` is applied around it.
+            center: Window center ``(cx, cy)`` (with ``size``).
+            size: Fixed output ``(width, height)`` (with ``center``).
+            margin: Pixels added around the ``roi`` bounds on every side.
             fill: Fill value for out-of-bounds regions.
-            **kwargs: Forwarded to :meth:`from_filename` when ``video`` is a path
-                (ignored when ``video`` is already a ``Video``).
+            share_decode: If ``True`` (default), reuse the source decoder.
+            **kwargs: Forwarded to :meth:`from_filename` for a path input.
 
         Returns:
             A new ``Video`` exposing the cropped view.
         """
         if isinstance(video, (str, Path)):
             video = cls.from_filename(video, **kwargs)
-        return video.crop(crop, fill=fill)
+        return video.crop(
+            crop,
+            bbox=bbox,
+            roi=roi,
+            center=center,
+            size=size,
+            margin=margin,
+            fill=fill,
+            share_decode=share_decode,
+        )
 
     def _crop_tuple(self) -> tuple[int, int, int, int] | None:
         """Return this video's crop rect ``(x1, y1, x2, y2)`` or ``None``.
@@ -438,6 +463,21 @@ class Video:
         if isinstance(self.backend, CropVideoBackend):
             return self.backend.fill
         return self.backend_metadata.get("crop_fill", 0)
+
+    @property
+    def is_cropped(self) -> bool:
+        """Whether this video is a virtual crop of another video."""
+        return self._crop_tuple() is not None
+
+    @property
+    def crop_rect(self) -> tuple[int, int, int, int] | None:
+        """Crop rect ``(x1, y1, x2, y2)`` in source coords, or ``None`` if uncropped."""
+        return self._crop_tuple()
+
+    @property
+    def crop_fill(self) -> int | tuple[int, ...]:
+        """The out-of-bounds fill value for this video's crop (``0`` if uncropped)."""
+        return self._crop_fill()
 
     def to_crop_coords(self, points: np.ndarray) -> np.ndarray:
         """Map source-frame ``(x, y)`` into this video's cropped frame.
@@ -1282,7 +1322,25 @@ class Video:
             )
 
         video_kwargs = {} if video_kwargs is None else video_kwargs.copy()
-        frame_inds = np.arange(len(self)) if frame_inds is None else frame_inds
+        if frame_inds is None:
+            # A crop over a SPARSELY embedded video (frame_map keys are not the dense
+            # range 0..N-1, e.g. {5, 9}) cannot be baked by default: writing the frames
+            # compacts them to 0..k-1, so any labeled frame referencing a source index
+            # (5, 9) would dangle. Refuse with a clear error rather than crash or
+            # silently misalign. An explicit frame_inds bypasses this for advanced use.
+            inner = getattr(self.backend, "inner", None)
+            frame_map = getattr(inner, "frame_map", None)
+            if frame_map:
+                keys = sorted(frame_map.keys())
+                if keys != list(range(len(keys))):
+                    raise ValueError(
+                        "Cannot bake a virtual crop over a video with sparsely "
+                        f"embedded frames (frame_map keys {keys}): baking would "
+                        "compact frames to a contiguous range and break frame_idx "
+                        "references. Pass explicit frame_inds to override, or "
+                        "materialize from the original source video."
+                    )
+            frame_inds = np.arange(len(self))
 
         # Use this video's FPS if not explicitly specified.
         if fps is None:
@@ -1295,11 +1353,14 @@ class Video:
                 vw(self[frame_ind])
 
         baked = Video.from_filename(path, grayscale=self.grayscale)
-        # Provenance: the uncropped original. Normally that is self.source_video
-        # (the parent a virtual crop was created against). For a manually-built
-        # crop with no parent, reconstruct an uncropped view from the crop
-        # backend's inner so source_video is never the cropped video itself.
+        # Provenance: the uncropped original. Walk past any still-virtual crop
+        # ancestors (a flattened crop-of-crop's source_video may itself be a crop)
+        # to the first uncropped ancestor. For a manually-built crop with no parent,
+        # reconstruct an uncropped view from the crop backend's inner, so
+        # source_video is never a cropped video.
         source = self.source_video
+        while source is not None and source._crop_tuple() is not None:
+            source = source.source_video
         if source is None:
             inner = getattr(self.backend, "inner", None)
             source = (

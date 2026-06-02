@@ -1144,6 +1144,27 @@ def test_from_crop_fill_forwarded(small_robot_path):
     assert np.array_equal(c[0], crop_frame(src[0], (-5, -5, 10, 10), fill=3))
 
 
+def test_from_crop_forwards_region_specs(small_robot_path):
+    """from_crop forwards bbox/center+size region specs (not only `crop`)."""
+    c = Video.from_crop(small_robot_path, bbox=(10.0, 20.0, 100.0, 120.0))
+    assert c.is_cropped
+    assert c.crop_rect == (10, 20, 100, 120)
+    c2 = Video.from_crop(small_robot_path, center=(50, 50), size=(40, 40))
+    assert c2.shape[1:3] == (40, 40)
+
+
+def test_public_crop_accessors(small_robot_path):
+    """is_cropped / crop_rect / crop_fill expose crop state publicly."""
+    v = Video.from_filename(small_robot_path)
+    assert v.is_cropped is False
+    assert v.crop_rect is None
+    assert v.crop_fill == 0
+    c = v.crop((2, 3, 12, 13), fill=5)
+    assert c.is_cropped is True
+    assert c.crop_rect == (2, 3, 12, 13)
+    assert c.crop_fill == 5
+
+
 def test_resolve_crop_rect_bbox():
     """The bbox spec floors mins / ceils maxs to an integer rect."""
     assert _resolve_crop_rect(bbox=(1.2, 2.8, 10.4, 20.1)) == (1, 2, 11, 21)

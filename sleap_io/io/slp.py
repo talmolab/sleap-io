@@ -389,38 +389,14 @@ def make_video(
         x1, y1, x2, y2 = crop
 
         if open_backend and backend is not None:
-            # Optionally reuse the reconstructed source backend as the shared
-            # inner (D-126) so a reloaded mosaic of tiles over one physical file
-            # decodes each frame once (the source Video owns that decoder, so the
-            # tile does not). Only safe when the source reports the SAME shape as
-            # the just-rebuilt inner: an embedded/frame-remapped source has a
-            # different frame index space and must NOT be substituted (it would
-            # read the wrong frame). On any mismatch, wrap the reconstructed inner
-            # directly.
-            reuse_inner = None
-            if (
-                source_video is not None
-                and source_video.backend is not None
-                and not isinstance(source_video.backend, CropVideoBackend)
-            ):
-                try:
-                    # Reuse only when the source is the SAME physical file/dataset
-                    # (not merely the same shape), so two equal-shaped distinct
-                    # sources are never conflated (DI-5).
-                    same_file = source_video.backend.filename == backend.filename and (
-                        getattr(source_video.backend, "dataset", None)
-                        == getattr(backend, "dataset", None)
-                    )
-                    if same_file and source_video.backend.shape == backend.shape:
-                        reuse_inner = source_video.backend
-                except Exception:
-                    reuse_inner = None
-            if reuse_inner is not None:
-                backend = CropVideoBackend.wrap(
-                    inner=reuse_inner, crop=crop, fill=fill, owns_inner=False
-                )
-            else:
-                backend = CropVideoBackend.wrap(inner=backend, crop=crop, fill=fill)
+            # Wrap the freshly reconstructed (uncropped) backend. Each reloaded tile
+            # gets its OWN inner decoder that its close() releases (owns_inner=True).
+            # We do not reuse source_video.backend here: on reload each tile rebuilds
+            # a private source_video.backend, so reusing it would share nothing across
+            # tiles yet leak the unowned decoder (it would never be closed). Live
+            # decoder sharing for a mosaic is created in-memory via Video.crop and is
+            # intentionally not reconstructed on load.
+            backend = CropVideoBackend.wrap(inner=backend, crop=crop, fill=fill)
 
         # Copy before overwriting so a shared dict is never mutated (D-126), then
         # record the cropped shape derived from the uncropped inner/source shape.
@@ -553,7 +529,17 @@ def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
                 "transform_labels before saving."
             )
         backend = inner
-        shape = inner.shape
+        # Mirror Video._get_shape(): never let a missing/unreadable inner file crash
+        # the save. Fall back to the recorded uncropped source shape (videos_json must
+        # describe the full frame); the per-type writers below tolerate shape=None,
+        # exactly as the uncropped Video.shape==None path does.
+        try:
+            shape = inner.shape
+        except Exception:
+            src_shape = video.backend_metadata.get("source_shape")
+            if src_shape is None and video.source_video is not None:
+                src_shape = video.source_video.shape
+            shape = tuple(src_shape) if src_shape is not None else None
         grayscale = inner.grayscale
         fps = inner.fps
     else:
@@ -1336,16 +1322,13 @@ def write_videos(
                 else:
                     # Collect information for embedding (source_inds live on the
                     # inner backend for a crop-over-embedded video, D-125). Embed
-                    # the UNCROPPED inner-backed view (``video.source_video`` for a
-                    # crop, else ``video``) so the embedded frames and their
-                    # videos_json entry describe the full frame; the crop rides
+                    # ``video`` itself (the crop facade): process_and_embed_frames
+                    # special-cases a CropVideoBackend and reads the UNCROPPED frame
+                    # straight from the embedded inner, so the embedded data + its
+                    # videos_json entry describe the full frame WITHOUT touching the
+                    # (possibly missing external) source_video. The crop rides
                     # /video_crops and is re-applied on read.
-                    embed_target = (
-                        video.source_video
-                        if isinstance(video.backend, CropVideoBackend)
-                        and video.source_video is not None
-                        else video
-                    )
+                    embed_target = video
                     frames_to_embed = [
                         (embed_target, frame_idx)
                         for frame_idx in inner_backend.source_inds
@@ -4742,6 +4725,7 @@ def _write_metadata_standalone(
     format_id: float = 2.2,
     skeletons: list[Skeleton] | None = None,
     provenance: dict | None = None,
+    videos: list[Video] | None = None,
 ) -> None:
     """Write minimal metadata group to an SLP file.
 
@@ -4753,6 +4737,8 @@ def _write_metadata_standalone(
         format_id: Format version identifier.
         skeletons: Optional list of skeletons to serialize.
         provenance: Optional provenance dict.
+        videos: Optional list of videos; if any carries a virtual crop the
+            ``format_id`` is bumped to 2.3 (matching ``write_metadata``).
     """
     skeletons = skeletons or []
     provenance = dict(provenance or {})
@@ -4805,6 +4791,9 @@ def _write_metadata_standalone(
             ("instance_id_end", "u8"),
         ]
     )
+
+    if videos and any(v._crop_tuple() is not None for v in videos):
+        format_id = max(format_id, 2.3)
 
     with h5py.File(labels_path, "a") as f:
         # Bump for chunked label image format
@@ -5095,7 +5084,7 @@ class LabelImageWriter:
             write_videos(self.path, videos)
             write_video_crops(self.path, Labels(videos=videos))
             write_tracks(self.path, self.tracks)
-            _write_metadata_standalone(self.path, skeletons=skeletons)
+            _write_metadata_standalone(self.path, skeletons=skeletons, videos=videos)
             return Labels(
                 videos=videos,
                 skeletons=skeletons,
@@ -5145,7 +5134,7 @@ class LabelImageWriter:
         write_videos(self.path, videos)
         write_video_crops(self.path, Labels(videos=videos))
         write_tracks(self.path, self.tracks)
-        _write_metadata_standalone(self.path, skeletons=skeletons)
+        _write_metadata_standalone(self.path, skeletons=skeletons, videos=videos)
 
         li_tuples, li_file = read_label_images(self.path, videos, self.tracks, [])
         # Distribute label images to frames
@@ -5599,7 +5588,7 @@ def merge_label_images(
         write_videos(dest_path, merged_videos)
         write_video_crops(dest_path, Labels(videos=merged_videos))
         write_tracks(dest_path, merged_tracks)
-        _write_metadata_standalone(dest_path)
+        _write_metadata_standalone(dest_path, videos=merged_videos)
 
         # Return Labels pointing at the merged file
         li_tuples, li_file = read_label_images(

@@ -27,12 +27,16 @@ def _is_embedded_video(video: "Video") -> bool:
     Returns:
         True if the video contains embedded images in HDF5 format.
     """
-    from sleap_io.io.video_reading import HDF5Video
+    from sleap_io.io.video_reading import CropVideoBackend, HDF5Video
 
     if not hasattr(video, "backend") or video.backend is None:
         return False
 
     backend = video.backend
+    # Unwrap a virtual crop to its inner decoder so a crop-over-embedded video is
+    # recognized as embedded (not misread as a regular, sequential video).
+    if isinstance(backend, CropVideoBackend):
+        backend = backend.inner
     if not isinstance(backend, HDF5Video):
         return False
 
@@ -51,12 +55,16 @@ def _get_frame_indices(video: "Video") -> list[int]:
     Returns:
         List of frame indices to iterate over.
     """
-    from sleap_io.io.video_reading import HDF5Video
+    from sleap_io.io.video_reading import CropVideoBackend, HDF5Video
 
-    if hasattr(video, "backend") and isinstance(video.backend, HDF5Video):
-        if video.backend.frame_map:
-            # Embedded video - return the source frame indices
-            return video.backend.embedded_frame_inds
+    backend = getattr(video, "backend", None)
+    # Unwrap a virtual crop to its inner decoder so a crop-over-embedded video
+    # iterates over its embedded source indices, not a dense 0..N-1 range.
+    if isinstance(backend, CropVideoBackend):
+        backend = backend.inner
+    if isinstance(backend, HDF5Video) and backend.frame_map:
+        # Embedded video - return the source frame indices
+        return backend.embedded_frame_inds
 
     # Regular video - sequential indices
     n_frames = video.shape[0] if video.shape else 0

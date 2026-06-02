@@ -6462,7 +6462,7 @@ def reencode(
     help="Encoding speed preset. Slower = better compression.",
 )
 @click.option(
-    "--output-fps",
+    "--fps",
     "output_fps",
     type=float,
     default=None,

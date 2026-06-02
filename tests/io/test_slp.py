@@ -8187,6 +8187,82 @@ def test_crop_roundtrip_media_video(centered_pair_low_quality_path, tmp_path):
     assert np.array_equal(video[0], expected)
 
 
+def test_crop_tuple_fill_roundtrips_and_flattens(
+    centered_pair_low_quality_path, tmp_path
+):
+    """A tuple fill survives the SLP round-trip and still flattens a crop-of-crop.
+
+    /video_crops stores fill as JSON (a tuple becomes a list); the fill converter
+    normalizes it back so a reloaded crop with a tuple fill compares equal and
+    flattens against a tuple inner.fill.
+    """
+    source = Video.from_filename(centered_pair_low_quality_path, grayscale=False)
+    cropped = source.crop((10, 20, 110, 140), fill=(7, 8, 9))
+    labels = Labels(videos=[cropped])
+    path = str(tmp_path / "tuple_fill.slp")
+    write_labels(path, labels)
+
+    loaded = read_labels(path, open_videos=True)
+    v = loaded.videos[0]
+    # Fill is normalized to a tuple (not a list) after the JSON round-trip.
+    assert v.backend.fill == (7, 8, 9)
+    assert isinstance(v.backend.fill, tuple)
+    # A further in-bounds crop with the same tuple fill flattens (no nesting).
+    refined = v.crop((1, 1, 50, 50), fill=(7, 8, 9))
+    assert not isinstance(refined.backend.inner, CropVideoBackend)
+
+
+def test_reloaded_mosaic_tiles_own_their_inner(
+    centered_pair_low_quality_path, tmp_path
+):
+    """Each reloaded cropped tile owns its inner decoder so close() releases it."""
+    source = Video.from_filename(centered_pair_low_quality_path)
+    tiles = [source.crop((0, 0, 64, 64)), source.crop((64, 0, 128, 64))]
+    labels = Labels(videos=tiles)
+    path = str(tmp_path / "mosaic.slp")
+    write_labels(path, labels)
+
+    loaded = read_labels(path, open_videos=True)
+    for v in loaded.videos:
+        assert isinstance(v.backend, CropVideoBackend)
+        # Owns its inner (no leaked, unowned decoder on the reload path).
+        assert v.backend.owns_inner is True
+        _ = v[0]
+        v.close()  # cascades to the owned inner; no leak
+
+
+def test_apply_crops_sparse_embedded_raises(centered_pair_low_quality_path, tmp_path):
+    """Baking a crop over a sparsely-embedded video raises (would break frame_idx).
+
+    Embedding labeled frames at non-contiguous indices then reloading yields a crop
+    whose inner is an embedded HDF5Video with a sparse frame_map; baking it would
+    compact frames to a contiguous range and dangle the labeled-frame references,
+    so apply_crop / apply_crops must refuse with a clear error.
+    """
+    source = Video.from_filename(centered_pair_low_quality_path)
+    cropped = source.crop((10, 10, 74, 74))
+    skel = Skeleton(["a"])
+    lfs = [
+        LabeledFrame(
+            video=cropped,
+            frame_idx=idx,
+            instances=[Instance.from_numpy(np.array([[5.0, 5.0]]), skeleton=skel)],
+        )
+        for idx in (5, 9)  # non-contiguous source indices
+    ]
+    labels = Labels(videos=[cropped], skeletons=[skel], labeled_frames=lfs)
+    pkg = str(tmp_path / "sparse.pkg.slp")
+    write_labels(pkg, labels, embed=True)
+
+    reloaded = read_labels(pkg, open_videos=True)
+    rv = reloaded.videos[0]
+    assert rv.backend.inner.frame_map  # sparse embedded inner
+    with pytest.raises(ValueError, match="sparsely embedded"):
+        rv.apply_crop(str(tmp_path / "baked.mp4"))
+    with pytest.raises(ValueError, match="sparsely embedded"):
+        reloaded.apply_crops(video_dir=str(tmp_path / "baked"))
+
+
 def test_crop_roundtrip_image_video(centered_pair_frame_paths, tmp_path):
     """An ImageVideo crop round-trips through /video_crops."""
     source = Video.from_filename(centered_pair_frame_paths)
