@@ -17,11 +17,27 @@ imported:
 DLC's ``video_sets[...].crop`` is a *virtual* read-time crop (an ROI sliced out
 of each full frame by DLC's video reader). When a project uses cropping, the
 ``labeled-data`` images are the cropped region and labels are in cropped-frame
-coordinates, while the linked ``source_video`` is the original, *uncropped*
-video -- so labels are offset from the source video by the crop origin. This
-crop is not yet applied on import; reconciling the two coordinate systems
-requires virtual ROI-cropping of a `Video` on read, which is planned future
-work. With no cropping (the DLC default), there is no offset.
+coordinates, while the original ``source_video`` is the full, *uncropped* video
+-- so labels are offset from the source video by the crop origin.
+
+On import, the crop rect is parsed from ``video_sets`` (DLC's width-range-first
+``x1, x2, y1, y2`` is reordered to the sleap rect ``(x1, y1, x2, y2)``) and
+recorded as provenance on the returned `Labels` under
+``provenance["dlc_crops"]``, keyed by source-video path. This dict is the
+*persistent* record of the crop: it round-trips through SLP unchanged. When the
+original source video is available on disk, ``source_video`` is set to a
+`Video.from_crop` view so ``source_video.crop_rect`` and
+``source_video.to_source_coords`` work in-memory (the crop on this view is
+in-memory only and is not persisted on the source on SLP save -- the provenance
+dict is the persistent record); otherwise ``source_video`` is a closed `Video`
+(``open_backend=False``) with no crop.
+
+The labeled-data `Video` itself is left *uncropped* (the ``labeled-data`` PNGs
+are already the cropped region) and labels remain verbatim in cropped-frame
+coordinates -- no offset is applied to points. Identity crops at origin
+``(0, 0)`` (the DLC default / no-op) are not recorded. To map labels into the
+source frame, use ``source_video.to_source_coords(...)`` (or apply a rect from
+``provenance["dlc_crops"]``), which adds the crop origin.
 """
 
 from __future__ import annotations
@@ -236,56 +252,125 @@ def _attach_config_skeleton(skeleton: Skeleton, cfg: dict) -> None:
         )
 
 
-def _video_sets_stem_map(cfg: dict) -> dict[str, str]:
-    """Map video filename stems to original video paths from config ``video_sets``.
+def _parse_dlc_crop(crop: object) -> tuple[int, int, int, int] | None:
+    """Parse a DLC ``video_sets[...].crop`` value into a sleap crop rect.
+
+    DLC stores the crop width-range-first as ``x1, x2, y1, y2`` (either a
+    comma-separated string ``"x1, x2, y1, y2"`` or a list/tuple
+    ``[x1, x2, y1, y2]``). This is reordered to the sleap rect convention
+    ``(x1, y1, x2, y2)`` with ``x2``/``y2`` exclusive and 0-indexed.
+
+    Args:
+        crop: The raw ``crop`` value from a DLC config (string, list/tuple, or
+            ``None``).
+
+    Returns:
+        The crop rect ``(x1, y1, x2, y2)`` as ints, or ``None`` when the crop is
+        missing/empty/unparseable, has the wrong arity, is inverted
+        (``x2 <= x1`` or ``y2 <= y1``; a warning is emitted), or is an identity
+        crop at origin ``(0, 0)`` (a no-op that needs no provenance, matching
+        DLC's default full-frame ``0, W, 0, H``).
+    """
+    if crop is None:
+        return None
+
+    if isinstance(crop, str):
+        parts = [p.strip() for p in crop.split(",") if p.strip() != ""]
+    elif isinstance(crop, (list, tuple)):
+        parts = list(crop)
+    else:
+        return None
+
+    if len(parts) != 4:
+        return None
+
+    try:
+        x1, x2, y1, y2 = (int(float(p)) for p in parts)
+    except (TypeError, ValueError):
+        return None
+
+    if x2 <= x1 or y2 <= y1:
+        warnings.warn(
+            f"Ignoring inverted DLC crop {crop!r}: expected x1 < x2 and y1 < y2 "
+            "(width-range-first 'x1, x2, y1, y2')."
+        )
+        return None
+
+    # Identity crop at origin (0, 0) is a no-op (DLC's default full-frame crop);
+    # recording it buys nothing and would needlessly create provenance.
+    if x1 == 0 and y1 == 0:
+        return None
+
+    return (x1, y1, x2, y2)
+
+
+def _video_sets_stem_map(
+    cfg: dict,
+) -> dict[str, tuple[str, tuple[int, int, int, int] | None]]:
+    """Map video filename stems to original paths and crop rects from config.
 
     Paths are normalized so Windows-style backslash separators are handled on any
-    OS. Placeholder entries (e.g. DLC demo templates) are skipped.
+    OS. Placeholder entries (e.g. DLC demo templates) are skipped. The crop rect
+    is parsed from each video's ``crop`` value via `_parse_dlc_crop` (reordered to
+    the sleap ``(x1, y1, x2, y2)`` convention), or ``None`` when absent/identity.
 
     Args:
         cfg: A parsed DLC config dictionary.
 
     Returns:
-        A dictionary mapping each video's filename stem to its original path
-        string (preserving config order).
+        A dictionary mapping each video's filename stem to a tuple of
+        ``(original_path_string, crop_rect_or_None)`` (preserving config order).
     """
-    out: dict[str, str] = {}
+    out: dict[str, tuple[str, tuple[int, int, int, int] | None]] = {}
     video_sets = cfg.get("video_sets") or {}
-    for key in video_sets.keys():
+    for key, value in video_sets.items():
         key_str = str(key)
         if "WILL BE AUTOMATICALLY UPDATED" in key_str:
             continue
         name = key_str.replace("\\", "/").rsplit("/", 1)[-1]
         stem = name.rsplit(".", 1)[0] if "." in name else name
         if stem:
-            out[stem] = key_str
+            crop = value.get("crop") if isinstance(value, dict) else None
+            out[stem] = (key_str, _parse_dlc_crop(crop))
     return out
 
 
 def _set_source_video(
     video: Video,
     folder_name: str,
-    stem_map: dict[str, str],
+    stem_map: dict[str, tuple[str, tuple[int, int, int, int] | None]],
     video_search_paths: list[str | Path] | None = None,
-) -> None:
+) -> tuple[str, tuple[int, int, int, int] | None] | None:
     """Link an image-folder `Video` back to its original source video.
 
     Args:
         video: The image-sequence `Video` to annotate (mutated in place).
         folder_name: The ``labeled-data/<folder>`` name for this video.
-        stem_map: Mapping of video stems to original paths (see
-            `_video_sets_stem_map`).
+        stem_map: Mapping of video stems to ``(original_path, crop_rect)`` tuples
+            (see `_video_sets_stem_map`).
         video_search_paths: Optional paths to search for the original video file
             by basename (best-effort path repair).
 
+    Returns:
+        A tuple ``(resolved_path, crop_rect)`` for the linked source video, or
+        ``None`` on a stem mismatch (when `video.source_video` is left as
+        ``None``). The caller uses this to record crop provenance.
+
     Notes:
-        The source `Video` is created with ``open_backend=False`` so a missing
-        original file (the common case on import) never raises. On a stem
-        mismatch, `video.source_video` is left as `None`.
+        When a non-identity crop is configured AND the resolved source file
+        exists on disk, `video.source_video` is set to a `Video.from_crop` view
+        so ``source_video.crop_rect`` / ``to_source_coords`` work in-memory; this
+        crop view is import-time only (it is not persisted on the source on SLP
+        save -- the persistent record is the returned rect, written to
+        ``labels.provenance["dlc_crops"]``). Otherwise the source `Video` is
+        created with ``open_backend=False`` (no crop attached) so a missing
+        original file (the common case on import) never raises and serialization
+        is never put at risk. The labeled-data `video` itself is never cropped.
     """
-    original = stem_map.get(folder_name)
-    if original is None:
-        return
+    entry = stem_map.get(folder_name)
+    if entry is None:
+        return None
+    original, rect = entry
 
     path = original
     if video_search_paths:
@@ -296,7 +381,18 @@ def _set_source_video(
                 path = str(candidate)
                 break
 
+    if rect is not None and Path(path).exists():
+        try:
+            video.source_video = Video.from_crop(path, crop=rect)
+            return path, rect
+        except Exception:
+            # Source could not be opened/cropped; fall back to a closed source
+            # with no crop on its backend_metadata (avoids the closed-crop
+            # serialization guard) while still recording the rect as provenance.
+            pass
+
     video.source_video = Video(filename=path, open_backend=False)
+    return path, rect
 
 
 # -----------------------------------------------------------------------------
@@ -471,11 +567,17 @@ def _load_dlc_csv(
         if actual_image_files:
             videos[video_name] = Video.from_filename(actual_image_files)
 
-    # Link image folders back to their original videos from config video_sets.
+    # Link image folders back to their original videos from config video_sets,
+    # collecting crop provenance keyed by source-video path.
+    dlc_crops: dict[str, list[int]] = {}
     if config is not None and videos:
         stem_map = _video_sets_stem_map(config)
         for video_name, video in videos.items():
-            _set_source_video(video, video_name, stem_map, video_search_paths)
+            result = _set_source_video(video, video_name, stem_map, video_search_paths)
+            if result is not None:
+                source_path, rect = result
+                if rect is not None:
+                    dlc_crops[source_path] = list(rect)
 
     # Parse the actual data rows and create labeled frames.
     labeled_frames = []
@@ -515,12 +617,15 @@ def _load_dlc_csv(
 
     unique_videos = list(videos.values())
 
-    return Labels(
+    labels = Labels(
         labeled_frames=labeled_frames,
         videos=unique_videos,
         tracks=tracks,
         skeletons=[skeleton] if skeleton.nodes else [],
     )
+    if dlc_crops:
+        labels.provenance["dlc_crops"] = dlc_crops
+    return labels
 
 
 # -----------------------------------------------------------------------------
@@ -644,6 +749,7 @@ def load_dlc_project(
     # Load each folder using the shared skeleton/tracks and collect the frames.
     all_frames: list[LabeledFrame] = []
     videos: list[Video] = []
+    dlc_crops: dict[str, list[int]] = {}
     for _, csv in folders:
         folder_labels = _load_dlc_csv(
             csv,
@@ -654,6 +760,7 @@ def load_dlc_project(
         )
         all_frames.extend(folder_labels.labeled_frames)
         videos.extend(folder_labels.videos)
+        dlc_crops.update(folder_labels.provenance.get("dlc_crops", {}))
 
     labels = Labels(
         labeled_frames=all_frames,
@@ -668,6 +775,8 @@ def load_dlc_project(
             "dlc_task": cfg.get("Task"),
         }
     )
+    if dlc_crops:
+        labels.provenance["dlc_crops"] = dlc_crops
     return labels
 
 
