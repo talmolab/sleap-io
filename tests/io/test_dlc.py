@@ -1118,3 +1118,241 @@ def test_load_dlc_image_resolved_from_parent_dir(tmp_path):
     labels = sio.load_dlc(csv, config=False)
     assert len(labels.labeled_frames) == 2
     assert len(labels.videos) == 1
+
+
+# -----------------------------------------------------------------------------
+# Item 2: video_sets crop wiring (provenance + source_video views)
+# -----------------------------------------------------------------------------
+
+#: A real, openable video reused for the source-present from_crop path.
+REAL_VIDEO = "tests/data/videos/small_robot_3_frame.mp4"
+
+
+def test_parse_dlc_crop_string_reorders_to_sleap_rect():
+    """A comma string 'x1, x2, y1, y2' reorders to sleap '(x1, y1, x2, y2)'."""
+    # Non-square, non-zero-origin so a transpose bug is caught.
+    assert dlc._parse_dlc_crop("10, 60, 20, 90") == (10, 20, 60, 90)
+
+
+def test_parse_dlc_crop_list_form_reorders():
+    """A list [x1, x2, y1, y2] reorders identically to the string form."""
+    assert dlc._parse_dlc_crop([10, 60, 20, 90]) == (10, 20, 60, 90)
+
+
+def test_parse_dlc_crop_float_strings_coerced_to_int():
+    """Float-valued crop strings are coerced to int rect components."""
+    assert dlc._parse_dlc_crop("10.0, 60.0, 20.0, 90.0") == (10, 20, 60, 90)
+
+
+@pytest.mark.parametrize("crop", [None, "", "  ", "10, 60", "10, 60, 20", "a, b, c, d"])
+def test_parse_dlc_crop_missing_or_bad_returns_none(crop):
+    """Missing / empty / wrong-arity / unparsable crops return None."""
+    assert dlc._parse_dlc_crop(crop) is None
+
+
+def test_parse_dlc_crop_non_string_non_sequence_returns_none():
+    """A crop value that is neither string nor sequence returns None."""
+    assert dlc._parse_dlc_crop(42) is None
+
+
+def test_parse_dlc_crop_inverted_warns_and_returns_none():
+    """An inverted crop (x2 <= x1) warns and returns None."""
+    with pytest.warns(UserWarning, match="inverted"):
+        assert dlc._parse_dlc_crop("60, 10, 20, 90") is None
+
+
+def test_parse_dlc_crop_identity_origin_returns_none():
+    """An identity crop at origin (0, 0) is a no-op and returns None."""
+    assert dlc._parse_dlc_crop("0, 384, 0, 384") is None
+
+
+def test_video_sets_stem_map_carries_crop_rect():
+    """The stem map returns (path, reordered_rect) for a non-square crop."""
+    path = "/data/videos/vid1.mp4"
+    cfg = {"video_sets": {path: {"crop": "10, 60, 20, 90"}}}
+    stem_map = dlc._video_sets_stem_map(cfg)
+    assert stem_map["vid1"] == (path, (10, 20, 60, 90))
+
+
+def test_video_sets_stem_map_none_crop_when_absent():
+    """The stem map returns (path, None) when no crop is configured."""
+    path = "/data/videos/vid1.mp4"
+    cfg = {"video_sets": {path: {}}}
+    stem_map = dlc._video_sets_stem_map(cfg)
+    assert stem_map["vid1"] == (path, None)
+
+
+def test_dlc_crop_provenance_recorded_source_absent(tmp_path):
+    """A non-square crop is recorded in provenance keyed by source path."""
+    source = tmp_path / "videos" / "vid1.mp4"  # absent on disk
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        video_sets={str(source): {"crop": "10, 60, 20, 90"}},
+    )
+    labels = sio.load_dlc_project(config_path)
+    assert labels.provenance["dlc_crops"] == {str(source): [10, 20, 60, 90]}
+
+
+def test_dlc_crop_not_applied_to_labeled_video_or_points(tmp_path):
+    """The labeled-data video stays uncropped and point coords are unchanged."""
+    source = tmp_path / "videos" / "vid1.mp4"  # absent on disk
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        video_sets={str(source): {"crop": "10, 60, 20, 90"}},
+    )
+    labels = sio.load_dlc_project(config_path)
+    video = labels.videos[0]
+    # Crop is NOT on the labeled-data ImageVideo (would double-crop on reload).
+    assert video.is_cropped is False
+    # Points are verbatim cropped-space coords (no offset applied).
+    # Row 0 writes range(0, 6) in declared bodypart order
+    # (snout, leftear, rightear) -> snout=(0, 1), leftear=(2, 3), rightear=(4, 5).
+    # Nodes are stored sorted (leftear, rightear, snout), so reorder accordingly.
+    lf = next(lf for lf in labels.labeled_frames if lf.frame_idx == 0)
+    pts = lf.instances[0].numpy()
+    node_names = [n.name for n in labels.skeleton.nodes]
+    declared = {"snout": [0, 1], "leftear": [2, 3], "rightear": [4, 5]}
+    expected = np.array([declared[name] for name in node_names])
+    np.testing.assert_array_equal(pts, expected)
+
+
+def test_dlc_crop_source_absent_is_closed_video(tmp_path):
+    """When the source mp4 is absent, source_video is a closed (uncropped) Video."""
+    source = tmp_path / "videos" / "vid1.mp4"  # absent on disk
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000"]},
+        video_sets={str(source): {"crop": "10, 60, 20, 90"}},
+    )
+    labels = sio.load_dlc_project(config_path)
+    sv = labels.videos[0].source_video
+    assert sv is not None
+    # Closed source: no crop attached to backend_metadata (avoids save crash).
+    assert sv.backend is None
+    assert sv.is_cropped is False
+
+
+def test_dlc_crop_source_present_but_unopenable_falls_back(tmp_path):
+    """A source path that exists but cannot be opened falls back to a closed Video.
+
+    Exercises the from_crop open-failure guard in _set_source_video: the rect is
+    still recorded in provenance, but source_video is the plain closed Video.
+    Uses an existing file with an unsupported extension so from_filename raises
+    deterministically (avoids relying on a decoder rejecting a malformed video).
+    """
+    bad = tmp_path / "videos" / "vid1.bin"  # exists, but not a recognized video
+    bad.parent.mkdir(parents=True, exist_ok=True)
+    bad.write_bytes(b"not a real video at all")
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000"]},
+        video_sets={str(bad): {"crop": "10, 60, 20, 90"}},
+    )
+    labels = sio.load_dlc_project(config_path)
+    sv = labels.videos[0].source_video
+    assert sv is not None
+    assert sv.backend is None  # from_crop failed -> closed fallback
+    assert sv.is_cropped is False
+    # The persistent rect is still recorded despite the open failure.
+    assert labels.provenance["dlc_crops"] == {str(bad): [10, 20, 60, 90]}
+
+
+def test_dlc_crop_provenance_roundtrips_through_slp(tmp_path):
+    """provenance['dlc_crops'] survives a save_slp + load_slp round-trip."""
+    source = tmp_path / "videos" / "vid1.mp4"  # absent on disk
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        video_sets={str(source): {"crop": "10, 60, 20, 90"}},
+    )
+    labels = sio.load_dlc_project(config_path)
+    slp_path = tmp_path / "out.slp"
+    sio.save_slp(labels, slp_path)  # must not crash on a closed cropped source
+    reloaded = sio.load_slp(slp_path)
+    assert reloaded.provenance["dlc_crops"] == {str(source): [10, 20, 60, 90]}
+
+
+def test_dlc_crop_source_present_from_crop_view(tmp_path):
+    """With a real source mp4, source_video is a from_crop view (in-memory crop)."""
+    # Folder stem must match the source video stem for the link to resolve.
+    stem = Path(REAL_VIDEO).stem
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={stem: ["img000", "img001"]},
+        video_sets={str(Path(REAL_VIDEO).resolve()): {"crop": "10, 60, 20, 90"}},
+    )
+    labels = sio.load_dlc_project(config_path)
+    sv = labels.videos[0].source_video
+    assert sv.is_cropped is True
+    assert sv.crop_rect == (10, 20, 60, 90)
+    # to_source_coords adds the crop origin (10, 20).
+    pts = np.array([[1.0, 2.0]])
+    np.testing.assert_array_equal(sv.to_source_coords(pts), [[11.0, 22.0]])
+    # The labeled-data video itself stays uncropped.
+    assert labels.videos[0].is_cropped is False
+    # Provenance still records the persistent rect.
+    src_key = str(Path(REAL_VIDEO).resolve())
+    assert labels.provenance["dlc_crops"][src_key] == [10, 20, 60, 90]
+
+
+def test_dlc_crop_source_present_save_slp_strips_inmemory_crop(tmp_path):
+    """A from_crop source view does not crash save_slp; provenance persists."""
+    stem = Path(REAL_VIDEO).stem
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={stem: ["img000", "img001"]},
+        video_sets={str(Path(REAL_VIDEO).resolve()): {"crop": "10, 60, 20, 90"}},
+    )
+    labels = sio.load_dlc_project(config_path)
+    slp_path = tmp_path / "out.slp"
+    sio.save_slp(labels, slp_path)
+    reloaded = sio.load_slp(slp_path)
+    src_key = str(Path(REAL_VIDEO).resolve())
+    assert reloaded.provenance["dlc_crops"][src_key] == [10, 20, 60, 90]
+
+
+def test_dlc_crop_per_video_independent(tmp_path):
+    """Distinct crops per video are recorded independently in provenance."""
+    src1 = tmp_path / "videos" / "vid1.mp4"
+    src2 = tmp_path / "videos" / "vid2.mp4"
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000"], "vid2": ["img000"]},
+        video_sets={
+            str(src1): {"crop": "10, 60, 20, 90"},
+            str(src2): {"crop": "5, 25, 7, 47"},
+        },
+    )
+    labels = sio.load_dlc_project(config_path)
+    assert labels.provenance["dlc_crops"] == {
+        str(src1): [10, 20, 60, 90],
+        str(src2): [5, 7, 25, 47],
+    }
+
+
+def test_dlc_crop_single_csv_load_records_provenance(tmp_path):
+    """load_dlc (single CSV + config) also records dlc_crops provenance."""
+    source = tmp_path / "videos" / "vid1.mp4"
+    config_path = make_dlc_project(
+        tmp_path,
+        folders={"vid1": ["img000", "img001"]},
+        video_sets={str(source): {"crop": "10, 60, 20, 90"}},
+    )
+    csv = tmp_path / "labeled-data" / "vid1" / "CollectedData_LM.csv"
+    labels = sio.load_dlc(csv, config=config_path)
+    assert labels.provenance["dlc_crops"] == {str(source): [10, 20, 60, 90]}
+
+
+def test_dlc_identity_crop_records_no_provenance(tmp_path):
+    """The default identity crop (origin 0, 0) records no dlc_crops entry."""
+    config_path = make_dlc_project(tmp_path)  # default crop "0, 100, 0, 100"
+    labels = sio.load_dlc_project(config_path)
+    assert "dlc_crops" not in labels.provenance
+
+
+def test_dlc_madlc_230_config_no_crop_provenance(dlc_maudlc_testdata, dlc_config):
+    """The madlc_230 fixture's no-op 0,384,0,384 crop yields no provenance."""
+    labels = sio.load_dlc(dlc_maudlc_testdata, config=dlc_config)
+    assert "dlc_crops" not in labels.provenance

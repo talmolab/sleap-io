@@ -23,6 +23,7 @@ from sleap_io import (
     load_slp,
     save_slp,
 )
+from sleap_io.io.video_reading import CropVideoBackend
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.label_image import (
@@ -756,6 +757,81 @@ def test_match_video_image_sequence(centered_pair_frame_paths):
     # A partially overlapping sequence is not an "auto" match.
     partial = Video(filename=list(centered_pair_frame_paths[:1]), open_backend=False)
     assert labels.match_video(partial) is None
+
+
+def test_match_video_distinct_crops(centered_pair_low_quality_path):
+    """match_video keeps mosaic tiles distinct and resolves each correctly.
+
+    Two equal-size crops of one physical file share a root file. Without
+    crop-aware path rungs, a query for one tile would mis-resolve to the other
+    (or raise an ambiguity error). It must resolve to the matching tile.
+    """
+    src = Video.from_filename(centered_pair_low_quality_path)
+    left = src.crop((0, 0, 192, 384))
+    right = src.crop((192, 0, 384, 384))
+    labels = Labels(videos=[left, right])
+
+    # A fresh right-equivalent crop resolves to right, not left, no ambiguity.
+    right_eq = src.crop((192, 0, 384, 384))
+    assert labels.match_video(right_eq) is right
+    # And a left-equivalent resolves to left.
+    left_eq = src.crop((0, 0, 192, 384))
+    assert labels.match_video(left_eq) is left
+
+
+def test_match_video_identical_crop(centered_pair_low_quality_path):
+    """match_video resolves an identical crop to the stored crop."""
+    src = Video.from_filename(centered_pair_low_quality_path)
+    a = src.crop((0, 0, 192, 384))
+    labels = Labels(videos=[a])
+
+    a_eq = src.crop((0, 0, 192, 384))
+    assert labels.match_video(a_eq) is a
+
+
+def test_match_video_crop_not_basename_shadowed(centered_pair_low_quality_path):
+    """A crop query is not basename-matched to a different crop of one file."""
+    src = Video.from_filename(centered_pair_low_quality_path)
+    left = src.crop((0, 0, 192, 384))
+    labels = Labels(videos=[left])
+
+    # A different crop of the same source must not resolve to the left tile.
+    right = src.crop((192, 0, 384, 384))
+    assert labels.match_video(right) is None
+
+
+def test_add_video_distinct_crops_not_collapsed(centered_pair_low_quality_path):
+    """add_video keeps two distinct crops of one file as separate videos."""
+    src = Video.from_filename(centered_pair_low_quality_path)
+    left = src.crop((0, 0, 192, 384))
+    right = src.crop((192, 0, 384, 384))
+    labels = Labels()
+    labels.add_video(left)
+    labels.add_video(right)
+    assert len(labels.videos) == 2
+
+
+def test_add_video_identical_crops_dedup(centered_pair_low_quality_path):
+    """add_video dedups two identical crops of one file to a single video."""
+    src = Video.from_filename(centered_pair_low_quality_path)
+    a = src.crop((0, 0, 192, 384))
+    a_eq = src.crop((0, 0, 192, 384))
+    labels = Labels()
+    labels.add_video(a)
+    returned = labels.add_video(a_eq)
+    assert len(labels.videos) == 1
+    assert returned is a
+
+
+def test_add_video_noncrop_same_file_dedup(centered_pair_low_quality_path):
+    """add_video still dedups non-crop videos of the same file (additive)."""
+    v1 = Video.from_filename(centered_pair_low_quality_path)
+    v2 = Video.from_filename(centered_pair_low_quality_path)
+    labels = Labels()
+    labels.add_video(v1)
+    returned = labels.add_video(v2)
+    assert len(labels.videos) == 1
+    assert returned is v1
 
 
 def test_labels_save(tmp_path, slp_typical):
@@ -4971,6 +5047,148 @@ def test_labels_match_result_import():
     assert isinstance(result.video_map, dict)
     assert isinstance(result.skeleton_map, dict)
     assert isinstance(result.track_map, dict)
+
+
+def _synthetic_mosaic_labels(tmp_path):
+    """Build labels with a 2-tile mosaic of one source plus an uncropped video.
+
+    Returns ``(labels, src, n_tiles, inst_points)`` where ``src`` is the
+    uncropped source video for the mosaic, ``n_tiles`` is the number of cropped
+    tiles, and ``inst_points`` is the point array placed on the first tile.
+    """
+    rng = np.random.default_rng(0)
+    frames = rng.integers(0, 255, size=(4, 32, 64, 3), dtype=np.uint8)
+    src_path = tmp_path / "src.mp4"
+    sleap_io.save_video(frames, src_path)
+
+    src = Video.from_filename(src_path.as_posix())
+    left = src.crop((0, 0, 32, 32))
+    right = src.crop((32, 0, 64, 32))
+
+    other_frames = rng.integers(0, 255, size=(3, 16, 16, 3), dtype=np.uint8)
+    other_path = tmp_path / "other.mp4"
+    sleap_io.save_video(other_frames, other_path)
+    other = Video.from_filename(other_path.as_posix())
+
+    skel = Skeleton(["A", "B"])
+    inst_points = np.array([[1.0, 2.0], [3.0, 4.0]])
+    lf = LabeledFrame(
+        video=left,
+        frame_idx=0,
+        instances=[Instance.from_numpy(inst_points.copy(), skeleton=skel)],
+    )
+    labels = Labels(videos=[left, right, other], labeled_frames=[lf], skeletons=[skel])
+    return labels, src, 2, inst_points
+
+
+def test_apply_crops_mosaic_bakes_unique_files(tmp_path):
+    """apply_crops bakes each mosaic tile to a unique file in video_dir."""
+    labels, src, n_tiles, _ = _synthetic_mosaic_labels(tmp_path)
+    out_dir = tmp_path / "baked"
+
+    labels.apply_crops(video_dir=out_dir)
+
+    baked_files = sorted(out_dir.glob("*.mp4"))
+    # Both tiles share the stem "src", so they must be disambiguated.
+    assert len(baked_files) == n_tiles
+    names = [p.name for p in baked_files]
+    assert len(set(names)) == n_tiles  # unique names
+    assert all(p.exists() for p in baked_files)
+    assert all(name.startswith("src_crop") for name in names)
+
+
+def test_apply_crops_updates_references_to_baked_files(tmp_path):
+    """apply_crops rewires labels.videos to baked files, dropping crop backends."""
+    labels, src, n_tiles, _ = _synthetic_mosaic_labels(tmp_path)
+    out_dir = tmp_path / "baked"
+
+    labels.apply_crops(video_dir=out_dir)
+
+    cropped_videos = [v for v in labels.videos if Path(v.filename).parent == out_dir]
+    assert len(cropped_videos) == n_tiles
+    for v in cropped_videos:
+        # No longer a virtual crop: backend is a plain media backend.
+        assert not isinstance(v.backend, CropVideoBackend)
+        assert v._crop_tuple() is None
+        assert Path(v.filename).parent == out_dir
+        # The labeled frame now points at the baked file.
+    # The labeled frame's video reference was updated to a baked file.
+    lf_video = labels[0].video
+    assert lf_video in labels.videos
+    assert not isinstance(lf_video.backend, CropVideoBackend)
+
+
+def test_apply_crops_preserves_source_provenance(tmp_path):
+    """Baked videos keep source_video pointing at the uncropped original."""
+    labels, src, n_tiles, _ = _synthetic_mosaic_labels(tmp_path)
+    out_dir = tmp_path / "baked"
+
+    labels.apply_crops(video_dir=out_dir)
+
+    baked = [v for v in labels.videos if Path(v.filename).parent == out_dir]
+    for v in baked:
+        assert v.source_video is not None
+        # Cropped shape (32x32) differs from uncropped source shape (32x64).
+        assert v.shape[1:3] == (32, 32)
+        assert v.source_video.shape[1:3] == (32, 64)
+
+
+def test_apply_crops_leaves_uncropped_video_untouched(tmp_path):
+    """Uncropped videos are not rewritten or replaced by apply_crops."""
+    labels, src, n_tiles, _ = _synthetic_mosaic_labels(tmp_path)
+    other_before = labels.videos[2]
+    out_dir = tmp_path / "baked"
+
+    labels.apply_crops(video_dir=out_dir)
+
+    # The uncropped video object is the same instance, untouched.
+    assert other_before in labels.videos
+    assert labels.videos[2] is other_before
+    assert other_before.filename.endswith("other.mp4")
+    # No baked file was created for the uncropped video.
+    assert not (out_dir / "other_crop.mp4").exists()
+
+
+def test_apply_crops_coordinates_unchanged(tmp_path):
+    """Instance point coordinates are unchanged after baking (coord-neutral)."""
+    labels, src, n_tiles, inst_points = _synthetic_mosaic_labels(tmp_path)
+    out_dir = tmp_path / "baked"
+
+    labels.apply_crops(video_dir=out_dir)
+
+    baked_points = labels[0].instances[0].numpy()
+    assert_allclose(baked_points, inst_points)
+
+
+def test_apply_crops_default_dir_beside_source(tmp_path):
+    """Without video_dir, baked files are written next to the source video."""
+    labels, src, n_tiles, _ = _synthetic_mosaic_labels(tmp_path)
+
+    labels.apply_crops()
+
+    baked = [v for v in labels.videos if "_crop" in Path(v.filename).name]
+    assert len(baked) == n_tiles
+    for v in baked:
+        assert Path(v.filename).parent == tmp_path
+        assert Path(v.filename).exists()
+
+
+def test_apply_crops_empty_suffix_refuses_to_overwrite_source(tmp_path):
+    """An empty suffix next to the source would overwrite it; apply_crops raises."""
+    # Single cropped tile over one source so the baked name is "{stem}{suffix}.mp4"
+    # with no index disambiguation; an empty suffix collides with the source file.
+    rng = np.random.default_rng(0)
+    frames = rng.integers(0, 255, size=(4, 32, 64, 3), dtype=np.uint8)
+    src_path = tmp_path / "src.mp4"
+    sleap_io.save_video(frames, src_path)
+    src = Video.from_filename(src_path.as_posix())
+    tile = src.crop((0, 0, 32, 32))
+    labels = Labels(videos=[tile])
+
+    with pytest.raises(ValueError, match="overwrite a source video"):
+        labels.apply_crops(suffix="")
+    # The source file is left intact and no replacement happened.
+    assert isinstance(labels.videos[0].backend, CropVideoBackend)
 
 
 def test_labels_match_with_matcher_objects():

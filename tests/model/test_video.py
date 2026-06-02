@@ -7,7 +7,14 @@ import numpy as np
 import pytest
 
 from sleap_io import Video
-from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
+from sleap_io.io.video_reading import (
+    CropVideoBackend,
+    HDF5Video,
+    ImageVideo,
+    MediaVideo,
+)
+from sleap_io.model.video import _resolve_crop_rect
+from sleap_io.transform.frame import crop_frame
 
 
 def test_video_class():
@@ -1048,3 +1055,521 @@ def test_video_save_custom_fps(centered_pair_low_quality_path, tmp_path):
 
     # New video should have custom FPS
     assert new_video.fps == 30.0
+
+
+# ---------------------------------------------------------------------------
+# Video crop facade (UNIT U3)
+# ---------------------------------------------------------------------------
+
+
+def test_crop_facade_shape_len_grayscale(small_robot_path):
+    """Cropped video reports cropped shape/len and inherits grayscale intent."""
+    v = Video.from_filename(small_robot_path)
+    assert v.shape == (3, 320, 560, 3)
+
+    rect = (10, 20, 100, 120)
+    c = v.crop(rect)
+
+    assert isinstance(c.backend, CropVideoBackend)
+    assert c.backend.crop == rect
+    # Width = 100 - 10 = 90, height = 120 - 20 = 100, frames/channels preserved.
+    assert c.shape == (3, 100, 90, 3)
+    assert len(c) == 3
+    assert c.grayscale is False
+    assert c.source_video is v
+
+
+def test_crop_facade_grayscale_video(centered_pair_low_quality_path):
+    """A crop of a grayscale video stays grayscale."""
+    v = Video.from_filename(centered_pair_low_quality_path)
+    assert v.grayscale is True
+
+    c = v.crop((0, 0, 100, 100))
+    assert c.shape == (1100, 100, 100, 1)
+    assert c.grayscale is True
+
+
+def test_crop_byte_parity(small_robot_path):
+    """Cropped frames are byte-identical to crop_frame(full_frame, rect)."""
+    v = Video.from_filename(small_robot_path)
+    rect = (10, 20, 100, 120)
+    c = v.crop(rect)
+
+    for i in range(len(v)):
+        got = c[i]
+        expected = crop_frame(v[i], rect)
+        assert np.array_equal(got, expected)
+        assert got.dtype == expected.dtype
+
+
+def test_crop_byte_parity_out_of_bounds(small_robot_path):
+    """An out-of-bounds crop pads with fill, byte-identical to crop_frame."""
+    v = Video.from_filename(small_robot_path)
+    rect = (-10, -5, 30, 40)
+    c = v.crop(rect, fill=7)
+
+    got = c[0]
+    expected = crop_frame(v[0], rect, fill=7)
+    assert got.shape == (45, 40, 3)
+    assert np.array_equal(got, expected)
+
+
+def test_from_crop_path(small_robot_path):
+    """from_crop opens a path and returns a virtual crop."""
+    rect = (10, 20, 100, 120)
+    c = Video.from_crop(small_robot_path, rect)
+
+    assert isinstance(c.backend, CropVideoBackend)
+    assert c.backend.crop == rect
+    assert c.shape == (3, 100, 90, 3)
+    src = Video.from_filename(small_robot_path)
+    assert np.array_equal(c[0], crop_frame(src[0], rect))
+
+
+def test_from_crop_video(small_robot_path):
+    """from_crop accepts an existing Video and sets it as the source."""
+    v = Video.from_filename(small_robot_path)
+    rect = (10, 20, 100, 120)
+    c = Video.from_crop(v, rect)
+
+    assert c.source_video is v
+    assert c.backend.crop == rect
+
+
+def test_from_crop_fill_forwarded(small_robot_path):
+    """from_crop forwards the fill value to the crop."""
+    c = Video.from_crop(small_robot_path, (-5, -5, 10, 10), fill=3)
+    assert c.backend.fill == 3
+    src = Video.from_filename(small_robot_path)
+    assert np.array_equal(c[0], crop_frame(src[0], (-5, -5, 10, 10), fill=3))
+
+
+def test_from_crop_forwards_region_specs(small_robot_path):
+    """from_crop forwards bbox/center+size region specs (not only `crop`)."""
+    c = Video.from_crop(small_robot_path, bbox=(10.0, 20.0, 100.0, 120.0))
+    assert c.is_cropped
+    assert c.crop_rect == (10, 20, 100, 120)
+    c2 = Video.from_crop(small_robot_path, center=(50, 50), size=(40, 40))
+    assert c2.shape[1:3] == (40, 40)
+
+
+def test_public_crop_accessors(small_robot_path):
+    """is_cropped / crop_rect / crop_fill expose crop state publicly."""
+    v = Video.from_filename(small_robot_path)
+    assert v.is_cropped is False
+    assert v.crop_rect is None
+    assert v.crop_fill == 0
+    c = v.crop((2, 3, 12, 13), fill=5)
+    assert c.is_cropped is True
+    assert c.crop_rect == (2, 3, 12, 13)
+    assert c.crop_fill == 5
+
+
+def test_resolve_crop_rect_bbox():
+    """The bbox spec floors mins / ceils maxs to an integer rect."""
+    assert _resolve_crop_rect(bbox=(1.2, 2.8, 10.4, 20.1)) == (1, 2, 11, 21)
+
+
+def test_resolve_crop_rect_roi_margin():
+    """The roi spec uses axis-aligned .bounds (floor/ceil) plus a margin."""
+    from shapely.geometry import box
+
+    roi = box(1.5, 2.5, 10.5, 20.5)
+    assert _resolve_crop_rect(roi=roi, margin=2) == (-1, 0, 13, 23)
+
+
+def test_resolve_crop_rect_center_size():
+    """center+size yields a fixed output shape rect (round, not truncate)."""
+    # cx - w/2 = 50 - 10 = 40, cy - h/2 = 60 - 15 = 45.
+    rect = _resolve_crop_rect(center=(50, 60), size=(20, 30))
+    assert rect == (40, 45, 60, 75)
+    assert rect[2] - rect[0] == 20
+    assert rect[3] - rect[1] == 30
+
+
+def test_resolve_crop_rect_explicit():
+    """An explicit crop rect is returned as integers without truncation."""
+    assert _resolve_crop_rect(crop=(1, 2, 3, 4)) == (1, 2, 3, 4)
+
+
+def test_resolve_crop_rect_exactly_one_required():
+    """Not providing exactly one region spec raises ValueError."""
+    with pytest.raises(ValueError):
+        _resolve_crop_rect()
+    with pytest.raises(ValueError):
+        _resolve_crop_rect(crop=(0, 0, 5, 5), bbox=(0, 0, 5, 5))
+    # center without size is not a complete spec.
+    with pytest.raises(ValueError):
+        _resolve_crop_rect(center=(5, 5))
+
+
+def test_resolve_crop_rect_stray_center_or_size():
+    """A lone center or size alongside another spec is rejected, not dropped."""
+    with pytest.raises(ValueError, match="center and size"):
+        _resolve_crop_rect(crop=(0, 0, 5, 5), center=(99, 99))
+    with pytest.raises(ValueError, match="center and size"):
+        _resolve_crop_rect(bbox=(0, 0, 5, 5), size=(99, 99))
+
+
+def test_resolve_crop_rect_inverted_raises():
+    """Inverted crop rects (x2<x1 / y2<y1) raise rather than yield a negative shape."""
+    with pytest.raises(ValueError, match="Inverted crop"):
+        _resolve_crop_rect(crop=(100, 100, 50, 200))
+    with pytest.raises(ValueError, match="Inverted crop"):
+        _resolve_crop_rect(bbox=(100.0, 100.0, 50.0, 200.0))
+
+
+def test_resolve_crop_rect_size_rounds_not_truncates():
+    """Float size is rounded (not int()-truncated) so output shape matches size."""
+    assert _resolve_crop_rect(center=(5, 5), size=(3.9, 3.9)) == (3, 3, 7, 7)
+
+
+def test_crop_closed_video_no_backend_raises():
+    """Cropping a video with no openable backend raises a clear ValueError."""
+    v = Video(filename="/nonexistent_video.mp4", open_backend=False)
+    assert v.backend is None
+    with pytest.raises(ValueError, match="no open backend"):
+        v.crop((0, 0, 10, 10))
+
+
+def test_crop_persists_source_shape_and_fill(small_robot_path):
+    """Video.crop records the uncropped source_shape and exposes _crop_fill."""
+    v = Video.from_filename(small_robot_path)
+    c = v.crop((2, 3, 12, 13), fill=7)
+    assert tuple(c.backend_metadata["source_shape"]) == tuple(v.shape)
+    assert c._crop_fill() == 7
+    assert v._crop_fill() == 0  # uncropped
+
+
+def test_crop_center_size_fixed_shape(small_robot_path):
+    """A center+size crop produces a fixed output shape even partly OOB."""
+    v = Video.from_filename(small_robot_path)
+    # Center near the top-left corner so the window runs off the edge.
+    c = v.crop(center=(5, 5), size=(40, 40))
+    assert c.shape[1:3] == (40, 40)
+
+
+def test_crop_validation_error_on_video(small_robot_path):
+    """Video.crop surfaces the exactly-one-spec validation error."""
+    v = Video.from_filename(small_robot_path)
+    with pytest.raises(ValueError):
+        v.crop()
+    with pytest.raises(ValueError):
+        v.crop((0, 0, 5, 5), bbox=(0, 0, 5, 5))
+
+
+def test_crop_close_open_preserves_crop_and_shape(small_robot_path):
+    """close()/open() on a cropped media video preserves crop + cropped shape."""
+    v = Video.from_filename(small_robot_path)
+    rect = (10, 20, 100, 120)
+    c = v.crop(rect)
+    expected = crop_frame(v[0], rect)
+
+    c.close()
+    # Closed video reports the cropped shape from metadata (no double-crop).
+    assert c.shape == (3, 100, 90, 3)
+    assert c.backend is None
+    assert c.backend_metadata["crop"] == list(rect)
+
+    # Reading reopens and re-wraps exactly once.
+    got = c[0]
+    assert isinstance(c.backend, CropVideoBackend)
+    assert c.backend.crop == rect
+    assert np.array_equal(got, expected)
+
+
+def test_crop_close_open_preserves_dataset_hdf5(slp_minimal_pkg):
+    """A cropped HDF5 video keeps its dataset across close()/open() (D-116)."""
+    import sleap_io as sio
+
+    labels = sio.load_slp(slp_minimal_pkg)
+    v = labels.videos[0]
+    rect = (5, 10, 50, 60)
+    c = v.crop(rect)
+    expected = crop_frame(v[0], rect)
+    assert c.backend.dataset == v.backend.dataset
+
+    c.close()
+    assert c.backend_metadata["dataset"] == v.backend.dataset
+
+    got = c[0]
+    assert isinstance(c.backend, CropVideoBackend)
+    # Dataset delegates to the inner backend after reopen.
+    assert c.backend.dataset == v.backend.dataset
+    assert np.array_equal(got, expected)
+
+
+def test_crop_deepcopy_preserves_crop_and_reads(small_robot_path):
+    """A deepcopy of a cropped video preserves the crop and reads correctly."""
+    v = Video.from_filename(small_robot_path)
+    rect = (10, 20, 100, 120)
+    c = v.crop(rect)
+    expected = crop_frame(v[0], rect)
+
+    d = copy.deepcopy(c)
+    assert isinstance(d.backend, CropVideoBackend)
+    assert d.backend.crop == rect
+    assert d.backend_metadata["crop"] == list(rect)
+    assert np.array_equal(d[0], expected)
+
+
+def test_crop_mosaic_shared_inner_close_one_keeps_sibling(small_robot_path):
+    """Mosaic tiles share the source's inner; closing one keeps the others."""
+    src = Video.from_filename(small_robot_path)
+    W, H = src.shape[2], src.shape[1]
+    W2 = W // 2
+
+    t1 = src.crop((0, 0, W2, H))
+    t2 = src.crop((W2, 0, W, H))
+
+    # Both tiles reuse the source's backend instance as the shared inner.
+    assert t1.backend.inner is src.backend
+    assert t2.backend.inner is src.backend
+    # Shared-decode tiles do not own the shared decoder.
+    assert t1.backend.owns_inner is False
+    assert t2.backend.owns_inner is False
+
+    # Prime the shared reader, then close one tile.
+    _ = t1[0]
+    t1.close()
+
+    # The shared decoder is untouched: the source and sibling still read.
+    assert src.backend._open_reader is not None
+    assert src[0].shape == (H, W, 3)
+    assert t2[0].shape == (H, W2, 3)
+
+
+def test_crop_no_share_decode_owns_inner(small_robot_path):
+    """share_decode=False reuses the source backend as inner but TAKES ownership."""
+    src = Video.from_filename(small_robot_path)
+    t = src.crop((0, 0, 100, 100), share_decode=False)
+    assert t.backend.owns_inner is True
+    # share_decode=False still reuses self.backend as the inner, but the tile owns
+    # it, so closing the tile cascades close() into the shared source backend.
+    assert t.backend.inner is src.backend
+    _ = src[0]
+    t.close()
+    # owns_inner=True released the shared inner's reader...
+    assert src.backend._open_reader is None
+    # ...but the source transparently re-opens on the next read (lazy reopen).
+    assert src[0].shape[0] > 0
+
+
+def test_crop_closed_video_reports_cropped_shape(small_robot_path):
+    """A never-opened cropped video reports the cropped shape from metadata."""
+    v = Video.from_filename(small_robot_path)
+    c = v.crop((10, 20, 100, 120))
+    # Drop the backend so shape must come from backend_metadata.
+    c.close()
+    assert c.backend is None
+    assert c.shape == (3, 100, 90, 3)
+    assert c.grayscale is False
+
+
+def test_crop_of_crop_composition(small_robot_path):
+    """crop-of-crop flattens to a composed source rect (backend + metadata)."""
+    v = Video.from_filename(small_robot_path)
+    c1 = v.crop((10, 20, 110, 120))
+    c2 = c1.crop((5, 5, 50, 50))
+
+    # Composed source rect: (10+5, 20+5, 10+50, 20+50).
+    assert c2.backend.crop == (15, 25, 60, 70)
+    assert c2.backend_metadata["crop"] == [15, 25, 60, 70]
+    # Flattened: the inner is the plain source backend, never another crop.
+    assert not isinstance(c2.backend.inner, CropVideoBackend)
+
+    # Byte-identical to a direct composed crop on the source.
+    direct = v.crop((15, 25, 60, 70))
+    assert np.array_equal(c2[0], direct[0])
+
+
+def test_crop_of_crop_byte_parity_via_nested_frames(small_robot_path):
+    """crop-of-crop equals cropping the already-cropped frame."""
+    v = Video.from_filename(small_robot_path)
+    c1 = v.crop((10, 20, 110, 120))
+    c2 = c1.crop((5, 5, 50, 50))
+    expected = crop_frame(c1[0], (5, 5, 50, 50))
+    assert np.array_equal(c2[0], expected)
+
+
+def test_video_to_crop_and_source_coords(small_robot_path):
+    """to_crop_coords/to_source_coords translate by the crop origin."""
+    v = Video.from_filename(small_robot_path)
+    rect = (10, 20, 100, 120)
+    c = v.crop(rect)
+
+    pts = np.array([[15.0, 25.0], [np.nan, 5.0]])
+    in_crop = c.to_crop_coords(pts)
+    assert np.array_equal(in_crop[0], np.array([5.0, 5.0]))
+    # NaN x is preserved; y shifts by -y1.
+    assert np.isnan(in_crop[1, 0])
+    assert in_crop[1, 1] == -15.0
+
+    # Round-trip back to source coordinates.
+    back = c.to_source_coords(in_crop)
+    valid = ~np.isnan(pts)
+    assert np.allclose(back[valid], pts[valid])
+
+
+def test_video_coords_uncropped_passthrough(small_robot_path):
+    """Coordinate methods are identity copies on an uncropped video."""
+    v = Video.from_filename(small_robot_path)
+    pts = np.array([[15.0, 25.0], [3.0, 4.0]])
+
+    out_c = v.to_crop_coords(pts)
+    out_s = v.to_source_coords(pts)
+    assert np.array_equal(out_c, pts)
+    assert np.array_equal(out_s, pts)
+    # Copies, not the same object (no accidental in-place aliasing).
+    assert out_c is not pts
+    assert out_s is not pts
+
+
+def test_video_crop_tuple(small_robot_path):
+    """_crop_tuple returns the rect for a crop and None when uncropped."""
+    v = Video.from_filename(small_robot_path)
+    assert v._crop_tuple() is None
+
+    rect = (10, 20, 100, 120)
+    c = v.crop(rect)
+    assert c._crop_tuple() == rect
+
+    # Closed path reads the crop from backend_metadata.
+    c.close()
+    assert c._crop_tuple() == rect
+
+
+# ---------------------------------------------------------------------------
+# Video.apply_crop (bake virtual crop to disk)
+# ---------------------------------------------------------------------------
+
+
+def test_apply_crop_shape_and_open(small_robot_path, tmp_path):
+    """apply_crop bakes the cropped shape into a file that opens to that shape."""
+    v = Video.from_filename(small_robot_path)
+    # Dimensions divisible by 16 so libx264 macro-block padding is a no-op and
+    # the baked shape is exactly the cropped shape.
+    rect = (16, 16, 112, 112)
+    c = v.crop(rect)
+    assert c.shape == (3, 96, 96, 3)
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out)
+
+    assert out.exists()
+    # The crop is now physical: no CropVideoBackend.
+    assert not isinstance(baked.backend, CropVideoBackend)
+    # Baked video opens and its frame shape matches the cropped (h, w).
+    assert baked.shape[1:3] == (96, 96)
+    assert baked[0].shape[:2] == (96, 96)
+    assert len(baked) == len(c)
+
+
+def test_apply_crop_byte_parity(small_robot_path, tmp_path):
+    """Baked frames match the in-memory crop within codec tolerance."""
+    v = Video.from_filename(small_robot_path)
+    rect = (16, 16, 112, 112)
+    c = v.crop(rect)
+    h, w = rect[3] - rect[1], rect[2] - rect[0]
+
+    out = tmp_path / "baked.mp4"
+    # Near-lossless encode for the tightest parity the writer can provide.
+    baked = c.apply_crop(out, video_kwargs={"crf": 0, "preset": "veryslow"})
+
+    for i in range(len(c)):
+        got = baked[i]
+        expected = crop_frame(v[i], rect)
+        assert got.shape == expected.shape
+        # Compare the content region (libx264 pads bottom/right, preserving the
+        # top-left, but here the crop is macro-block aligned so no padding).
+        got = got[:h, :w]
+        # H.264 colorspace conversion is not bit-exact even at crf=0; allow a
+        # small per-pixel tolerance.
+        assert np.abs(got.astype(np.int16) - expected.astype(np.int16)).max() <= 6
+
+
+def test_apply_crop_source_video_provenance(small_robot_path, tmp_path):
+    """Baked video's source_video is the uncropped original with full shape."""
+    v = Video.from_filename(small_robot_path)
+    full_shape = v.shape
+    rect = (16, 16, 112, 112)
+    c = v.crop(rect)
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out)
+
+    # c.source_video is v (the uncropped original), so baked inherits it.
+    assert baked.source_video is v
+    assert baked.source_video.shape == full_shape
+    # Baked shape is the cropped (h, w); source is the full frame.
+    assert baked.shape[1:3] == (rect[3] - rect[1], rect[2] - rect[0])
+    assert baked.source_video.shape[1:3] == full_shape[1:3]
+
+
+def test_apply_crop_provenance_reconstructs_uncropped_source(
+    small_robot_path, tmp_path
+):
+    """When the cropped video has no source_video, baked source is an uncropped view."""
+    v = Video.from_filename(small_robot_path)
+    full_shape = v.shape
+    rect = (10, 20, 100, 120)
+    c = v.crop(rect)
+    # Detach the source so the fallback branch (source_video is None) is taken.
+    c.source_video = None
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out)
+
+    # The fallback reconstructs an UNCROPPED source from the crop backend's inner,
+    # never the cropped video itself.
+    assert baked.source_video is not c
+    assert baked.source_video._crop_tuple() is None
+    assert baked.source_video.shape[1:3] == full_shape[1:3]
+
+
+def test_apply_crop_raises_when_uncropped(small_robot_path, tmp_path):
+    """apply_crop raises on an uncropped video and does not write a file."""
+    v = Video.from_filename(small_robot_path)
+    assert v._crop_tuple() is None
+
+    out = tmp_path / "baked.mp4"
+    with pytest.raises(ValueError, match="requires a cropped video"):
+        v.apply_crop(out)
+    assert not out.exists()
+
+
+def test_apply_crop_carries_grayscale(centered_pair_low_quality_path, tmp_path):
+    """Baked video carries grayscale from the cropped source."""
+    v = Video.from_filename(centered_pair_low_quality_path)
+    assert v.grayscale is True
+    c = v.crop((0, 0, 96, 96))
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out)
+
+    assert baked.grayscale is True
+    assert baked.shape[1:3] == (96, 96)
+
+
+def test_apply_crop_uses_source_fps(centered_pair_low_quality_path, tmp_path):
+    """apply_crop defaults output FPS to the cropped video's FPS."""
+    v = Video.from_filename(centered_pair_low_quality_path)
+    v.fps = 15.0
+    c = v.crop((0, 0, 100, 100))
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out, frame_inds=[0, 1, 2])
+
+    assert baked.fps == 15.0
+    assert len(baked) == 3
+
+
+def test_apply_crop_custom_fps(small_robot_path, tmp_path):
+    """apply_crop honors an explicit fps argument."""
+    v = Video.from_filename(small_robot_path)
+    c = v.crop((10, 20, 100, 120))
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out, fps=30.0)
+
+    assert baked.fps == 30.0

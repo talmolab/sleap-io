@@ -9,10 +9,12 @@ import re
 import sys
 from pathlib import Path
 
+import h5py
+import numpy as np
 import pytest
 from click.testing import CliRunner
 
-from sleap_io import load_slp
+from sleap_io import load_slp, save_video
 from sleap_io.io.cli import (
     _get_ffmpeg_version,
     _is_ffmpeg_available,
@@ -21,9 +23,11 @@ from sleap_io.io.cli import (
     _parse_overlay_outline_color,
     cli,
 )
-from sleap_io.model.instance import PredictedInstance
+from sleap_io.model.instance import Instance, PredictedInstance
+from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
+from sleap_io.model.video import Video
 from sleap_io.version import __version__
 
 # Skip marker for tests that are extremely slow on Windows CI due to video encoding
@@ -11134,3 +11138,249 @@ def test_transform_embed_provenance_embedded_video(tmp_path, slp_minimal_pkg):
         transform_json = f["provenance/transform_json"][()].decode()
         metadata = json.loads(transform_json)
         assert "videos" in metadata
+
+
+def _make_cropped_slp(
+    tmp_path: Path,
+    crop: tuple[int, int, int, int] = (10, 5, 40, 25),
+    name: str = "syn",
+) -> tuple[Path, tuple[int, int, int, int]]:
+    """Create a small .slp with one virtually-cropped synthetic video.
+
+    Args:
+        tmp_path: Directory to write the synthetic video and SLP into.
+        crop: Crop region ``(x1, y1, x2, y2)`` to apply virtually.
+        name: Stem used for the synthetic video and SLP files.
+
+    Returns:
+        Tuple of (path to the saved .slp, the crop region).
+    """
+    video_path = tmp_path / f"{name}.mp4"
+    frames = (np.random.default_rng(0).random((5, 40, 60, 3)) * 255).astype("uint8")
+    save_video(frames, str(video_path), fps=30)
+
+    video = Video.from_crop(str(video_path), crop=crop)
+    skeleton = Skeleton(["a"])
+    instance = Instance.from_numpy(np.array([[5.0, 5.0]]), skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels(skeletons=[skeleton], videos=[video], labeled_frames=[lf])
+
+    slp_path = tmp_path / f"{name}.slp"
+    labels.save(str(slp_path))
+    return slp_path, crop
+
+
+@skip_slow_video_on_windows
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_apply_crops_roundtrip(tmp_path):
+    """Bake a virtually-cropped SLP and verify provenance + materialization."""
+    slp_path, crop = _make_cropped_slp(tmp_path)
+    x1, y1, x2, y2 = crop
+    crop_h, crop_w = y2 - y1, x2 - x1
+
+    # Record the uncropped source shape for the provenance assertion.
+    src_labels = load_slp(str(slp_path))
+    src_video = src_labels.videos[0]
+    assert src_video._crop_tuple() == crop
+    src_shape = src_video.source_video.shape
+
+    output_slp = tmp_path / "baked.slp"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["apply-crops", str(slp_path), "-o", str(output_slp)])
+
+    assert result.exit_code == 0, result.output
+    assert output_slp.exists()
+
+    # The video directory next to the output SLP should hold the baked file.
+    video_dir = tmp_path / "baked.videos"
+    assert video_dir.exists()
+    baked_file = video_dir / "syn_crop.mp4"
+    assert baked_file.exists()
+
+    # Reload the output and inspect the (now physical) video.
+    out_labels = load_slp(str(output_slp))
+    assert len(out_labels.videos) == 1
+    baked = out_labels.videos[0]
+
+    # Reference points at the baked file.
+    assert Path(baked.filename).name == "syn_crop.mp4"
+
+    # The virtual crop has been materialized: no crop tuple remains.
+    assert baked._crop_tuple() is None
+
+    # Provenance: source_video is the uncropped original.
+    assert baked.source_video is not None
+    assert baked.source_video.shape == src_shape
+
+    # The baked shape carries the cropped dimensions (encoders may pad up to a
+    # block-aligned size, never below the logical crop).
+    assert baked.shape[1] >= crop_h
+    assert baked.shape[2] >= crop_w
+    # And it is strictly smaller than the uncropped source frame.
+    assert baked.shape[1] <= src_shape[1]
+    assert baked.shape[2] <= src_shape[2]
+
+
+@skip_slow_video_on_windows
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_apply_crops_no_virtual_crop_remains(tmp_path):
+    """The baked SLP must not contain a /video_crops virtual crop entry."""
+    slp_path, _ = _make_cropped_slp(tmp_path)
+    output_slp = tmp_path / "baked.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["apply-crops", str(slp_path), "-o", str(output_slp)])
+    assert result.exit_code == 0, result.output
+
+    with h5py.File(output_slp, "r") as f:
+        assert "video_crops" not in f
+
+
+@skip_slow_video_on_windows
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_apply_crops_custom_video_dir_and_suffix(tmp_path):
+    """--video-dir and --suffix control the baked file location and name."""
+    slp_path, _ = _make_cropped_slp(tmp_path)
+    output_slp = tmp_path / "baked.slp"
+    baked_dir = tmp_path / "baked_videos"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "apply-crops",
+            str(slp_path),
+            "-o",
+            str(output_slp),
+            "--video-dir",
+            str(baked_dir),
+            "--suffix",
+            "_baked",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    baked_file = baked_dir / "syn_baked.mp4"
+    assert baked_file.exists()
+
+    out_labels = load_slp(str(output_slp))
+    assert Path(out_labels.videos[0].filename).name == "syn_baked.mp4"
+    assert out_labels.videos[0]._crop_tuple() is None
+
+
+@skip_slow_video_on_windows
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_apply_crops_dry_run_writes_nothing(tmp_path):
+    """--dry-run reports the plan without writing the SLP or baked videos."""
+    slp_path, _ = _make_cropped_slp(tmp_path)
+    output_slp = tmp_path / "baked.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["apply-crops", str(slp_path), "-o", str(output_slp), "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Dry run" in result.output
+    assert not output_slp.exists()
+    assert not (tmp_path / "baked.videos").exists()
+
+
+def test_apply_crops_no_crops_message(tmp_path):
+    """A project with no virtual crops prints a clear message and still writes."""
+    video_path = tmp_path / "plain.mp4"
+    frames = (np.random.default_rng(1).random((3, 40, 60, 3)) * 255).astype("uint8")
+    save_video(frames, str(video_path), fps=30)
+
+    video = Video.from_filename(str(video_path))
+    skeleton = Skeleton(["a"])
+    instance = Instance.from_numpy(np.array([[5.0, 5.0]]), skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels(skeletons=[skeleton], videos=[video], labeled_frames=[lf])
+
+    slp_path = tmp_path / "plain.slp"
+    labels.save(str(slp_path))
+
+    output_slp = tmp_path / "out.slp"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["apply-crops", str(slp_path), "-o", str(output_slp)])
+
+    assert result.exit_code == 0, result.output
+    assert "nothing to bake" in result.output
+    # The output is still written as a safe pass-through.
+    assert output_slp.exists()
+    out_labels = load_slp(str(output_slp))
+    assert len(out_labels.videos) == 1
+    assert out_labels.videos[0]._crop_tuple() is None
+
+
+def test_apply_crops_no_videos_message(tmp_path):
+    """A project with no videos reports it and still writes the output SLP."""
+    skeleton = Skeleton(["node"])
+    labels = Labels(skeletons=[skeleton], videos=[], labeled_frames=[])
+    input_slp = tmp_path / "empty.slp"
+    output_slp = tmp_path / "out.slp"
+    labels.save(str(input_slp))
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["apply-crops", str(input_slp), "-o", str(output_slp)])
+
+    assert result.exit_code == 0, result.output
+    assert "No videos found" in result.output
+    assert output_slp.exists()
+
+
+@skip_slow_video_on_windows
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_apply_crops_overwrite(tmp_path):
+    """--overwrite is required to replace an existing output SLP."""
+    slp_path, _ = _make_cropped_slp(tmp_path)
+    output_slp = tmp_path / "baked.slp"
+    output_slp.touch()
+
+    runner = CliRunner()
+
+    # Without --overwrite the existing output blocks the command.
+    result = runner.invoke(cli, ["apply-crops", str(slp_path), "-o", str(output_slp)])
+    assert result.exit_code != 0
+    assert "already exists" in result.output
+
+    # With --overwrite it succeeds.
+    result = runner.invoke(
+        cli, ["apply-crops", str(slp_path), "-o", str(output_slp), "--overwrite"]
+    )
+    assert result.exit_code == 0, result.output
+    assert output_slp.exists()
+
+
+def test_apply_crops_quality_crf_mutually_exclusive(tmp_path):
+    """--quality and --crf cannot be combined."""
+    slp_path, _ = _make_cropped_slp(tmp_path)
+    output_slp = tmp_path / "baked.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "apply-crops",
+            str(slp_path),
+            "-o",
+            str(output_slp),
+            "--quality",
+            "high",
+            "--crf",
+            "20",
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Cannot use both --quality and --crf" in output

@@ -31,6 +31,30 @@ def crop_points(
     return result
 
 
+def uncrop_points(
+    points: np.ndarray,
+    crop: tuple[int, int, int, int],
+) -> np.ndarray:
+    """Map crop-local point coordinates back to source coordinates.
+
+    Inverse of :func:`crop_points`: maps crop-local (x, y) coordinates back to
+    source coordinates by adding the crop origin (x1, y1).
+
+    Args:
+        points: Coordinate array of shape (..., 2) where the last dimension
+            contains (x, y) coordinates. NaN values are preserved.
+        crop: Crop region as (x1, y1, x2, y2) pixel coordinates.
+
+    Returns:
+        Adjusted coordinates with same shape as input.
+    """
+    x1, y1, x2, y2 = crop
+    result = points.copy()
+    result[..., 0] = points[..., 0] + x1
+    result[..., 1] = points[..., 1] + y1
+    return result
+
+
 def scale_points(
     points: np.ndarray,
     scale: tuple[float, float],

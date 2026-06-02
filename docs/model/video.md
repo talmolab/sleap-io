@@ -161,6 +161,22 @@ video.original_video  # Root video in the chain
 
 This provenance chain enables restoring original video paths when extracting labels from packaged files.
 
+## Virtual cropping
+
+A `Video` can expose a virtual, on-read crop of another video — a cropped view whose frames are decoded from the source and sliced in memory, with no pixels copied or re-encoded:
+
+```python
+full = sio.load_video("session.mp4")          # (1000, 1080, 1920, 3)
+view = full.crop((320, 200, 576, 456))        # (x1, y1, x2, y2), x2/y2 exclusive
+view.shape                                     # (1000, 256, 256, 3)
+view.source_video is full                      # True
+
+# Map landmark coordinates between source and cropped frames (NaN-preserving):
+pts_crop = view.to_crop_coords(pts_source)
+```
+
+The view reports the cropped `shape`, `len()`, and `grayscale`, and indexes like any other video. Crops round-trip through `.slp` (stored in a dedicated `/video_crops` dataset; older readers see the uncropped source), and many crops of one file can share a single decoder. See the [Virtual cropping guide](../cropping.md) for conventions, mosaics, performance, and non-goals.
+
 ## File management
 
 ### Checking existence

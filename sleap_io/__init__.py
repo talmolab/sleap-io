@@ -54,6 +54,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "io.seq": ["SeqVideo"],
         "io.video_reading": [
             "VideoBackend",
+            "CropVideoBackend",
             "get_default_image_plugin",
             "get_default_video_plugin",
             "set_default_image_plugin",

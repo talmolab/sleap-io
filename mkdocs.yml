@@ -161,6 +161,7 @@ nav:
     - Merging: merging.md
     - Rendering: rendering.md
     - Transforms: transforms.md
+    - Virtual cropping: cropping.md
   - Reference:
     - Model:
       - model/index.md

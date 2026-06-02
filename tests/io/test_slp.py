@@ -77,6 +77,7 @@ from sleap_io.io.slp import (
     read_skeletons,
     read_suggestions,
     read_tracks,
+    read_video_crops,
     read_videos,
     session_to_dict,
     video_to_dict,
@@ -89,10 +90,16 @@ from sleap_io.io.slp import (
     write_sessions,
     write_suggestions,
     write_tracks,
+    write_video_crops,
     write_videos,
 )
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
-from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
+from sleap_io.io.video_reading import (
+    CropVideoBackend,
+    HDF5Video,
+    ImageVideo,
+    MediaVideo,
+)
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.identity import Identity
@@ -103,6 +110,7 @@ from sleap_io.model.mask import (
     UserSegmentationMask,
 )
 from sleap_io.model.roi import PredictedROI, UserROI
+from sleap_io.transform.frame import crop_frame
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
@@ -8150,3 +8158,376 @@ def test_read_labels_threads_single_open(slp_minimal_pkg):
 
     assert type(labels) is Labels
     assert open_count <= 3
+
+
+# ---------------------------------------------------------------------------
+# Virtual crop serialization (UNIT U4, §6)
+# ---------------------------------------------------------------------------
+
+
+def test_crop_roundtrip_media_video(centered_pair_low_quality_path, tmp_path):
+    """A MediaVideo crop round-trips: crop, cropped shape, uncropped source."""
+    source = Video.from_filename(centered_pair_low_quality_path)
+    crop = (10, 20, 110, 140)
+    expected = crop_frame(source[0], crop, fill=0)
+
+    cropped = source.crop(crop)
+    labels = Labels(videos=[cropped])
+    path = str(tmp_path / "media_crop.slp")
+    write_labels(path, labels)
+
+    loaded = read_labels(path, open_videos=True)
+    video = loaded.videos[0]
+
+    assert isinstance(video.backend, CropVideoBackend)
+    assert video._crop_tuple() == crop
+    # Cropped shape on the facade; uncropped on the provenance source.
+    assert video.shape == (source.shape[0], 120, 100, source.shape[3])
+    assert video.source_video.shape == source.shape
+    assert np.array_equal(video[0], expected)
+
+
+def test_crop_tuple_fill_roundtrips_and_flattens(
+    centered_pair_low_quality_path, tmp_path
+):
+    """A tuple fill survives the SLP round-trip and still flattens a crop-of-crop.
+
+    /video_crops stores fill as JSON (a tuple becomes a list); the fill converter
+    normalizes it back so a reloaded crop with a tuple fill compares equal and
+    flattens against a tuple inner.fill.
+    """
+    source = Video.from_filename(centered_pair_low_quality_path, grayscale=False)
+    cropped = source.crop((10, 20, 110, 140), fill=(7, 8, 9))
+    labels = Labels(videos=[cropped])
+    path = str(tmp_path / "tuple_fill.slp")
+    write_labels(path, labels)
+
+    loaded = read_labels(path, open_videos=True)
+    v = loaded.videos[0]
+    # Fill is normalized to a tuple (not a list) after the JSON round-trip.
+    assert v.backend.fill == (7, 8, 9)
+    assert isinstance(v.backend.fill, tuple)
+    # A further in-bounds crop with the same tuple fill flattens (no nesting).
+    refined = v.crop((1, 1, 50, 50), fill=(7, 8, 9))
+    assert not isinstance(refined.backend.inner, CropVideoBackend)
+
+
+def test_reloaded_mosaic_tiles_own_their_inner(
+    centered_pair_low_quality_path, tmp_path
+):
+    """Each reloaded cropped tile owns its inner decoder so close() releases it."""
+    source = Video.from_filename(centered_pair_low_quality_path)
+    tiles = [source.crop((0, 0, 64, 64)), source.crop((64, 0, 128, 64))]
+    labels = Labels(videos=tiles)
+    path = str(tmp_path / "mosaic.slp")
+    write_labels(path, labels)
+
+    loaded = read_labels(path, open_videos=True)
+    for v in loaded.videos:
+        assert isinstance(v.backend, CropVideoBackend)
+        # Owns its inner (no leaked, unowned decoder on the reload path).
+        assert v.backend.owns_inner is True
+        _ = v[0]
+        v.close()  # cascades to the owned inner; no leak
+
+
+def test_apply_crops_sparse_embedded_raises(centered_pair_low_quality_path, tmp_path):
+    """Baking a crop over a sparsely-embedded video raises (would break frame_idx).
+
+    Embedding labeled frames at non-contiguous indices then reloading yields a crop
+    whose inner is an embedded HDF5Video with a sparse frame_map; baking it would
+    compact frames to a contiguous range and dangle the labeled-frame references,
+    so apply_crop / apply_crops must refuse with a clear error.
+    """
+    source = Video.from_filename(centered_pair_low_quality_path)
+    cropped = source.crop((10, 10, 74, 74))
+    skel = Skeleton(["a"])
+    lfs = [
+        LabeledFrame(
+            video=cropped,
+            frame_idx=idx,
+            instances=[Instance.from_numpy(np.array([[5.0, 5.0]]), skeleton=skel)],
+        )
+        for idx in (5, 9)  # non-contiguous source indices
+    ]
+    labels = Labels(videos=[cropped], skeletons=[skel], labeled_frames=lfs)
+    pkg = str(tmp_path / "sparse.pkg.slp")
+    write_labels(pkg, labels, embed=True)
+
+    reloaded = read_labels(pkg, open_videos=True)
+    rv = reloaded.videos[0]
+    assert rv.backend.inner.frame_map  # sparse embedded inner
+    with pytest.raises(ValueError, match="sparsely embedded"):
+        rv.apply_crop(str(tmp_path / "baked.mp4"))
+    with pytest.raises(ValueError, match="sparsely embedded"):
+        reloaded.apply_crops(video_dir=str(tmp_path / "baked"))
+
+
+def test_crop_roundtrip_image_video(centered_pair_frame_paths, tmp_path):
+    """An ImageVideo crop round-trips through /video_crops."""
+    source = Video.from_filename(centered_pair_frame_paths)
+    crop = (5, 5, 55, 65)
+    expected = crop_frame(source[0], crop, fill=0)
+
+    cropped = source.crop(crop)
+    labels = Labels(videos=[cropped])
+    path = str(tmp_path / "image_crop.slp")
+    write_labels(path, labels)
+
+    loaded = read_labels(path, open_videos=True)
+    video = loaded.videos[0]
+
+    assert isinstance(video.backend, CropVideoBackend)
+    assert isinstance(video.backend.inner, ImageVideo)
+    assert video._crop_tuple() == crop
+    assert video.shape == (source.shape[0], 60, 50, source.shape[3])
+    assert video.source_video.shape == source.shape
+    assert np.array_equal(video[0], expected)
+
+
+def test_crop_write_video_crops_dataset(centered_pair_low_quality_path, tmp_path):
+    """The /video_crops dataset is written with the crop tuple and fill."""
+    source = Video.from_filename(centered_pair_low_quality_path)
+    cropped = source.crop((10, 20, 110, 140), fill=7)
+    labels = Labels(videos=[cropped])
+    path = str(tmp_path / "crop_dataset.slp")
+    write_labels(path, labels)
+
+    crops = read_video_crops(path)
+    assert crops == {0: {"video": 0, "crop": [10, 20, 110, 140], "fill": 7}}
+
+
+def test_uncropped_writes_no_video_crops_and_golden_videos_json(slp_minimal, tmp_path):
+    """Uncropped labels stay byte-identical and bump nothing.
+
+    Uncropped labels write no /video_crops, keep format_id <= 2.2, and the
+    videos_json bytes are identical to a baseline save (golden compare).
+    """
+    labels = read_labels(slp_minimal)
+
+    baseline = str(tmp_path / "baseline.slp")
+    candidate = str(tmp_path / "candidate.slp")
+    write_labels(baseline, labels)
+    write_labels(candidate, labels)
+
+    # No /video_crops dataset for an uncropped file.
+    with pytest.raises(KeyError):
+        read_hdf5_dataset(candidate, "video_crops")
+    assert read_video_crops(candidate) == {}
+
+    with h5py.File(candidate, "r") as f:
+        assert "video_crops" not in f
+        assert f["metadata"].attrs["format_id"] <= 2.2
+
+    # videos_json is byte-identical to a baseline save.
+    with h5py.File(baseline, "r") as f1, h5py.File(candidate, "r") as f2:
+        assert f1["videos_json"][:].tobytes() == f2["videos_json"][:].tobytes()
+
+
+def test_crop_format_id_bumped_only_with_crop(
+    slp_minimal, centered_pair_low_quality_path, tmp_path
+):
+    """format_id becomes 2.3 only when a crop is present."""
+    uncropped = read_labels(slp_minimal)
+    uncropped_path = str(tmp_path / "uncropped.slp")
+    write_labels(uncropped_path, uncropped)
+    with h5py.File(uncropped_path, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 2.3
+
+    cropped_video = Video.from_filename(centered_pair_low_quality_path).crop(
+        (0, 0, 100, 100)
+    )
+    cropped = Labels(videos=[cropped_video])
+    cropped_path = str(tmp_path / "cropped.slp")
+    write_labels(cropped_path, cropped)
+    with h5py.File(cropped_path, "r") as f:
+        assert f["metadata"].attrs["format_id"] == 2.3
+
+
+def test_crop_old_reader_degrades_without_video_crops(
+    centered_pair_low_quality_path, tmp_path
+):
+    """A file with /video_crops deleted loads the uncropped source (old reader)."""
+    source = Video.from_filename(centered_pair_low_quality_path)
+    cropped = source.crop((10, 20, 110, 140))
+    labels = Labels(videos=[cropped])
+    path = str(tmp_path / "degrade.slp")
+    write_labels(path, labels)
+
+    with h5py.File(path, "a") as f:
+        del f["video_crops"]
+
+    loaded = read_labels(path, open_videos=True)
+    video = loaded.videos[0]
+
+    # No crop record -> the full uncropped source is reconstructed.
+    assert not isinstance(video.backend, CropVideoBackend)
+    assert video._crop_tuple() is None
+    assert video.shape == source.shape
+    assert np.array_equal(video[0], source[0])
+
+
+def test_crop_load_modify_save_load_preserves_crop(
+    centered_pair_low_quality_path, tmp_path
+):
+    """Round-trip through an in-place edit preserves the crop (the GUI footgun)."""
+    source = Video.from_filename(centered_pair_low_quality_path)
+    crop = (10, 20, 110, 140)
+    expected = crop_frame(source[0], crop, fill=0)
+
+    labels = Labels(videos=[source.crop(crop)])
+    first = str(tmp_path / "first.slp")
+    write_labels(first, labels)
+
+    reloaded = read_labels(first, open_videos=True)
+    reloaded.provenance["edited"] = True  # an innocuous in-place modification
+    second = str(tmp_path / "second.slp")
+    write_labels(second, reloaded)
+
+    final = read_labels(second, open_videos=True)
+    video = final.videos[0]
+    assert video._crop_tuple() == crop
+    assert video.shape == (source.shape[0], 120, 100, source.shape[3])
+    assert video.source_video.shape == source.shape
+    assert np.array_equal(video[0], expected)
+
+
+def test_crop_closed_load_reports_cropped_shape_and_reserializes(
+    centered_pair_low_quality_path, tmp_path
+):
+    """Closed load reports cropped shape and re-serializes the crop.
+
+    With open_backend=False the closed load reports the cropped shape and
+    re-serializes the crop; the re-serialized videos_json describes the
+    uncropped source.
+    """
+    source = Video.from_filename(centered_pair_low_quality_path)
+    crop = (10, 20, 110, 140)
+    labels = Labels(videos=[source.crop(crop)])
+    path = str(tmp_path / "closed.slp")
+    write_labels(path, labels)
+
+    closed = read_labels(path, open_videos=False)
+    video = closed.videos[0]
+
+    # Closed path: no live backend, but the cropped shape and crop are reported.
+    assert video.backend is None
+    assert video.shape == (source.shape[0], 120, 100, source.shape[3])
+    assert video._crop_tuple() == crop
+
+    # Re-serializing the closed labels preserves the crop and keeps videos_json
+    # describing the uncropped source frame.
+    out = str(tmp_path / "closed_reserialized.slp")
+    write_labels(out, closed)
+    assert read_video_crops(out) == {0: {"video": 0, "crop": list(crop), "fill": 0}}
+    with h5py.File(out, "r") as f:
+        video_json = json.loads(f["videos_json"][0])
+    assert list(video_json["backend"]["shape"]) == list(source.shape)
+
+
+def test_crop_over_embedded_pkg_roundtrip(slp_minimal_pkg, tmp_path):
+    """A crop over an embedded .pkg.slp video round-trips.
+
+    The crop-aware reader gets cropped embedded frames with no KeyError, and the
+    embedded frames are stored uncropped (so the crop is applied exactly once).
+    """
+    labels = read_labels(slp_minimal_pkg)
+    source = labels.video
+    crop = (100, 100, 200, 250)
+    expected = crop_frame(source[0], crop, fill=0)
+
+    cropped = source.crop(crop)
+    labels.videos[0] = cropped
+    for lf in labels.labeled_frames:
+        lf.video = cropped
+
+    path = str(tmp_path / "cropped.pkg.slp")
+    write_labels(path, labels)
+
+    # Crop rides /video_crops; the embedded video group still exists.
+    assert read_video_crops(path) == {0: {"video": 0, "crop": list(crop), "fill": 0}}
+    with h5py.File(path, "r") as f:
+        assert "video0/video" in f
+
+    loaded = read_labels(path, open_videos=True)
+    video = loaded.videos[0]
+    assert isinstance(video.backend, CropVideoBackend)
+    assert isinstance(video.backend.inner, HDF5Video)
+    assert video.backend.inner.has_embedded_images
+    # Inner holds the UNCROPPED embedded frame; the crop is applied exactly once.
+    assert video.backend.inner.shape == source.shape
+    assert video.shape == (source.shape[0], 150, 100, source.shape[3])
+    assert np.array_equal(video[0], expected)
+
+
+def test_crop_over_media_embed_true_roundtrip(centered_pair_low_quality_path, tmp_path):
+    """Crop over a MediaVideo saved with embed=True embeds UNCROPPED + keeps the crop.
+
+    The crop is preserved in /video_crops (not baked away), the embedded frames are
+    full-source frames, and reload yields a CropVideoBackend applying the crop once.
+    """
+    source = Video.from_filename(centered_pair_low_quality_path)
+    crop = (20, 30, 100, 110)
+    expected = crop_frame(source[0], crop, fill=0)
+    cropped = source.crop(crop)
+
+    skel = Skeleton(["a"])
+    lf = LabeledFrame(
+        video=cropped,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[5.0, 5.0]]), skeleton=skel)],
+    )
+    labels = Labels(videos=[cropped], skeletons=[skel], labeled_frames=[lf])
+
+    path = str(tmp_path / "crop_embed.pkg.slp")
+    write_labels(path, labels, embed=True)
+
+    assert read_video_crops(path) == {0: {"video": 0, "crop": list(crop), "fill": 0}}
+
+    loaded = read_labels(path, open_videos=True)
+    v = loaded.videos[0]
+    assert isinstance(v.backend, CropVideoBackend)
+    assert v.backend.inner.has_embedded_images
+    # Inner holds the UNCROPPED embedded frame; crop applied exactly once.
+    assert v.backend.inner.shape[1:3] == source.shape[1:3]
+    assert v.shape[1:3] == (80, 80)
+    assert np.array_equal(v[0], expected)
+
+
+def test_nested_crop_serialization_raises(centered_pair_low_quality_path):
+    """A nested (un-flattened) crop-of-crop raises a clear error at serialize time."""
+    source = Video.from_filename(centered_pair_low_quality_path)
+    inner = source.crop((10, 10, 60, 60))
+    # Differing fills force a NEST (wrap cannot flatten) -> unrepresentable on disk.
+    nested = inner.crop((1, 1, 20, 20), fill=9)
+    assert isinstance(nested.backend.inner, CropVideoBackend)
+    with pytest.raises(ValueError, match="nested crop-of-crop"):
+        video_to_dict(nested)
+
+
+def test_video_to_dict_crop_serializes_uncropped_source(
+    centered_pair_low_quality_path,
+):
+    """video_to_dict on a cropped Video emits the UNCROPPED source backend dict."""
+    source = Video.from_filename(centered_pair_low_quality_path)
+    cropped = source.crop((10, 20, 110, 140))
+
+    result = video_to_dict(cropped)
+
+    # The backend dict describes the uncropped MediaVideo source, not the crop.
+    assert result["backend"]["type"] == "MediaVideo"
+    assert list(result["backend"]["shape"]) == list(source.shape)
+    assert "crop" not in result["backend"]
+    assert "crop_fill" not in result["backend"]
+
+
+def test_write_video_crops_omitted_when_no_crops(slp_minimal, tmp_path):
+    """write_video_crops writes nothing when no video is cropped."""
+    labels = read_labels(slp_minimal)
+    path = str(tmp_path / "no_crops.slp")
+    write_labels(path, labels)
+
+    # Calling write_video_crops directly on uncropped labels is a no-op.
+    write_video_crops(path, labels)
+    with h5py.File(path, "r") as f:
+        assert "video_crops" not in f

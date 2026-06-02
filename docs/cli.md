@@ -72,6 +72,7 @@ sio render --help
 sio trim --help
 sio reencode --help
 sio transform --help
+sio apply-crops --help
 
 # Check version and installed plugins
 sio --version
@@ -2520,6 +2521,26 @@ sio transform labels.slp --config transforms.yaml -o output.slp
 ```
 
 See the [Transforms Guide](transforms.md#config-file-format) for config file format and examples.
+
+---
+
+## Apply Crops
+
+`sio apply-crops` materializes [virtual crops](cropping.md) (created via `Video.crop` and
+stored in a `.slp`'s `/video_crops`) into real video files, updating the labels to point at
+the baked files. Unlike `sio transform --crop` (which applies a *new* crop and adjusts
+coordinates), this bakes an *existing* virtual crop and is coordinate-neutral.
+
+```bash
+# Bake every virtually-cropped video; baked files go next to the output SLP.
+sio apply-crops mosaic.slp -o baked.slp
+
+# Choose the output video directory and filename suffix.
+sio apply-crops mosaic.slp -o baked.slp --video-dir baked_videos/ --suffix _crop
+```
+
+Each baked video keeps `source_video` provenance to the uncropped original; uncropped videos
+are left untouched. See the [Virtual cropping guide](cropping.md#applying-baking-a-crop-to-disk).
 
 ---
 
