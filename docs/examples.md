@@ -1007,6 +1007,73 @@ sio.save_video(sio.load_video("input.mp4"), "output.mp4")
 !!! note "See also"
     [`save_video`](formats/#sleap_io.save_video): Video saving options and codec settings
 
+### Virtual cropping and batch autocrop
+
+Expose a virtual, on-read crop of a video — frames are decoded and sliced in memory, with no pixels copied or re-encoded ([`Video.crop`](model/video.md#sleap_io.Video.crop) / [`Video.from_crop`](model/video.md#sleap_io.Video.from_crop)). The crop is `(x1, y1, x2, y2)` in source pixels (`x2`/`y2` exclusive); out-of-bounds regions are padded.
+
+```python title="virtual_crop.py" linenums="1"
+import sleap_io as sio
+
+full = sio.load_video("session.mp4")              # (1000, 1080, 1920, 3)
+view = full.crop((320, 200, 576, 456))            # virtual view, no decode yet
+view.shape                                         # (1000, 256, 256, 3)
+view.is_cropped, view.crop_rect                    # True, (320, 200, 576, 456)
+view.source_video is full                          # True - provenance preserved
+frame = view[0]                                    # decode-then-slice (256, 256, 3)
+
+# Other region specs: a bbox, an ROI (+ margin), or a fixed-size centered window.
+view = full.crop(bbox=(320.0, 200.0, 576.0, 456.0))
+view = full.crop(roi=my_shapely_poly, margin=8)
+view = full.crop(center=(cx, cy), size=(128, 128))   # fixed shape; off-frame is padded
+```
+
+**Batch autocrop (e.g. a multi-chamber rig).** Apply a fixed set of per-chamber rects across many recordings and write one cropped file per `(video x chamber)`. `apply_crop` bakes the virtual crop to disk and keeps `source_video` pointing at the uncropped original.
+
+```python title="batch_autocrop.py" linenums="1"
+import sleap_io as sio
+from pathlib import Path
+
+# Chamber layout, defined once (x1, y1, x2, y2). 16-aligned dims avoid encoder padding.
+chambers = {
+    "A": (0, 0, 640, 480),
+    "B": (640, 0, 1280, 480),
+    "C": (0, 480, 640, 960),
+    "D": (640, 480, 1280, 960),
+}
+
+out_dir = Path("crops")
+out_dir.mkdir(exist_ok=True)
+for path in Path("recordings").glob("*.mp4"):
+    full = sio.load_video(path.as_posix())
+    for name, rect in chambers.items():
+        crop = sio.Video.from_crop(full, rect)
+        crop.apply_crop((out_dir / f"{path.stem}_{name}.mp4").as_posix())
+```
+
+Prefer to stay lazy (no re-encode) and carry the crops in a labels file? Build the views into a `Labels`, save (crops ride a `/video_crops` dataset; pixels are untouched), and bake them all later in one call with [`Labels.apply_crops`](model/labels.md#sleap_io.Labels.apply_crops):
+
+```python title="virtual_crop_slp.py" linenums="1"
+import sleap_io as sio
+
+full = sio.load_video("session.mp4")
+tiles = [sio.Video.from_crop(full, rect) for rect in chambers.values()]
+sio.save_file(sio.Labels(videos=tiles), "session.slp")   # virtual; no re-encode
+
+# Later - materialize every virtual crop to real files and update references:
+sio.load_file("session.slp").apply_crops(video_dir="crops/")
+```
+
+The same step is available from the command line for an SLP that already carries virtual crops:
+
+```bash
+sio apply-crops session.slp -o baked.slp --video-dir crops/
+```
+
+!!! note "See also"
+    - [Virtual cropping guide](cropping.md): conventions, mosaics, coordinates, performance, and non-goals.
+    - [`Video.apply_crop`](model/video.md#sleap_io.Video.apply_crop) / [`Labels.apply_crops`](model/labels.md#sleap_io.Labels.apply_crops): materialize virtual crops to disk.
+    - [Transforms](transforms.md): the materializing crop/scale/rotate/pad/flip pipeline (`sio transform --crop` applies a *new* crop and adjusts coordinates).
+
 ### Switch video and image backends
 
 Control which backend is used for video reading and embedded frame encoding.
