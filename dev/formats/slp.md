@@ -103,6 +103,8 @@ file.slp
 ├── /label_image_obj_categories  # Dataset: vlen string, one per object (Format 1.9+)
 ├── /label_image_obj_names       # Dataset: vlen string, one per object (Format 1.9+)
 │
+├── /video_crops                 # Dataset: JSON, virtual on-read crops (Format 2.3+, optional)
+│
 └── /video{N}/                   # Group: Per-video embedded data (one per video)
     ├── /video                   # Dataset: Embedded image data
     │   ├── @format              # Attribute: "png", "jpg", or "hdf5"
@@ -183,6 +185,28 @@ Videos can have a `source_video` field that tracks the original video when frame
 ```
 
 This creates a chain of provenance, allowing the original video to be restored when extracting embedded data.
+
+### Virtual Crops (Format 2.3+)
+
+A [virtually-cropped video](../cropping.md) stores its crop rect in a dedicated top-level
+`/video_crops` dataset (a single JSON string), written **only when at least one video is
+cropped**. Its `/videos_json` entry describes the **uncropped source** backend, and its
+`source_video` is the uncropped original — so a reader that does not understand
+`/video_crops` simply loads the full-frame source (a graceful, lossy degrade).
+
+```json
+[
+  {"video": 2, "crop": [128, 96, 384, 352], "fill": 0},
+  {"video": 5, "crop": [0, 0, 256, 256], "fill": 0}
+]
+```
+
+- `video` — integer index into the `/videos_json` video list.
+- `crop` — `[x1, y1, x2, y2]` in **source** pixel coordinates, `x2`/`y2` exclusive.
+- `fill` — out-of-bounds fill value (regions outside the source are padded, not clamped).
+
+The presence of any crop bumps `format_id` to `2.3`. Files with no crops are byte-identical
+to earlier versions (no `/video_crops` dataset, no version bump).
 
 ## Embedded Images
 

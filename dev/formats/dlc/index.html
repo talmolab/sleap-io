@@ -598,6 +598,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cropping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Virtual cropping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3501,17 +3529,32 @@ up from the CSV — the following extra metadata is imported:</p>
 <p>Pass <code>config=False</code> to disable config use entirely and reproduce the legacy,
 config-free output.</p>
 <div class="admonition note">
-<p class="admonition-title">Cropping is not yet applied</p>
+<p class="admonition-title">Cropping (<code>video_sets[...].crop</code>)</p>
 <p>DeepLabCut's <code>video_sets[...].crop</code> is a <em>virtual</em> read-time crop (an ROI
-that DLC's video reader slices out of each full frame on the fly). When a
-project uses cropping, the images under <code>labeled-data/&lt;video&gt;/</code> are the
-cropped region and the labels are stored in <strong>cropped-frame coordinates</strong>,
-whereas the linked <code>source_video</code> points at the original, <strong>uncropped</strong>
-video. sleap-io does not yet apply this crop, so for cropped projects the
-labels are offset from the source video by the crop origin <code>(x1, y1)</code>.
-Reconciling the two requires virtual ROI-cropping of a <code>Video</code> on read,
-which is planned future work. For the common case of no cropping (the DLC
-default is the full frame), there is no offset and the link is exact.</p>
+that DLC's video reader slices out of each full frame). The images under
+<code>labeled-data/&lt;video&gt;/</code> are the cropped region and the labels are stored in
+<strong>cropped-frame coordinates</strong>, while the linked <code>source_video</code> is the
+original, <strong>uncropped</strong> video. sleap-io now imports this crop:</p>
+<ul>
+<li>The crop rect is parsed from <code>video_sets</code> (DLC stores it width-range-first
+  as <code>x1, x2, y1, y2</code>; sleap-io reorders it to its <code>(x1, y1, x2, y2)</code>
+  convention, <code>x2</code>/<code>y2</code> exclusive) and recorded under
+  <code>labels.provenance["dlc_crops"]</code>, keyed by source-video path. This record
+  <strong>persists through an SLP round-trip</strong>.</li>
+<li>Labels are left <strong>verbatim in cropped-frame coordinates</strong> on the uncropped
+  <code>labeled-data</code> <code>ImageVideo</code> — no offset is applied (and the already-cropped
+  images are never cropped again). To map a label into the full source frame,
+  use <a href="../../model/video/#sleap_io.Video.to_source_coords"><code>Video.to_source_coords</code></a>
+  with the recorded rect (it adds the crop origin <code>(x1, y1)</code>).</li>
+<li>When the source video file is available, <code>source_video</code> is set to a
+  <a href="../../model/video/#sleap_io.Video.from_crop"><code>Video.from_crop</code></a> view of it,
+  so <code>source_video.crop_rect</code> / <code>to_source_coords</code> work in memory (this view's
+  crop is in-memory only; the persistent record is <code>provenance["dlc_crops"]</code>).
+  When the source is absent, <code>source_video</code> is a closed <code>Video</code> as before.</li>
+<li>Identity crops at the origin (<code>0, W, 0, H</code> — the DLC no-cropping default)
+  record no crop and leave the link exact.</li>
+</ul>
+<p>See the <a href="../../cropping/">virtual cropping guide</a> for the crop conventions.</p>
 </div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
