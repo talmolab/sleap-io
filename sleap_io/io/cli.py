@@ -84,6 +84,7 @@ click.rich_click.COMMAND_GROUPS = {
                 "trim",
                 "reencode",
                 "transform",
+                "apply-crops",
             ],
         },
         {"name": "Embedding", "commands": ["embed", "unembed"]},
@@ -6389,6 +6390,240 @@ def reencode(
         f"{_format_file_size(output_size)} "
         f"({size_change:+.1f}%)[/]"
     )
+
+
+@cli.command(name="apply-crops")
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-i",
+    "--input",
+    "input_opt",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input SLP file. Can also be passed as positional argument.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Output SLP path. Default: {input}.cropped.slp.",
+)
+@click.option(
+    "--video-dir",
+    "video_dir",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Directory for baked videos. Default: {output stem}.videos next to OUTPUT.",
+)
+@click.option(
+    "--suffix",
+    default="_crop",
+    show_default=True,
+    help="Suffix appended to each source stem for baked video filenames.",
+)
+# Quality options (mutually exclusive group)
+@click.option(
+    "--quality",
+    type=click.Choice(["lossless", "high", "medium", "low"]),
+    default=None,
+    help="Quality level. Maps to CRF: lossless=0, high=18, medium=25, low=32.",
+)
+@click.option(
+    "--crf",
+    type=int,
+    default=None,
+    help="Constant rate factor (0-51, lower=better). Overrides --quality.",
+)
+@click.option(
+    "--encoding",
+    "preset",
+    type=click.Choice(
+        [
+            "ultrafast",
+            "superfast",
+            "veryfast",
+            "faster",
+            "fast",
+            "medium",
+            "slow",
+            "slower",
+            "veryslow",
+        ]
+    ),
+    default="superfast",
+    show_default=True,
+    help="Encoding speed preset. Slower = better compression.",
+)
+@click.option(
+    "--output-fps",
+    "output_fps",
+    type=float,
+    default=None,
+    help="Output frame rate. Default: preserve each source FPS.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show what would be baked without writing any files.",
+)
+@click.option(
+    "--overwrite",
+    is_flag=True,
+    default=False,
+    help="Overwrite existing output SLP file.",
+)
+def apply_crops(
+    input_arg: Path | None,
+    input_opt: Path | None,
+    output_path: Path | None,
+    video_dir: Path | None,
+    suffix: str,
+    quality: str | None,
+    crf: int | None,
+    preset: str,
+    output_fps: float | None,
+    dry_run: bool,
+    overwrite: bool,
+) -> None:
+    """Materialize virtual crops in an SLP to physical video files.
+
+    Bakes every virtually-cropped video (created via [bold]Video.crop[/] /
+    [bold]Video.from_crop[/], or round-tripped through the SLP ``/video_crops``
+    table) into a new video file holding the cropped pixels, then rewires all
+    label references to the baked files and writes an updated SLP.
+
+    This is distinct from [bold]sio transform --crop[/]: that applies a NEW crop
+    and adjusts coordinates, whereas a virtual crop already presents cropped-frame
+    coordinates, so baking is coordinate-neutral (no point coordinates change).
+    Provenance is preserved: each baked video's [bold]source_video[/] is the
+    uncropped original. Uncropped videos are left untouched.
+
+    [bold]Quality levels:[/]
+    lossless: CRF 0 (mathematically identical, huge files)
+    high: CRF 18 (visually lossless)
+    medium: CRF 25 (good quality, reasonable size) [default]
+    low: CRF 32 (smaller files, some quality loss)
+
+    [dim]Examples:[/]
+
+        $ sio apply-crops cropped.slp -o baked.slp
+
+        $ sio apply-crops cropped.slp -o baked.slp --quality high
+
+        $ sio apply-crops cropped.slp -o baked.slp --video-dir baked_videos
+
+        $ sio apply-crops cropped.slp -o baked.slp --dry-run
+    """
+    # Resolve input path.
+    input_path = _resolve_input(input_arg, input_opt, "input SLP file")
+
+    # Resolve output path for SLP.
+    if output_path is None:
+        output_path = input_path.with_name(input_path.stem + ".cropped.slp")
+
+    # Ensure output has .slp extension.
+    if output_path.suffix.lower() != ".slp":
+        output_path = output_path.with_suffix(".slp")
+
+    # Check for same file.
+    if output_path.resolve() == input_path.resolve():
+        raise click.ClickException(
+            f"Output path cannot be the same as input: {input_path}\n"
+            "Use a different output path or rename the output file."
+        )
+
+    # Check output exists.
+    if output_path.exists() and not overwrite:
+        raise click.ClickException(
+            f"Output SLP already exists: {output_path}\nUse --overwrite to replace it."
+        )
+
+    # Resolve quality/CRF into a single value.
+    if crf is not None and quality is not None:
+        raise click.ClickException("Cannot use both --quality and --crf. Choose one.")
+
+    if crf is not None:
+        resolved_crf = crf
+    elif quality is not None:
+        resolved_crf = _QUALITY_TO_CRF[quality]
+    else:
+        resolved_crf = _QUALITY_TO_CRF["medium"]
+
+    # Validate CRF.
+    if not 0 <= resolved_crf <= 51:
+        raise click.ClickException(f"CRF must be between 0 and 51, got {resolved_crf}")
+
+    # Load the input labels.
+    console.print(f"[bold]Loading SLP:[/] {input_path}")
+    labels = io_main.load_slp(str(input_path))
+
+    if not labels.videos:
+        console.print("[yellow]No videos found in SLP file.[/]")
+        n_cropped = 0
+    else:
+        console.print(f"[dim]  Found {len(labels.videos)} video(s)[/]")
+        # Count cropped videos up front for reporting (apply_crops returns self).
+        n_cropped = sum(1 for video in labels.videos if video._crop_tuple() is not None)
+
+    # Resolve the video output directory: --video-dir if given, else a directory
+    # next to the output SLP (mirrors reencode's batch naming).
+    if video_dir is None:
+        video_dir = output_path.with_name(output_path.stem + ".videos")
+    console.print(f"[dim]  Video output directory: {video_dir}[/]")
+
+    # If nothing is cropped, there is no work to bake; still write the output so
+    # the command is a safe no-op pass-through.
+    if n_cropped == 0:
+        console.print("[yellow]No virtually-cropped videos found; nothing to bake.[/]")
+        if dry_run:
+            console.print(
+                f"[bold]Dry run - would save SLP (unchanged) to:[/] {output_path}"
+            )
+            return
+        console.print(f"[bold]Saving SLP:[/] {output_path}")
+        labels.save(str(output_path))
+        console.print(f"[bold green]Saved:[/] {output_path}")
+        return
+
+    # Build video_kwargs from encoding options (threaded into save_video).
+    video_kwargs: dict[str, Any] = {
+        "crf": resolved_crf,
+        "preset": preset,
+    }
+
+    console.print(
+        f"[dim]  Baking {n_cropped} cropped video(s): "
+        f"CRF {resolved_crf}, Preset: {preset}[/]"
+    )
+
+    if dry_run:
+        console.print(
+            f"[bold]Dry run - would bake {n_cropped} video(s) into:[/] {video_dir}"
+        )
+        console.print(f"[bold]Dry run - would save SLP to:[/] {output_path}")
+        return
+
+    # Materialize every virtual crop and update references in place.
+    labels.apply_crops(
+        video_dir=video_dir,
+        suffix=suffix,
+        fps=output_fps,
+        video_kwargs=video_kwargs,
+    )
+
+    # Save the updated labels.
+    console.print(f"[bold]Saving SLP:[/] {output_path}")
+    labels.save(str(output_path))
+    console.print(f"[bold green]Saved:[/] {output_path}")
+    console.print(f"[dim]  Baked {n_cropped} cropped video(s) to {video_dir}[/]")
 
 
 def _parse_transform_param(
