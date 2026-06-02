@@ -131,15 +131,52 @@ len(labels2.videos)                     # all tiles preserved (not collapsed)
 
 ---
 
-## Baking a crop to disk
+## Applying (baking) a crop to disk
 
-A virtual crop is the lazy dual of the materializing pipeline. To write a real cropped
-file later, feed the same rect to [`transform_video`](transforms.md) /
-`transform_labels`; the baked pixels are identical to the virtual view:
+A virtual crop can be **materialized** to a real video file — the cropped pixels become
+physical and the crop is no longer a read-time view. This is coordinate-neutral: a virtual
+crop already presents cropped-frame coordinates, so baking the pixels leaves all point
+coordinates unchanged.
+
+`Video.apply_crop` bakes one cropped video and returns a new `Video` for the baked file,
+preserving provenance (`source_video` is the uncropped original):
 
 ```python
-sio.transform_video(full, "baked.mp4", sio.Transform(crop=(320, 200, 576, 456)))
+view = full.crop((320, 200, 576, 456))
+baked = view.apply_crop("crop.mp4")
+baked.shape                    # (1000, 256, 256, 3)  — cropped, now physical
+baked.source_video.shape       # (1000, 1080, 1920, 3) — uncropped original
+baked._crop_tuple()            # None — the crop is materialized, not virtual
 ```
+
+`Labels.apply_crops` bakes every virtually-cropped video in a `Labels` and rewires all
+references (labeled frames, ROIs, suggestions) to the baked files; uncropped videos are
+untouched and coordinates are unchanged:
+
+```python
+labels.apply_crops(video_dir="baked_videos/")   # one file per tile, unique names
+```
+
+From the command line, `sio apply-crops` materializes every virtual crop in an SLP,
+writing baked videos to a directory next to the output and updating the references:
+
+```bash
+sio apply-crops mosaic.slp -o baked.slp --video-dir baked_videos/
+```
+
+!!! note "`apply_crop` vs `sio transform --crop`"
+    `apply_crop` materializes an **existing** virtual crop (no coordinate change).
+    `sio transform --crop` applies a **new** crop and adjusts coordinates — that is the
+    materializing [`transform_video`](transforms.md) / `transform_labels` path:
+
+    ```python
+    sio.transform_video(full, "baked.mp4", sio.Transform(crop=(320, 200, 576, 456)))
+    ```
+
+!!! info "Encoder padding"
+    The H.264 encoder pads frame dimensions up to a multiple of 16 (bottom/right only,
+    preserving the top-left content and coordinate alignment). A baked video whose cropped
+    width/height are not multiples of 16 is padded on those edges.
 
 ---
 
