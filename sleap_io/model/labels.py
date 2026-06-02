@@ -2402,6 +2402,111 @@ class Labels:
         # Frame index is keyed by id(video), so must be rebuilt
         self._invalidate_indices()
 
+    def apply_crops(
+        self,
+        video_dir: str | Path | None = None,
+        *,
+        suffix: str = "_crop",
+        fps: float | None = None,
+        video_kwargs: dict[str, Any] | None = None,
+    ) -> "Labels":
+        """Bake every virtually-cropped video to disk and update references.
+
+        For each video in :attr:`videos` that carries a virtual crop (i.e.
+        ``video._crop_tuple()`` is not ``None``), materialize the cropped frames
+        to a new physical video file via :meth:`Video.apply_crop` and rewire all
+        references (labeled frames, ROIs, suggestions, and :attr:`videos`) to the
+        baked file via :meth:`replace_videos`. Uncropped videos are left
+        untouched.
+
+        Baked files are written to deterministic, unique paths derived from each
+        source video's filename stem. The output directory is ``video_dir`` if
+        given, otherwise the source video's own directory. The filename is
+        ``{stem}{suffix}.mp4``; when multiple cropped videos share a stem (e.g. a
+        mosaic of tiles over a single source file), the colliding files are
+        disambiguated as ``{stem}{suffix}_{i}.mp4`` so no two baked files collide.
+
+        This operation is coordinate-neutral. A virtual crop already presents
+        cropped-frame coordinates, so baking the cropped pixels does not change
+        any instance point coordinates; ``instance.points`` is not touched.
+        Provenance is preserved per :meth:`Video.apply_crop`: each baked video's
+        ``source_video`` is the uncropped original.
+
+        Args:
+            video_dir: Directory to write baked videos to. If ``None`` (the
+                default), each baked video is written next to its source video.
+                The directory is created if it does not exist.
+            suffix: Suffix appended to the source stem for baked filenames.
+                Defaults to ``"_crop"``.
+            fps: Frames per second for the baked videos. If ``None`` (the
+                default), each video's own FPS is used (falling back to 30).
+            video_kwargs: Keyword arguments forwarded to ``sio.save_video`` for
+                video compression of each baked video.
+
+        Returns:
+            This ``Labels`` (mutated in place) with all cropped videos baked to
+            disk and references updated.
+        """
+        out_dir = None if video_dir is None else Path(video_dir)
+        if out_dir is not None:
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Resolve the output directory and stem for each cropped video. Index is
+        # carried so colliding stems can be disambiguated deterministically.
+        cropped: list[tuple[int, Video, Path, str]] = []
+        # Count cropped videos per (resolved output dir, stem) to detect stem
+        # collisions (e.g. a mosaic of tiles over one source file).
+        stem_counts: dict[tuple[str, str], int] = {}
+        # Resolved paths of every source video file, so a baked file can never
+        # overwrite a source (e.g. an empty suffix written next to the source).
+        source_paths: set[str] = set()
+        for video in self.videos:
+            fns = (
+                video.filename if isinstance(video.filename, list) else [video.filename]
+            )
+            for fn in fns:
+                try:
+                    source_paths.add(Path(fn).resolve().as_posix())
+                except (OSError, ValueError):  # pragma: no cover - defensive
+                    pass
+        for i, video in enumerate(self.videos):
+            if video._crop_tuple() is None:
+                continue
+            src_path = Path(
+                video.filename[0]
+                if isinstance(video.filename, list)
+                else video.filename
+            )
+            stem = src_path.stem
+            dest_dir = out_dir if out_dir is not None else src_path.parent
+            cropped.append((i, video, dest_dir, stem))
+            key = (dest_dir.as_posix(), stem)
+            stem_counts[key] = stem_counts.get(key, 0) + 1
+
+        video_map: dict[Video, Video] = {}
+        for i, video, dest_dir, stem in cropped:
+            if stem_counts[(dest_dir.as_posix(), stem)] > 1:
+                # Multiple crops share this stem; disambiguate with the video
+                # index so the name is deterministic and collision-free.
+                out_path = dest_dir / f"{stem}{suffix}_{i}.mp4"
+            else:
+                out_path = dest_dir / f"{stem}{suffix}.mp4"
+
+            if out_path.resolve().as_posix() in source_paths:
+                raise ValueError(
+                    f"Baked crop path {out_path} would overwrite a source video "
+                    "file. Pass a distinct video_dir or a non-empty suffix so "
+                    "baked videos are written to separate files."
+                )
+
+            baked = video.apply_crop(out_path, fps=fps, video_kwargs=video_kwargs)
+            video_map[video] = baked
+
+        if video_map:
+            self.replace_videos(video_map=video_map)
+
+        return self
+
     def replace_filenames(
         self,
         new_filenames: list[str | Path] | None = None,

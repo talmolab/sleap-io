@@ -1223,6 +1223,93 @@ class Video:
         new_video = Video.from_filename(save_path, grayscale=self.grayscale)
         return new_video
 
+    def apply_crop(
+        self,
+        path: str | Path,
+        *,
+        frame_inds: list[int] | np.ndarray | None = None,
+        fps: float | None = None,
+        video_kwargs: dict[str, Any] | None = None,
+    ) -> "Video":
+        """Bake this video's virtual crop into a new physical video file.
+
+        Materializes the cropped frames (``self[i]``, already cropped by the
+        virtual :class:`~sleap_io.io.video_reading.CropVideoBackend`) to ``path``
+        via :class:`~sleap_io.io.video_writing.VideoWriter`. The crop becomes
+        physical: the returned video has no ``CropVideoBackend`` / ``/video_crops``
+        entry. ``baked.shape`` equals this video's cropped shape when the cropped
+        width and height are multiples of 16; otherwise the H.264 encoder pads the
+        bottom/right edges up to the next multiple of 16 (the macro-block size),
+        so ``baked.shape`` may exceed the cropped shape on those edges. The
+        top-left content is preserved, so coordinates stay aligned regardless.
+
+        This operation is coordinate-neutral. A virtual crop already presents
+        cropped-frame coordinates, so baking the cropped pixels does not change
+        any point coordinates (unlike ``sio transform --crop``, which applies a
+        new crop and adjusts coordinates).
+
+        Provenance is preserved: the returned video's ``source_video`` is the
+        uncropped original — ``self.source_video`` (the parent a virtual crop is
+        created against), or, for a manually-built crop with no parent, an
+        uncropped view reconstructed from the crop backend's inner. So
+        ``baked.source_video.shape`` is the uncropped shape while ``baked.shape``
+        is the cropped shape, and ``baked.grayscale`` is carried from this video.
+
+        Args:
+            path: Path to the new video file. Should end in MP4.
+            frame_inds: Frame indices to bake. Can be specified as a list or array
+                of frame integers. If not specified, bakes all video frames.
+            fps: Frames per second for the output video. If not specified, uses
+                this video's FPS if available, otherwise defaults to 30.
+            video_kwargs: A dictionary of keyword arguments to provide to
+                ``sio.save_video`` for video compression.
+
+        Returns:
+            A new ``Video`` pointing to the baked file, with ``source_video`` set
+            to the uncropped original (or this video) and ``grayscale`` carried
+            from this video.
+
+        Raises:
+            ValueError: If this video has no virtual crop to apply (i.e.,
+                :meth:`_crop_tuple` returns ``None``). Use :meth:`save` to
+                re-encode an uncropped video.
+        """
+        if self._crop_tuple() is None:
+            raise ValueError(
+                "apply_crop requires a cropped video (a virtual crop created via "
+                "Video.crop / Video.from_crop), but this video has no crop to "
+                "apply. Use Video.save to re-encode an uncropped video."
+            )
+
+        video_kwargs = {} if video_kwargs is None else video_kwargs.copy()
+        frame_inds = np.arange(len(self)) if frame_inds is None else frame_inds
+
+        # Use this video's FPS if not explicitly specified.
+        if fps is None:
+            fps = self.fps
+        if fps is not None and "fps" not in video_kwargs:
+            video_kwargs["fps"] = fps
+
+        with VideoWriter(path, **video_kwargs) as vw:
+            for frame_ind in frame_inds:
+                vw(self[frame_ind])
+
+        baked = Video.from_filename(path, grayscale=self.grayscale)
+        # Provenance: the uncropped original. Normally that is self.source_video
+        # (the parent a virtual crop was created against). For a manually-built
+        # crop with no parent, reconstruct an uncropped view from the crop
+        # backend's inner so source_video is never the cropped video itself.
+        source = self.source_video
+        if source is None:
+            inner = getattr(self.backend, "inner", None)
+            source = (
+                Video(filename=inner.filename, backend=inner)
+                if inner is not None
+                else self
+            )
+        baked.source_video = source
+        return baked
+
     def set_video_plugin(self, plugin: str) -> None:
         """Set the video plugin and reopen the video.
 

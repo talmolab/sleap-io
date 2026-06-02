@@ -1416,3 +1416,139 @@ def test_video_crop_tuple(small_robot_path):
     # Closed path reads the crop from backend_metadata.
     c.close()
     assert c._crop_tuple() == rect
+
+
+# ---------------------------------------------------------------------------
+# Video.apply_crop (bake virtual crop to disk)
+# ---------------------------------------------------------------------------
+
+
+def test_apply_crop_shape_and_open(small_robot_path, tmp_path):
+    """apply_crop bakes the cropped shape into a file that opens to that shape."""
+    v = Video.from_filename(small_robot_path)
+    # Dimensions divisible by 16 so libx264 macro-block padding is a no-op and
+    # the baked shape is exactly the cropped shape.
+    rect = (16, 16, 112, 112)
+    c = v.crop(rect)
+    assert c.shape == (3, 96, 96, 3)
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out)
+
+    assert out.exists()
+    # The crop is now physical: no CropVideoBackend.
+    assert not isinstance(baked.backend, CropVideoBackend)
+    # Baked video opens and its frame shape matches the cropped (h, w).
+    assert baked.shape[1:3] == (96, 96)
+    assert baked[0].shape[:2] == (96, 96)
+    assert len(baked) == len(c)
+
+
+def test_apply_crop_byte_parity(small_robot_path, tmp_path):
+    """Baked frames match the in-memory crop within codec tolerance."""
+    v = Video.from_filename(small_robot_path)
+    rect = (16, 16, 112, 112)
+    c = v.crop(rect)
+    h, w = rect[3] - rect[1], rect[2] - rect[0]
+
+    out = tmp_path / "baked.mp4"
+    # Near-lossless encode for the tightest parity the writer can provide.
+    baked = c.apply_crop(out, video_kwargs={"crf": 0, "preset": "veryslow"})
+
+    for i in range(len(c)):
+        got = baked[i]
+        expected = crop_frame(v[i], rect)
+        assert got.shape == expected.shape
+        # Compare the content region (libx264 pads bottom/right, preserving the
+        # top-left, but here the crop is macro-block aligned so no padding).
+        got = got[:h, :w]
+        # H.264 colorspace conversion is not bit-exact even at crf=0; allow a
+        # small per-pixel tolerance.
+        assert np.abs(got.astype(np.int16) - expected.astype(np.int16)).max() <= 6
+
+
+def test_apply_crop_source_video_provenance(small_robot_path, tmp_path):
+    """Baked video's source_video is the uncropped original with full shape."""
+    v = Video.from_filename(small_robot_path)
+    full_shape = v.shape
+    rect = (16, 16, 112, 112)
+    c = v.crop(rect)
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out)
+
+    # c.source_video is v (the uncropped original), so baked inherits it.
+    assert baked.source_video is v
+    assert baked.source_video.shape == full_shape
+    # Baked shape is the cropped (h, w); source is the full frame.
+    assert baked.shape[1:3] == (rect[3] - rect[1], rect[2] - rect[0])
+    assert baked.source_video.shape[1:3] == full_shape[1:3]
+
+
+def test_apply_crop_provenance_reconstructs_uncropped_source(
+    small_robot_path, tmp_path
+):
+    """When the cropped video has no source_video, baked source is an uncropped view."""
+    v = Video.from_filename(small_robot_path)
+    full_shape = v.shape
+    rect = (10, 20, 100, 120)
+    c = v.crop(rect)
+    # Detach the source so the fallback branch (source_video is None) is taken.
+    c.source_video = None
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out)
+
+    # The fallback reconstructs an UNCROPPED source from the crop backend's inner,
+    # never the cropped video itself.
+    assert baked.source_video is not c
+    assert baked.source_video._crop_tuple() is None
+    assert baked.source_video.shape[1:3] == full_shape[1:3]
+
+
+def test_apply_crop_raises_when_uncropped(small_robot_path, tmp_path):
+    """apply_crop raises on an uncropped video and does not write a file."""
+    v = Video.from_filename(small_robot_path)
+    assert v._crop_tuple() is None
+
+    out = tmp_path / "baked.mp4"
+    with pytest.raises(ValueError, match="requires a cropped video"):
+        v.apply_crop(out)
+    assert not out.exists()
+
+
+def test_apply_crop_carries_grayscale(centered_pair_low_quality_path, tmp_path):
+    """Baked video carries grayscale from the cropped source."""
+    v = Video.from_filename(centered_pair_low_quality_path)
+    assert v.grayscale is True
+    c = v.crop((0, 0, 96, 96))
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out)
+
+    assert baked.grayscale is True
+    assert baked.shape[1:3] == (96, 96)
+
+
+def test_apply_crop_uses_source_fps(centered_pair_low_quality_path, tmp_path):
+    """apply_crop defaults output FPS to the cropped video's FPS."""
+    v = Video.from_filename(centered_pair_low_quality_path)
+    v.fps = 15.0
+    c = v.crop((0, 0, 100, 100))
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out, frame_inds=[0, 1, 2])
+
+    assert baked.fps == 15.0
+    assert len(baked) == 3
+
+
+def test_apply_crop_custom_fps(small_robot_path, tmp_path):
+    """apply_crop honors an explicit fps argument."""
+    v = Video.from_filename(small_robot_path)
+    c = v.crop((10, 20, 100, 120))
+
+    out = tmp_path / "baked.mp4"
+    baked = c.apply_crop(out, fps=30.0)
+
+    assert baked.fps == 30.0
