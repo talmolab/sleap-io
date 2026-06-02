@@ -18,6 +18,85 @@ import numpy as np
 from sleap_io.io.utils import is_file_accessible
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo, VideoBackend
 from sleap_io.io.video_writing import VideoWriter
+from sleap_io.transform.points import crop_points, uncrop_points
+
+
+def _resolve_crop_rect(
+    crop: tuple[int, int, int, int] | None = None,
+    bbox: tuple[float, float, float, float] | None = None,
+    roi: object | None = None,
+    center: tuple[float, float] | None = None,
+    size: tuple[int, int] | None = None,
+    margin: int = 0,
+) -> tuple[int, int, int, int]:
+    """Resolve a crop region spec into an integer ``(x1, y1, x2, y2)`` rect.
+
+    Exactly one region spec must be provided: an explicit ``crop`` rect, a
+    ``bbox``, a ``roi`` (its axis-aligned bounds), or a (``center``, ``size``)
+    pair for a fixed-shape centered window. Float bounds are rounded outward
+    (floor of the mins, ceil of the maxs) so the integer rect always *contains*
+    the requested region; the centered window uses ``round`` so the output shape
+    is exactly ``size`` (the position may be out of bounds and is pad-filled on
+    read). ``int()`` truncation is never used.
+
+    Args:
+        crop: Explicit crop region ``(x1, y1, x2, y2)``, ``x2``/``y2`` exclusive.
+        bbox: A bounding box ``(x1, y1, x2, y2)``; bounds may be float.
+        roi: Any object exposing axis-aligned ``.bounds`` as
+            ``(minx, miny, maxx, maxy)`` (e.g. a shapely geometry). ``margin`` is
+            applied symmetrically around the bounds.
+        center: Window center ``(cx, cy)`` (used with ``size``).
+        size: Fixed output ``(width, height)`` (used with ``center``).
+        margin: Pixels added around the ``roi`` bounds on every side.
+
+    Returns:
+        An integer crop region ``(x1, y1, x2, y2)``, possibly out of bounds.
+
+    Raises:
+        ValueError: If not exactly one of {``crop``, ``bbox``, ``roi``,
+            (``center``, ``size``)} is provided.
+    """
+    # ``center`` and ``size`` must be given together (both or neither).
+    if (center is None) != (size is None):
+        raise ValueError(
+            "center and size must be provided together for a centered window; "
+            f"got center={center!r}, size={size!r}."
+        )
+    has_center_size = center is not None and size is not None
+    n_specs = sum(
+        [crop is not None, bbox is not None, roi is not None, has_center_size]
+    )
+    if n_specs != 1:
+        raise ValueError(
+            "Exactly one of {crop, bbox, roi, (center, size)} must be provided "
+            f"to specify a crop region, got {n_specs}. For a centered window, "
+            "pass both center and size."
+        )
+
+    if crop is not None:
+        x1, y1, x2, y2 = (int(v) for v in crop)
+    elif bbox is not None:
+        bx1, by1, bx2, by2 = bbox
+        x1, y1 = int(np.floor(bx1)), int(np.floor(by1))
+        x2, y2 = int(np.ceil(bx2)), int(np.ceil(by2))
+    elif roi is not None:
+        minx, miny, maxx, maxy = roi.bounds
+        x1, y1 = int(np.floor(minx)) - margin, int(np.floor(miny)) - margin
+        x2, y2 = int(np.ceil(maxx)) + margin, int(np.ceil(maxy)) + margin
+    else:
+        # Centered window with fixed output shape.
+        cx, cy = center
+        w, h = size
+        x1 = int(round(cx - w / 2))
+        y1 = int(round(cy - h / 2))
+        x2, y2 = x1 + int(round(w)), y1 + int(round(h))
+
+    if x2 < x1 or y2 < y1:
+        raise ValueError(
+            f"Inverted crop rect: x2 ({x2}) < x1 ({x1}) or y2 ({y2}) < y1 ({y1}). "
+            "Crop bounds must satisfy x2 >= x1 and y2 >= y1."
+        )
+    return x1, y1, x2, y2
 
 
 @attrs.define(eq=False)
@@ -221,6 +300,174 @@ class Video:
             backend=backend,
             source_video=source_video,
         )
+
+    def crop(
+        self,
+        crop: tuple[int, int, int, int] | None = None,
+        *,
+        bbox: tuple[float, float, float, float] | None = None,
+        roi: object | None = None,
+        center: tuple[float, float] | None = None,
+        size: tuple[int, int] | None = None,
+        margin: int = 0,
+        fill: int | tuple[int, ...] = 0,
+        share_decode: bool = True,
+    ) -> "Video":
+        """Return a virtual, on-read cropped view of this video.
+
+        Exactly one region spec must be given: ``crop`` (explicit
+        ``(x1, y1, x2, y2)`` rect), ``bbox``, ``roi`` (its axis-aligned bounds +
+        ``margin``), or (``center``, ``size``) for a fixed-size centered/
+        centroid-following window. The returned ``Video`` shares no pixels with
+        this one; frames are decoded on read and cropped (byte-identical to
+        :func:`sleap_io.transform.frame.crop_frame`). Out-of-bounds regions are
+        pad-filled with ``fill`` (never clamped), so the output shape is always
+        exactly ``(y2 - y1, x2 - x1)``.
+
+        The crop composes (FLATTENS when fills agree and the region is in-bounds)
+        with any existing crop on this video via
+        :meth:`CropVideoBackend.wrap`. ``source_video`` is set to this video for
+        provenance. When ``share_decode`` (the default), the new crop reuses this
+        video's backend instance as the shared inner so a mosaic of tiles over
+        one file decodes each source frame once; in that case the new tile does
+        NOT own the shared decoder (this video does).
+
+        Args:
+            crop: Explicit crop region ``(x1, y1, x2, y2)``, ``x2``/``y2``
+                exclusive.
+            bbox: A bounding box ``(x1, y1, x2, y2)``; bounds may be float.
+            roi: Any object exposing axis-aligned ``.bounds`` as
+                ``(minx, miny, maxx, maxy)`` (e.g. a shapely geometry).
+            center: Window center ``(cx, cy)`` (used with ``size``).
+            size: Fixed output ``(width, height)`` (used with ``center``).
+            margin: Pixels added around the ``roi`` bounds on every side.
+            fill: Fill value for out-of-bounds regions.
+            share_decode: If ``True`` (the default), reuse this video's backend
+                as the shared inner so tiles decode each frame once; the new tile
+                does not own the shared decoder.
+
+        Returns:
+            A new ``Video`` exposing the cropped view.
+        """
+        from sleap_io.io.video_reading import CropVideoBackend
+
+        rect = _resolve_crop_rect(crop, bbox, roi, center, size, margin)
+        if self.backend is None and self.open_backend:
+            self.open()
+        if self.backend is None:
+            raise ValueError(
+                "Cannot crop a video with no open backend. Open it first (set "
+                "open_backend=True or call .open()) before cropping."
+            )
+        inner = self.backend
+        cropped_backend = CropVideoBackend.wrap(
+            inner=inner, crop=rect, fill=fill, owns_inner=not share_decode
+        )
+
+        cropped = Video(
+            filename=self.filename,
+            backend=cropped_backend,
+            source_video=self,
+            open_backend=self.open_backend,
+        )
+
+        x1, y1, x2, y2 = cropped_backend.crop
+        src_shape = self.shape
+        cropped.backend_metadata = {
+            **self.backend_metadata,
+            "shape": (src_shape[0], y2 - y1, x2 - x1, src_shape[3])
+            if src_shape is not None
+            else None,
+            # The uncropped source shape, so a closed re-serialize keeps videos_json
+            # describing the full frame even without a live source_video (D-120/DI-2).
+            "source_shape": list(src_shape) if src_shape is not None else None,
+            # COMPOSED source rect from wrap (D-120): keeps open/closed crop keys
+            # identical and root-canonical, and survives close()->open().
+            "crop": list(cropped_backend.crop),
+            "crop_fill": cropped_backend.fill,
+        }
+        return cropped
+
+    @classmethod
+    def from_crop(
+        cls,
+        video: "str | Path | Video",
+        crop: tuple[int, int, int, int] | None = None,
+        *,
+        fill: int | tuple[int, ...] = 0,
+        **kwargs,
+    ) -> "Video":
+        """Open ``video`` (path or ``Video``) and return a virtual crop.
+
+        Args:
+            video: A path/filename to open, or an existing ``Video`` to crop.
+            crop: Explicit crop region ``(x1, y1, x2, y2)``, ``x2``/``y2``
+                exclusive.
+            fill: Fill value for out-of-bounds regions.
+            **kwargs: Forwarded to :meth:`from_filename` when ``video`` is a path
+                (ignored when ``video`` is already a ``Video``).
+
+        Returns:
+            A new ``Video`` exposing the cropped view.
+        """
+        if isinstance(video, (str, Path)):
+            video = cls.from_filename(video, **kwargs)
+        return video.crop(crop, fill=fill)
+
+    def _crop_tuple(self) -> tuple[int, int, int, int] | None:
+        """Return this video's crop rect ``(x1, y1, x2, y2)`` or ``None``.
+
+        Reads ``backend.crop`` when the backend is a ``CropVideoBackend`` (open
+        path), else ``backend_metadata["crop"]`` (closed path), else ``None``
+        (uncropped).
+        """
+        from sleap_io.io.video_reading import CropVideoBackend
+
+        if isinstance(self.backend, CropVideoBackend):
+            return tuple(self.backend.crop)
+        crop = self.backend_metadata.get("crop")
+        return tuple(crop) if crop is not None else None
+
+    def _crop_fill(self) -> int | tuple[int, ...]:
+        """Return this video's crop fill value (open: backend; closed: metadata).
+
+        Returns ``0`` for an uncropped video. Mirrors :meth:`_crop_tuple`.
+        """
+        from sleap_io.io.video_reading import CropVideoBackend
+
+        if isinstance(self.backend, CropVideoBackend):
+            return self.backend.fill
+        return self.backend_metadata.get("crop_fill", 0)
+
+    def to_crop_coords(self, points: np.ndarray) -> np.ndarray:
+        """Map source-frame ``(x, y)`` into this video's cropped frame.
+
+        Args:
+            points: Coordinate array of shape ``(..., 2)``. NaN values are
+                preserved.
+
+        Returns:
+            Coordinates translated into the cropped frame. If this video is not
+            cropped, a copy of ``points`` is returned unchanged.
+        """
+        crop = self._crop_tuple()
+        return points.copy() if crop is None else crop_points(points, crop)
+
+    def to_source_coords(self, points: np.ndarray) -> np.ndarray:
+        """Map cropped-frame ``(x, y)`` back to source-frame coordinates.
+
+        Inverse of :meth:`to_crop_coords`.
+
+        Args:
+            points: Coordinate array of shape ``(..., 2)``. NaN values are
+                preserved.
+
+        Returns:
+            Coordinates translated back to source coordinates. If this video is
+            not cropped, a copy of ``points`` is returned unchanged.
+        """
+        crop = self._crop_tuple()
+        return points.copy() if crop is None else uncrop_points(points, crop)
 
     @property
     def shape(self) -> tuple[int, int, int, int] | None:
@@ -613,6 +860,18 @@ class Video:
             **backend_kwargs,
         )
 
+        # Re-wrap as a crop view if this video records a crop in its metadata.
+        # The rebuilt backend above is always a plain backend, so this wraps
+        # exactly once (idempotent across close()->open() and deepcopy).
+        if "crop" in self.backend_metadata:
+            from sleap_io.io.video_reading import CropVideoBackend
+
+            self.backend = CropVideoBackend.wrap(
+                inner=self.backend,
+                crop=tuple(self.backend_metadata["crop"]),
+                fill=self.backend_metadata.get("crop_fill", 0),
+            )
+
     def close(self):
         """Close the video backend."""
         if self.backend is not None:
@@ -627,6 +886,15 @@ class Video:
                 )
                 self.backend_metadata["shape"] = getattr(self.backend, "shape", None)
                 self.backend_metadata["fps"] = getattr(self.backend, "fps", None)
+                # Persist the crop so a Video cropped in-memory (never loaded
+                # from disk) survives a close()->open() and deepcopy: open()
+                # re-wraps from these keys (the closed-path shape above is
+                # already the cropped shape).
+                from sleap_io.io.video_reading import CropVideoBackend
+
+                if isinstance(self.backend, CropVideoBackend):
+                    self.backend_metadata["crop"] = list(self.backend.crop)
+                    self.backend_metadata["crop_fill"] = self.backend.fill
             except Exception:
                 pass
 
