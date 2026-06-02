@@ -722,10 +722,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#baking-a-crop-to-disk" class="md-nav__link">
+  <a href="#applying-baking-a-crop-to-disk" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Baking a crop to disk
+        Applying (baking) a crop to disk
       
     </span>
   </a>
@@ -3535,10 +3535,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#baking-a-crop-to-disk" class="md-nav__link">
+  <a href="#applying-baking-a-crop-to-disk" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Baking a crop to disk
+        Applying (baking) a crop to disk
       
     </span>
   </a>
@@ -3696,12 +3696,42 @@ append, and matching; two crops with the <strong>same</strong> rect dedup to one
   <code>/video_crops</code>, no format-version bump).</li>
 </ul>
 <hr />
-<h2 id="baking-a-crop-to-disk">Baking a crop to disk<a class="headerlink" href="#baking-a-crop-to-disk" title="Permanent link">&para;</a></h2>
-<p>A virtual crop is the lazy dual of the materializing pipeline. To write a real cropped
-file later, feed the same rect to <a href="../transforms/"><code>transform_video</code></a> /
-<code>transform_labels</code>; the baked pixels are identical to the virtual view:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">transform_video</span><span class="p">(</span><span class="n">full</span><span class="p">,</span> <span class="s2">&quot;baked.mp4&quot;</span><span class="p">,</span> <span class="n">sio</span><span class="o">.</span><span class="n">Transform</span><span class="p">(</span><span class="n">crop</span><span class="o">=</span><span class="p">(</span><span class="mi">320</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">576</span><span class="p">,</span> <span class="mi">456</span><span class="p">)))</span>
+<h2 id="applying-baking-a-crop-to-disk">Applying (baking) a crop to disk<a class="headerlink" href="#applying-baking-a-crop-to-disk" title="Permanent link">&para;</a></h2>
+<p>A virtual crop can be <strong>materialized</strong> to a real video file — the cropped pixels become
+physical and the crop is no longer a read-time view. This is coordinate-neutral: a virtual
+crop already presents cropped-frame coordinates, so baking the pixels leaves all point
+coordinates unchanged.</p>
+<p><code>Video.apply_crop</code> bakes one cropped video and returns a new <code>Video</code> for the baked file,
+preserving provenance (<code>source_video</code> is the uncropped original):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">view</span> <span class="o">=</span> <span class="n">full</span><span class="o">.</span><span class="n">crop</span><span class="p">((</span><span class="mi">320</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">576</span><span class="p">,</span> <span class="mi">456</span><span class="p">))</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">baked</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">apply_crop</span><span class="p">(</span><span class="s2">&quot;crop.mp4&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">baked</span><span class="o">.</span><span class="n">shape</span>                    <span class="c1"># (1000, 256, 256, 3)  — cropped, now physical</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">baked</span><span class="o">.</span><span class="n">source_video</span><span class="o">.</span><span class="n">shape</span>       <span class="c1"># (1000, 1080, 1920, 3) — uncropped original</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">baked</span><span class="o">.</span><span class="n">_crop_tuple</span><span class="p">()</span>            <span class="c1"># None — the crop is materialized, not virtual</span>
 </code></pre></div>
+<p><code>Labels.apply_crops</code> bakes every virtually-cropped video in a <code>Labels</code> and rewires all
+references (labeled frames, ROIs, suggestions) to the baked files; uncropped videos are
+untouched and coordinates are unchanged:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">labels</span><span class="o">.</span><span class="n">apply_crops</span><span class="p">(</span><span class="n">video_dir</span><span class="o">=</span><span class="s2">&quot;baked_videos/&quot;</span><span class="p">)</span>   <span class="c1"># one file per tile, unique names</span>
+</code></pre></div>
+<p>From the command line, <code>sio apply-crops</code> materializes every virtual crop in an SLP,
+writing baked videos to a directory next to the output and updating the references:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>sio<span class="w"> </span>apply-crops<span class="w"> </span>mosaic.slp<span class="w"> </span>-o<span class="w"> </span>baked.slp<span class="w"> </span>--video-dir<span class="w"> </span>baked_videos/
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title"><code>apply_crop</code> vs <code>sio transform --crop</code></p>
+<p><code>apply_crop</code> materializes an <strong>existing</strong> virtual crop (no coordinate change).
+<code>sio transform --crop</code> applies a <strong>new</strong> crop and adjusts coordinates — that is the
+materializing <a href="../transforms/"><code>transform_video</code></a> / <code>transform_labels</code> path:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">transform_video</span><span class="p">(</span><span class="n">full</span><span class="p">,</span> <span class="s2">&quot;baked.mp4&quot;</span><span class="p">,</span> <span class="n">sio</span><span class="o">.</span><span class="n">Transform</span><span class="p">(</span><span class="n">crop</span><span class="o">=</span><span class="p">(</span><span class="mi">320</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">576</span><span class="p">,</span> <span class="mi">456</span><span class="p">)))</span>
+</code></pre></div>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Encoder padding</p>
+<p>The H.264 encoder pads frame dimensions up to a multiple of 16 (bottom/right only,
+preserving the top-left content and coordinate alignment). A baked video whose cropped
+width/height are not multiples of 16 is padded on those edges.</p>
+</div>
 <hr />
 <h2 id="performance-expectations">Performance expectations<a class="headerlink" href="#performance-expectations" title="Permanent link">&para;</a></h2>
 <p>The crop is applied <strong>after</strong> a full-frame decode for every backend except raw,
