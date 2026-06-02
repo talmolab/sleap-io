@@ -1142,6 +1142,20 @@ def render_image(
             f"or None, got {type(source)}"
         )
 
+    # Auto-use the frame's segmentation masks as overlay when no explicit
+    # overlay is given and the frame carries masks. Mirrors render_video's
+    # auto-overlay behavior so a segmentation-only frame still draws its masks.
+    # Only masks are auto-resolved here (not label_images): label_image overlays
+    # are a Labels/render_video-level concept and _apply_overlay does not accept a
+    # list[LabelImage] in the single-frame path. An explicit overlay always wins.
+    if (
+        overlay is None
+        and isinstance(source, (Labels, LabeledFrame))
+        and lf is not None
+        and lf.masks
+    ):
+        overlay = list(lf.masks)
+
     # Apply cropping if specified
     render_image_data = image
     render_points = instances_points
@@ -1555,6 +1569,23 @@ def render_video(
                 if include_unlabeled is None:
                     include_unlabeled = True
 
+        # Auto-use segmentation masks as overlay when no explicit overlay (and
+        # no label images) resolved. Masks live on specific frames at arbitrary
+        # frame indices, so resolve them per-frame via a callable rather than a
+        # positional list. label_images take precedence (resolved above).
+        if overlay is None and labels.masks:
+            video_masks = labels.get_masks(video=target_video)
+            if video_masks:
+                _auto_labels = labels
+                _auto_video = target_video
+
+                def overlay(fidx: int) -> list["SegmentationMask"]:
+                    """Resolve segmentation masks for a single frame index."""
+                    return _auto_labels.get_masks(video=_auto_video, frame_idx=fidx)
+
+                if include_unlabeled is None:
+                    include_unlabeled = True
+
         # Check if centroids exist for this video (per-frame access via lf).
         if show_centroids and labels.centroids:
             _has_video_centroids = bool(labels.get_centroids(video=target_video))
@@ -1764,6 +1795,8 @@ def render_video(
             return image
         if image.ndim == 2:
             image = np.stack([image] * 3, axis=-1)
+        elif image.ndim == 3 and image.shape[-1] == 1:
+            image = np.repeat(image, 3, axis=-1)
         # Crop overlay to match cropped image region
         cropped_overlay = frame_overlay
         if crop_bounds is not None:
@@ -1823,6 +1856,8 @@ def render_video(
         # Ensure RGB.
         if image.ndim == 2:
             image = np.stack([image] * 3, axis=-1)
+        elif image.ndim == 3 and image.shape[-1] == 1:
+            image = np.repeat(image, 3, axis=-1)
 
         # Assign colors by track using pre-built index map.
         centroid_colors = []
