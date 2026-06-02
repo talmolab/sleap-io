@@ -5104,7 +5104,7 @@ def test_apply_crops_updates_references_to_baked_files(tmp_path):
 
     labels.apply_crops(video_dir=out_dir)
 
-    cropped_videos = [v for v in labels.videos if v.filename.startswith(str(out_dir))]
+    cropped_videos = [v for v in labels.videos if Path(v.filename).parent == out_dir]
     assert len(cropped_videos) == n_tiles
     for v in cropped_videos:
         # No longer a virtual crop: backend is a plain media backend.
@@ -5125,7 +5125,7 @@ def test_apply_crops_preserves_source_provenance(tmp_path):
 
     labels.apply_crops(video_dir=out_dir)
 
-    baked = [v for v in labels.videos if v.filename.startswith(str(out_dir))]
+    baked = [v for v in labels.videos if Path(v.filename).parent == out_dir]
     for v in baked:
         assert v.source_video is not None
         # Cropped shape (32x32) differs from uncropped source shape (32x64).

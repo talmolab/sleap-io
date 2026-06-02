@@ -11382,4 +11382,5 @@ def test_apply_crops_quality_crf_mutually_exclusive(tmp_path):
         ],
     )
     assert result.exit_code != 0
-    assert "Cannot use both --quality and --crf" in result.output
+    output = _strip_ansi(result.output)
+    assert "Cannot use both --quality and --crf" in output
