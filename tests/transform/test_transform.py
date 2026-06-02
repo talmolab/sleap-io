@@ -463,6 +463,30 @@ class TestFrameTransformsGrayscale:
         # Some interior should have original values
         assert result[15, 15, 0] == 255
 
+    def test_crop_frame_wholly_outside_one_axis(self):
+        """Crop wholly beyond the frame on one axis returns an all-fill region.
+
+        Regression: a crop with no source overlap on an axis (e.g. x in [100, 120)
+        for a 24-wide frame) previously raised a broadcast ValueError. It must now
+        return a correctly shaped, fully-filled array.
+        """
+        frame = np.arange(20 * 24 * 3, dtype=np.uint8).reshape(20, 24, 3)
+
+        # Wholly beyond on x (positive), straddling on y.
+        result = crop_frame(frame, (100, 5, 120, 12), fill=7)
+        assert result.shape == (7, 20, 3)
+        assert np.all(result == 7)
+
+        # Wholly beyond on x (negative), wholly beyond on y (negative).
+        result = crop_frame(frame, (-200, -30, -100, -10), fill=3)
+        assert result.shape == (20, 100, 3)
+        assert np.all(result == 3)
+
+        # 2D (grayscale) frame, wholly beyond on x.
+        result = crop_frame(frame[..., 0], (30, 5, 50, 12), fill=0)
+        assert result.shape == (7, 20)
+        assert np.all(result == 0)
+
     def test_pad_frame_with_tuple_fill(self):
         """Test pad_frame with tuple fill color."""
         frame = np.zeros((50, 50, 3), dtype=np.uint8)

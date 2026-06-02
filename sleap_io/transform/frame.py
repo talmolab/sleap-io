@@ -70,11 +70,14 @@ def crop_frame(
     h, w = frame.shape[:2]
     crop_w, crop_h = x2 - x1, y2 - y1
 
-    # Compute valid source region
+    # Compute valid source region. Clamp the upper bounds to the lower bounds so a
+    # crop that lies wholly beyond the frame on an axis yields an empty (not
+    # negative-extent) source slice, which pastes cleanly into an all-fill output
+    # instead of raising a broadcast error.
     src_x1 = max(0, x1)
     src_y1 = max(0, y1)
-    src_x2 = min(w, x2)
-    src_y2 = min(h, y2)
+    src_x2 = max(src_x1, min(w, x2))
+    src_y2 = max(src_y1, min(h, y2))
 
     # Extract source region
     cropped = frame[src_y1:src_y2, src_x1:src_x2]
