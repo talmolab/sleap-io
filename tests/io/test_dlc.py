@@ -1146,7 +1146,7 @@ def test_parse_dlc_crop_float_strings_coerced_to_int():
 
 @pytest.mark.parametrize("crop", [None, "", "  ", "10, 60", "10, 60, 20", "a, b, c, d"])
 def test_parse_dlc_crop_missing_or_bad_returns_none(crop):
-    """Missing / empty / wrong-arity / unparseable crops return None."""
+    """Missing / empty / wrong-arity / unparsable crops return None."""
     assert dlc._parse_dlc_crop(crop) is None
 
 

@@ -266,7 +266,7 @@ def _parse_dlc_crop(crop: object) -> tuple[int, int, int, int] | None:
 
     Returns:
         The crop rect ``(x1, y1, x2, y2)`` as ints, or ``None`` when the crop is
-        missing/empty/unparseable, has the wrong arity, is inverted
+        missing/empty/unparsable, has the wrong arity, is inverted
         (``x2 <= x1`` or ``y2 <= y1``; a warning is emitted), or is an identity
         crop at origin ``(0, 0)`` (a no-op that needs no provenance, matching
         DLC's default full-frame ``0, W, 0, H``).
