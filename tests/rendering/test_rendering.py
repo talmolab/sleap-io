@@ -3185,6 +3185,67 @@ def test_render_video_no_masks_leaves_background():
     assert np.array_equal(frames[0][60, 5], [128, 128, 128])
 
 
+def test_render_video_masks_for_other_video_not_drawn():
+    """Masks present on a DIFFERENT video are not auto-drawn for the target video.
+
+    Exercises the `if video_masks:` false branch: labels.masks is non-empty but
+    get_masks(video=target) is empty, so no auto-overlay is resolved.
+    """
+    skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    vid_a = sio.Video(filename="a.mp4")
+    vid_b = sio.Video(filename="b.mp4")
+    pts = np.array([[5, 5], [10, 10]], dtype=np.float32)
+
+    # vid_a has a labeled frame but NO mask; the only mask lives on vid_b.
+    lf_a = sio.LabeledFrame(
+        video=vid_a,
+        frame_idx=0,
+        instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+    )
+    binary = np.zeros((64, 64), dtype=bool)
+    binary[40:60, 40:60] = True
+    lf_b = sio.LabeledFrame(video=vid_b, frame_idx=0)
+    lf_b.masks.append(UserSegmentationMask.from_numpy(binary))
+    labels = sio.Labels(
+        labeled_frames=[lf_a, lf_b], videos=[vid_a, vid_b], skeletons=[skeleton]
+    )
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        video=0,  # render vid_a, whose masks are empty
+        background=(128, 128, 128),
+        overlay_alpha=0.6,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # No mask for vid_a -> the would-be mask region stays plain background.
+    assert np.array_equal(frames[0][50, 50], [128, 128, 128])
+
+
+def test_render_video_auto_masks_with_explicit_include_unlabeled():
+    """Auto-mask resolution respects an explicitly-set include_unlabeled.
+
+    Exercises the `if include_unlabeled is None:` false branch inside the mask
+    block: masks resolve for the video AND include_unlabeled was passed.
+    """
+    labels = _make_mask_labels(n_frames=2, h=64, w=64)
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background=(128, 128, 128),
+        include_unlabeled=False,  # explicit -> not None when masks resolve
+        overlay_alpha=0.6,
+        show_progress=False,
+    )
+
+    # Only labeled frames render (include_unlabeled=False), masks still drawn.
+    assert len(frames) == 2
+    assert not np.array_equal(frames[0][50, 50], [128, 128, 128])
+
+
 def test_render_video_explicit_overlay_takes_precedence_over_masks():
     """An explicit overlay is used even when labels.masks exist."""
     labels = _make_mask_labels(n_frames=1, h=64, w=64, mask_box=(40, 60, 40, 60))
