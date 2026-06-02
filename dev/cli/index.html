@@ -8416,11 +8416,16 @@ share an arbitrary name (e.g. <code>track_0</code>) are no longer merged. Pass
 <a id="__codelineno-95-17" name="__codelineno-95-17" href="#__codelineno-95-17"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--background<span class="w"> </span>black
 <a id="__codelineno-95-18" name="__codelineno-95-18" href="#__codelineno-95-18"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--background<span class="w"> </span><span class="s2">&quot;#333&quot;</span>
 <a id="__codelineno-95-19" name="__codelineno-95-19" href="#__codelineno-95-19"></a>
-<a id="__codelineno-95-20" name="__codelineno-95-20" href="#__codelineno-95-20"></a><span class="c1"># Overlay a segmentation mask on rendered poses</span>
-<a id="__codelineno-95-21" name="__codelineno-95-21" href="#__codelineno-95-21"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>--overlay-alpha<span class="w"> </span><span class="m">0</span>.4
-<a id="__codelineno-95-22" name="__codelineno-95-22" href="#__codelineno-95-22"></a>
-<a id="__codelineno-95-23" name="__codelineno-95-23" href="#__codelineno-95-23"></a><span class="c1"># Overlay-only mode: render masks on images without a labels file</span>
-<a id="__codelineno-95-24" name="__codelineno-95-24" href="#__codelineno-95-24"></a>sio<span class="w"> </span>render<span class="w"> </span>--images<span class="w"> </span>frames/<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>-o<span class="w"> </span>output.mp4
+<a id="__codelineno-95-20" name="__codelineno-95-20" href="#__codelineno-95-20"></a><span class="c1"># Segmentation predictions are drawn automatically (no --overlay needed):</span>
+<a id="__codelineno-95-21" name="__codelineno-95-21" href="#__codelineno-95-21"></a><span class="c1"># label_images take precedence, falling back to SegmentationMask annotations.</span>
+<a id="__codelineno-95-22" name="__codelineno-95-22" href="#__codelineno-95-22"></a><span class="c1"># Works on RGB and single-channel grayscale video.</span>
+<a id="__codelineno-95-23" name="__codelineno-95-23" href="#__codelineno-95-23"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>out.mp4
+<a id="__codelineno-95-24" name="__codelineno-95-24" href="#__codelineno-95-24"></a>
+<a id="__codelineno-95-25" name="__codelineno-95-25" href="#__codelineno-95-25"></a><span class="c1"># Overlay a segmentation mask on rendered poses (explicit overlay overrides auto)</span>
+<a id="__codelineno-95-26" name="__codelineno-95-26" href="#__codelineno-95-26"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>--overlay-alpha<span class="w"> </span><span class="m">0</span>.4
+<a id="__codelineno-95-27" name="__codelineno-95-27" href="#__codelineno-95-27"></a>
+<a id="__codelineno-95-28" name="__codelineno-95-28" href="#__codelineno-95-28"></a><span class="c1"># Overlay-only mode: render masks on images without a labels file</span>
+<a id="__codelineno-95-29" name="__codelineno-95-29" href="#__codelineno-95-29"></a>sio<span class="w"> </span>render<span class="w"> </span>--images<span class="w"> </span>frames/<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>-o<span class="w"> </span>output.mp4
 </code></pre></div>
 <h3 id="options-reference_1">Options Reference<a class="headerlink" href="#options-reference_1" title="Permanent link">&para;</a></h3>
 <h4 id="inputoutput-options_1">Input/Output Options<a class="headerlink" href="#inputoutput-options_1" title="Permanent link">&para;</a></h4>

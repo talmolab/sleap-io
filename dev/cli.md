@@ -1778,7 +1778,12 @@ sio render predictions.slp --lf 0               # -> predictions.lf=0.png
 sio render predictions.slp --background black
 sio render predictions.slp --background "#333"
 
-# Overlay a segmentation mask on rendered poses
+# Segmentation predictions are drawn automatically (no --overlay needed):
+# label_images take precedence, falling back to SegmentationMask annotations.
+# Works on RGB and single-channel grayscale video.
+sio render predictions.slp -o out.mp4
+
+# Overlay a segmentation mask on rendered poses (explicit overlay overrides auto)
 sio render predictions.slp --overlay masks.tif --overlay-alpha 0.4
 
 # Overlay-only mode: render masks on images without a labels file
