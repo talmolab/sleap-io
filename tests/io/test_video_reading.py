@@ -1,5 +1,6 @@
 """Tests for methods in the sleap_io.io.video_reading file."""
 
+import copy
 import pickle
 from pathlib import Path
 
@@ -12,12 +13,14 @@ from pytest_httpserver import HTTPServer
 
 import sleap_io as sio
 from sleap_io.io.video_reading import (
+    CropVideoBackend,
     HDF5Video,
     ImageVideo,
     MediaVideo,
     TiffVideo,
     VideoBackend,
 )
+from sleap_io.transform.frame import crop_frame
 
 try:
     import cv2
@@ -1774,3 +1777,485 @@ def test_is_pyav_available_when_installed():
     from sleap_io.io.video_reading import _is_pyav_available
 
     assert _is_pyav_available() is True
+
+
+# ---------------------------------------------------------------------------
+# CropVideoBackend
+# ---------------------------------------------------------------------------
+
+
+def _make_chunked_hdf5(path, data, input_format="channels_last", chunks=None):
+    """Write a raw rank-4 HDF5 dataset and return an HDF5Video over it.
+
+    Args:
+        path: Destination file path.
+        data: Rank-4 array to store (on-disk layout matching ``input_format``).
+        input_format: Either "channels_last" or "channels_first".
+        chunks: Chunk shape passed to ``create_dataset`` (None = whole-frame).
+
+    Returns:
+        An ``HDF5Video`` opened over the written dataset.
+    """
+    with h5py.File(path, "w") as f:
+        f.create_dataset("video", data=data, chunks=chunks)
+    return HDF5Video(filename=str(path), dataset="video", input_format=input_format)
+
+
+def test_crop_backend_basic_shape(centered_pair_low_quality_path):
+    """Cropped img_shape/shape/len/num_frames report the cropped view."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    crop = (10, 20, 110, 120)
+    cb = CropVideoBackend.wrap(inner, crop)
+
+    assert isinstance(cb, VideoBackend)
+    assert cb.num_frames == inner.num_frames
+    assert cb.img_shape == (100, 100, 1)
+    assert cb.shape == (inner.num_frames, 100, 100, 1)
+    assert len(cb) == inner.num_frames
+    assert cb.filename == centered_pair_low_quality_path
+
+
+def test_crop_backend_byte_parity(centered_pair_low_quality_path):
+    """Cropped frame is byte-identical to crop_frame(full, rect)."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    crop = (30, 40, 130, 150)
+    cb = CropVideoBackend.wrap(inner, crop)
+
+    full = inner.get_frame(0)
+    ref = crop_frame(full, crop)
+    assert_equal(cb[0], ref)
+
+
+def test_crop_backend_oob_negative_pads(centered_pair_low_quality_path):
+    """Negative-origin crop pads with the fill value."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    crop = (-10, -5, 20, 25)
+    cb = CropVideoBackend.wrap(inner, crop, fill=7)
+
+    full = inner.get_frame(0)
+    ref = crop_frame(full, crop, fill=7)
+    assert cb[0].shape == (30, 30, 1)
+    assert_equal(cb[0], ref)
+
+
+def test_crop_backend_oob_oversized_pads(centered_pair_low_quality_path):
+    """Oversized crop (beyond source bounds) pads with the fill value."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    crop = (360, 360, 420, 420)
+    cb = CropVideoBackend.wrap(inner, crop, fill=3)
+
+    full = inner.get_frame(0)
+    ref = crop_frame(full, crop, fill=3)
+    assert cb[0].shape == (60, 60, 1)
+    assert_equal(cb[0], ref)
+
+
+def test_crop_backend_grayscale_full_frame_detection(
+    centered_pair_low_quality_path,
+):
+    """Grayscale is detected on the UNCROPPED frame, even for a 1px-wide crop."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    cb = CropVideoBackend.wrap(inner, (10, 10, 11, 60))  # 1px wide
+    # Construction is lazy: grayscale is unresolved until first access (no decode).
+    assert cb.grayscale is None
+    # img_shape resolves grayscale on the inner's full frame and reports the crop.
+    assert cb.img_shape == (50, 1, 1)
+    assert cb.grayscale is True
+    # detect_grayscale resolves from the inner full frame, not the crop.
+    assert cb.detect_grayscale() is True
+    # read_test_frame returns the UNCROPPED inner frame.
+    assert cb.read_test_frame().shape[0] == inner.read_test_frame().shape[0]
+
+
+def test_crop_backend_getitem_scalar_list_slice(
+    centered_pair_low_quality_path,
+):
+    """Scalar/list/slice __getitem__ all return the cropped view."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    cb = CropVideoBackend.wrap(inner, (0, 0, 50, 50))
+
+    assert cb[0].shape == (50, 50, 1)
+    assert cb[[0, 1, 2]].shape == (3, 50, 50, 1)
+    assert cb[0:3].shape == (3, 50, 50, 1)
+
+    full = inner.get_frames([0, 1, 2])
+    ref = np.stack([crop_frame(f, (0, 0, 50, 50)) for f in full], axis=0)
+    assert_equal(cb[[0, 1, 2]], ref)
+
+
+def test_crop_backend_has_frame_delegates(centered_pair_low_quality_path):
+    """has_frame delegates to the inner backend."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    cb = CropVideoBackend.wrap(inner, (0, 0, 50, 50))
+    assert cb.has_frame(0) is True
+    assert cb.has_frame(10**9) is False
+
+
+@pytest.mark.parametrize("crop", [(5, 5, 55, 65), (-5, -5, 45, 45)])
+def test_crop_backend_batched_image_video_parity(centered_pair_frame_paths, crop):
+    """Batched crop over an ImageVideo (base-default _read_frames) is byte-parity.
+
+    The in-bounds rect exercises the fast slice+copy path; the OOB rect exercises the
+    np.stack(crop_frame) padded fallback that the MediaVideo batched test never hits.
+    ImageVideo uses the base-default _read_frames (applies grayscale early), so this
+    also guards the D-114 idempotent-grayscale invariant.
+    """
+    inner = VideoBackend.from_filename(centered_pair_frame_paths)
+    assert isinstance(inner, ImageVideo)
+    cb = CropVideoBackend.wrap(inner, crop, fill=7)
+    full = inner.get_frames([0, 1, 2])
+    ref = np.stack([crop_frame(f, crop, fill=7) for f in full], axis=0)
+    out = cb[[0, 1, 2]]
+    assert out.dtype != object
+    assert_equal(out, ref)
+
+
+def test_crop_backend_deepcopy_roundtrip(centered_pair_low_quality_path):
+    """Deepcopy preserves crop/fill and frame parity."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path, keep_open=False)
+    cb = CropVideoBackend.wrap(inner, (5, 6, 55, 66), fill=4)
+    ref = cb[0].copy()
+
+    cc = copy.deepcopy(cb)
+    assert cc.crop == (5, 6, 55, 66)
+    assert cc.fill == 4
+    assert cc.owns_inner is True
+    assert_equal(cc[0], ref)
+
+
+def test_crop_backend_pickle_roundtrip(centered_pair_low_quality_path):
+    """Pickle preserves crop/fill/filename and frame parity."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path, keep_open=False)
+    cb = CropVideoBackend.wrap(inner, (5, 6, 55, 66), fill=4)
+    ref = cb[0].copy()
+
+    pk = pickle.loads(pickle.dumps(cb))
+    assert pk.crop == (5, 6, 55, 66)
+    assert pk.fill == 4
+    assert pk.filename == centered_pair_low_quality_path
+    assert_equal(pk[0], ref)
+
+
+def test_crop_backend_identity_equality(centered_pair_low_quality_path):
+    """Equality is by object identity (eq=False), robust to cache state."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    a = CropVideoBackend.wrap(inner, (0, 0, 50, 50))
+    b = CropVideoBackend.wrap(inner, (0, 0, 50, 50))
+    _ = a.shape  # populate a's cached shape only
+    assert a == a
+    assert a != b  # distinct instances despite identical crop/fill
+
+
+def test_crop_backend_channels_first_parity(tmp_path):
+    """channels_first synthetic HDF5 crop matches crop_frame byte-for-byte."""
+    n, h, w, c = 3, 32, 40, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    disk = np.transpose(data, (0, 3, 2, 1)).copy()  # (N, C, W, H)
+    inner = _make_chunked_hdf5(
+        tmp_path / "cf.h5", disk, "channels_first", chunks=(1, c, 8, 8)
+    )
+    cb = CropVideoBackend.wrap(inner, (5, 6, 25, 26))
+
+    ref = crop_frame(inner._read_frame(0), (5, 6, 25, 26))
+    assert_equal(cb[0], ref)
+
+
+def test_crop_backend_flatten_byte_parity(centered_pair_low_quality_path):
+    """crop-of-crop FLATTENS (inner not a crop) with byte-parity to nested."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    c1 = CropVideoBackend.wrap(inner, (10, 10, 110, 110))
+    c2 = CropVideoBackend.wrap(c1, (5, 5, 40, 40))
+
+    # Flattened: inner is the original (never a crop), crop is composed.
+    assert not isinstance(c2.inner, CropVideoBackend)
+    assert c2.crop == (15, 15, 50, 50)
+
+    full = inner.get_frame(0)
+    nested = crop_frame(crop_frame(full, (10, 10, 110, 110)), (5, 5, 40, 40))
+    assert_equal(c2[0], nested)
+
+
+def test_crop_backend_nest_when_outer_exceeds_inner(
+    centered_pair_low_quality_path,
+):
+    """F-2: outer crop exceeding the inner frame must NEST (byte-parity)."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    c1 = CropVideoBackend.wrap(inner, (10, 10, 110, 110))  # 100x100 frame
+    c2 = CropVideoBackend.wrap(c1, (-1, -1, 40, 40))  # exceeds [0,100]x[0,100]
+
+    assert isinstance(c2.inner, CropVideoBackend)
+
+    full = inner.get_frame(0)
+    nested = crop_frame(crop_frame(full, (10, 10, 110, 110)), (-1, -1, 40, 40))
+    assert_equal(c2[0], nested)
+
+
+def test_crop_backend_nest_when_fill_mismatch(centered_pair_low_quality_path):
+    """Crop-of-crop with mismatched fills must NEST (byte-parity)."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    c1 = CropVideoBackend.wrap(inner, (10, 10, 110, 110), fill=0)
+    c2 = CropVideoBackend.wrap(c1, (-2, -2, 40, 40), fill=9)
+
+    assert isinstance(c2.inner, CropVideoBackend)
+
+    full = inner.get_frame(0)
+    nested = crop_frame(
+        crop_frame(full, (10, 10, 110, 110), fill=0), (-2, -2, 40, 40), fill=9
+    )
+    assert_equal(c2[0], nested)
+
+
+def test_crop_backend_owns_inner_false_does_not_close(tmp_path):
+    """owns_inner=False: close does NOT close the (shared) inner."""
+    data = np.arange(4 * 16 * 16 * 3, dtype=np.uint8).reshape(4, 16, 16, 3)
+    inner = _make_chunked_hdf5(
+        tmp_path / "v.h5", data, "channels_last", chunks=(1, 4, 4, 3)
+    )
+    _ = inner._read_frame(0)
+    assert inner._open_reader is not None
+
+    cb = CropVideoBackend.wrap(inner, (2, 2, 12, 12), owns_inner=False)
+    cb.close()
+    assert inner._open_reader is not None  # sibling-safe: inner stays open
+
+
+def test_crop_backend_owns_inner_true_closes(tmp_path):
+    """owns_inner=True (default): close cascades to the inner."""
+    data = np.arange(4 * 16 * 16 * 3, dtype=np.uint8).reshape(4, 16, 16, 3)
+    inner = _make_chunked_hdf5(
+        tmp_path / "v.h5", data, "channels_last", chunks=(1, 4, 4, 3)
+    )
+    _ = inner._read_frame(0)
+    assert inner._open_reader is not None
+
+    cb = CropVideoBackend.wrap(inner, (2, 2, 12, 12))
+    cb.close()
+    assert inner._open_reader is None
+
+
+def test_crop_backend_dataset_delegation(slp_minimal_pkg):
+    """dataset/input_format delegate to the inner backend."""
+    inner = VideoBackend.from_filename(slp_minimal_pkg)
+    cb = CropVideoBackend.wrap(inner, (5, 5, 55, 55))
+    assert cb.dataset == inner.dataset
+    assert cb.input_format == inner.input_format
+
+
+def test_crop_backend_to_crop_to_source_coords(centered_pair_low_quality_path):
+    """to_crop_coords / to_source_coords translate by (x1, y1) and invert."""
+    inner = VideoBackend.from_filename(centered_pair_low_quality_path)
+    cb = CropVideoBackend.wrap(inner, (10, 20, 110, 120))
+
+    pts = np.array([[15.0, 25.0], [np.nan, np.nan], [110.0, 120.0]])
+    cropped = cb.to_crop_coords(pts)
+    assert_equal(cropped[0], np.array([5.0, 5.0]))
+    assert np.isnan(cropped[1]).all()
+    # Round-trip back to source coordinates.
+    back = cb.to_source_coords(cropped)
+    assert_equal(back[0], pts[0])
+    assert np.isnan(back[1]).all()
+    assert_equal(back[2], pts[2])
+
+
+# ---------------------------------------------------------------------------
+# HDF5 pushdown
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "crop",
+    [(5, 5, 30, 30), (-3, -4, 12, 11), (40, 30, 60, 47), (-4, -4, 47, 47)],
+)
+def test_hdf5_read_crop_channels_last_parity(tmp_path, crop):
+    """read_crop byte-parity with crop_frame (channels_last, sub-frame chunks).
+
+    Covers inside, off-each-edge, and straddle cases. Crops are chosen so the
+    reference ``crop_frame`` has a non-empty valid source region on both axes
+    (it does not support a crop wholly beyond the frame on one axis); the
+    fully-outside pushdown case is exercised separately in
+    :func:`test_hdf5_pushdown_fully_outside_all_fill`.
+    """
+    n, h, w, c = 3, 48, 64, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    inner = _make_chunked_hdf5(
+        tmp_path / "cl.h5", data, "channels_last", chunks=(1, 16, 16, c)
+    )
+    assert inner._can_push_crop is True
+
+    ref = crop_frame(inner._read_frame(0), crop, fill=9)
+    out = inner.read_crop(0, crop, fill=9)
+    assert out is not None
+    assert out.dtype == data.dtype
+    assert_equal(out, ref)
+
+
+def test_hdf5_pushdown_fully_outside_all_fill(tmp_path):
+    """A crop wholly outside the frame pushes down to an all-fill array."""
+    n, h, w, c = 2, 48, 64, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    inner = _make_chunked_hdf5(
+        tmp_path / "v.h5", data, "channels_last", chunks=(1, 16, 16, c)
+    )
+    crop = (-30, -30, -10, -10)  # entirely above/left of the frame
+    out = inner.read_crop(0, crop, fill=4)
+    assert out is not None
+    assert_equal(out, np.full((20, 20, c), 4, dtype=data.dtype))
+
+
+@pytest.mark.parametrize(
+    "crop",
+    [(5, 6, 30, 31), (-3, -4, 12, 11), (60, 40, 90, 70)],
+)
+def test_hdf5_read_crop_channels_first_parity(tmp_path, crop):
+    """read_crop byte-parity with crop_frame (channels_first, sub-frame chunks)."""
+    n, h, w, c = 3, 48, 64, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    disk = np.transpose(data, (0, 3, 2, 1)).copy()  # (N, C, W, H)
+    inner = _make_chunked_hdf5(
+        tmp_path / "cf.h5", disk, "channels_first", chunks=(1, c, 16, 16)
+    )
+    assert inner._can_push_crop is True
+
+    ref = crop_frame(inner._read_frame(0), crop, fill=9)
+    out = inner.read_crop(0, crop, fill=9)
+    assert out is not None
+    assert_equal(out, ref)
+
+
+def test_hdf5_read_crops_batched_parity(tmp_path):
+    """Batched read_crops byte-parity with stacked per-frame crop_frame."""
+    n, h, w, c = 4, 48, 64, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    inner = _make_chunked_hdf5(
+        tmp_path / "cl.h5", data, "channels_last", chunks=(1, 16, 16, c)
+    )
+    crop = (5, 5, 30, 30)
+    out = inner.read_crops([0, 1, 2], crop, fill=2)
+    ref = np.stack(
+        [crop_frame(inner._read_frame(i), crop, fill=2) for i in range(3)], axis=0
+    )
+    assert out is not None
+    assert_equal(out, ref)
+
+
+def test_hdf5_pushdown_whole_frame_chunk_falls_back(tmp_path):
+    """Whole-frame chunking disables pushdown (dataset-level gate)."""
+    n, h, w, c = 2, 32, 40, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    inner = _make_chunked_hdf5(
+        tmp_path / "whole.h5", data, "channels_last", chunks=(1, h, w, c)
+    )
+    assert inner._can_push_crop is False
+    assert inner.read_crop(0, (5, 5, 20, 20)) is None
+
+
+def test_hdf5_pushdown_unchunked_falls_back(tmp_path):
+    """Contiguous (unchunked) datasets disable pushdown."""
+    n, h, w, c = 2, 32, 40, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    inner = _make_chunked_hdf5(
+        tmp_path / "contig.h5", data, "channels_last", chunks=None
+    )
+    assert inner._can_push_crop is False
+    assert inner.read_crop(0, (5, 5, 20, 20)) is None
+
+
+def test_hdf5_pushdown_per_call_gate_full_span_falls_back(tmp_path):
+    """A crop as large as the chunk-spanned frame falls back (per-call gate)."""
+    n, h, w, c = 2, 32, 40, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    inner = _make_chunked_hdf5(
+        tmp_path / "v.h5", data, "channels_last", chunks=(1, 16, 16, c)
+    )
+    assert inner._can_push_crop is True
+    # A crop covering the entire frame spans every chunk -> no benefit -> None.
+    assert inner.read_crop(0, (0, 0, w, h)) is None
+
+
+def test_hdf5_read_crops_per_call_gate_full_span_falls_back(tmp_path):
+    """Batched read_crops returns a clean None (not an object array) on gate decline.
+
+    Regression: a full-span crop makes every per-frame read_crop return None; the
+    batched path must return None (so the wrapper falls back to full decode + crop),
+    never ``np.stack([None, None])`` which yields a corrupt object array.
+    """
+    n, h, w, c = 3, 32, 40, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    inner = _make_chunked_hdf5(
+        tmp_path / "v.h5", data, "channels_last", chunks=(1, 16, 16, c)
+    )
+    assert inner._can_push_crop is True
+    assert inner.read_crops([0, 1, 2], (0, 0, w, h)) is None
+    # keep_open=False reopen branch must also fall back cleanly.
+    inner_ko = _make_chunked_hdf5(
+        tmp_path / "v2.h5", data, "channels_last", chunks=(1, 16, 16, c)
+    )
+    inner_ko.keep_open = False
+    assert inner_ko.read_crops([0, 1], (0, 0, w, h)) is None
+
+
+def test_crop_backend_batched_full_span_fallback_parity(tmp_path):
+    """Wrapper batched read over a full-span crop returns a real array, not object."""
+    n, h, w, c = 3, 32, 40, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    inner = _make_chunked_hdf5(
+        tmp_path / "v.h5", data, "channels_last", chunks=(1, 16, 16, c)
+    )
+    cb = CropVideoBackend.wrap(inner, (0, 0, w, h))  # no-op crop, spans all chunks
+    out = cb[[0, 1, 2]]
+    assert out.dtype != object
+    assert out.dtype == data.dtype
+    ref = np.stack(
+        [crop_frame(inner._read_frame(i), (0, 0, w, h)) for i in range(3)], axis=0
+    )
+    assert_equal(out, ref[..., [0]] if cb.grayscale else ref)
+
+
+def test_hdf5_pushdown_oob_parity(tmp_path):
+    """Out-of-bounds pushdown crop pads exactly as crop_frame."""
+    n, h, w, c = 2, 48, 64, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    inner = _make_chunked_hdf5(
+        tmp_path / "v.h5", data, "channels_last", chunks=(1, 16, 16, c)
+    )
+    crop = (-8, -8, 8, 8)
+    out = inner.read_crop(0, crop, fill=5)
+    ref = crop_frame(inner._read_frame(0), crop, fill=5)
+    assert out is not None
+    assert out.shape == (16, 16, c)
+    assert_equal(out, ref)
+
+
+def test_hdf5_pushdown_keep_open_false_parity(tmp_path):
+    """Pushdown works with keep_open=False (reopens per call)."""
+    n, h, w, c = 2, 48, 64, 3
+    data = np.arange(n * h * w * c, dtype=np.uint8).reshape(n, h, w, c)
+    with h5py.File(tmp_path / "v.h5", "w") as f:
+        f.create_dataset("video", data=data, chunks=(1, 16, 16, c))
+    inner = HDF5Video(filename=str(tmp_path / "v.h5"), dataset="video", keep_open=False)
+    crop = (5, 5, 30, 30)
+    out = inner.read_crop(0, crop)
+    ref = crop_frame(inner._read_frame(0), crop)
+    assert out is not None
+    assert_equal(out, ref)
+    out_b = inner.read_crops([0, 1], crop)
+    assert out_b is not None
+    assert out_b.shape == (2, 25, 25, c)
+
+
+def test_hdf5_pushdown_embedded_falls_back(slp_minimal_pkg):
+    """Embedded/frame_map inner disables pushdown; crop still works via fallback."""
+    inner = VideoBackend.from_filename(slp_minimal_pkg)
+    assert inner.frame_map  # embedded subset with a frame map
+    assert inner._can_push_crop is False
+
+    fidx = list(inner.frame_map.keys())[0]
+    assert inner.read_crop(fidx, (5, 5, 30, 30)) is None
+    assert inner.read_crops([fidx], (5, 5, 30, 30)) is None
+
+    # The crop view still works (full decode + crop_frame), shape/grayscale safe.
+    cb = CropVideoBackend.wrap(inner, (5, 5, 55, 55))
+    assert cb.img_shape == (50, 50, 1)
+    assert cb.grayscale is True
+    ref = crop_frame(inner._read_frame(fidx), (5, 5, 55, 55))
+    assert_equal(cb[fidx], ref[..., [0]])

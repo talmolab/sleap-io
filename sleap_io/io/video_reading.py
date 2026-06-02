@@ -14,6 +14,8 @@ import numpy as np
 import simplejson as json
 
 from sleap_io.io import _remote
+from sleap_io.transform.frame import crop_frame
+from sleap_io.transform.points import crop_points, uncrop_points
 
 try:
     import cv2
@@ -1165,6 +1167,9 @@ class HDF5Video(VideoBackend):
         validator=attrs.validators.in_(["channels_last", "channels_first"]),
     )
     frame_map: dict[int, int] = attrs.field(init=False, default=attrs.Factory(dict))
+    _can_push_crop_cached: bool | None = attrs.field(
+        init=False, default=None, repr=False, eq=False
+    )
     source_filename: str | None = None
     source_inds: np.ndarray | None = None
     image_format: str = "hdf5"
@@ -1596,6 +1601,232 @@ class HDF5Video(VideoBackend):
 
         return imgs
 
+    @property
+    def _can_push_crop(self) -> bool:
+        """Whether this dataset supports HDF5 crop pushdown (dataset-level gate).
+
+        Pushdown reads only a spatial hyperslab of a frame instead of decoding the
+        whole frame, but it is only valid (and beneficial) for raw rank-4 chunked
+        datasets with sub-frame spatial chunking and no embedded/frame-mapped
+        subset. This is the dataset-level gate only (the per-call "crop smaller than
+        the chunk span" predicate is evaluated in :meth:`read_crop`/:meth:`read_crops`).
+        The probe reflects the immutable on-disk layout, so the result is cached
+        after the first call (no file open per read).
+
+        Returns:
+            ``True`` if the dataset is a raw (``image_format == "hdf5"``) rank-4
+            chunked array with sub-frame spatial chunking and an empty
+            ``frame_map``; ``False`` otherwise (including any error while probing,
+            so a non-applicable dataset never raises).
+        """
+        # Cheap short-circuit (no file open) for embedded/frame-mapped datasets.
+        if self.image_format != "hdf5" or self.frame_map:
+            return False
+        if self._can_push_crop_cached is None:
+            self._can_push_crop_cached = self._probe_can_push_crop()
+        return self._can_push_crop_cached
+
+    def _probe_can_push_crop(self) -> bool:
+        """Probe the on-disk layout for pushdown eligibility (opens the file once)."""
+        try:
+            with self._open_h5() as f:
+                ds = f[self.dataset]
+                if ds.ndim != 4 or ds.chunks is None:
+                    return False
+                chunks = ds.chunks
+                if self.input_format == "channels_first":
+                    # On-disk layout is (F, C, W, H).
+                    disk_w, disk_h = ds.shape[2], ds.shape[3]
+                    return chunks[2] < disk_w or chunks[3] < disk_h
+                # channels_last on-disk layout is (F, H, W, C).
+                height, width = ds.shape[1], ds.shape[2]
+                return chunks[1] < height or chunks[2] < width
+        except (OSError, KeyError, TypeError):  # pragma: no cover - defensive
+            return False
+
+    def read_crop(
+        self,
+        frame_idx: int,
+        crop: tuple[int, int, int, int],
+        fill: int | tuple[int, ...] = 0,
+    ) -> np.ndarray | None:
+        """Read a spatial hyperslab of a frame, padded to the crop shape.
+
+        This is the single-frame HDF5 crop pushdown hook consumed by
+        :class:`CropVideoBackend`. When applicable, it reads only the spatial
+        region of the frame that overlaps ``crop`` directly from the chunked
+        dataset (avoiding a full-frame decode) and pads out-of-bounds regions
+        exactly as :func:`sleap_io.transform.frame.crop_frame` would.
+
+        Args:
+            frame_idx: Index of the frame to read (source-video index; mapped
+                through ``frame_map`` if present, though pushdown is gated off when
+                a ``frame_map`` exists).
+            crop: Crop region ``(x1, y1, x2, y2)`` with ``x2``/``y2`` exclusive.
+                May be negative or exceed the frame bounds (padded with ``fill``).
+            fill: Fill value for out-of-bounds regions.
+
+        Returns:
+            A ``(y2 - y1, x2 - x1, C)`` array (pre-grayscale, ``dtype == ds.dtype``)
+            byte-identical to ``crop_frame(self._read_frame(frame_idx), crop,
+            fill)`` when pushdown is applicable; otherwise ``None`` to signal the
+            caller should fall back to a full-frame decode plus ``crop_frame``.
+            Never raises for out-of-bounds crops.
+        """
+        if not self._can_push_crop:
+            return None
+        try:
+            if self.keep_open:
+                if self._open_reader is None:
+                    self._open_reader = self._open_h5()
+                f = self._open_reader
+                ds = f[self.dataset]
+                return self._read_crop_from_ds(ds, frame_idx, crop, fill)
+            else:
+                with self._open_h5() as f:
+                    ds = f[self.dataset]
+                    return self._read_crop_from_ds(ds, frame_idx, crop, fill)
+        except (OSError, KeyError, IndexError):  # pragma: no cover - defensive
+            return None
+
+    def read_crops(
+        self,
+        frame_inds: list,
+        crop: tuple[int, int, int, int],
+        fill: int | tuple[int, ...] = 0,
+    ) -> np.ndarray | None:
+        """Batched :meth:`read_crop`.
+
+        Args:
+            frame_inds: List of source-video frame indices to read.
+            crop: Crop region ``(x1, y1, x2, y2)`` with ``x2``/``y2`` exclusive.
+            fill: Fill value for out-of-bounds regions.
+
+        Returns:
+            A ``(N, y2 - y1, x2 - x1, C)`` array byte-identical to stacking
+            per-frame ``crop_frame`` results, or ``None`` to fall back to a
+            full-frame decode plus ``crop_frame``.
+        """
+        if not self._can_push_crop:
+            return None
+        try:
+            if self.keep_open:
+                if self._open_reader is None:
+                    self._open_reader = self._open_h5()
+                f = self._open_reader
+                ds = f[self.dataset]
+                return self._stack_crops(ds, frame_inds, crop, fill)
+            else:
+                with self._open_h5() as f:
+                    ds = f[self.dataset]
+                    return self._stack_crops(ds, frame_inds, crop, fill)
+        except (OSError, KeyError, IndexError):  # pragma: no cover - defensive
+            return None
+
+    def _stack_crops(
+        self,
+        ds: h5py.Dataset,
+        frame_inds: list,
+        crop: tuple[int, int, int, int],
+        fill: int | tuple[int, ...],
+    ) -> np.ndarray | None:
+        """Stack per-frame crop reads, falling back to ``None`` if the gate declines.
+
+        The per-call gate in :meth:`_read_crop_from_ds` is frame-index independent, so
+        a batch is uniformly all-arrays or all-``None``; returning ``None`` on any
+        ``None`` keeps batched reads byte-for-byte consistent with the scalar path
+        (the caller then decodes the full frames and crops them).
+
+        Args:
+            ds: The open ``h5py.Dataset`` (raw rank-4).
+            frame_inds: Frame indices to read.
+            crop: Crop region ``(x1, y1, x2, y2)``.
+            fill: Fill value for out-of-bounds regions.
+
+        Returns:
+            A ``(N, y2 - y1, x2 - x1, C)`` array, or ``None`` to signal fallback.
+        """
+        parts = [self._read_crop_from_ds(ds, i, crop, fill) for i in frame_inds]
+        if any(p is None for p in parts):
+            return None
+        return np.stack(parts, axis=0)
+
+    def _read_crop_from_ds(
+        self,
+        ds: h5py.Dataset,
+        frame_idx: int,
+        crop: tuple[int, int, int, int],
+        fill: int | tuple[int, ...],
+    ) -> np.ndarray | None:
+        """Read and pad one frame's crop region from an open dataset.
+
+        Performs the per-call gate (crop must be smaller than the chunk span on at
+        least one spatial axis) and the clamp+pad hyperslab read. Axis ordering is
+        derived from ``ds.shape`` rather than assumed. Pushdown is structurally gated
+        off for frame-mapped/embedded datasets (see :attr:`_can_push_crop`), so
+        ``frame_idx`` is always a raw source index here.
+
+        Args:
+            ds: The open ``h5py.Dataset`` (raw rank-4).
+            frame_idx: Frame index (raw source index; no ``frame_map`` remap needed).
+            crop: Crop region ``(x1, y1, x2, y2)``.
+            fill: Fill value for out-of-bounds regions.
+
+        Returns:
+            The ``(y2 - y1, x2 - x1, C)`` cropped/padded frame, or ``None`` if the
+            per-call gate decides a full read is at least as good.
+        """
+        x1, y1, x2, y2 = crop
+        chunks = ds.chunks
+
+        if self.input_format == "channels_first":
+            # On-disk layout (F, C, W, H): x maps to axis 2 (W), y to axis 3 (H).
+            channels = ds.shape[1]
+            disk_w, disk_h = ds.shape[2], ds.shape[3]
+            width, height = disk_w, disk_h
+            chunk_w, chunk_h = chunks[2], chunks[3]
+        else:
+            # channels_last (F, H, W, C).
+            height, width, channels = ds.shape[1], ds.shape[2], ds.shape[3]
+            chunk_h, chunk_w = chunks[1], chunks[2]
+
+        # Per-call gate: only push down when the crop touches fewer spatial chunks
+        # than the full frame does on at least one axis. If the (in-bounds) crop
+        # already touches every chunk on both spatial axes, a hyperslab read buys
+        # nothing over a full read, so fall back.
+        crop_w, crop_h = x2 - x1, y2 - y1
+        in_sx1, in_sy1 = max(0, x1), max(0, y1)
+        in_sx2, in_sy2 = min(width, x2), min(height, y2)
+        if in_sx2 <= in_sx1 or in_sy2 <= in_sy1:
+            # Fully outside on at least one axis: no valid source pixels to read,
+            # so the hyperslab touches no chunks; pushdown is trivially beneficial.
+            n_chunks_w = n_chunks_h = 0
+        else:
+            n_chunks_w = (in_sx2 - 1) // chunk_w - in_sx1 // chunk_w + 1
+            n_chunks_h = (in_sy2 - 1) // chunk_h - in_sy1 // chunk_h + 1
+        frame_chunks_w = -(-width // chunk_w)
+        frame_chunks_h = -(-height // chunk_h)
+        if n_chunks_w >= frame_chunks_w and n_chunks_h >= frame_chunks_h:
+            return None
+
+        # frame_map is always empty here: _can_push_crop gates pushdown off for
+        # frame-mapped/embedded datasets, so frame_idx is a raw source index.
+        out = np.full((crop_h, crop_w, channels), fill, dtype=ds.dtype)
+
+        # Clamp the requested rect to the valid frame bounds.
+        sx1, sy1 = max(0, x1), max(0, y1)
+        sx2, sy2 = min(width, x2), min(height, y2)
+        if sx2 > sx1 and sy2 > sy1:
+            if self.input_format == "channels_first":
+                region = np.transpose(ds[frame_idx, :, sx1:sx2, sy1:sy2], (2, 1, 0))
+            else:
+                region = ds[frame_idx, sy1:sy2, sx1:sx2, :]
+            out[
+                sy1 - y1 : sy1 - y1 + (sy2 - sy1),
+                sx1 - x1 : sx1 - x1 + (sx2 - sx1),
+            ] = region
+        return out
+
 
 @attrs.define
 class ImageVideo(VideoBackend):
@@ -1970,3 +2201,273 @@ class TiffVideo(VideoBackend):
                 return frames
             else:
                 raise ValueError(f"Unknown format: {self.format}")
+
+
+@attrs.define(eq=False)
+class CropVideoBackend(VideoBackend):
+    """Virtual, axis-aligned, on-read crop of an inner :class:`VideoBackend`.
+
+    Wraps an inner backend and reports a cropped ``(F, h, w, c)`` view. Frames are
+    decoded by the inner backend, then cropped/padded by
+    :func:`sleap_io.transform.frame.crop_frame` (byte-identical), so no pixels are
+    copied or re-encoded on disk. Frame count is unchanged (a crop is spatial, not
+    temporal). Reports the cropped shape/grayscale and is a drop-in substitute
+    anywhere a ``VideoBackend`` is accepted.
+
+    Equality is by object identity (``eq=False``): inherited cache fields
+    (``_cached_shape``, ``_open_reader``, ...) would otherwise pollute value
+    equality, and dedup never relies on backend ``==`` (it uses an explicit crop
+    key). Always construct via :meth:`wrap` (never the raw constructor) so the
+    "inner is never a crop" invariant and fill-aware flatten hold by construction.
+
+    Attributes:
+        inner: The wrapped source backend. Decodes full frames; this wrapper crops
+            its output. Invariant: ``inner`` is never itself a ``CropVideoBackend``
+            (enforced by :meth:`wrap`).
+        crop: Crop region ``(x1, y1, x2, y2)``, ``x2``/``y2`` exclusive. May be
+            negative or exceed source bounds; out-of-bounds regions are pad-filled.
+            Stored as a tuple of ints.
+        fill: Fill value for out-of-bounds regions, forwarded to ``crop_frame``.
+        owns_inner: Whether this wrapper owns the inner backend's decode handle. If
+            ``True`` (the default), :meth:`close` cascades to ``inner.close()``; if
+            ``False`` (a shared-decode mosaic tile), it does not, so closing one
+            tile does not tear down siblings sharing the inner.
+        filename: Derived from ``inner.filename`` in post-init; NOT a constructor
+            argument.
+    """
+
+    filename: str | Path | list[str] | list[Path] = attrs.field(
+        init=False, default=None
+    )
+    inner: VideoBackend = attrs.field(kw_only=True)
+    crop: tuple[int, int, int, int] = attrs.field(
+        kw_only=True, converter=lambda c: tuple(int(v) for v in c)
+    )
+    fill: int | tuple[int, ...] = attrs.field(default=0, kw_only=True)
+    owns_inner: bool = attrs.field(default=True, kw_only=True)
+
+    def __attrs_post_init__(self) -> None:
+        """Derive ``filename`` from the inner; inherit resolved grayscale/fps lazily."""
+        object.__setattr__(self, "filename", getattr(self.inner, "filename", None))
+        # Inherit only an ALREADY-resolved inner grayscale; never force a decode at
+        # construction (keeps crop construction lazy). When unresolved, grayscale is
+        # resolved on first real access via the overridden ``detect_grayscale`` /
+        # ``img_shape``, always on the inner's FULL frame (so a degenerate crop never
+        # skews detection).
+        if self.grayscale is None and self.inner.grayscale is not None:
+            object.__setattr__(self, "grayscale", self.inner.grayscale)
+        # Carry fps so a closed/non-MediaVideo inner still reports fps.
+        if self._fps is None:
+            object.__setattr__(self, "_fps", getattr(self.inner, "_fps", None))
+
+    @classmethod
+    def wrap(
+        cls,
+        inner: VideoBackend,
+        crop: tuple[int, int, int, int],
+        fill: int | tuple[int, ...] = 0,
+        owns_inner: bool = True,
+    ) -> "CropVideoBackend":
+        """Wrap ``inner`` in a crop view, flattening crop-of-crop when safe.
+
+        Flattens (composes into a single wrapper) only when ``inner`` is itself a
+        ``CropVideoBackend``, the fills agree, AND the outer crop lies fully within
+        the inner cropped frame ``[0, iw] x [0, ih]`` (``iw = ix2 - ix1``,
+        ``ih = iy2 - iy1``). Otherwise it nests, preserving byte-parity:
+
+        - Different fills: the inner crop's materialized pad of value ``inner.fill``
+          would be silently replaced after a flatten.
+        - Outer crop exceeds the inner frame: a flatten would read real source
+          pixels where the nested view pads with ``fill``.
+
+        The flatten composition law expresses the outer rect in source coordinates:
+        ``(ix1 + ox1, iy1 + oy1, ix1 + ox2, iy1 + oy2)``. A flattened ``inner`` is
+        always unwrapped to ``inner.inner`` so the "inner is never a crop"
+        invariant holds.
+
+        Args:
+            inner: The backend to wrap (may itself be a ``CropVideoBackend``).
+            crop: Outer crop region ``(x1, y1, x2, y2)``, expressed in the inner
+                (possibly already-cropped) frame.
+            fill: Fill value for out-of-bounds regions.
+            owns_inner: Whether the returned wrapper owns the inner's decode handle
+                (see the class ``owns_inner`` attribute).
+
+        Returns:
+            A ``CropVideoBackend`` whose ``inner`` is never a crop.
+        """
+        if isinstance(inner, CropVideoBackend) and inner.fill == fill:
+            ix1, iy1, ix2, iy2 = inner.crop
+            ox1, oy1, ox2, oy2 = (int(v) for v in crop)
+            iw, ih = ix2 - ix1, iy2 - iy1
+            if 0 <= ox1 and 0 <= oy1 and ox2 <= iw and oy2 <= ih:
+                crop = (ix1 + ox1, iy1 + oy1, ix1 + ox2, iy1 + oy2)
+                inner = inner.inner  # invariant: inner.inner is never a crop
+        return cls(inner=inner, crop=crop, fill=fill, owns_inner=owns_inner)
+
+    @property
+    def num_frames(self) -> int:
+        """Number of frames in the video (identity: a crop is spatial)."""
+        return self.inner.num_frames
+
+    @property
+    def img_shape(self) -> tuple[int, int, int]:
+        """Shape of a single cropped frame as ``(height, width, channels)``."""
+        x1, y1, x2, y2 = self.crop
+        if self.grayscale is None:
+            self.detect_grayscale()
+        c = 1 if self.grayscale else self.inner.img_shape[2]
+        return int(y2 - y1), int(x2 - x1), int(c)
+
+    @property
+    def dataset(self) -> object | None:
+        """Inner backend's dataset name (delegated; ``None`` if absent)."""
+        return getattr(self.inner, "dataset", None)
+
+    @property
+    def input_format(self) -> object | None:
+        """Inner backend's input format (delegated; ``None`` if absent)."""
+        return getattr(self.inner, "input_format", None)
+
+    def has_frame(self, frame_idx: int) -> bool:
+        """Check if a frame index is contained in the video (delegates to inner).
+
+        Args:
+            frame_idx: Index of frame to check.
+
+        Returns:
+            ``True`` if the inner backend contains the index, else ``False``.
+        """
+        return self.inner.has_frame(frame_idx)
+
+    def read_test_frame(self) -> np.ndarray:
+        """Read the inner backend's UNCROPPED test frame (frame_map-safe)."""
+        return self.inner.read_test_frame()
+
+    def detect_grayscale(self, test_img: np.ndarray | None = None) -> bool:
+        """Resolve grayscale from the inner, ignoring any passed cropped image.
+
+        Args:
+            test_img: Ignored; grayscale is always resolved on the inner's full
+                frame so a degenerate (e.g. 1px-wide) crop never breaks detection.
+
+        Returns:
+            Whether the video is grayscale (also cached on ``self.grayscale``).
+        """
+        gs = self.inner.grayscale
+        if gs is None:
+            gs = self.inner.detect_grayscale()
+        self.grayscale = gs
+        self._cached_shape = None
+        return gs
+
+    def close(self) -> None:
+        """Release this wrapper's handle and the inner's, if owned.
+
+        Always releases the wrapper's own (unused) cached reader via
+        :meth:`VideoBackend.close`, then cascades to ``inner.close()`` only when
+        ``owns_inner`` (a shared-decode mosaic tile leaves the shared inner open).
+        """
+        super().close()
+        if self.owns_inner:
+            self.inner.close()
+
+    def _source_frame(self, frame_idx: int) -> tuple[np.ndarray, bool]:
+        """Return ``(frame, already_cropped)`` for a single frame.
+
+        Tries the inner's HDF5 crop pushdown first (returns the final cropped
+        frame); otherwise delegates to ``inner._read_frame`` (NOT ``get_frame``, so
+        the base ``get_frame`` applies the grayscale slice exactly once to our
+        cropped result).
+
+        Args:
+            frame_idx: Index of frame to read.
+
+        Returns:
+            A tuple of the frame and a flag indicating whether it is already
+            cropped (pushdown) or still a full source frame.
+        """
+        read_crop = getattr(self.inner, "read_crop", None)
+        if read_crop is not None:
+            out = read_crop(frame_idx, self.crop, self.fill)
+            if out is not None:
+                return out, True
+        return self.inner._read_frame(frame_idx), False
+
+    def _apply_view(self, frame: np.ndarray, frame_idx: int) -> np.ndarray:
+        """Crop/pad a full source frame into the cropped view.
+
+        Args:
+            frame: A full source frame ``(H, W, C)``.
+            frame_idx: Reserved for a future per-frame-varying window; unused.
+
+        Returns:
+            The cropped frame, materialized as a contiguous owned array.
+        """
+        return np.ascontiguousarray(crop_frame(frame, self.crop, fill=self.fill))
+
+    def _read_frame(self, frame_idx: int) -> np.ndarray:
+        """Read a single cropped frame.
+
+        Args:
+            frame_idx: Index of frame to read.
+
+        Returns:
+            The cropped frame ``(crop_h, crop_w, C)``.
+        """
+        src, already_cropped = self._source_frame(frame_idx)
+        return src if already_cropped else self._apply_view(src, frame_idx)
+
+    def _read_frames(self, frame_inds: list) -> np.ndarray:
+        """Read a list of cropped frames.
+
+        Tries the inner's batched HDF5 crop pushdown first; otherwise reads full
+        frames from the inner and crops them. The fully-in-bounds case uses a basic
+        slice then ``.copy()`` to defuse aliasing into the inner's reused decode
+        buffer; otherwise it pads per-frame via ``crop_frame``.
+
+        Args:
+            frame_inds: List of frame indices to read.
+
+        Returns:
+            Cropped frames ``(N, crop_h, crop_w, C)``.
+        """
+        read_crops = getattr(self.inner, "read_crops", None)
+        if read_crops is not None:
+            out = read_crops(frame_inds, self.crop, self.fill)
+            if out is not None:
+                return out
+        imgs = self.inner._read_frames(frame_inds)
+        x1, y1, x2, y2 = self.crop
+        h, w = imgs.shape[1], imgs.shape[2]
+        if 0 <= x1 and 0 <= y1 and x2 <= w and y2 <= h:
+            return imgs[:, y1:y2, x1:x2].copy()
+        return np.stack(
+            [crop_frame(im, self.crop, fill=self.fill) for im in imgs], axis=0
+        )
+
+    def to_crop_coords(self, points: np.ndarray) -> np.ndarray:
+        """Map source-frame ``(x, y)`` coordinates into the cropped frame.
+
+        Args:
+            points: Coordinate array of shape ``(..., 2)``. NaN values are
+                preserved.
+
+        Returns:
+            Coordinates translated by ``-(x1, y1)`` (copy-based, NaN-preserving).
+        """
+        return crop_points(points, self.crop)
+
+    def to_source_coords(self, points: np.ndarray) -> np.ndarray:
+        """Map cropped-frame ``(x, y)`` coordinates back to source coordinates.
+
+        Inverse of :meth:`to_crop_coords`.
+
+        Args:
+            points: Coordinate array of shape ``(..., 2)``. NaN values are
+                preserved.
+
+        Returns:
+            Coordinates translated by ``+(x1, y1)`` (copy-based, NaN-preserving).
+        """
+        return uncrop_points(points, self.crop)
