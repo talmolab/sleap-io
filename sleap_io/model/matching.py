@@ -504,6 +504,26 @@ def _is_same_file_direct(video1: Video, video2: Video) -> bool:
     return True
 
 
+def _crop_key(video: Video) -> tuple[int, int, int, int] | None:
+    """Return a video's crop rect as a hashable identity key, or ``None``.
+
+    This is the per-video crop identity used to disambiguate distinct crops
+    (e.g. mosaic tiles) of one underlying source file. It reads the composed
+    source-coordinate crop rect via :meth:`Video._crop_tuple` (which prefers
+    ``backend.crop`` on an open ``CropVideoBackend`` and falls back to
+    ``backend_metadata["crop"]`` when closed), normalized to a plain tuple.
+
+    Args:
+        video: The video to read the crop key from.
+
+    Returns:
+        The crop rect ``(x1, y1, x2, y2)`` as a tuple, or ``None`` when the
+        video is not cropped (or does not expose ``_crop_tuple``).
+    """
+    crop = getattr(video, "_crop_tuple", lambda: None)()
+    return tuple(crop) if crop is not None else None
+
+
 def is_same_file(video1: Video, video2: Video) -> bool:
     """Check if two videos refer to the same underlying file.
 
@@ -511,21 +531,32 @@ def is_same_file(video1: Video, video2: Video) -> bool:
     - Traversing source_video/original_video chains to find root videos
     - Using os.path.samefile() when files exist (handles symlinks)
     - Falling back to path resolution and string comparison
+    - Requiring matching crop rects (so two distinct crops of one source file
+      -- e.g. mosaic tiles -- are NOT collapsed into one video)
 
     Args:
         video1: First video to compare.
         video2: Second video to compare.
 
     Returns:
-        True if both videos refer to the same underlying file.
+        True if both videos refer to the same underlying file AND have the same
+        crop identity.
 
     Notes:
         This is stricter than matches_path(strict=False) - it only returns True
         when files are verifiably the same, not just same basename.
+
+        The crop keys are read from the ORIGINAL videos (not the resolved
+        roots): two tiles share one uncropped source whose own crop key is
+        ``None``, so the disambiguation must use each video's own crop rect.
+        For non-cropped videos both keys are ``None``, so behavior is unchanged.
     """
     root1 = _get_root_video(video1)
     root2 = _get_root_video(video2)
-    return _is_same_file_direct(root1, root2)
+    if not _is_same_file_direct(root1, root2):
+        return False
+    # Same underlying file: distinct crops of it are distinct videos.
+    return _crop_key(video1) == _crop_key(video2)
 
 
 def _get_effective_shape(video: Video) -> tuple | None:
@@ -642,6 +673,43 @@ def original_videos_conflict(video1: Video, video2: Video) -> bool:
 
     # At least one file exists and they don't match - conflict
     return True
+
+
+def _same_file_different_crop(video1: Video, video2: Video) -> bool:
+    """Check if two videos are the same source file but DIFFERENT crops.
+
+    This is the definitive disambiguation for mosaic tiles: two distinct crops
+    of one physical file share a root file (so file-identity and path rungs
+    would otherwise collapse them) but have different crop rects, making them
+    genuinely different videos.
+
+    Args:
+        video1: First video to compare.
+        video2: Second video to compare.
+
+    Returns:
+        True only when the two videos resolve to the same underlying root file
+        (verifiable identity or matching root basename) AND their crop keys
+        differ. For non-cropped videos (both keys ``None``) this is always
+        False, so behavior for non-crop videos is unchanged.
+    """
+    if _crop_key(video1) == _crop_key(video2):
+        return False
+
+    root1 = _get_root_video(video1)
+    root2 = _get_root_video(video2)
+    if _is_same_file_direct(root1, root2):
+        return True
+
+    # Even without verifiable file identity, a shared root basename means the
+    # path/leaf rungs could re-match the pair; differing crops still disambiguate.
+    from pathlib import Path
+
+    fn1 = root1.filename
+    fn2 = root2.filename
+    if isinstance(fn1, list) or isinstance(fn2, list):
+        return False
+    return Path(fn1).name == Path(fn2).name
 
 
 @attrs.define
@@ -869,7 +937,13 @@ class VideoMatcher:
             if original_videos_conflict(video1, video2):
                 return False
 
-            # Definitive: same file identity
+            # Definitive: same source file but different crop (mosaic tiles).
+            # Must run before any path rung, which would otherwise re-match the
+            # shared root file. For non-crop videos this is always False.
+            if _same_file_different_crop(video1, video2):
+                return False
+
+            # Definitive: same file identity (crop-aware)
             if is_same_file(video1, video2):
                 return True
 
@@ -950,6 +1024,14 @@ class VideoMatcher:
                 # REJECTION CHECK 2: original_video conflict
                 if original_videos_conflict(candidate, incoming):
                     # Both have provenance pointing to different files - skip
+                    continue
+
+                # REJECTION CHECK 3: same source file, different crop.
+                # Distinct crops (mosaic tiles) of one physical file share a
+                # root file, so dropping them here prevents the file-identity,
+                # strict-path, and leaf-uniqueness rungs from collapsing them.
+                # For non-crop candidates this is always False.
+                if _same_file_different_crop(candidate, incoming):
                     continue
 
                 viable.append(candidate)

@@ -1317,6 +1317,7 @@ class Labels:
         from sleap_io.model.matching import (
             VideoMatcher,
             VideoMatchMethod,
+            _crop_key,
             is_same_file,
         )
 
@@ -1367,17 +1368,31 @@ class Labels:
         if matcher is None:
             # Tiered cascade: prefer a definitive (file identity / exact path)
             # match so a shared basename never shadows a true match.
+            # The strict-path and basename rungs must also be crop-aware: two
+            # distinct crops (mosaic tiles) of one source share a path, so an
+            # unguarded path match would mis-resolve one tile to the other.
+            # `is_same_file` is already crop-aware; for uncropped videos both
+            # crop keys are None, so these guards leave behavior unchanged.
             definitive = [
                 v
                 for v in self.videos
-                if is_same_file(v, query) or v.matches_path(query, strict=True)
+                if is_same_file(v, query)
+                or (
+                    v.matches_path(query, strict=True)
+                    and _crop_key(v) == _crop_key(query)
+                )
             ]
             if len(definitive) > 1:
                 raise _ambiguous(definitive, "by file identity")
             if definitive:
                 return definitive[0]
 
-            basename = [v for v in self.videos if v.matches_path(query, strict=False)]
+            basename = [
+                v
+                for v in self.videos
+                if v.matches_path(query, strict=False)
+                and _crop_key(v) == _crop_key(query)
+            ]
             if len(basename) > 1:
                 raise _ambiguous(basename, "by basename")
             return basename[0] if basename else None

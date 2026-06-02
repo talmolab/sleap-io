@@ -4,6 +4,7 @@ import numpy as np
 
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.labels import Labels
 from sleap_io.model.matching import (
     ConflictResolution,
     ErrorMode,
@@ -20,7 +21,9 @@ from sleap_io.model.matching import (
     TrackMatchMethod,
     VideoMatcher,
     VideoMatchMethod,
+    _crop_key,
     _is_same_file_direct,
+    _same_file_different_crop,
     is_same_file,
 )
 from sleap_io.model.skeleton import Skeleton
@@ -2764,3 +2767,163 @@ class TestFindMatchWithLabels:
         result = matcher.find_match(video_incoming, [video_candidate])
         # Should return None since paths don't match (covers line 1030)
         assert result is None
+
+
+class TestVideoMatcherCropAware:
+    """Crop-aware matching/dedup for mosaic tiles (D-127/D-128).
+
+    Two equal-size crops of ONE physical file (mosaic tiles) share a root file,
+    so without crop awareness they collapse into a single video across the four
+    dedup sites (add_video, match_video, VideoMatcher.match, find_match). These
+    tests pin the crop-disambiguated behavior while asserting non-crop videos
+    are unaffected.
+    """
+
+    def _tiles(self, src_path):
+        """Build two equal-size left/right tiles of one source video."""
+        src = Video.from_filename(src_path)
+        w, h = 384, 384
+        w2 = w // 2
+        left = src.crop((0, 0, w2, h))
+        right = src.crop((w2, 0, w, h))
+        return src, left, right
+
+    def test_crop_key_reads_crop_tuple(self, centered_pair_low_quality_path):
+        """_crop_key returns the crop rect for crops and None otherwise."""
+        src, left, right = self._tiles(centered_pair_low_quality_path)
+        assert _crop_key(left) == (0, 0, 192, 384)
+        assert _crop_key(right) == (192, 0, 384, 384)
+        assert _crop_key(src) is None
+
+    def test_crop_key_defensive_no_method(self):
+        """_crop_key tolerates objects without _crop_tuple (returns None)."""
+
+        class NoCrop:
+            pass
+
+        assert _crop_key(NoCrop()) is None
+
+    def test_is_same_file_different_crops(self, centered_pair_low_quality_path):
+        """Two distinct crops of one file are NOT the same file (D-127)."""
+        src, left, right = self._tiles(centered_pair_low_quality_path)
+        assert not is_same_file(left, right)
+
+    def test_is_same_file_identical_crops(self, centered_pair_low_quality_path):
+        """Two identical crops of one file ARE the same file (D-127)."""
+        src = Video.from_filename(centered_pair_low_quality_path)
+        a = src.crop((0, 0, 192, 384))
+        b = src.crop((0, 0, 192, 384))
+        assert is_same_file(a, b)
+
+    def test_is_same_file_noncrop_unchanged(self, centered_pair_low_quality_path):
+        """Non-crop videos of the same file still match (additive guard)."""
+        v1 = Video.from_filename(centered_pair_low_quality_path)
+        v2 = Video.from_filename(centered_pair_low_quality_path)
+        assert is_same_file(v1, v2)
+
+    def test_same_file_different_crop_helper(self, centered_pair_low_quality_path):
+        """_same_file_different_crop is True only for differing crops of one file."""
+        src, left, right = self._tiles(centered_pair_low_quality_path)
+        assert _same_file_different_crop(left, right)
+        # Identical crops: not "different crop".
+        same = src.crop((0, 0, 192, 384))
+        assert not _same_file_different_crop(left, same)
+        # Non-crop same file: not "different crop".
+        v1 = Video.from_filename(centered_pair_low_quality_path)
+        v2 = Video.from_filename(centered_pair_low_quality_path)
+        assert not _same_file_different_crop(v1, v2)
+
+    def test_same_file_different_crop_via_basename(
+        self, centered_pair_low_quality_path
+    ):
+        """Shared root basename + differing crops disambiguates even unresolved."""
+        src = Video.from_filename(centered_pair_low_quality_path)
+        left = src.crop((0, 0, 192, 384))
+        # A crop of a same-basename file in a different directory: roots are not
+        # verifiably the same file, but the basename rung could re-match them.
+        other = Video(filename="/elsewhere/centered_pair_low_quality.mp4")
+        other_crop = Video(
+            filename="/elsewhere/centered_pair_low_quality.mp4",
+            source_video=other,
+        )
+        other_crop.backend_metadata = {"crop": [192, 0, 384, 384]}
+        assert _same_file_different_crop(left, other_crop)
+
+    def test_match_rejects_different_crops(self, centered_pair_low_quality_path):
+        """VideoMatcher.match(tileA, tileB) is False for differing crops (c)."""
+        src, left, right = self._tiles(centered_pair_low_quality_path)
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert not matcher.match(left, right)
+
+    def test_match_accepts_identical_crops(self, centered_pair_low_quality_path):
+        """VideoMatcher.match accepts identical crops of one file (d)."""
+        src = Video.from_filename(centered_pair_low_quality_path)
+        a = src.crop((0, 0, 192, 384))
+        b = src.crop((0, 0, 192, 384))
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.match(a, b)
+
+    def test_match_noncrop_same_file(self, centered_pair_low_quality_path):
+        """VideoMatcher.match still matches non-crop same-file videos (e)."""
+        v1 = Video.from_filename(centered_pair_low_quality_path)
+        v2 = Video.from_filename(centered_pair_low_quality_path)
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.match(v1, v2)
+
+    def test_find_match_drops_different_crop(self, centered_pair_low_quality_path):
+        """find_match(tileB, [tileA]) does NOT return tileA (c)."""
+        src, left, right = self._tiles(centered_pair_low_quality_path)
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(right, [left]) is None
+
+    def test_find_match_picks_correct_crop(self, centered_pair_low_quality_path):
+        """find_match resolves to the matching tile, never the other (c)."""
+        src, left, right = self._tiles(centered_pair_low_quality_path)
+        right_eq = src.crop((192, 0, 384, 384))
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        # Among both tiles, the right-equivalent resolves to right, not left.
+        assert matcher.find_match(right_eq, [left, right]) is right
+
+    def test_find_match_identical_crop(self, centered_pair_low_quality_path):
+        """find_match matches an identical crop (d)."""
+        src = Video.from_filename(centered_pair_low_quality_path)
+        a = src.crop((0, 0, 192, 384))
+        a_eq = src.crop((0, 0, 192, 384))
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(a_eq, [a]) is a
+
+    def test_find_match_noncrop_same_file(self, centered_pair_low_quality_path):
+        """find_match still matches non-crop same-file videos (e)."""
+        v1 = Video.from_filename(centered_pair_low_quality_path)
+        v2 = Video.from_filename(centered_pair_low_quality_path)
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(v1, [v2]) is v2
+
+    def test_add_video_keeps_distinct_tiles(self, centered_pair_low_quality_path):
+        """Labels.add_video keeps two distinct tiles separate (a)."""
+        src, left, right = self._tiles(centered_pair_low_quality_path)
+        labels = Labels()
+        labels.add_video(left)
+        labels.add_video(right)
+        assert len(labels.videos) == 2
+
+    def test_add_video_dedups_identical_crop(self, centered_pair_low_quality_path):
+        """Labels.add_video dedups identical crops to one (d)."""
+        src = Video.from_filename(centered_pair_low_quality_path)
+        a = src.crop((0, 0, 192, 384))
+        a_eq = src.crop((0, 0, 192, 384))
+        labels = Labels()
+        labels.add_video(a)
+        returned = labels.add_video(a_eq)
+        assert len(labels.videos) == 1
+        assert returned is a
+
+    def test_add_video_dedups_noncrop_same_file(self, centered_pair_low_quality_path):
+        """Labels.add_video still dedups non-crop same-file videos (e)."""
+        v1 = Video.from_filename(centered_pair_low_quality_path)
+        v2 = Video.from_filename(centered_pair_low_quality_path)
+        labels = Labels()
+        labels.add_video(v1)
+        returned = labels.add_video(v2)
+        assert len(labels.videos) == 1
+        assert returned is v1

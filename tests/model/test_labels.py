@@ -758,6 +758,81 @@ def test_match_video_image_sequence(centered_pair_frame_paths):
     assert labels.match_video(partial) is None
 
 
+def test_match_video_distinct_crops(centered_pair_low_quality_path):
+    """match_video keeps mosaic tiles distinct and resolves each correctly.
+
+    Two equal-size crops of one physical file share a root file. Without
+    crop-aware path rungs, a query for one tile would mis-resolve to the other
+    (or raise an ambiguity error). It must resolve to the matching tile.
+    """
+    src = Video.from_filename(centered_pair_low_quality_path)
+    left = src.crop((0, 0, 192, 384))
+    right = src.crop((192, 0, 384, 384))
+    labels = Labels(videos=[left, right])
+
+    # A fresh right-equivalent crop resolves to right, not left, no ambiguity.
+    right_eq = src.crop((192, 0, 384, 384))
+    assert labels.match_video(right_eq) is right
+    # And a left-equivalent resolves to left.
+    left_eq = src.crop((0, 0, 192, 384))
+    assert labels.match_video(left_eq) is left
+
+
+def test_match_video_identical_crop(centered_pair_low_quality_path):
+    """match_video resolves an identical crop to the stored crop."""
+    src = Video.from_filename(centered_pair_low_quality_path)
+    a = src.crop((0, 0, 192, 384))
+    labels = Labels(videos=[a])
+
+    a_eq = src.crop((0, 0, 192, 384))
+    assert labels.match_video(a_eq) is a
+
+
+def test_match_video_crop_not_basename_shadowed(centered_pair_low_quality_path):
+    """A crop query is not basename-matched to a different crop of one file."""
+    src = Video.from_filename(centered_pair_low_quality_path)
+    left = src.crop((0, 0, 192, 384))
+    labels = Labels(videos=[left])
+
+    # A different crop of the same source must not resolve to the left tile.
+    right = src.crop((192, 0, 384, 384))
+    assert labels.match_video(right) is None
+
+
+def test_add_video_distinct_crops_not_collapsed(centered_pair_low_quality_path):
+    """add_video keeps two distinct crops of one file as separate videos."""
+    src = Video.from_filename(centered_pair_low_quality_path)
+    left = src.crop((0, 0, 192, 384))
+    right = src.crop((192, 0, 384, 384))
+    labels = Labels()
+    labels.add_video(left)
+    labels.add_video(right)
+    assert len(labels.videos) == 2
+
+
+def test_add_video_identical_crops_dedup(centered_pair_low_quality_path):
+    """add_video dedups two identical crops of one file to a single video."""
+    src = Video.from_filename(centered_pair_low_quality_path)
+    a = src.crop((0, 0, 192, 384))
+    a_eq = src.crop((0, 0, 192, 384))
+    labels = Labels()
+    labels.add_video(a)
+    returned = labels.add_video(a_eq)
+    assert len(labels.videos) == 1
+    assert returned is a
+
+
+def test_add_video_noncrop_same_file_dedup(centered_pair_low_quality_path):
+    """add_video still dedups non-crop videos of the same file (additive)."""
+    v1 = Video.from_filename(centered_pair_low_quality_path)
+    v2 = Video.from_filename(centered_pair_low_quality_path)
+    labels = Labels()
+    labels.add_video(v1)
+    returned = labels.add_video(v2)
+    assert len(labels.videos) == 1
+    assert returned is v1
+
+
 def test_labels_save(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
     labels.save(tmp_path / "test.slp")
