@@ -681,6 +681,16 @@ img = sio.render_image(
 
 Overlay segmentation masks on images via `render_image`/`render_video` or standalone functions.
 
+!!! tip "Masks and label images are drawn automatically"
+    When no explicit `overlay` is passed and the labels carry annotations,
+    `render_video` (and `sio render`) auto-draw them: **label images take
+    precedence**, falling back to `SegmentationMask` annotations
+    (`labels.get_masks(video=...)`, routed to the correct frame). `render_image`
+    auto-draws the frame's `masks` when no overlay is given. So
+    `sio render preds.slp -o out.mp4` draws segmentation predictions out of the
+    box. Pass an explicit `overlay` to override. Auto-drawing works on both RGB
+    and single-channel grayscale `(H, W, 1)` video.
+
 ### Using render_image / render_video
 
 The `overlay` parameter on `render_image` and `render_video` accepts label images, `SegmentationMask`, `ROI`, or `BoundingBox` objects:

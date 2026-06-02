@@ -3109,6 +3109,297 @@ def test_render_video_overlay_out_of_bounds():
 
 
 # ============================================================================
+# Issue #461: auto-draw segmentation masks + grayscale (H,W,1) support
+# ============================================================================
+
+
+def _make_mask_labels(n_frames=2, h=64, w=64, mask_box=(40, 60, 40, 60)):
+    """Create synthetic Labels whose frames carry segmentation masks.
+
+    Each frame gets one ``UserSegmentationMask`` covering ``mask_box`` (given as
+    ``(y0, y1, x0, x1)``) attached to the frame's ``masks`` list. The mask region
+    is deliberately kept away from the poses so rendering changes there can be
+    attributed to the mask and not pose markers.
+    """
+    skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = sio.Video(filename="dummy.mp4")
+    pts = np.array([[5, 5], [10, 10]], dtype=np.float32)
+    y0, y1, x0, x1 = mask_box
+
+    labeled_frames = []
+    for i in range(n_frames):
+        binary = np.zeros((h, w), dtype=bool)
+        binary[y0:y1, x0:x1] = True
+        mask = UserSegmentationMask.from_numpy(binary)
+        lf = sio.LabeledFrame(
+            video=video,
+            frame_idx=i,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        lf.masks.append(mask)
+        labeled_frames.append(lf)
+
+    return sio.Labels(
+        labeled_frames=labeled_frames, videos=[video], skeletons=[skeleton]
+    )
+
+
+def test_render_video_auto_draws_masks():
+    """render_video auto-draws labels.masks when no overlay is passed."""
+    labels = _make_mask_labels(n_frames=2, h=64, w=64)
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background=(128, 128, 128),
+        overlay_alpha=0.6,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 2
+    for i, frame in enumerate(frames):
+        # Masked region (50, 50) differs from the plain background.
+        assert not np.array_equal(frame[50, 50], [128, 128, 128]), (
+            f"Frame {i}: mask was not auto-drawn"
+        )
+        # Region outside the mask is untouched background.
+        assert np.array_equal(frame[0, 0], [128, 128, 128])
+
+
+def test_render_video_no_masks_leaves_background():
+    """Without masks (and no overlay), the background region is unchanged."""
+    labels = _make_synthetic_labels(n_frames=1, h=64, w=64)
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background=(128, 128, 128),
+        overlay_alpha=0.6,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # No mask -> a region away from the poses stays the plain background.
+    assert np.array_equal(frames[0][60, 5], [128, 128, 128])
+
+
+def test_render_video_explicit_overlay_takes_precedence_over_masks():
+    """An explicit overlay is used even when labels.masks exist."""
+    labels = _make_mask_labels(n_frames=1, h=64, w=64, mask_box=(40, 60, 40, 60))
+
+    # Explicit overlay marks a different region (top-left); mask is bottom-right.
+    overlay = np.zeros((64, 64), dtype=np.int32)
+    overlay[5:25, 5:25] = 1
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background=(128, 128, 128),
+        overlay=overlay,
+        overlay_alpha=0.6,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # Explicit overlay region is colored.
+    assert not np.array_equal(frames[0][15, 15], [128, 128, 128])
+    # Mask region is NOT drawn since an explicit overlay was provided.
+    assert np.array_equal(frames[0][50, 50], [128, 128, 128])
+
+
+def test_render_video_label_images_take_precedence_over_masks():
+    """label_images auto-overlay wins over masks (precedence unchanged)."""
+    skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = sio.Video(filename="dummy.mp4")
+
+    # label image marks top-left; mask marks bottom-right.
+    data = np.zeros((64, 64), dtype=np.int32)
+    data[5:25, 5:25] = 1
+    li = UserLabelImage(data=data)
+
+    binary = np.zeros((64, 64), dtype=bool)
+    binary[40:60, 40:60] = True
+    mask = UserSegmentationMask.from_numpy(binary)
+
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.label_images.append(li)
+    lf.masks.append(mask)
+    labels = sio.Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background=(128, 128, 128),
+        overlay_alpha=0.6,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # Label image region (top-left) is colored.
+    assert not np.array_equal(frames[0][15, 15], [128, 128, 128])
+    # Mask region (bottom-right) is NOT drawn since label_images take precedence.
+    assert np.array_equal(frames[0][50, 50], [128, 128, 128])
+
+
+def test_render_image_auto_draws_masks():
+    """render_image auto-draws the frame's masks when no overlay is passed."""
+    labels = _make_mask_labels(n_frames=1, h=64, w=64)
+    lf = labels.labeled_frames[0]
+
+    result = render_image(lf, background=(128, 128, 128))
+
+    assert result.shape == (64, 64, 3)
+    # Masked region is colored.
+    assert not np.array_equal(result[50, 50], [128, 128, 128])
+    # Background outside the mask is unchanged.
+    assert np.array_equal(result[0, 0], [128, 128, 128])
+
+
+def test_render_image_no_masks_no_overlay_leaves_background():
+    """render_image without masks/overlay leaves the background untouched."""
+    skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = sio.Video(filename="dummy.mp4")
+    pts = np.array([[5, 5], [10, 10]], dtype=np.float32)
+    lf = sio.LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+    )
+    sio.Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    result = render_image(lf, background=(128, 128, 128))
+    # No mask -> region away from the pose stays the plain background.
+    assert np.array_equal(result[50, 50], [128, 128, 128])
+
+
+def test_render_video_grayscale_single_channel_auto_masks(
+    tiff_image_sequence_path,
+):
+    """(H,W,1) grayscale video + auto masks does not crash and draws the mask."""
+    video = sio.Video.from_filename(tiff_image_sequence_path)
+    assert video[0].shape == (128, 128, 1)
+
+    skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    binary = np.zeros((128, 128), dtype=bool)
+    binary[80:110, 80:110] = True  # corner region away from poses
+    mask = UserSegmentationMask.from_numpy(binary)
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = sio.Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    # Reference: grayscale frame promoted to RGB (what the renderer starts from).
+    ref = np.repeat(video[0], 3, axis=-1)
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        overlay_alpha=0.6,
+        fps=30,
+        show_progress=False,
+    )
+
+    # Auto-overlay enables include_unlabeled, so every video frame is rendered.
+    assert len(frames) == len(video)
+    assert frames[0].shape == (128, 128, 3)
+    # Masked region on the labeled frame changed vs the promoted grayscale frame.
+    assert not np.array_equal(frames[0][95, 95], ref[95, 95])
+
+
+def test_render_video_grayscale_single_channel_explicit_overlay(
+    tiff_image_sequence_path,
+):
+    """(H,W,1) grayscale video + explicit overlay callback does not crash."""
+    video = sio.Video.from_filename(tiff_image_sequence_path)
+    assert video[0].shape == (128, 128, 1)
+
+    skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    binary = np.zeros((128, 128), dtype=bool)
+    binary[80:110, 80:110] = True
+    mask = UserSegmentationMask.from_numpy(binary)
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    labels = sio.Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    masks_by_frame = {0: [mask]}
+    ref = np.repeat(video[0], 3, axis=-1)
+
+    # Previously raised: ValueError: shape mismatch ... (N,3) vs (N,1).
+    frames = render_video(
+        labels,
+        save_path=None,
+        overlay=lambda i: masks_by_frame.get(i, []),
+        overlay_alpha=0.6,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    assert frames[0].shape == (128, 128, 3)
+    assert not np.array_equal(frames[0][95, 95], ref[95, 95])
+
+
+def test_render_image_grayscale_single_channel_auto_masks(
+    tiff_image_sequence_path,
+):
+    """render_image on a (H,W,1) frame auto-draws masks without crashing."""
+    video = sio.Video.from_filename(tiff_image_sequence_path)
+    assert video[0].shape == (128, 128, 1)
+
+    binary = np.zeros((128, 128), dtype=bool)
+    binary[80:110, 80:110] = True
+    mask = UserSegmentationMask.from_numpy(binary)
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+
+    ref = np.repeat(video[0], 3, axis=-1)
+    result = render_image(lf)
+
+    assert result.shape == (128, 128, 3)
+    assert not np.array_equal(result[95, 95], ref[95, 95])
+
+
+def test_render_video_grayscale_single_channel_centroids_no_overlay(
+    tiff_image_sequence_path,
+):
+    """(H,W,1) grayscale video + centroids (no overlay) promotes to RGB and draws.
+
+    Exercises the single-channel->RGB conversion in the centroid path (no overlay
+    promotes the image first), which the mask/overlay tests do not reach.
+    """
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.model.instance import Track
+
+    video = sio.Video.from_filename(tiff_image_sequence_path)
+    assert video[0].shape == (128, 128, 1)
+
+    track = Track(name="t1")
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.centroids.append(UserCentroid(x=95.0, y=95.0, track=track))
+    labels = sio.Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[sio.Skeleton(["A"])],
+        tracks=[track],
+    )
+
+    ref = np.repeat(video[0], 3, axis=-1)
+    frames = render_video(
+        labels,
+        save_path=None,
+        show_centroids=True,
+        marker_size=8.0,
+        show_progress=False,
+    )
+
+    assert frames[0].shape == (128, 128, 3)
+    # The centroid marker region changed vs the promoted grayscale frame.
+    assert not np.array_equal(frames[0][88:103, 88:103], ref[88:103, 88:103])
+
+
+# ============================================================================
 # _apply_overlay TypeError for unknown list element types
 # ============================================================================
 
