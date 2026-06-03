@@ -4425,6 +4425,106 @@ def test_slp_mask_roundtrip(tmp_path):
     np.testing.assert_array_equal(m.data, mask_data)
 
 
+def _fragmented_mask():
+    """A checkerboard mask whose RLE is large and highly compressible.
+
+    Alternating pixels produce ~H*W single-pixel runs, the worst case for
+    ``mask_rle`` size and the case that makes segmentation ``.slp`` files balloon.
+    """
+    y, x = np.indices((128, 128))
+    return ((x + y) % 2).astype(bool)
+
+
+def test_slp_mask_rle_gzip_compressed(tmp_path):
+    """`mask_rle` is written with gzip compression (issue #463)."""
+    video = Video(filename="test.mp4")
+    mask = UserSegmentationMask.from_numpy(_fragmented_mask())
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = Labels(
+        labeled_frames=[lf], videos=[video], skeletons=[Skeleton(nodes=["A"])]
+    )
+
+    path = str(tmp_path / "gzip_masks.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        rle = f["mask_rle"]
+        assert rle.compression == "gzip"
+        assert rle.compression_opts == 1
+        assert rle.chunks is not None  # gzip requires a chunked layout
+
+
+def test_slp_mask_rle_compression_reduces_size(tmp_path):
+    """Gzip meaningfully shrinks `mask_rle` on disk vs. its raw byte size."""
+    video = Video(filename="test.mp4")
+    mask = UserSegmentationMask.from_numpy(_fragmented_mask())
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = Labels(
+        labeled_frames=[lf], videos=[video], skeletons=[Skeleton(nodes=["A"])]
+    )
+
+    path = str(tmp_path / "compressed_masks.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        rle = f["mask_rle"]
+        on_disk = rle.id.get_storage_size()
+        raw = rle.nbytes
+    # A fragmented RLE has thousands of bytes raw; gzip easily beats 2x on it.
+    assert raw > 1024
+    assert on_disk < raw / 2
+
+
+def test_slp_mask_rle_roundtrip_bit_identical(tmp_path):
+    """Gzip is lossless: RLE counts survive a save/load round-trip bit-identical."""
+    video = Video(filename="test.mp4")
+    mask = UserSegmentationMask.from_numpy(_fragmented_mask())
+    original_rle = np.asarray(mask.rle_counts, dtype=np.uint32).copy()
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = Labels(
+        labeled_frames=[lf], videos=[video], skeletons=[Skeleton(nodes=["A"])]
+    )
+
+    path = str(tmp_path / "roundtrip_masks.slp")
+    save_slp(labels, path)
+    loaded = load_slp(path)
+
+    assert len(loaded.masks) == 1
+    reloaded_rle = np.asarray(loaded.masks[0].rle_counts, dtype=np.uint32)
+    np.testing.assert_array_equal(reloaded_rle, original_rle)
+
+
+def test_slp_mask_rle_empty_roundtrip(tmp_path):
+    """A degenerate empty-RLE mask uses the uncompressed path and round-trips.
+
+    A zero-height mask produces no RLE bytes, exercising the empty-guard branch
+    where chunking/gzip are skipped (nothing to compress). It must still load
+    back losslessly.
+    """
+    video = Video(filename="test.mp4")
+    mask = UserSegmentationMask.from_numpy(np.zeros((0, 5), dtype=bool))
+    assert len(mask.rle_counts) == 0
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(mask)
+    labels = Labels(
+        labeled_frames=[lf], videos=[video], skeletons=[Skeleton(nodes=["A"])]
+    )
+
+    path = str(tmp_path / "empty_rle_masks.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        # Empty RLE skips the gzip filter: there is nothing to compress.
+        assert f["mask_rle"].compression is None
+
+    loaded = load_slp(path)
+    assert len(loaded.masks) == 1
+    assert len(loaded.masks[0].rle_counts) == 0
+
+
 def test_slp_backward_compat_no_rois(slp_typical):
     """Reading old SLP files without ROIs/masks gives empty lists."""
     labels = read_labels(slp_typical)
