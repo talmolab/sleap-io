@@ -4167,7 +4167,17 @@ def write_masks(
             "mask_rle",
             data=rle_flat,
             dtype=np.uint8,
-            **({"chunks": True} if len(rle_flat) > 0 else {}),
+            # Gzip-compress the RLE bytes (lossless, transparent on read).
+            # RLE counts are uint32 run-lengths whose high bytes are mostly
+            # zero, so they compress ~8x+ at level 1. Mirrors the gzip used for
+            # video/label-image data. A degenerate empty-RLE mask (e.g. a
+            # zero-height mask) keeps the contiguous, no-filter path: there are
+            # no bytes to compress, so chunking + gzip would only add overhead.
+            **(
+                {"chunks": True, "compression": "gzip", "compression_opts": 1}
+                if len(rle_flat) > 0
+                else {}
+            ),
         )
         str_dt = h5py.special_dtype(vlen=str)
         f.create_dataset("mask_categories", data=categories, dtype=str_dt)
