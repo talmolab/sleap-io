@@ -77,7 +77,7 @@ file.slp
 │   ├── @categories              # Attribute: JSON array (legacy fallback)
 │   ├── @names                   # Attribute: JSON array (legacy fallback)
 │   └── @sources                 # Attribute: JSON array (legacy fallback)
-├── /roi_wkb                     # Dataset: Packed WKB geometry bytes (uint8 array)
+├── /roi_wkb                     # Dataset: Packed WKB geometry bytes (uint8 array, gzip-compressed)
 ├── /roi_categories              # Dataset: vlen string, one per ROI (Format 1.9+)
 ├── /roi_names                   # Dataset: vlen string, one per ROI (Format 1.9+)
 ├── /roi_sources                 # Dataset: vlen string, one per ROI (Format 1.9+)
@@ -952,9 +952,11 @@ The `/centroids/` group is only written when the [`Labels`][sleap_io.Labels] obj
 ROI data is stored across two datasets:
 
 - `/rois`: Structured array containing ROI metadata and byte offsets into the geometry data
-- `/roi_wkb`: Packed `uint8` array of [WKB (Well-Known Binary)](https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry#Well-known_binary) geometry bytes
+- `/roi_wkb`: Packed `uint8` array of [WKB (Well-Known Binary)](https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry#Well-known_binary) geometry bytes, gzip-compressed (`compression_opts=1`)
 
 Each ROI's geometry is stored as a WKB blob in `/roi_wkb`, with `/rois` providing the byte range via `wkb_start` and `wkb_end` offsets.
+
+`/roi_wkb` is stored with the HDF5 gzip filter (`compression="gzip", compression_opts=1`), a transparent on-disk storage detail: readers decompress it automatically, byte ranges are unchanged, and no `format_id` bump is required. This is lossless and typically shrinks `/roi_wkb` ~2x on polygon-heavy ROI sets. Browser/h5wasm readers must support the deflate filter, which is already required for the format's gzip-filtered `/mask_rle` and embedded video frames (and the v2.2 chunked `/label_image_data`).
 
 ### ROI Dtype
 
@@ -1324,7 +1326,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 
 [`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so it stores the `points`, `pred_points`, `instances`, and `frames` datasets as **flat 2D arrays** with the same per-row field layout as the structured dtype. The Python reader in v0.7.0 detects this representation (via shape and dataset attributes) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without requiring a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
 
-The `/mask_rle` dataset is stored with the HDF5 gzip (deflate) filter. Readers must support deflate to read masks — this is already required for the SLP format's embedded video frames and `/label_image_data` (both gzip-filtered), and h5wasm bundles zlib, so no additional reader capability is introduced.
+The `/mask_rle` dataset is stored with the HDF5 gzip (deflate) filter. Readers must support deflate to read masks — this is already required for the SLP format's embedded video frames (and the v2.2 chunked `/label_image_data`), and h5wasm bundles zlib, so no additional reader capability is introduced.
 
 ## API
 

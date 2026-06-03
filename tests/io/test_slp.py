@@ -4392,6 +4392,133 @@ def test_slp_roi_roundtrip(tmp_path):
     assert triangle.track is loaded.tracks[0]
 
 
+def _polygon_heavy_rois(n_rois=100, n_verts=64):
+    """An ROI set of many-vertex polygons with a sizable, compressible WKB blob."""
+    video = Video(filename="test.mp4")
+    ang = np.linspace(0, 2 * np.pi, n_verts, endpoint=False)
+    base = np.stack([500 + 400 * np.cos(ang), 500 + 400 * np.sin(ang)], 1)
+    rois = [
+        UserROI.from_polygon((base + i * 0.13).tolist(), video=video, name=f"r{i}")
+        for i in range(n_rois)
+    ]
+    skeleton = Skeleton(nodes=["A"])
+    return Labels(videos=[video], skeletons=[skeleton], rois=rois)
+
+
+def test_slp_roi_wkb_gzip_compressed(tmp_path):
+    """`roi_wkb` is written with gzip compression (follow-up to #463)."""
+    labels = _polygon_heavy_rois(n_rois=5, n_verts=8)
+    path = str(tmp_path / "gzip_rois.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        wkb = f["roi_wkb"]
+        assert wkb.compression == "gzip"
+        assert wkb.compression_opts == 1
+        assert wkb.chunks is not None  # gzip requires a chunked layout
+
+
+def test_slp_roi_wkb_compression_reduces_size(tmp_path):
+    """Gzip meaningfully shrinks `roi_wkb` on disk vs. its raw byte size."""
+    labels = _polygon_heavy_rois(n_rois=100, n_verts=64)
+    path = str(tmp_path / "compressed_rois.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        wkb = f["roi_wkb"]
+        on_disk = wkb.id.get_storage_size()
+        raw = wkb.nbytes
+    # A polygon-heavy ROI set packs ~100 KB of WKB; gzip beats it ~2x.
+    assert raw > 10240
+    assert on_disk < raw * 0.8
+
+
+def test_slp_roi_wkb_roundtrip_bit_identical(tmp_path):
+    """Gzip is lossless: ROI geometry survives a round-trip with identical WKB."""
+    labels = _polygon_heavy_rois(n_rois=20, n_verts=32)
+    original_wkb = sorted(r.geometry.wkb for r in labels.rois)
+
+    path = str(tmp_path / "roundtrip_rois.slp")
+    save_slp(labels, path)
+    loaded = load_slp(path)
+
+    assert len(loaded.rois) == len(labels.rois)
+    reloaded_wkb = sorted(r.geometry.wkb for r in loaded.rois)
+    assert reloaded_wkb == original_wkb
+
+
+def test_slp_roi_wkb_roundtrip_geometry_types(tmp_path):
+    """Gzip round-trip preserves WKB + type across ROI geometry kinds.
+
+    Covers a UserROI polygon, a PredictedROI (with score), and a MultiPolygon —
+    all share the generic WKB serialize/deserialize path. Non-rectangular shapes
+    avoid the rectangle->BoundingBox migration.
+    """
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    rois = [
+        UserROI(
+            geometry=shapely.Polygon([(0, 0), (10, 0), (10, 10), (5, 15), (0, 10)]),
+            video=video,
+            category="user",
+        ),
+        PredictedROI(
+            geometry=shapely.Polygon([(20, 20), (30, 20), (25, 35)]),
+            video=video,
+            category="pred",
+            score=0.85,
+        ),
+        UserROI(
+            geometry=shapely.MultiPolygon(
+                [
+                    shapely.Polygon([(0, 0), (5, 0), (5, 5)]),
+                    shapely.Polygon([(10, 10), (15, 10), (15, 15)]),
+                ]
+            ),
+            video=video,
+            category="multi",
+        ),
+    ]
+    original_wkb = {r.category: r.geometry.wkb for r in rois}
+
+    path = str(tmp_path / "roi_geom_types.slp")
+    save_slp(Labels(videos=[video], skeletons=[skeleton], rois=rois), path)
+    loaded = load_slp(path, open_videos=False)
+
+    assert len(loaded.rois) == 3
+    by_cat = {r.category: r for r in loaded.rois}
+    assert isinstance(by_cat["pred"], PredictedROI)
+    assert by_cat["pred"].score == pytest.approx(0.85, abs=1e-5)
+    assert isinstance(by_cat["user"], UserROI)
+    assert by_cat["multi"].geometry.geom_type == "MultiPolygon"
+    for cat, wkb in original_wkb.items():
+        assert by_cat[cat].geometry.wkb == wkb
+
+
+def test_slp_roi_wkb_empty_geometry(tmp_path):
+    """An empty-geometry ROI still packs non-empty WKB and round-trips gzip.
+
+    Pins the invariant that lets ``write_rois`` always gzip ``roi_wkb`` with no
+    empty-dataset guard: every geometry — even an empty polygon — serializes to
+    a non-empty WKB header, so ``wkb_flat`` is never empty when ROIs exist.
+    """
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    roi = UserROI(geometry=shapely.Polygon(), video=video, category="empty")
+    labels = Labels(videos=[video], skeletons=[skeleton], rois=[roi])
+
+    path = str(tmp_path / "empty_geom_roi.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        assert f["roi_wkb"].compression == "gzip"
+        assert f["roi_wkb"].nbytes > 0
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.rois) == 1
+    assert loaded.rois[0].geometry.is_empty
+
+
 def test_slp_mask_roundtrip(tmp_path):
     """Test SLP round-trip with segmentation masks."""
     video = Video(filename="test.mp4")
