@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from click.testing import CliRunner
 
-from sleap_io import load_slp, save_video
+from sleap_io import load_slp, save_slp, save_video
 from sleap_io.io.cli import (
     _get_ffmpeg_version,
     _is_ffmpeg_available,
@@ -26,6 +26,7 @@ from sleap_io.io.cli import (
 from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
+from sleap_io.model.mask import PredictedSegmentationMask
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
 from sleap_io.version import __version__
@@ -4383,6 +4384,45 @@ def test_filenames_save_failure(tmp_path, slp_typical):
 # ============================================================================
 # Render command crop tests
 # ============================================================================
+
+
+@pytest.mark.parametrize("specifier", [["--lf", "0"], ["--frame", "0"]])
+def test_render_single_frame_masks_only_no_skeleton(specifier, tmp_path):
+    """``sio render --lf/--frame`` works on a mask-only, skeleton-less .slp.
+
+    Regression test for issue #466: bottom-up segmentation tracking output has
+    zero skeletons and frames carrying only ``PredictedSegmentationMask`` (no
+    instances). The single-image CLI modes used to fail with
+    ``Failed to render: list index out of range`` while ``--start/--end``
+    (``render_video``) worked. Both ``--lf`` and ``--frame`` must now render.
+    """
+    m = np.zeros((64, 64), dtype=bool)
+    m[10:30, 10:30] = True
+    mask = PredictedSegmentationMask.from_numpy(m, score=0.9)
+    video = Video(filename="dummy.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[], masks=[mask])
+    labels = Labels(labeled_frames=[lf], videos=[video])
+    slp_path = tmp_path / "masks_only.slp"
+    save_slp(labels, str(slp_path))
+
+    output_path = tmp_path / "frame.png"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            str(slp_path),
+            *specifier,
+            "--background",
+            "black",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+    assert output_path.exists()
 
 
 def test_render_crop_pixel(centered_pair, tmp_path):
