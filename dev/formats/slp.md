@@ -86,7 +86,7 @@ file.slp
 │   ├── @categories              # Attribute: JSON array (legacy fallback)
 │   ├── @names                   # Attribute: JSON array (legacy fallback)
 │   └── @sources                 # Attribute: JSON array (legacy fallback)
-├── /mask_rle                    # Dataset: Packed RLE bytes (uint8 array)
+├── /mask_rle                    # Dataset: Packed RLE bytes (uint8 array, gzip-compressed)
 ├── /mask_categories             # Dataset: vlen string, one per mask (Format 1.9+)
 ├── /mask_names                  # Dataset: vlen string, one per mask (Format 1.9+)
 ├── /mask_sources                # Dataset: vlen string, one per mask (Format 1.9+)
@@ -1024,9 +1024,11 @@ The `/rois` and `/roi_wkb` datasets are only written when the [`Labels`][sleap_i
 Mask data is stored across two datasets:
 
 - `/masks`: Structured array containing mask metadata and byte offsets into the RLE data
-- `/mask_rle`: Packed `uint8` array of RLE-encoded mask bytes
+- `/mask_rle`: Packed `uint8` array of RLE-encoded mask bytes, gzip-compressed (`compression_opts=1`)
 
 The RLE encoding stores `uint32` run-length counts packed as little-endian `uint8` bytes. Each mask's RLE data is located in `/mask_rle` at the byte range specified by `rle_start` and `rle_end`.
+
+`/mask_rle` is stored with the HDF5 gzip filter (`compression="gzip", compression_opts=1`), a transparent on-disk storage detail: readers decompress it automatically, byte ranges are unchanged, and no `format_id` bump is required. RLE counts are run-lengths whose packed bytes are highly redundant, so gzip is lossless and typically shrinks `/mask_rle` ~8x (and the whole file ~5x on fragmented segmentation masks). Degenerate empty-RLE masks are written uncompressed (nothing to compress).
 
 ### Mask Dtype
 
@@ -1321,6 +1323,8 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 ## Browser-side compatibility (h5wasm / sleap-io.js)
 
 [`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so it stores the `points`, `pred_points`, `instances`, and `frames` datasets as **flat 2D arrays** with the same per-row field layout as the structured dtype. The Python reader in v0.7.0 detects this representation (via shape and dataset attributes) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without requiring a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
+
+The `/mask_rle` dataset is stored with the HDF5 gzip (deflate) filter. Readers must support deflate to read masks — this is already required for the SLP format's embedded video frames and `/label_image_data` (both gzip-filtered), and h5wasm bundles zlib, so no additional reader capability is introduced.
 
 ## API
 
