@@ -1260,7 +1260,22 @@ def render_image(
         from sleap_io.rendering.overlays import draw_centroids as _draw_centroids
 
         render_fidx = fidx_for_callback
-        frame_centroids = source.get_centroids(frame_idx=render_fidx)
+        if lf is not None:
+            # Scope to the rendered frame's own video. A centroid on a
+            # *different* video that happens to share this frame index must not
+            # bleed in, so read this frame's centroids directly (mirroring
+            # render_video's per-frame `lf.centroids`).
+            frame_centroids = list(lf.centroids)
+        else:
+            # No labeled frame resolved — only reachable via an explicit
+            # video+frame_idx that matched no frame, so `video` is a concrete
+            # spec. Scope centroids to it so a *different* video's centroid that
+            # shares this frame index can't bleed in (mirrors render_video's
+            # get_centroids(video=target_video)).
+            target_video = source.videos[video] if isinstance(video, int) else video
+            frame_centroids = source.get_centroids(
+                video=target_video, frame_idx=render_fidx
+            )
         if frame_centroids:
             if render_image_data.ndim == 2:
                 render_image_data = np.stack([render_image_data] * 3, axis=-1)
