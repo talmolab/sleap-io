@@ -3371,11 +3371,19 @@ def write_rois(
         f.create_dataset("roi_categories", data=categories, dtype=str_dt)
         f.create_dataset("roi_names", data=names, dtype=str_dt)
         f.create_dataset("roi_sources", data=sources, dtype=str_dt)
+        # Gzip-compress the packed WKB geometry bytes (lossless, transparent on
+        # read). Mirrors the gzip used for mask_rle / video / label-image data;
+        # ~2x smaller on polygon-heavy ROI sets. wkb_flat is always non-empty
+        # here: write_rois returns early on empty input and every geometry
+        # serializes to >=9 WKB bytes (even an empty polygon is a 9-byte
+        # header), so no empty-dataset guard is needed.
         f.create_dataset(
             "roi_wkb",
             data=wkb_flat,
             dtype=np.uint8,
-            **({"chunks": True} if len(wkb_flat) > 0 else {}),
+            chunks=True,
+            compression="gzip",
+            compression_opts=1,
         )
 
 
