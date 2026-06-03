@@ -3943,6 +3943,124 @@ def test_render_image_with_centroids():
     assert non_white.sum() > 0
 
 
+def test_render_image_centroids_scoped_to_rendered_video():
+    """render_image only draws centroids from the rendered frame's own video.
+
+    In a multi-video Labels where two videos share a frame index, the centroid
+    block used to query ``get_centroids(frame_idx=...)`` without a ``video=``
+    filter, so a centroid from a *different* video at the same frame index bled
+    onto the rendered frame. The query is now scoped to the rendered frame's
+    video (read from ``lf.centroids``), matching ``render_video``.
+    """
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.model.instance import Track
+
+    video_a = sio.Video(filename="A.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    video_b = sio.Video(filename="B.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    track_a, track_b = Track(name="a"), Track(name="b")
+    lf_a = sio.LabeledFrame(video=video_a, frame_idx=0)
+    lf_a.centroids.append(UserCentroid(x=10.0, y=10.0, track=track_a))
+    lf_b = sio.LabeledFrame(video=video_b, frame_idx=0)
+    lf_b.centroids.append(UserCentroid(x=50.0, y=50.0, track=track_b))
+    labels = sio.Labels(
+        labeled_frames=[lf_a, lf_b],
+        videos=[video_a, video_b],
+        tracks=[track_a, track_b],
+    )
+
+    # Render video B's frame 0 by every entry point; video A's centroid at
+    # (10, 10) must never appear while video B's at (50, 50) must.
+    for kwargs in (
+        {"video": video_b, "frame_idx": 0},  # Video object
+        {"video": 1, "frame_idx": 0},  # video index
+        {"lf_ind": 1},  # labeled-frame index
+    ):
+        rendered = render_image(
+            labels, background="black", show_centroids=True, **kwargs
+        )
+        a_region = rendered[0:25, 0:25].sum()  # around video A's (10, 10)
+        b_region = rendered[40:64, 40:64].sum()  # around video B's (50, 50)
+        assert a_region == 0, f"video A centroid bled in via {kwargs}"
+        assert b_region > 0, f"video B centroid missing via {kwargs}"
+
+    # And the symmetric case: rendering video A shows A's centroid, not B's.
+    rendered_a = render_image(
+        labels, video=video_a, frame_idx=0, background="black", show_centroids=True
+    )
+    assert rendered_a[0:25, 0:25].sum() > 0
+    assert rendered_a[40:64, 40:64].sum() == 0
+
+
+def test_render_image_centroids_scoped_when_no_labeled_frame():
+    """Centroid scoping holds even when the requested frame has no LabeledFrame.
+
+    When ``video`` + ``frame_idx`` resolve to no ``LabeledFrame`` (so ``lf`` is
+    None) but the ``Labels`` still has centroids on another video at that frame
+    index, the spatial-only centroid query must be scoped to the requested
+    video. Otherwise the other video's centroid bleeds onto the rendered frame
+    (the same bug as the concrete-``lf`` path, via a different entry point).
+    """
+    from sleap_io.model.centroid import UserCentroid
+
+    video_a = sio.Video(filename="A.mp4", backend_metadata={"shape": (10, 64, 64, 3)})
+    video_b = sio.Video(filename="B.mp4", backend_metadata={"shape": (10, 64, 64, 3)})
+    lf_a = sio.LabeledFrame(video=video_a, frame_idx=5)
+    lf_a.centroids.append(UserCentroid(x=10.0, y=10.0))
+    # video_b has no LabeledFrame at frame 5.
+    labels = sio.Labels(labeled_frames=[lf_a], videos=[video_a, video_b])
+
+    # Render video B's (absent) frame 5: video A's centroid must not appear.
+    for video_spec in (video_b, 1):
+        rendered = render_image(
+            labels,
+            video=video_spec,
+            frame_idx=5,
+            background="black",
+            show_centroids=True,
+        )
+        assert rendered[0:25, 0:25].sum() == 0
+
+    # Rendering video A's own frame 5 still draws its centroid.
+    rendered_a = render_image(
+        labels, video=video_a, frame_idx=5, background="black", show_centroids=True
+    )
+    assert rendered_a[0:25, 0:25].sum() > 0
+
+
+def test_render_image_centroids_scoped_lazy_roundtrip(tmp_path):
+    """Centroid video-scoping survives a lazy ``.slp`` round-trip.
+
+    Hardens the scoped centroid path against regressions in lazy frame
+    materialization: a multi-video Labels saved and reloaded with ``lazy=True``
+    must still render only the requested video's centroid.
+    """
+    from sleap_io.model.centroid import UserCentroid
+    from sleap_io.model.instance import Track
+
+    video_a = sio.Video(filename="A.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    video_b = sio.Video(filename="B.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    track_a, track_b = Track(name="a"), Track(name="b")
+    lf_a = sio.LabeledFrame(video=video_a, frame_idx=0)
+    lf_a.centroids.append(UserCentroid(x=10.0, y=10.0, track=track_a))
+    lf_b = sio.LabeledFrame(video=video_b, frame_idx=0)
+    lf_b.centroids.append(UserCentroid(x=50.0, y=50.0, track=track_b))
+    labels = sio.Labels(
+        labeled_frames=[lf_a, lf_b],
+        videos=[video_a, video_b],
+        tracks=[track_a, track_b],
+    )
+    slp_path = tmp_path / "multivideo_centroids.slp"
+    sio.save_slp(labels, str(slp_path))
+    reloaded = sio.load_slp(str(slp_path), lazy=True)
+    assert reloaded.is_lazy
+
+    rendered = render_image(
+        reloaded, video=1, frame_idx=0, background="black", show_centroids=True
+    )
+    assert rendered[0:25, 0:25].sum() == 0  # video A's centroid not drawn
+    assert rendered[40:64, 40:64].sum() > 0  # video B's centroid drawn
+
+
 def test_render_video_centroids_only():
     """render_video works with centroid-only Labels (no labeled frames)."""
     from sleap_io.model.centroid import UserCentroid
