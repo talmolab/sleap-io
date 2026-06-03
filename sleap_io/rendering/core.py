@@ -992,13 +992,28 @@ def render_image(
 
         if lf is not None:
             instances = list(lf.instances)
-            skeleton = instances[0].skeleton if instances else source.skeletons[0]
-            edge_inds = skeleton.edge_inds
-            node_names = [n.name for n in skeleton.nodes]
+            if instances:
+                skeleton = instances[0].skeleton
+            elif source.skeletons:
+                # No instances but skeletons exist: use the first skeleton for
+                # pose-rendering metadata (e.g. trail node resolution).
+                skeleton = source.skeletons[0]
+            else:
+                # No instances and no skeletons — segmentation/overlay-only
+                # frame (e.g. bottom-up mask tracking). Fall through with empty
+                # pose state so the background and any overlay (masks, label
+                # images, ROIs, bboxes) still render instead of crashing.
+                # Mirrors the LabeledFrame branch below.
+                skeleton = None
+            edge_inds = skeleton.edge_inds if skeleton is not None else []
+            node_names = (
+                [n.name for n in skeleton.nodes] if skeleton is not None else []
+            )
             fidx_for_callback = lf.frame_idx
         else:
             # Centroid-only / spatial-only mode: no labeled frames.
             instances = []
+            skeleton = None
             edge_inds = []
             node_names = []
             fidx_for_callback = frame_idx if frame_idx is not None else 0
@@ -1197,7 +1212,12 @@ def render_image(
     # context, so they are only drawn when the source is a Labels object. They
     # are drawn even when the current frame has no instances, since past frames
     # may still contribute (matching render_video).
-    if show_trails and isinstance(source, Labels) and trail_length > 0:
+    if (
+        show_trails
+        and isinstance(source, Labels)
+        and trail_length > 0
+        and skeleton is not None
+    ):
         from sleap_io.rendering.overlays import draw_trails as _draw_trails
 
         trail_targets = _resolve_trail_node(trail_node, skeleton)

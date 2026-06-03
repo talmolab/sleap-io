@@ -1207,6 +1207,155 @@ class TestRenderImage:
         assert isinstance(rendered_bg, np.ndarray)
         assert rendered_bg.ndim == 3 and rendered_bg.shape[-1] == 3
 
+    def test_render_image_labels_instanceless_no_skeleton_lf_ind(self):
+        """``render_image(labels, lf_ind=...)`` works for a mask-only frame.
+
+        Bottom-up segmentation tracking produces ``Labels`` with zero skeletons
+        and frames that carry only ``PredictedSegmentationMask`` objects (no
+        ``Instance``s). The ``Labels`` branch previously indexed
+        ``source.skeletons[0]`` unconditionally and crashed with ``IndexError``
+        on these frames (issue #466). It should now fall through to empty pose
+        state and still draw the masks, mirroring the ``LabeledFrame`` path.
+        """
+        m = np.zeros((64, 64), dtype=bool)
+        m[10:30, 10:30] = True
+        mask = sio.PredictedSegmentationMask.from_numpy(m, score=0.9)
+        video = sio.Video(filename="dummy.mp4")
+        lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[], masks=[mask])
+        labels = sio.Labels(labeled_frames=[lf], videos=[video])
+        assert len(labels.skeletons) == 0
+
+        rendered = render_image(labels, lf_ind=0, background="black")
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.ndim == 3 and rendered.shape[-1] == 3
+        # The mask should actually be drawn (not just a blank background).
+        assert rendered.sum() > 0
+
+    def test_render_image_labels_instanceless_no_skeleton_video_frame_idx(self):
+        """``render_image(labels, video=, frame_idx=)`` works for a mask-only frame.
+
+        Same instance-less, skeleton-less case as the ``lf_ind`` path but reached
+        via the ``video`` + ``frame_idx`` specifier (the ``sio render --frame``
+        CLI surface). Both must avoid the ``IndexError`` from issue #466.
+        """
+        m = np.zeros((64, 64), dtype=bool)
+        m[10:30, 10:30] = True
+        mask = sio.PredictedSegmentationMask.from_numpy(m, score=0.9)
+        video = sio.Video(filename="dummy.mp4")
+        lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[], masks=[mask])
+        labels = sio.Labels(labeled_frames=[lf], videos=[video])
+
+        rendered = render_image(labels, video=0, frame_idx=0, background="black")
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.ndim == 3 and rendered.shape[-1] == 3
+        assert rendered.sum() > 0
+
+    def test_render_image_labels_instanceless_no_skeleton_default_frame(self):
+        """``render_image(labels)`` defaults to the first frame for a mask-only file.
+
+        With no frame specifier the ``Labels`` branch defaults to the first
+        labeled frame. A skeleton-less, instance-less first frame must not crash.
+        """
+        m = np.zeros((64, 64), dtype=bool)
+        m[10:30, 10:30] = True
+        mask = sio.PredictedSegmentationMask.from_numpy(m, score=0.9)
+        video = sio.Video(filename="dummy.mp4")
+        lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[], masks=[mask])
+        labels = sio.Labels(labeled_frames=[lf], videos=[video])
+
+        rendered = render_image(labels, background="black")
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.ndim == 3 and rendered.shape[-1] == 3
+        assert rendered.sum() > 0
+
+    def test_render_image_labels_instanceless_matches_labeled_frame_path(self):
+        """The ``Labels`` and ``LabeledFrame`` paths render identically.
+
+        Issue #466 was an asymmetry: a mask-only frame rendered fine when passed
+        as a ``LabeledFrame`` but crashed when reached through ``Labels``. With a
+        known video shape (the real mask-tracking case), all ``Labels`` entry
+        points must produce pixel-identical output to the ``LabeledFrame`` path.
+        """
+        m = np.zeros((64, 64), dtype=bool)
+        m[10:30, 10:30] = True
+        mask = sio.PredictedSegmentationMask.from_numpy(m, score=0.9)
+        video = sio.Video(
+            filename="dummy.mp4", backend_metadata={"shape": (1, 64, 64, 3)}
+        )
+        lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[], masks=[mask])
+        labels = sio.Labels(labeled_frames=[lf], videos=[video])
+
+        from_lf = render_image(lf, background="black")
+        from_lf_ind = render_image(labels, lf_ind=0, background="black")
+        from_video_frame = render_image(
+            labels, video=0, frame_idx=0, background="black"
+        )
+
+        assert np.array_equal(from_lf, from_lf_ind)
+        assert np.array_equal(from_lf, from_video_frame)
+
+    def test_render_image_labels_instanceless_show_trails_skipped(self):
+        """``show_trails=True`` on a skeleton-less mask-only frame is a no-op.
+
+        The trails block is guarded on ``skeleton is not None`` (mirroring
+        ``render_video``). With no skeleton the whole block is skipped *before*
+        ``trail_node`` is ever resolved, so the frame still renders its masks and
+        the ``trail_node`` value is inert: an unresolvable named node produces
+        the same image as the default centroid trail rather than crashing.
+        Without the guard this path raised (``IndexError`` before the skeleton
+        fallback, ``AttributeError`` from ``None.index`` after it).
+        """
+        m = np.zeros((64, 64), dtype=bool)
+        m[10:30, 10:30] = True
+        mask = sio.PredictedSegmentationMask.from_numpy(m, score=0.9)
+        video = sio.Video(filename="dummy.mp4")
+        lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[], masks=[mask])
+        labels = sio.Labels(labeled_frames=[lf], videos=[video])
+
+        rendered = render_image(labels, lf_ind=0, background="black", show_trails=True)
+        assert rendered.sum() > 0  # masks still drawn
+        # trail_node is never resolved (block skipped), so an unresolvable named
+        # node yields the exact same image as the default centroid trail.
+        rendered_named = render_image(
+            labels, lf_ind=0, background="black", show_trails=True, trail_node="nose"
+        )
+        assert np.array_equal(rendered, rendered_named)
+
+    def test_render_image_spatial_only_no_labeled_frame(self):
+        """``render_image`` renders a frame with no ``LabeledFrame`` (centroid-only).
+
+        When a ``Labels`` carries centroids but the requested ``frame_idx`` has no
+        ``LabeledFrame``, the ``Labels`` branch resolves ``lf`` to ``None`` and
+        enters the spatial-only path (no instances, no skeleton). This must
+        render the background without error. With ``show_trails=True`` this path
+        also exercises the ``skeleton is not None`` trails guard: ``skeleton`` is
+        ``None`` here, so trails are skipped rather than dereferencing an unset
+        skeleton.
+        """
+        from sleap_io.model.centroid import UserCentroid
+        from sleap_io.model.instance import Track
+
+        track = Track(name="t1")
+        video = sio.Video(
+            filename="dummy.mp4", backend_metadata={"shape": (10, 64, 64, 3)}
+        )
+        lf0 = sio.LabeledFrame(video=video, frame_idx=0)
+        lf0.centroids.append(UserCentroid(x=10.0, y=10.0, track=track))
+        labels = sio.Labels(
+            labeled_frames=[lf0], skeletons=[sio.Skeleton(["A"])], tracks=[track]
+        )
+
+        # frame_idx 5 has no LabeledFrame -> spatial-only (lf is None) path.
+        rendered = render_image(labels, video=video, frame_idx=5, background="black")
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.shape == (64, 64, 3)
+
+        # show_trails on the lf-less path must not crash (skeleton is None).
+        rendered_trails = render_image(
+            labels, video=video, frame_idx=5, background="black", show_trails=True
+        )
+        assert isinstance(rendered_trails, np.ndarray)
+
     def test_render_image_video_unavailable_with_background(self, labels_predictions):
         """Test frame size estimation from keypoints when video unavailable."""
         # Make a copy so we don't modify the fixture
