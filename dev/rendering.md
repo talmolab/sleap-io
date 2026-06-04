@@ -691,6 +691,15 @@ Overlay segmentation masks on images via `render_image`/`render_video` or standa
     box. Pass an explicit `overlay` to override. Auto-drawing works on both RGB
     and single-channel grayscale `(H, W, 1)` video.
 
+!!! note "Coloring overlays by track"
+    With `color_by="track"` (the default `"auto"` when the labels carry tracks),
+    `SegmentationMask`, `ROI`, and `BoundingBox` overlays are colored by their
+    `.track` identity using the pose `palette`, so a tracked object keeps a
+    stable color across frames and matches its poses, centroids, and trails.
+    Untracked elements use the first palette color. When `color_by` is not
+    `"track"` (or the overlay carries no tracks), elements fall back to
+    positional coloring from `overlay_palette` (default `"distinct"`).
+
 ### Using render_image / render_video
 
 The `overlay` parameter on `render_image` and `render_video` accepts label images, `SegmentationMask`, `ROI`, or `BoundingBox` objects:
