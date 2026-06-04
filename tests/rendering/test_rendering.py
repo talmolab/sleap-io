@@ -3430,20 +3430,19 @@ def test_render_image_masks_positional_when_color_by_not_track():
     assert _box_center_color(img, _BOX_B) == dist[1]  # second in list
 
 
-def test_render_image_track_colored_mask_matches_centroid_palette():
-    """A mask and a centroid on the same track render the same color (#469).
+def test_render_image_track_colored_mask_matches_centroid():
+    """A mask and a centroid on the same track render the same pixel color (#469).
 
-    Locks the palette decision: track-colored masks use the pose ``palette``,
-    so track i's mask matches track i's centroid.
+    Locks the palette decision: track-colored masks use the pose ``palette``, so
+    track B's mask pixels equal track B's centroid marker pixels.
     """
     from sleap_io.model.centroid import UserCentroid
 
     track_a, track_b = Track(name="A"), Track(name="B")
     video = sio.Video(filename="v.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
     lf = sio.LabeledFrame(video=video, frame_idx=0, masks=[_box_mask(_BOX_B, track_b)])
-    # Centroid on track B at the center of box B.
-    cy, cx = (sum(_BOX_B[:2]) // 2, sum(_BOX_B[2:]) // 2)
-    lf.centroids.append(UserCentroid(x=float(cx), y=float(cy), track=track_b))
+    # Centroid on track B in a clear area away from the mask.
+    lf.centroids.append(UserCentroid(x=12.0, y=30.0, track=track_b))
     labels = sio.Labels(labeled_frames=[lf], videos=[video], tracks=[track_a, track_b])
 
     img = render_image(
@@ -3452,20 +3451,23 @@ def test_render_image_track_colored_mask_matches_centroid_palette():
         color_by="track",
         background="black",
         overlay_alpha=1.0,
-        show_centroids=False,  # isolate the mask color
+        show_centroids=True,
+        centroid_marker_size=6,
     )
     pal = get_palette("standard", 2)
-    # Mask for track B uses the same palette/index centroids use (core.py
-    # centroid block: get_palette(palette, max(len(tracks), 1))[track_idx]).
-    assert _box_center_color(img, _BOX_B) == pal[1]
+    mask_color = _box_center_color(img, _BOX_B)
+    centroid_color = tuple(int(v) for v in img[30, 12])  # centroid marker center
+    assert mask_color == pal[1]  # track B index
+    assert mask_color == centroid_color  # mask and centroid agree
 
 
-def test_render_image_labeled_frame_source_color_by_track_no_crash():
-    """color_by="track" on a LabeledFrame source falls back without crashing.
+def test_render_image_labeled_frame_source_color_by_track_positional():
+    """color_by="track" on a LabeledFrame source falls back to positional (#469).
 
     A bare ``LabeledFrame`` source builds no track index map, so the track
     branch is skipped (guarded on a ``Labels`` source) and masks render
-    positionally — consistent with poses, which aren't track-colored there.
+    positionally from ``overlay_palette`` — consistent with poses, which aren't
+    track-colored there.
     """
     track_a = Track(name="A")
     video = sio.Video(filename="v.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
@@ -3473,7 +3475,8 @@ def test_render_image_labeled_frame_source_color_by_track_no_crash():
 
     img = render_image(lf, color_by="track", background="black", overlay_alpha=1.0)
     assert img.shape == (64, 64, 3)
-    assert _box_center_color(img, _BOX_A) != (0, 0, 0)  # mask still drawn
+    # Positional: first (only) mask gets overlay_palette ("distinct") index 0.
+    assert _box_center_color(img, _BOX_A) == get_palette("distinct", 1)[0]
 
 
 def test_render_image_rois_color_by_track_keyed_not_positional():
@@ -3528,6 +3531,132 @@ def test_render_image_bboxes_color_by_track_keyed_not_positional():
     pal = get_palette("standard", 2)
     assert _box_center_color(img, _BOX_A) == pal[0]
     assert _box_center_color(img, _BOX_B) == pal[1]
+
+
+def test_render_video_masks_untracked_and_mixed_fall_back_to_palette0():
+    """render_video: untracked masks fall back to palette[0] under track (#469).
+
+    Exercises the ``_apply_frame_overlay`` else-arm: a mixed frame with one
+    untracked mask (``track=None``) and one tracked mask renders the untracked
+    one at the first palette color and the tracked one at its track color.
+    """
+    track_a, track_b = Track(name="A"), Track(name="B")
+    video = sio.Video(filename="v.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    lf = sio.LabeledFrame(
+        video=video,
+        frame_idx=0,
+        masks=[_box_mask(_BOX_A, None), _box_mask(_BOX_B, track_b)],
+    )
+    labels = sio.Labels(labeled_frames=[lf], videos=[video], tracks=[track_a, track_b])
+
+    frames = render_video(
+        labels,
+        color_by="track",
+        background="black",
+        overlay_alpha=1.0,
+        show_progress=False,
+        frame_inds=[0],
+    )
+    pal = get_palette("standard", 2)
+    assert _box_center_color(frames[0], _BOX_A) == pal[0]  # untracked -> palette[0]
+    assert _box_center_color(frames[0], _BOX_B) == pal[1]  # track B -> its index
+
+
+def test_render_video_masks_positional_when_color_by_not_track():
+    """render_video keeps positional overlay_palette when color_by != track (#469).
+
+    Regression guard mirroring the render_image case: with ``color_by="instance"``
+    masks are colored by list position from ``overlay_palette`` ("distinct"),
+    even though tracks exist.
+    """
+    track_a, track_b = Track(name="A"), Track(name="B")
+    video = sio.Video(filename="v.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    lf = sio.LabeledFrame(
+        video=video,
+        frame_idx=0,
+        masks=[_box_mask(_BOX_A, track_a), _box_mask(_BOX_B, track_b)],
+    )
+    labels = sio.Labels(labeled_frames=[lf], videos=[video], tracks=[track_a, track_b])
+
+    frames = render_video(
+        labels,
+        color_by="instance",
+        background="black",
+        overlay_alpha=1.0,
+        show_progress=False,
+        frame_inds=[0],
+    )
+    dist = get_palette("distinct", 2)
+    assert _box_center_color(frames[0], _BOX_A) == dist[0]  # first in list
+    assert _box_center_color(frames[0], _BOX_B) == dist[1]  # second in list
+
+
+def test_render_image_and_video_agree_trackless_explicit_track():
+    """render_image and render_video agree for track-less explicit track (#469).
+
+    When ``color_by="track"`` is forced on a ``Labels`` with no tracks, both
+    renderers must fall through to positional ``overlay_palette`` coloring
+    (keeping masks distinguishable) rather than collapsing to one color.
+    """
+    video = sio.Video(filename="v.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    lf = sio.LabeledFrame(
+        video=video,
+        frame_idx=0,
+        masks=[_box_mask(_BOX_A), _box_mask(_BOX_B)],  # untracked
+    )
+    labels = sio.Labels(labeled_frames=[lf], videos=[video])  # no tracks
+    assert len(labels.tracks) == 0
+
+    img = render_image(
+        labels, lf_ind=0, color_by="track", background="black", overlay_alpha=1.0
+    )
+    frames = render_video(
+        labels,
+        color_by="track",
+        background="black",
+        overlay_alpha=1.0,
+        show_progress=False,
+        frame_inds=[0],
+    )
+    dist = get_palette("distinct", 2)
+    for out in (img, frames[0]):
+        assert _box_center_color(out, _BOX_A) == dist[0]
+        assert _box_center_color(out, _BOX_B) == dist[1]
+
+
+def test_render_video_label_image_overlay_not_recolored_by_track():
+    """Label-image overlays are not track-recolored under color_by="track" (#469).
+
+    Label images color by integer object ID, never by track. The overlay-color
+    guard skips them, so a tracked project with a label-image overlay still
+    renders the label image normally (by ID) without crashing.
+    """
+    track_a = Track(name="A")
+    skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = sio.Video(filename="v.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    data = np.zeros((64, 64), dtype=np.int32)
+    data[5:25, 5:25] = 1
+    inst = sio.Instance.from_numpy(
+        np.array([[50, 50], [55, 55]], dtype=np.float32),
+        skeleton=skeleton,
+        track=track_a,
+    )
+    lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    lf.label_images.append(UserLabelImage(data=data))
+    labels = sio.Labels(
+        labeled_frames=[lf], videos=[video], skeletons=[skeleton], tracks=[track_a]
+    )
+
+    frames = render_video(
+        labels,
+        color_by="track",
+        background="black",
+        overlay_alpha=1.0,
+        show_progress=False,
+        frame_inds=[0],
+    )
+    # Label-image region (top-left) is drawn (by ID), not left as background.
+    assert _box_center_color(frames[0], (5, 25, 5, 25)) != (0, 0, 0)
 
 
 def test_render_video_auto_draws_masks():

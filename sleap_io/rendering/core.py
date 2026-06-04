@@ -1216,12 +1216,15 @@ def render_image(
         # Color overlay elements (masks/ROIs/bboxes) by track identity when
         # color_by resolves to "track", matching poses/centroids/trails (same
         # `palette`). Otherwise fall through to positional `overlay_palette`
-        # coloring. Gated on a Labels source since only that branch builds the
-        # track index map; untracked elements fall back to the first color.
+        # coloring. Gated on a Labels source with tracks (only that branch builds
+        # the track index map; `has_tracks` mirrors render_video so track-less
+        # labels stay positional). Untracked elements fall back to the first
+        # color.
         overlay_colors = None
         if (
             resolved_scheme == "track"
             and isinstance(source, Labels)
+            and has_tracks
             and isinstance(render_overlay, list)
             and render_overlay
             and not _is_label_image(render_overlay[0])
