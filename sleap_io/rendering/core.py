@@ -481,6 +481,7 @@ def _apply_overlay(
     outline: bool = False,
     outline_width: int = 1,
     outline_color: tuple[int, int, int] | None = None,
+    colors: list[tuple[int, int, int]] | None = None,
 ) -> np.ndarray:
     """Apply an annotation overlay to an image, dispatching by type.
 
@@ -502,6 +503,10 @@ def _apply_overlay(
         outline: Draw outlines (only used for label images).
         outline_width: Outline width in pixels.
         outline_color: Uniform outline color, or ``None`` for auto-darkened.
+        colors: Optional per-element RGB colors for a ``list`` overlay. When
+            provided, overrides the positional ``palette`` coloring (used by
+            callers to color overlays by track identity). Must match the length
+            of ``overlay``. Ignored for label-image overlays.
 
     Returns:
         The modified image array.
@@ -549,7 +554,8 @@ def _apply_overlay(
                 "happen at the render_video level."
             )
 
-        colors = get_palette(palette, len(overlay))
+        if colors is None:
+            colors = get_palette(palette, len(overlay))
 
         if isinstance(first, SegmentationMask):
             draw_masks(image, overlay, colors=colors, alpha=alpha)
@@ -1171,6 +1177,15 @@ def render_image(
     ):
         overlay = list(lf.masks)
 
+    # Determine color scheme up front so track-colored overlays (masks/ROIs/
+    # bboxes) can match the pose/centroid/trail track colors. Consumed below by
+    # both the overlay block and the pose render_frame call.
+    resolved_scheme = determine_color_scheme(
+        has_tracks=has_tracks,
+        is_single_image=True,
+        scheme=color_by,
+    )
+
     # Apply cropping if specified
     render_image_data = image
     render_points = instances_points
@@ -1198,6 +1213,30 @@ def render_image(
             x1, y1, x2, y2 = crop_bounds
             oh, ow = overlay.shape[:2]
             render_overlay = overlay[max(0, y1) : min(oh, y2), max(0, x1) : min(ow, x2)]
+        # Color overlay elements (masks/ROIs/bboxes) by track identity when
+        # color_by resolves to "track", matching poses/centroids/trails (same
+        # `palette`). Otherwise fall through to positional `overlay_palette`
+        # coloring. Gated on a Labels source with tracks (only that branch builds
+        # the track index map; `has_tracks` mirrors render_video so track-less
+        # labels stay positional). Untracked elements fall back to the first
+        # color.
+        overlay_colors = None
+        if (
+            resolved_scheme == "track"
+            and isinstance(source, Labels)
+            and has_tracks
+            and isinstance(render_overlay, list)
+            and render_overlay
+            and not _is_label_image(render_overlay[0])
+        ):
+            ov_pal = get_palette(palette, max(len(source.tracks), 1))
+            overlay_colors = []
+            for el in render_overlay:
+                t = getattr(el, "track", None)
+                tidx = img_track_idx_map.get(id(t)) if t is not None else None
+                overlay_colors.append(
+                    ov_pal[tidx % len(ov_pal)] if tidx is not None else ov_pal[0]
+                )
         _apply_overlay(
             render_image_data,
             render_overlay,
@@ -1206,6 +1245,7 @@ def render_image(
             outline=overlay_outline,
             outline_width=overlay_outline_width,
             outline_color=overlay_outline_color,
+            colors=overlay_colors,
         )
 
     # Draw motion trails behind the poses and centroids. Trails need temporal
@@ -1317,13 +1357,6 @@ def render_image(
         if hasattr(inst, "score"):
             meta["confidence"] = inst.score
         instance_metadata.append(meta)
-
-    # Determine color scheme
-    resolved_scheme = determine_color_scheme(
-        has_tracks=has_tracks,
-        is_single_image=True,
-        scheme=color_by,
-    )
 
     # Render
     rendered = render_frame(
@@ -1857,6 +1890,27 @@ def render_video(
                     kwargs["score"] = frame_overlay.score
                     kwargs["score_map"] = frame_overlay.score_map
                 cropped_overlay = type(frame_overlay)(**kwargs)
+        # Color overlay elements (masks/ROIs/bboxes) by track identity when
+        # color_by resolves to "track", matching poses/centroids/trails (same
+        # `palette`). Otherwise fall through to positional `overlay_palette`.
+        # Untracked elements fall back to the first palette color.
+        overlay_colors = None
+        if (
+            resolved_scheme == "track"
+            and _overlay_palette_by_track
+            and isinstance(cropped_overlay, list)
+            and cropped_overlay
+            and not _is_label_image(cropped_overlay[0])
+        ):
+            overlay_colors = []
+            for el in cropped_overlay:
+                t = getattr(el, "track", None)
+                tidx = _track_idx_map.get(id(t)) if t is not None else None
+                overlay_colors.append(
+                    _overlay_palette_by_track[tidx % len(_overlay_palette_by_track)]
+                    if tidx is not None
+                    else _overlay_palette_by_track[0]
+                )
         _apply_overlay(
             image,
             cropped_overlay,
@@ -1865,6 +1919,7 @@ def render_video(
             outline=overlay_outline,
             outline_width=overlay_outline_width,
             outline_color=overlay_outline_color,
+            colors=overlay_colors,
         )
         return image
 
@@ -1872,6 +1927,12 @@ def render_video(
     _track_idx_map: dict[int, int] = {}
     if labels is not None and has_tracks:
         _track_idx_map = {id(t): i for i, t in enumerate(labels.tracks)}
+
+    # Track-keyed palette for overlay (mask/ROI/bbox) coloring under
+    # color_by="track", matching centroids/poses/trails (same `palette`).
+    _overlay_palette_by_track: list[tuple[int, int, int]] = []
+    if labels is not None and has_tracks:
+        _overlay_palette_by_track = get_palette(palette, max(len(labels.tracks), 1))
 
     def _draw_frame_centroids(
         image: np.ndarray, fidx: int, crop_off: tuple[float, float] = (0.0, 0.0)
