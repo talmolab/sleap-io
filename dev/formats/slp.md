@@ -1077,6 +1077,8 @@ The reader checks for these datasets first. For pre-1.9 files, it falls back to 
 
 The `/masks` and `/mask_rle` datasets are only written when the [`Labels`][sleap_io.Labels] object contains masks. On read, missing datasets default to empty lists.
 
+The [`UserSegmentationMask.from_predicted`][sleap_io.UserSegmentationMask] provenance link (set by [`PredictedSegmentationMask.to_user()`][sleap_io.PredictedSegmentationMask]) is an in-memory-only convenience and is **not** serialized; it reloads as `None`. The source `PredictedSegmentationMask`, if kept in `labels.masks`, is written and read back independently. This is unlike instance `from_predicted`, which is persisted as an index (see the Instances → Instance Linking section above).
+
 ## Score Map Datasets
 
 Score maps store per-pixel confidence values for predicted segmentation masks and label images. These datasets are only written when `PredictedSegmentationMask` or `PredictedLabelImage` objects have a `score_map` set.

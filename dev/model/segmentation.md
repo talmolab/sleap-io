@@ -109,6 +109,50 @@ The `score_map` field is an optional dense `float32` array of shape `(H, W)`
 providing pixel-level confidence. It is stored separately in the SLP format
 using zlib compression to avoid bloating files.
 
+#### Adopting predictions (human-in-the-loop)
+
+`PredictedSegmentationMask.to_user()` converts a prediction into a
+`UserSegmentationMask`, the predicted -> human-correct -> retrain round-trip for
+masks (mirroring `Instance.from_predicted` for poses). It copies the mask raster
+and shared metadata (`track`, `instance`, `name`, `category`, `source`,
+`tracking_score`, `scale`, `offset`), drops the prediction-only fields
+(`score`, `score_map`), and records the source prediction on `from_predicted`:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> mask_data = np.zeros((100, 100), dtype=bool)
+>>> mask_data[20:40, 30:60] = True
+>>> pred_mask = sio.PredictedSegmentationMask.from_numpy(mask_data, score=0.87)
+>>> user_mask = pred_mask.to_user()
+>>> print(user_mask.is_predicted)
+>>> print(user_mask.from_predicted is pred_mask)
+
+```
+
+Pass `to_user(link=False)` for an unlinked copy. The `from_predicted` link is an
+in-memory provenance pointer and is **not** persisted to the SLP format — it
+becomes `None` after a save/load round-trip.
+
+This mirrors the pose flow, where a user `Instance` is created from a
+`PredictedInstance` with `from_predicted=` set. To adopt a prediction within a
+frame, append the user mask to `frame.masks`; the source prediction stays in the
+frame, exactly as predicted poses do, so the "predicted + user → replace"
+resolution can happen later at merge time (see [Merging](../merging.md)):
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> video = sio.Video(filename="example.mp4", open_backend=False)
+>>> mask_data = np.zeros((100, 100), dtype=bool)
+>>> mask_data[20:40, 30:60] = True
+>>> pred_mask = sio.PredictedSegmentationMask.from_numpy(mask_data, score=0.87)
+>>> frame = sio.LabeledFrame(video=video, frame_idx=0, masks=[pred_mask])
+>>> frame.masks.append(pred_mask.to_user())
+>>> print(len(frame.masks))  # prediction stays, user mask appended alongside
+
+```
+
 ### Multi-resolution masks
 
 Segmentation masks stored at lower resolution — e.g., from a model that
@@ -625,6 +669,7 @@ geometrically meaningful:
 | `ROI`               | `SegmentationMask`    | `roi.to_mask(height, width)`      |
 | `SegmentationMask`  | `ROI` (polygon)       | `mask.to_polygon()`               |
 | `SegmentationMask`  | `BoundingBox`         | `mask.to_bbox()`                  |
+| `PredictedSegmentationMask` | `UserSegmentationMask` | `pred_mask.to_user()`     |
 | `LabelImage`        | `list[SegmentationMask]` | `li.to_masks()`                |
 | `LabelImage`        | `list[BoundingBox]`   | `li.to_bboxes()`                  |
 | `list[SegmentationMask]` | `LabelImage`     | `UserLabelImage.from_masks(masks)` |
@@ -633,6 +678,15 @@ All conversions preserve metadata (track, instance, name,
 category, source) when applicable. `to_bbox()` and `to_bboxes()` preserve
 prediction semantics (`Predicted*` inputs produce `Predicted*` outputs with
 scores). Other conversions return `User*` types.
+
+The geometry conversions above project to a different shape, so they carry the
+identifying metadata but drop `tracking_score` (the geometry, not the track
+assignment, is what's being reinterpreted). `to_user()` is different: it is the
+predicted -> user *adoption* path (see
+[below](#user-vs-predicted-segmentation-masks)), so it faithfully carries the
+full annotation — including `tracking_score`, `scale`, and `offset` — dropping
+only the prediction-only fields (`score`, `score_map`) and recording the source
+prediction on `from_predicted`.
 
 ```pycon
 >>> import sleap_io as sio
