@@ -5,6 +5,7 @@ from numpy.testing import assert_equal
 
 from sleap_io import Instance, PredictedInstance, Skeleton, Track, Video
 from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
 
 
 def test_labeled_frame():
@@ -185,6 +186,74 @@ def test_labeled_frame_unused_predictions():
 
     assert len(lf2.unused_predictions) == 1
     assert (lf2.unused_predictions[0].numpy() == 1).all()
+
+
+def test_unused_predicted_masks_none_when_no_predictions():
+    """A frame with no predicted masks reports no unused predictions."""
+    video = Video("test.mp4")
+    user = UserSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool))
+    lf = LabeledFrame(video=video, frame_idx=0, masks=[user])
+    assert lf.unused_predicted_masks == []
+
+
+def test_unused_predicted_masks_unadopted_reported():
+    """A predicted mask with no adopting user mask is reported as unused."""
+    video = Video("test.mp4")
+    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
+    lf = LabeledFrame(video=video, frame_idx=0, masks=[pred])
+    assert lf.unused_predicted_masks == [pred]
+
+
+def test_unused_predicted_masks_excludes_linked():
+    """A predicted mask adopted via from_predicted is not reported (link-first)."""
+    video = Video("test.mp4")
+    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
+    user = pred.to_user()  # sets user.from_predicted = pred
+    lf = LabeledFrame(video=video, frame_idx=0, masks=[pred, user])
+    assert lf.unused_predicted_masks == []
+
+
+def test_unused_predicted_masks_link_overrides_distance():
+    """An explicit link counts as adopted even when the masks are far apart."""
+    video = Video("test.mp4")
+    pred = PredictedSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), score=0.9, offset=(0.0, 0.0)
+    )
+    user = pred.to_user()
+    # Move the user mask far away; the from_predicted link should still count.
+    user.offset = (500.0, 500.0)
+    lf = LabeledFrame(video=video, frame_idx=0, masks=[pred, user])
+    assert lf.unused_predicted_masks == []
+
+
+def test_unused_predicted_masks_spatial_fallback():
+    """An unlinked user mask overlapping a prediction adopts it spatially."""
+    video = Video("test.mp4")
+    pred = PredictedSegmentationMask.from_numpy(
+        np.ones((10, 10), dtype=bool), score=0.9, offset=(5.0, 5.0)
+    )
+    # Unlinked user mask with an overlapping bbox centroid (within 5 px).
+    user = UserSegmentationMask.from_numpy(
+        np.ones((10, 10), dtype=bool), offset=(6.0, 6.0)
+    )
+    assert user.from_predicted is None
+    lf = LabeledFrame(video=video, frame_idx=0, masks=[pred, user])
+    assert lf.unused_predicted_masks == []
+
+
+def test_unused_predicted_masks_mixed():
+    """Only the prediction without an adopting user mask is reported."""
+    video = Video("test.mp4")
+    adopted = PredictedSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), score=0.9, offset=(0.0, 0.0)
+    )
+    user = adopted.to_user()
+    # A second prediction far from any user mask remains unused.
+    orphan = PredictedSegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), score=0.8, offset=(500.0, 500.0)
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, masks=[adopted, user, orphan])
+    assert lf.unused_predicted_masks == [orphan]
 
 
 def test_labeled_frame_matches():
@@ -1467,6 +1536,135 @@ def test_merge_annotations_auto_masks():
     # Bbox centroids are close — prediction replaced by user
     assert len(lf1.masks) == 1
     assert not lf1.masks[0].is_predicted
+
+
+def test_merge_annotations_auto_masks_link_overrides_distance():
+    """from_predicted link replaces the source prediction despite far distance."""
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.ones((10, 10), dtype=bool)
+    # self holds the prediction; other holds a user correction adopted from it
+    # but moved far away (well beyond the 5 px spatial threshold).
+    self_pred = PredictedSegmentationMask.from_numpy(
+        mask_data, score=0.7, offset=(5.0, 5.0)
+    )
+    other_user = self_pred.to_user()
+    other_user.offset = (500.0, 500.0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[other_user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Spatial matching alone would keep both (too far apart); the link resolves
+    # them as the same annotation and the user correction wins.
+    assert len(lf1.masks) == 1
+    assert not lf1.masks[0].is_predicted
+
+
+def test_merge_annotations_auto_masks_link_self_side():
+    """from_predicted link is honored when the user correction lives in self."""
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.ones((10, 10), dtype=bool)
+    # other holds the source prediction; self holds the user correction adopted
+    # from it, moved far away (beyond the spatial threshold).
+    other_pred = PredictedSegmentationMask.from_numpy(
+        mask_data, score=0.7, offset=(5.0, 5.0)
+    )
+    self_user = other_pred.to_user()
+    self_user.offset = (500.0, 500.0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[self_user])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[other_pred])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # The user correction in self is kept and its linked source prediction from
+    # other is dropped, despite the large spatial distance.
+    assert len(lf1.masks) == 1
+    assert not lf1.masks[0].is_predicted
+
+
+def test_merge_annotations_auto_masks_link_beats_spatial_decoy():
+    """The link pairs with the true source, not a closer spatial decoy."""
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.ones((6, 6), dtype=bool)
+    # True source the user adopted from, placed far from the user mask.
+    true_src = PredictedSegmentationMask.from_numpy(
+        mask_data, score=0.6, offset=(100.0, 100.0)
+    )
+    # A decoy prediction sitting right on top of the user mask.
+    decoy = PredictedSegmentationMask.from_numpy(
+        mask_data, score=0.9, offset=(6.0, 6.0)
+    )
+    user = true_src.to_user()
+    user.offset = (5.0, 5.0)  # spatially nearest to `decoy`
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[true_src, decoy])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # The user replaces its linked true source; the decoy stays as a prediction.
+    assert sum(not m.is_predicted for m in lf1.masks) == 1
+    remaining_pred = [m for m in lf1.masks if m.is_predicted]
+    assert remaining_pred == [decoy]
+
+
+def test_merge_annotations_auto_masks_link_multiple_pairs():
+    """Independent from_predicted links resolve in both directions in one merge."""
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.ones((8, 8), dtype=bool)
+    # Two source predictions, each adopted by a user correction in the *other*
+    # frame, with every mask placed far apart so only the links can pair them.
+    self_pred = PredictedSegmentationMask.from_numpy(
+        mask_data, score=0.5, offset=(200.0, 200.0)
+    )
+    other_pred = PredictedSegmentationMask.from_numpy(
+        mask_data, score=0.6, offset=(600.0, 600.0)
+    )
+    self_user = other_pred.to_user()  # self user adopted from other's prediction
+    self_user.offset = (10.0, 10.0)
+    other_user = self_pred.to_user()  # other user adopted from self's prediction
+    other_user.offset = (400.0, 400.0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[self_user, self_pred])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[other_user, other_pred])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Both predictions are superseded by their linked corrections; only the two
+    # user masks remain.
+    assert len(lf1.masks) == 2
+    assert all(not m.is_predicted for m in lf1.masks)
+
+
+def test_merge_annotations_auto_masks_link_source_absent():
+    """A from_predicted link to a prediction absent from the merge falls back.
+
+    When the linked source is not present in the opposing frame, no link match is
+    produced (the link cannot be honored) and matching falls back to spatial
+    behavior.
+    """
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.ones((8, 8), dtype=bool)
+    external = PredictedSegmentationMask.from_numpy(mask_data, score=0.5)
+
+    # self's user links to `external` (not in other); other's user links to
+    # `external` too (not in self). Neither link can resolve to the opposing
+    # frame, and the two user masks are far apart.
+    self_user = external.to_user()
+    self_user.offset = (10.0, 10.0)
+    other_user = external.to_user()
+    other_user.offset = (900.0, 900.0)
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[self_user])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[other_user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    # Unresolvable links + far apart → both user masks are kept.
+    assert len(lf1.masks) == 2
+    assert all(not m.is_predicted for m in lf1.masks)
 
 
 def test_merge_annotations_update_tracks_cascades():

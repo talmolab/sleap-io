@@ -613,6 +613,16 @@ same threshold as instance matching (default 5 pixels). Each modality is resolve
 independently — centroids by `(x, y)`, bounding boxes and ROIs by their centroid, and
 masks by the centroid of their bounding box.
 
+For segmentation masks, an explicit provenance link takes precedence over spatial
+matching. If a `UserSegmentationMask` records (via `from_predicted`, set by
+[`PredictedSegmentationMask.to_user()`](model/segmentation.md#adopting-predictions-human-in-the-loop))
+that it was adopted from a `PredictedSegmentationMask` present in the merge, the two are
+paired directly — the user correction replaces its exact source prediction regardless of
+centroid distance — and spatial matching only resolves the remaining, unlinked
+annotations. Other modalities do not yet carry a `from_predicted` link and are matched
+spatially only. To list predicted masks that have not been adopted (by link or spatial
+overlap), use `LabeledFrame.unused_predicted_masks`.
+
 New frames (no matching frame in the target) always copy all annotations from the
 source, regardless of strategy.
 

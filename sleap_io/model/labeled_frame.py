@@ -95,6 +95,47 @@ def _find_annotation_matches(
     return matches
 
 
+def _find_annotation_link_matches(
+    self_list: list,
+    other_list: list,
+) -> list[tuple[int, int, float]]:
+    """Find user<->predicted matches via the ``from_predicted`` provenance link.
+
+    A match is recorded whenever a user annotation in one list explicitly records
+    (via ``from_predicted``) that it was adopted from a predicted annotation in
+    the other list. These take precedence over spatial matching (score is
+    ``inf``), so an adopted correction resolves against its exact source
+    prediction regardless of centroid distance. Only modalities that carry
+    ``from_predicted`` (segmentation masks) can produce link matches; for every
+    other modality this returns an empty list and merge behavior is unchanged.
+
+    Args:
+        self_list: Annotations from the self frame.
+        other_list: Annotations from the other frame.
+
+    Returns:
+        List of ``(self_idx, other_idx, inf)`` tuples for linked pairs.
+    """
+    matches = []
+    other_id_to_idx = {id(b): j for j, b in enumerate(other_list)}
+    self_id_to_idx = {id(a): i for i, a in enumerate(self_list)}
+    # User annotation in self linked to a predicted annotation in other.
+    for i, a in enumerate(self_list):
+        src = getattr(a, "from_predicted", None)
+        if src is not None:
+            j = other_id_to_idx.get(id(src))
+            if j is not None:
+                matches.append((i, j, float("inf")))
+    # User annotation in other linked to a predicted annotation in self.
+    for j, b in enumerate(other_list):
+        src = getattr(b, "from_predicted", None)
+        if src is not None:
+            i = self_id_to_idx.get(id(src))
+            if i is not None:
+                matches.append((i, j, float("inf")))
+    return matches
+
+
 def _resolve_annotation_auto(
     self_list: list,
     other_list: list,
@@ -124,8 +165,13 @@ def _resolve_annotation_auto(
         if not ann.is_predicted:
             merged.append(ann)
 
-    # 2. Find spatial matches
-    matches = _find_annotation_matches(self_list, other_list, attr, threshold)
+    # 2. Find matches: explicit ``from_predicted`` links first (score ``inf``, so
+    # the greedy pass below prefers them over spatial matches and ignores the
+    # distance threshold), then spatial centroid matches as a fallback. Only
+    # masks carry links today, so other modalities fall straight through to
+    # spatial matching with unchanged behavior.
+    matches = _find_annotation_link_matches(self_list, other_list)
+    matches += _find_annotation_matches(self_list, other_list, attr, threshold)
 
     # 3. Greedy one-to-one matching: sort by score descending, assign each
     # self/other index at most once so no annotation is silently dropped.
@@ -421,6 +467,47 @@ class LabeledFrame:
             ]
 
         return unused_predictions
+
+    @property
+    def unused_predicted_masks(self) -> list["SegmentationMask"]:
+        """Return predicted masks in this frame not yet adopted by a user mask.
+
+        A `PredictedSegmentationMask` is considered *adopted* (and so excluded
+        from the result) when some `UserSegmentationMask` in the same frame
+        either links to it via `from_predicted` (checked first) or, lacking an
+        explicit link, spatially overlaps it (bbox-centroid distance within 5 px,
+        the auto-merge default). This mirrors the link-first, spatial-fallback
+        precedence used by the auto-merge cascade and supports the
+        "retrain only what a human corrected" workflow.
+
+        This is the segmentation-mask analogue of `unused_predictions` (which
+        covers `PredictedInstance` objects).
+
+        Returns:
+            The `PredictedSegmentationMask` objects with no adopting user mask.
+        """
+        from sleap_io.model.mask import PredictedSegmentationMask
+
+        predicted = [m for m in self.masks if isinstance(m, PredictedSegmentationMask)]
+        if not predicted:
+            return []
+        user_masks = [m for m in self.masks if not m.is_predicted]
+
+        adopted: set[int] = set()
+        # Link-first: predicted masks explicitly adopted via from_predicted.
+        for u in user_masks:
+            src = getattr(u, "from_predicted", None)
+            if src is not None:
+                adopted.add(id(src))
+        # Spatial fallback: a user mask overlaps a still-unadopted prediction.
+        remaining = [m for m in predicted if id(m) not in adopted]
+        if remaining and user_masks:
+            for self_idx, _other_idx, _score in _find_annotation_matches(
+                remaining, user_masks, "masks", 5.0
+            ):
+                adopted.add(id(remaining[self_idx]))
+
+        return [m for m in predicted if id(m) not in adopted]
 
     def remove_predictions(self):
         """Remove all predicted instances and annotations from the frame."""
