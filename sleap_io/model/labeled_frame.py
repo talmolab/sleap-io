@@ -20,11 +20,7 @@ if TYPE_CHECKING:
     from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.centroid import Centroid
     from sleap_io.model.label_image import LabelImage
-    from sleap_io.model.mask import (
-        PredictedSegmentationMask,
-        SegmentationMask,
-        UserSegmentationMask,
-    )
+    from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.matching import InstanceMatcher
     from sleap_io.model.roi import ROI
 
@@ -448,48 +444,6 @@ class LabeledFrame:
             li for li in self.label_images if not isinstance(li, PredictedLabelImage)
         ]
         self.rois = [r for r in self.rois if not isinstance(r, PredictedROI)]
-
-    def adopt_prediction(
-        self,
-        pred_mask: "PredictedSegmentationMask",
-        remove_source: bool = True,
-    ) -> "UserSegmentationMask":
-        """Adopt a predicted mask in this frame as a user-corrected mask.
-
-        Converts ``pred_mask`` to a `UserSegmentationMask` via
-        `PredictedSegmentationMask.to_user`, recording the provenance link
-        (`UserSegmentationMask.from_predicted`), appends the user mask to
-        ``self.masks``, and (by default) removes the source prediction. This is
-        the frame-level convenience for the predicted -> human-correct ->
-        retrain loop, so callers do not re-implement the list surgery on
-        ``self.masks``.
-
-        Args:
-            pred_mask: A `PredictedSegmentationMask` already present in
-                ``self.masks`` (matched by object identity).
-            remove_source: If ``True`` (the default), remove ``pred_mask`` from
-                ``self.masks`` after adopting it ("predicted + user -> replace"
-                semantics). If ``False``, keep both the prediction and the new
-                user mask (e.g. for a review workflow).
-
-        Returns:
-            The new `UserSegmentationMask`, also appended to ``self.masks``. Its
-            ``from_predicted`` points back at ``pred_mask`` (an in-memory link
-            that is not persisted to the SLP format).
-
-        Raises:
-            ValueError: If ``pred_mask`` is not present in ``self.masks``.
-        """
-        if not any(m is pred_mask for m in self.masks):
-            raise ValueError(
-                "pred_mask is not in this frame's masks; only a mask already "
-                "attached to the frame can be adopted."
-            )
-        user = pred_mask.to_user()
-        if remove_source:
-            self.masks = [m for m in self.masks if m is not pred_mask]
-        self.masks.append(user)
-        return user
 
     def remove_empty_instances(self):
         """Remove all instances with no visible points."""

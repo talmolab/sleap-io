@@ -1,12 +1,10 @@
 """Tests for methods in sleap_io.model.labeled_frame file."""
 
 import numpy as np
-import pytest
 from numpy.testing import assert_equal
 
 from sleap_io import Instance, PredictedInstance, Skeleton, Track, Video
 from sleap_io.model.labeled_frame import LabeledFrame
-from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
 
 
 def test_labeled_frame():
@@ -1245,53 +1243,6 @@ def test_labeled_frame_remove_predictions_annotations():
     assert lf.centroids[0] is c_user
     assert len(lf.bboxes) == 1
     assert lf.bboxes[0] is b_user
-
-
-def test_adopt_prediction_replaces_source():
-    """adopt_prediction replaces the predicted mask with a linked user mask."""
-    video = Video(filename="test.mp4", open_backend=False)
-    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
-    lf = LabeledFrame(video=video, frame_idx=0, masks=[pred])
-
-    user = lf.adopt_prediction(pred)
-
-    assert isinstance(user, UserSegmentationMask)
-    assert user.from_predicted is pred
-    assert lf.masks == [user]
-
-
-def test_adopt_prediction_keep_source():
-    """remove_source=False keeps both the prediction and the user mask."""
-    video = Video(filename="test.mp4", open_backend=False)
-    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
-    lf = LabeledFrame(video=video, frame_idx=0, masks=[pred])
-
-    user = lf.adopt_prediction(pred, remove_source=False)
-
-    assert user.from_predicted is pred
-    assert lf.masks == [pred, user]
-
-
-def test_adopt_prediction_only_removes_target():
-    """Adopting one prediction leaves other masks in the frame untouched."""
-    video = Video(filename="test.mp4", open_backend=False)
-    other = UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
-    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
-    lf = LabeledFrame(video=video, frame_idx=0, masks=[other, pred])
-
-    user = lf.adopt_prediction(pred)
-
-    assert lf.masks == [other, user]
-
-
-def test_adopt_prediction_not_in_frame():
-    """Adopting a prediction not attached to the frame raises ValueError."""
-    video = Video(filename="test.mp4", open_backend=False)
-    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
-    lf = LabeledFrame(video=video, frame_idx=0)
-
-    with pytest.raises(ValueError, match="not in this frame's masks"):
-        lf.adopt_prediction(pred)
 
 
 def test_labeled_frame_merge_annotations():
