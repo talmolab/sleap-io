@@ -134,11 +134,11 @@ Pass `to_user(link=False)` for an unlinked copy. The `from_predicted` link is an
 in-memory provenance pointer and is **not** persisted to the SLP format — it
 becomes `None` after a save/load round-trip.
 
-When the prediction lives in a frame, [`LabeledFrame.adopt_prediction()`][sleap_io.LabeledFrame.adopt_prediction]
-does the list surgery for you: it adopts the prediction (via `to_user()`),
-appends the user mask to `frame.masks`, and by default removes the source
-prediction ("predicted + user -> replace"). Pass `remove_source=False` to keep
-both (e.g. for a review workflow):
+This mirrors the pose flow, where a user `Instance` is created from a
+`PredictedInstance` with `from_predicted=` set. To adopt a prediction within a
+frame, append the user mask to `frame.masks`; the source prediction stays in the
+frame, exactly as predicted poses do, so the "predicted + user → replace"
+resolution can happen later at merge time (see [Merging](../merging.md)):
 
 ```pycon
 >>> import numpy as np
@@ -148,9 +148,8 @@ both (e.g. for a review workflow):
 >>> mask_data[20:40, 30:60] = True
 >>> pred_mask = sio.PredictedSegmentationMask.from_numpy(mask_data, score=0.87)
 >>> frame = sio.LabeledFrame(video=video, frame_idx=0, masks=[pred_mask])
->>> user_mask = frame.adopt_prediction(pred_mask)
->>> print(frame.masks == [user_mask])
->>> print(user_mask.from_predicted is pred_mask)
+>>> frame.masks.append(pred_mask.to_user())
+>>> print(len(frame.masks))  # prediction stays, user mask appended alongside
 
 ```
 
