@@ -130,9 +130,11 @@ and shared metadata (`track`, `instance`, `name`, `category`, `source`,
 
 ```
 
-Pass `to_user(link=False)` for an unlinked copy. The `from_predicted` link is an
-in-memory provenance pointer and is **not** persisted to the SLP format — it
-becomes `None` after a save/load round-trip.
+Pass `to_user(link=False)` for an unlinked copy. The `from_predicted` link is
+persisted to the SLP format as an index into the saved mask list (mirroring
+instance `from_predicted`), so it survives a save/load round-trip as long as the
+source prediction is also saved. Files written before this column existed load
+it as `None`.
 
 This mirrors the pose flow, where a user `Instance` is created from a
 `PredictedInstance` with `from_predicted=` set. To adopt a prediction within a

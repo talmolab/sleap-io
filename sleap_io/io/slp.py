@@ -17,6 +17,8 @@ Format version history:
     - 2.1: Spatial transform metadata on dense annotations (masks/label images)
     - 2.2: Chunked label image data format (/label_image_data as rank-3 dataset)
     - 2.3: Virtual on-read video crops (/video_crops dataset)
+    - 2.4: Persisted mask from_predicted provenance (from_predicted column in
+            mask_dtype storing the source prediction's index in the mask list)
 """
 
 from __future__ import annotations
@@ -1893,6 +1895,16 @@ def write_metadata(labels_path: str, labels: Labels):
     # and only set when a crop is actually present (uncropped files stay <= 2.2).
     if any(v._crop_tuple() is not None for v in labels.videos):
         format_id = max(format_id, 2.3)
+
+    # Bump for persisted mask from_predicted provenance links (new in 2.4). Only
+    # set when a UserSegmentationMask actually records a source prediction; the
+    # column is always written but reads are gated on column presence, so files
+    # without any link stay <= 2.3.
+    has_mask_from_predicted = any(
+        getattr(m, "from_predicted", None) is not None for m in labels.masks
+    )
+    if has_mask_from_predicted:
+        format_id = max(format_id, 2.4)
 
     with h5py.File(labels_path, "a") as f:
         # Bump for chunked label image format (new in 2.2)
@@ -3979,6 +3991,7 @@ def read_masks(
                 score_map_spatial_by_idx[midx] = (sm_scale, sm_offset)
 
     masks = []
+    from_predicted_pairs = []
     for i, row in enumerate(mask_data):
         rle_start = int(row["rle_start"])
         rle_end = int(row["rle_end"])
@@ -4000,6 +4013,12 @@ def read_masks(
             instances[instance_idx]
             if instances is not None and 0 <= instance_idx < len(instances)
             else None
+        )
+
+        # Read from_predicted index (v2.4+). Resolved to an object in a deferred
+        # pass below, once all masks in this flat list have been constructed.
+        from_predicted_idx = (
+            int(row["from_predicted"]) if "from_predicted" in row.dtype.names else -1
         )
 
         # Read predicted flag (v1.9+)
@@ -4055,7 +4074,17 @@ def read_masks(
             mask = UserSegmentationMask(**kwargs)
 
         mask._instance_idx = instance_idx
+        # Only user masks carry a from_predicted link; queue it for re-linking.
+        if not is_predicted and from_predicted_idx >= 0:
+            from_predicted_pairs.append((i, from_predicted_idx))
         masks.append((mask, video_idx, frame_idx_val))
+
+    # Re-link from_predicted provenance now that every mask exists. The stored
+    # value is a global index into this flat list (see write_masks); out-of-range
+    # indices (corrupt/edited files) are skipped, leaving from_predicted as None.
+    for i, fp_idx in from_predicted_pairs:
+        if 0 <= fp_idx < len(masks):
+            masks[i][0].from_predicted = masks[fp_idx][0]
 
     return masks
 
@@ -4095,6 +4124,7 @@ def write_masks(
             ("frame_idx", "i8"),
             ("track", "i4"),
             ("instance", "i4"),
+            ("from_predicted", "i4"),  # Format 2.4+: index into this mask list
             ("is_predicted", "u1"),
             ("score", "f4"),
             ("tracking_score", "f4"),
@@ -4113,6 +4143,13 @@ def write_masks(
     categories = []
     names = []
     sources = []
+
+    # Map each mask object to its global index so a UserSegmentationMask's
+    # ``from_predicted`` link can be persisted as an index into this flat list,
+    # mirroring the instance ``from_predicted`` mechanism. The link resolves as
+    # long as the source prediction is anywhere in this list (typically the same
+    # frame); a source absent from the saved labels resolves to -1.
+    mask_id_to_idx = {id(mask): i for i, mask in enumerate(masks)}
 
     for i_mask, mask in enumerate(masks):
         # Pack uint32 RLE counts as raw bytes (uint8)
@@ -4133,6 +4170,16 @@ def write_masks(
             except ValueError:
                 pass  # Keep stored _instance_idx
 
+        # Resolve the ``from_predicted`` provenance link to a global mask index
+        # (-1 if absent, or if the source prediction was removed from the
+        # labels). Only UserSegmentationMask carries this attribute.
+        from_predicted_src = getattr(mask, "from_predicted", None)
+        from_predicted_idx = (
+            mask_id_to_idx.get(id(from_predicted_src), -1)
+            if from_predicted_src is not None
+            else -1
+        )
+
         is_predicted = isinstance(mask, PredictedSegmentationMask)
         score = mask.score if is_predicted else float("nan")
         tracking_score = (
@@ -4148,6 +4195,7 @@ def write_masks(
                 frame_idx,
                 track_idx,
                 instance_idx,
+                from_predicted_idx,
                 int(is_predicted),
                 score,
                 tracking_score,

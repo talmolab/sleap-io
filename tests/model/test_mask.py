@@ -349,6 +349,30 @@ def test_predicted_segmentation_mask_resampled():
     assert resampled.score_map_offset == (0.0, 0.0)
 
 
+def test_resampled_preserves_from_predicted():
+    """resampled() keeps the from_predicted provenance link on user masks."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.9, scale=(0.5, 0.5))
+    user = pred.to_user()
+    assert user.from_predicted is pred
+
+    resampled = user.resampled(20, 20)
+    assert isinstance(resampled, UserSegmentationMask)
+    assert resampled.from_predicted is pred
+
+
+def test_resampled_unlinked_stays_none():
+    """resampled() leaves from_predicted as None when there is no link."""
+    data = np.zeros((6, 6), dtype=bool)
+    data[1:3, 1:3] = True
+    user = UserSegmentationMask.from_numpy(data, scale=(0.5, 0.5))
+    assert user.from_predicted is None
+
+    resampled = user.resampled(12, 12)
+    assert resampled.from_predicted is None
+
+
 def test_predicted_segmentation_mask_score_map_spatial():
     mask = PredictedSegmentationMask.from_numpy(
         np.zeros((5, 5), dtype=bool),

@@ -210,6 +210,10 @@ class SegmentationMask:
             scale=(1.0, 1.0),
             offset=(0.0, 0.0),
         )
+        if isinstance(self, UserSegmentationMask):
+            # Preserve the provenance link so resampling a corrected mask keeps
+            # its source prediction (mirrors track/instance preservation above).
+            kwargs["from_predicted"] = self.from_predicted
         if isinstance(self, PredictedSegmentationMask):
             kwargs["score"] = self.score
             if self.score_map is not None:
@@ -405,8 +409,10 @@ class UserSegmentationMask(SegmentationMask):
             mask was initialized from, recorded by
             `PredictedSegmentationMask.to_user()` for human-in-the-loop
             correction workflows. `None` if the mask was created directly. This
-            is an in-memory provenance link and is **not** persisted to the SLP
-            format (it becomes `None` after a save/load round-trip).
+            provenance link is persisted to the SLP format as an index into the
+            saved mask list (mirroring instance `from_predicted`), so it survives
+            a save/load round-trip as long as the source prediction is also
+            saved. Files written before this column existed load it as `None`.
     """
 
     from_predicted: "PredictedSegmentationMask | None" = attrs.field(
@@ -458,8 +464,9 @@ class PredictedSegmentationMask(SegmentationMask):
         Notes:
             The `track` and `instance` references are shared (not copied), so
             mutating them affects both masks. The `from_predicted` link is
-            in-memory only and is **not** persisted to the SLP format; it
-            becomes `None` after a save/load round-trip.
+            persisted to the SLP format (as an index into the saved mask list);
+            it survives a save/load round-trip as long as this source prediction
+            is also saved.
         """
         user = UserSegmentationMask(
             rle_counts=self.rle_counts.copy(),
