@@ -562,21 +562,32 @@ def is_same_file(video1: Video, video2: Video) -> bool:
 def _get_effective_shape(video: Video) -> tuple | None:
     """Get the effective shape for comparison purposes.
 
-    For embedded videos with original_video, uses the original's shape
-    if available. Falls back to backend_metadata for videos without
-    loaded backends.
+    For embedded/derived videos, prefers the shape of the nearest video in the
+    ``source_video`` chain that has a known shape. An embedded subset's frames
+    are a subset of its source, so the source's full shape -- not the subset's
+    own (smaller) frame count -- is the right identity for shape comparison.
+    Falls back to ``backend_metadata`` for videos without loaded backends.
 
     Args:
         video: The video to get shape for.
 
     Returns:
         Shape tuple (frames, height, width, channels) or None if unavailable.
+
+    Notes:
+        Walks ``source_video`` nearest-first (rather than jumping to the root
+        ``original_video``) so an intermediate source with a known shape is used
+        even when the deeper root shape is unknown -- common for an embedded
+        ``.pkg.slp`` whose deeper provenance file is not loaded. This resolution
+        reads only in-memory metadata along the chain; the heavier ``is_same_file``
+        identity check (filesystem I/O) is reserved for the actual match.
     """
-    # For embedded videos, prefer original_video's shape
-    if video.original_video is not None:
-        original_shape = _get_effective_shape(video.original_video)
-        if original_shape is not None:
-            return original_shape
+    # Prefer the nearest source's shape (subset frame counts are a view of it).
+    source = video.source_video
+    if source is not None:
+        source_shape = _get_effective_shape(source)
+        if source_shape is not None:
+            return source_shape
 
     # Try backend_metadata first (for videos with open_backend=False)
     if "shape" in video.backend_metadata:

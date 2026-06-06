@@ -2,7 +2,8 @@
 
 import numpy as np
 
-from sleap_io.model.instance import Instance, Track
+import sleap_io as sio
+from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.matching import (
@@ -22,9 +23,11 @@ from sleap_io.model.matching import (
     VideoMatcher,
     VideoMatchMethod,
     _crop_key,
+    _get_effective_shape,
     _is_same_file_direct,
     _same_file_different_crop,
     is_same_file,
+    shapes_compatible,
 )
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
@@ -2927,3 +2930,271 @@ class TestVideoMatcherCropAware:
         returned = labels.add_video(v2)
         assert len(labels.videos) == 1
         assert returned is v1
+
+
+class TestEmbeddedSubsetShapeMatching:
+    """Embedded subset vs restored original match in AUTO video matching (#473).
+
+    An embedded subset of frames and its restored original source are the same
+    underlying file but legitimately differ in frame count. The AUTO cascade
+    used the heuristic ``shapes_compatible`` REJECTION before the definitive
+    ``is_same_file`` check, so a same-file pair was discarded on frame count.
+
+    The fix resolves a derived video's effective shape from the *nearest source
+    in its ``source_video`` chain* (metadata only, no file I/O): an embedded
+    subset reports its source's full shape, so it is shape-compatible with that
+    source and survives to the identity check -- even when the deeper root shape
+    is unknown. Genuine siblings that share a file but have no source
+    relationship keep their own shapes and are still rejected on frame count.
+    """
+
+    @staticmethod
+    def _subset_chain():
+        """Build the issue's provenance chain with an unknown-shape root.
+
+        Returns ``(root, restored, embedded)`` where the root ``.pkg.slp`` has
+        unknown shape (the deeper provenance file is not loaded), the restored
+        original reports 80 frames, and the embedded subset reports 27 frames.
+        """
+        root = Video(filename="labeling/original.pkg.slp", open_backend=False)
+        restored = Video(
+            filename="restored_source.pkg.slp", source_video=root, open_backend=False
+        )
+        restored.backend_metadata["shape"] = (80, 1024, 1024, 1)
+        embedded = Video(
+            filename="embedded_subset.pkg.slp",
+            source_video=restored,
+            open_backend=False,
+        )
+        embedded.backend_metadata["shape"] = (27, 1024, 1024, 1)
+        return root, restored, embedded
+
+    def test_effective_shape_uses_nearest_known_source(self):
+        """A subset resolves to its source's shape, not its own subset count."""
+        root, restored, embedded = self._subset_chain()
+        # Root shape is unknown, but the intermediate `restored` knows (80,...).
+        assert _get_effective_shape(embedded) == (80, 1024, 1024, 1)
+        assert _get_effective_shape(restored) == (80, 1024, 1024, 1)
+
+    def test_shapes_compatible_subset_vs_source(self):
+        """The subset and its source are shape-compatible despite frame diff."""
+        _, restored, embedded = self._subset_chain()
+        assert shapes_compatible(embedded, restored) is True
+        assert is_same_file(embedded, restored)
+
+    def test_find_match_restored_finds_embedded_subset(self):
+        """find_match(restored, [embedded]) returns the same-file subset."""
+        _, restored, embedded = self._subset_chain()
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(restored, [embedded]) is embedded
+
+    def test_find_match_embedded_subset_finds_restored(self):
+        """find_match is symmetric: the subset resolves to the restored source."""
+        _, restored, embedded = self._subset_chain()
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(embedded, [restored]) is restored
+
+    def test_pairwise_match_subset_restored_both_directions(self):
+        """Pairwise match() also matches the pair (used by merge)."""
+        _, restored, embedded = self._subset_chain()
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.match(embedded, restored)
+        assert matcher.match(restored, embedded)
+
+    def test_different_files_incompatible_shape_still_rejected(self):
+        """Guard: unrelated files with incompatible shapes still do not match."""
+        a = Video(filename="/data/a.mp4", open_backend=False)
+        a.backend_metadata["shape"] = (100, 480, 640, 3)
+        b = Video(filename="/data/b.mp4", open_backend=False)
+        b.backend_metadata["shape"] = (50, 480, 640, 3)
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(a, [b]) is None
+        assert not matcher.match(a, b)
+
+    def test_same_file_siblings_no_source_chain_still_rejected_on_shape(self):
+        """Distinct same-file siblings with no source link stay shape-rejected.
+
+        Two videos sharing a file but with NO source relationship and different
+        frame counts (e.g. distinct HDF5 datasets in one ``.pkg.slp``) keep
+        their own shapes and are still rejected on shape. Source-shape
+        resolution must not over-reach to genuine siblings: only a derived video
+        (one with a ``source_video``) borrows its source's shape.
+        """
+        v0 = Video(filename="project.pkg.slp", open_backend=False)
+        v0.backend_metadata["shape"] = (4, 384, 384, 1)
+        v0.backend_metadata["dataset"] = "video0/video"
+        v1 = Video(filename="project.pkg.slp", open_backend=False)
+        v1.backend_metadata["shape"] = (1, 320, 560, 3)
+        v1.backend_metadata["dataset"] = "video1/video"
+        assert shapes_compatible(v0, v1) is False
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(v1, [v0]) is None
+        assert not matcher.match(v0, v1)
+
+    def test_provenance_conflict_still_rejected(self):
+        """Guard: distinct-root chains are still rejected despite same shape."""
+        root1 = Video(filename="/data/v1.mp4", open_backend=False)
+        e1 = Video(filename="e1.pkg.slp", source_video=root1, open_backend=False)
+        e1.backend_metadata["shape"] = (100, 480, 640, 3)
+        root2 = Video(filename="/data/v2.mp4", open_backend=False)
+        e2 = Video(filename="e2.pkg.slp", source_video=root2, open_backend=False)
+        e2.backend_metadata["shape"] = (100, 480, 640, 3)
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(e1, [e2]) is None
+        assert not matcher.match(e1, e2)
+
+    def test_distinct_crops_not_collapsed(self, centered_pair_low_quality_path):
+        """Guard: distinct mosaic tiles of one file are still not collapsed."""
+        src = Video.from_filename(centered_pair_low_quality_path)
+        left = src.crop((0, 0, 192, 384))
+        right = src.crop((192, 0, 384, 384))
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(right, [left]) is None
+        assert not matcher.match(left, right)
+
+    def test_find_match_imagevideo_same_file_subset(self):
+        """ImageVideo same-file subset matches its restored original (#473).
+
+        Exercises the list-filename path with differing frame counts.
+        """
+        images = ["f0.png", "f1.png", "f2.png", "f3.png"]
+        root = Video(filename=list(images), open_backend=False)
+        restored = Video(filename=list(images), source_video=root, open_backend=False)
+        restored.backend_metadata["shape"] = (4, 128, 128, 1)
+        embedded = Video(
+            filename=list(images), source_video=restored, open_backend=False
+        )
+        embedded.backend_metadata["shape"] = (2, 128, 128, 1)
+        assert shapes_compatible(embedded, restored) is True
+        assert is_same_file(embedded, restored)
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        assert matcher.find_match(restored, [embedded]) is embedded
+        assert matcher.match(embedded, restored)
+
+    def test_labels_match_embedded_subset_to_restored_original(self):
+        """End-to-end via Labels.match(): GT subset pairs with restored preds.
+
+        Without the fix, video_map is empty and any downstream per-frame pairing
+        is lost ("Empty Frame Pairs").
+        """
+        skel = Skeleton(["a", "b"])
+        _, restored, embedded = self._subset_chain()
+        gt = Labels(
+            videos=[embedded],
+            skeletons=[skel],
+            labeled_frames=[
+                LabeledFrame(
+                    video=embedded,
+                    frame_idx=i,
+                    instances=[
+                        Instance.from_numpy([[1.0, 1.0], [2.0, 2.0]], skeleton=skel)
+                    ],
+                )
+                for i in (0, 5, 10)
+            ],
+        )
+        pr = Labels(
+            videos=[restored],
+            skeletons=[skel],
+            labeled_frames=[
+                LabeledFrame(
+                    video=restored,
+                    frame_idx=i,
+                    instances=[
+                        PredictedInstance.from_numpy(
+                            [[1.0, 1.0], [2.0, 2.0]],
+                            point_scores=[1.0, 1.0],
+                            score=1.0,
+                            skeleton=skel,
+                        )
+                    ],
+                )
+                for i in (0, 5, 10)
+            ],
+        )
+        result = gt.match(pr)
+        assert result.video_map[restored] is embedded
+        assert result.all_videos_matched
+
+    def test_labels_merge_restored_preds_into_subset_gt_dedups_video(self):
+        """End-to-end via Labels.merge(): same file is not duplicated."""
+        skel = Skeleton(["a", "b"])
+        _, restored, embedded = self._subset_chain()
+        gt = Labels(
+            videos=[embedded],
+            skeletons=[skel],
+            labeled_frames=[
+                LabeledFrame(
+                    video=embedded,
+                    frame_idx=0,
+                    instances=[
+                        Instance.from_numpy([[1.0, 1.0], [2.0, 2.0]], skeleton=skel)
+                    ],
+                )
+            ],
+        )
+        pr = Labels(
+            videos=[restored],
+            skeletons=[skel],
+            labeled_frames=[
+                LabeledFrame(
+                    video=restored,
+                    frame_idx=1,
+                    instances=[
+                        PredictedInstance.from_numpy(
+                            [[3.0, 3.0], [4.0, 4.0]],
+                            point_scores=[1.0, 1.0],
+                            score=1.0,
+                            skeleton=skel,
+                        )
+                    ],
+                )
+            ],
+        )
+        gt.merge(pr)
+        assert len(gt.videos) == 1
+        assert len(gt.labeled_frames) == 2
+
+    def test_embed_subset_restore_original_match_pipeline(
+        self, tmp_path, centered_pair_low_quality_path
+    ):
+        """Full real-file pipeline: embed subset, restore original, then match.
+
+        Embeds a labeled subset as a GT ``.pkg.slp``, saves predictions restored
+        to the original source, and matches them end-to-end through real ``.slp``
+        I/O. The restored prediction (full frame count) matches the embedded GT
+        subset (fewer frames). Here the embedded video's serialized
+        ``source_video`` carries the original's full shape, so the subset
+        resolves to it and is shape-compatible with the restored original.
+        """
+        video = sio.load_video(centered_pair_low_quality_path)
+        skel = Skeleton(["a", "b"])
+        gt = Labels(
+            videos=[video],
+            skeletons=[skel],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video,
+                    frame_idx=i,
+                    instances=[
+                        Instance.from_numpy([[10.0, 10.0], [20.0, 20.0]], skeleton=skel)
+                    ],
+                )
+                for i in (0, 5, 10)
+            ],
+        )
+        gt_path = tmp_path / "gt.pkg.slp"
+        gt.save(gt_path, embed="user")
+        labels_gt = sio.load_file(gt_path)
+        assert labels_gt.videos[0].source_video is not None
+        assert labels_gt.videos[0].shape[0] == 3  # embedded subset
+
+        pred_path = tmp_path / "pred.slp"
+        labels_gt.save(pred_path, embed=False)  # restore_original_videos=True
+        labels_pr = sio.load_file(pred_path)
+        assert labels_pr.videos[0].shape[0] == video.shape[0]  # restored original
+        assert labels_pr.videos[0].shape[0] != labels_gt.videos[0].shape[0]
+
+        result = labels_gt.match(labels_pr)
+        assert result.video_map[labels_pr.videos[0]] is labels_gt.videos[0]
+        assert result.all_videos_matched
