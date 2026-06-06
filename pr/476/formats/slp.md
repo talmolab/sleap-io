@@ -1043,6 +1043,7 @@ mask_dtype = np.dtype([
     ("frame_idx", "i8"),        # Frame index (-1 for static masks)
     ("track", "i4"),            # Track index (-1 if none)
     ("instance", "i4"),         # Instance index (-1 if none) (Format 1.9+)
+    ("from_predicted", "i4"),   # Source prediction index into this mask list, -1 if none (Format 2.4+)
     ("is_predicted", "u1"),     # 0 = UserSegmentationMask, 1 = Predicted (Format 1.9+)
     ("score", "f4"),            # Confidence score (NaN for user masks) (Format 1.9+)
     ("tracking_score", "f4"),   # Tracking link confidence (NaN if unset)
@@ -1077,7 +1078,7 @@ The reader checks for these datasets first. For pre-1.9 files, it falls back to 
 
 The `/masks` and `/mask_rle` datasets are only written when the [`Labels`][sleap_io.Labels] object contains masks. On read, missing datasets default to empty lists.
 
-The [`UserSegmentationMask.from_predicted`][sleap_io.UserSegmentationMask] provenance link (set by [`PredictedSegmentationMask.to_user()`][sleap_io.PredictedSegmentationMask]) is an in-memory-only convenience and is **not** serialized; it reloads as `None`. The source `PredictedSegmentationMask`, if kept in `labels.masks`, is written and read back independently. This is unlike instance `from_predicted`, which is persisted as an index (see the Instances → Instance Linking section above).
+The [`UserSegmentationMask.from_predicted`][sleap_io.UserSegmentationMask] provenance link (set by [`PredictedSegmentationMask.to_user()`][sleap_io.PredictedSegmentationMask]) is persisted (Format 2.4+) in the `from_predicted` column as an index into the flat mask list, mirroring instance `from_predicted` (see the Instances → Instance Linking section above). On write, the linked `PredictedSegmentationMask` is resolved to its global mask index in a deferred pass; a `None` link or a source that is no longer in `labels.masks` is written as `-1`. On read, the index is resolved back to the mask object in a deferred pass after all masks are constructed; `-1` and out-of-range indices load as `None`. The column is gated on presence at read time, so files written before Format 2.4 (which lack the column) load `from_predicted` as `None`.
 
 ## Score Map Datasets
 
@@ -1311,7 +1312,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Triggered automatically when any mask or label image has non-trivial spatial transform; otherwise the format remains 1.x or 2.0
 - Backward compatible: older readers ignore the new fields; writers always emit them but set defaults for unset cases
 
-### Format 2.2 (Current)
+### Format 2.2
 
 **Chunked label image storage and lazy loading.**
 
@@ -1323,6 +1324,23 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - New [`LabelImageWriter`][sleap_io.LabelImageWriter] enables streaming writes with constant memory
 - New [`merge_label_images()`][sleap_io.merge_label_images] copies raw compressed chunks between files (zero decompression for chunked sources)
 - Backward compatible: old files (v1.8-v2.1) remain fully readable; `data_start`/`data_end` fields are unused (set to 0) in chunked format
+
+### Format 2.3
+
+**Virtual on-read video crops.**
+
+- Optional `/video_crops` dataset stores per-video crop rectangles applied virtually on read (see [Virtual Crops](#virtual-crops-format-23) above)
+- Triggered only when a video carries a crop; uncropped files stay byte-identical and at `format_id <= 2.2`
+- Purely additive: does not cross the only legacy threshold (`< 1.4`)
+
+### Format 2.4 (Current)
+
+**Persisted mask `from_predicted` provenance.**
+
+- Added a `from_predicted` (`i4`) column to `mask_dtype` storing the index of the source [`PredictedSegmentationMask`][sleap_io.PredictedSegmentationMask] in the flat mask list (`-1` if none), mirroring instance `from_predicted`
+- Lets [`UserSegmentationMask.from_predicted`][sleap_io.UserSegmentationMask] (set by [`PredictedSegmentationMask.to_user()`][sleap_io.PredictedSegmentationMask]) survive a save/load round-trip when the source prediction is also saved
+- Triggered automatically when any mask records a `from_predicted` link; otherwise the format stays at whatever other state drives `format_id`
+- Backward compatible: the column is always written but reads are gated on its presence, so files written before 2.4 (which lack the column) load `from_predicted` as `None`
 
 ## Browser-side compatibility (h5wasm / sleap-io.js)
 
