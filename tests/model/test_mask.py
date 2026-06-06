@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
-from sleap_io.model.instance import Track
+from sleap_io.model.instance import Instance, Track
 from sleap_io.model.mask import (
     PredictedSegmentationMask,
     SegmentationMask,
@@ -13,6 +13,7 @@ from sleap_io.model.mask import (
     _encode_rle,
     _resize_nearest,
 )
+from sleap_io.model.skeleton import Skeleton
 
 
 def test_encode_rle_all_zeros():
@@ -463,3 +464,147 @@ def test_to_bbox_empty_mask():
     mask = UserSegmentationMask.from_numpy(data)
     bb = mask.to_bbox()
     assert bb.xywh == pytest.approx((0.0, 0.0, 0.0, 0.0))
+
+
+def test_to_user_basic():
+    data = np.zeros((10, 10), dtype=bool)
+    data[5:10, 3:8] = True
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.9)
+    user = pred.to_user()
+    assert isinstance(user, UserSegmentationMask)
+    assert user.is_predicted is False
+    assert user.height == pred.height
+    assert user.width == pred.width
+    np.testing.assert_array_equal(user.data, pred.data)
+
+
+def test_to_user_metadata():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 1:4] = True
+    track = Track(name="t1")
+    pred = PredictedSegmentationMask.from_numpy(
+        data,
+        score=0.8,
+        track=track,
+        tracking_score=0.7,
+        category="cell",
+        name="obj1",
+        source="model",
+    )
+    user = pred.to_user()
+    assert user.track is track
+    assert user.tracking_score == pytest.approx(0.7)
+    assert user.category == "cell"
+    assert user.name == "obj1"
+    assert user.source == "model"
+
+
+def test_to_user_drops_score_and_score_map():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    score_map = np.random.rand(10, 10).astype(np.float32)
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.85, score_map=score_map)
+    user = pred.to_user()
+    assert not hasattr(user, "score")
+    assert not hasattr(user, "score_map")
+    assert user.is_predicted is False
+
+
+def test_to_user_sets_from_predicted():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.9)
+    user = pred.to_user()
+    assert user.from_predicted is pred
+
+
+def test_to_user_link_false():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.9)
+    user = pred.to_user(link=False)
+    assert user.from_predicted is None
+
+
+def test_to_user_preserves_scale_offset():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:4, 3:6] = True
+    pred = PredictedSegmentationMask.from_numpy(
+        data, score=0.9, scale=(0.5, 0.5), offset=(10.0, 20.0)
+    )
+    user = pred.to_user()
+    # Transform metadata is carried over verbatim, not applied to the raster.
+    assert user.scale == (0.5, 0.5)
+    assert user.offset == (10.0, 20.0)
+
+
+def test_to_user_preserves_instance():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    skeleton = Skeleton(["a", "b"])
+    instance = Instance.from_numpy(np.array([[0.0, 0.0], [1.0, 1.0]]), skeleton)
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.9, instance=instance)
+    user = pred.to_user()
+    assert user.instance is instance
+
+
+def test_to_user_preserves_instance_idx():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.9)
+    pred._instance_idx = 3
+    user = pred.to_user()
+    assert user._instance_idx == 3
+
+
+def test_to_user_copies_rle_counts():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.9)
+    user = pred.to_user()
+    # Independent buffer with equal values.
+    assert user.rle_counts is not pred.rle_counts
+    np.testing.assert_array_equal(user.rle_counts, pred.rle_counts)
+    # Mutating the user copy does not affect the prediction.
+    user.rle_counts[0] += 1
+    assert not np.array_equal(user.rle_counts, pred.rle_counts)
+
+
+def test_to_user_empty_mask():
+    data = np.zeros((10, 10), dtype=bool)
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.5)
+    user = pred.to_user()
+    assert isinstance(user, UserSegmentationMask)
+    assert user.area == 0
+    assert user.from_predicted is pred
+
+
+def test_to_user_not_defined_on_user_mask():
+    """to_user() is a predicted-only conversion (no self-referential link)."""
+    user = UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
+    assert not hasattr(user, "to_user")
+
+
+def test_user_mask_from_predicted_defaults_none():
+    user = UserSegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
+    assert user.from_predicted is None
+
+
+def test_from_predicted_excluded_from_repr():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.9)
+    user = pred.to_user()
+    assert "from_predicted" not in repr(user)
+
+
+def test_from_predicted_does_not_affect_identity_equality():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    pred = PredictedSegmentationMask.from_numpy(data, score=0.9)
+    user1 = pred.to_user()
+    user2 = pred.to_user()
+    # Identity equality holds despite a shared from_predicted link.
+    assert user1.from_predicted is user2.from_predicted
+    assert user1 != user2
+    assert user1 == user1
