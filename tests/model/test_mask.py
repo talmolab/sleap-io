@@ -536,6 +536,8 @@ def test_to_user_preserves_scale_offset():
     # Transform metadata is carried over verbatim, not applied to the raster.
     assert user.scale == (0.5, 0.5)
     assert user.offset == (10.0, 20.0)
+    np.testing.assert_array_equal(user.data, pred.data)
+    assert user.area == pred.area
 
 
 def test_to_user_preserves_instance():

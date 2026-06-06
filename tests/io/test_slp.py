@@ -6498,7 +6498,16 @@ def test_slp_mask_from_predicted_not_persisted(tmp_path):
 
     loaded = load_slp(path, open_videos=False)
     assert len(loaded.masks) == 2
+    # Both subtypes survive intact in a mixed pred+user frame.
+    assert sum(isinstance(m, PredictedSegmentationMask) for m in loaded.masks) == 1
+    loaded_pred = next(
+        m for m in loaded.masks if isinstance(m, PredictedSegmentationMask)
+    )
+    assert loaded_pred.score == pytest.approx(0.9, abs=1e-5)
+    np.testing.assert_array_equal(loaded_pred.data, np.ones((5, 5), dtype=bool))
     loaded_user = next(m for m in loaded.masks if isinstance(m, UserSegmentationMask))
+    np.testing.assert_array_equal(loaded_user.data, np.ones((5, 5), dtype=bool))
+    # The provenance link is intentionally not persisted.
     assert loaded_user.from_predicted is None
 
 
