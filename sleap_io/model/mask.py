@@ -210,6 +210,10 @@ class SegmentationMask:
             scale=(1.0, 1.0),
             offset=(0.0, 0.0),
         )
+        if isinstance(self, UserSegmentationMask):
+            # Preserve the provenance link so resampling a corrected mask keeps
+            # its source prediction (mirrors track/instance preservation above).
+            kwargs["from_predicted"] = self.from_predicted
         if isinstance(self, PredictedSegmentationMask):
             kwargs["score"] = self.score
             if self.score_map is not None:
