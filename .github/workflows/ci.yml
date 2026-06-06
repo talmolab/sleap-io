@@ -116,6 +116,12 @@ jobs:
         uses: codecov/codecov-action@v6
         with:
           fail_ci_if_error: true
+          # Skip GPG signature verification of the uploader CLI. The action
+          # fetches its signing key from a keyserver, which intermittently
+          # returns no key ("gpg: no valid OpenPGP data found" -> "Can't check
+          # signature: No public key") and fails the job even though tests and
+          # the upload itself are fine. Skipping validation avoids that flake.
+          skip_validation: true
           verbose: false
           token: ${{ secrets.CODECOV_TOKEN }}
 

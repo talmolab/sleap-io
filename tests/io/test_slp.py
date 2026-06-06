@@ -6472,6 +6472,45 @@ def test_slp_predicted_mask_roundtrip(tmp_path):
     assert format_id == 1.9
 
 
+def test_slp_mask_from_predicted_not_persisted(tmp_path):
+    """UserSegmentationMask.from_predicted is in-memory only (drops on reload).
+
+    Both masks survive the round-trip, but the provenance link is intentionally
+    not serialized (documented behavior), so it reloads as ``None``.
+    """
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
+    user = pred.to_user()
+    assert user.from_predicted is pred
+
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.extend([pred, user])
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+    )
+
+    path = str(tmp_path / "mask_provenance.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 2
+    # Both subtypes survive intact in a mixed pred+user frame.
+    assert sum(isinstance(m, PredictedSegmentationMask) for m in loaded.masks) == 1
+    loaded_pred = next(
+        m for m in loaded.masks if isinstance(m, PredictedSegmentationMask)
+    )
+    assert loaded_pred.score == pytest.approx(0.9, abs=1e-5)
+    np.testing.assert_array_equal(loaded_pred.data, np.ones((5, 5), dtype=bool))
+    loaded_user = next(m for m in loaded.masks if isinstance(m, UserSegmentationMask))
+    np.testing.assert_array_equal(loaded_user.data, np.ones((5, 5), dtype=bool))
+    # The provenance link is intentionally not persisted.
+    assert loaded_user.from_predicted is None
+
+
 def test_slp_predicted_mask_score_map_roundtrip(tmp_path):
     """PredictedSegmentationMask with score_map survives round-trip."""
     video = Video(filename="test.mp4")

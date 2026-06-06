@@ -398,9 +398,20 @@ class SegmentationMask:
 
 @attrs.define(eq=False)
 class UserSegmentationMask(SegmentationMask):
-    """Human-annotated segmentation mask."""
+    """Human-annotated segmentation mask.
 
-    pass
+    Attributes:
+        from_predicted: The `PredictedSegmentationMask` (if any) that this user
+            mask was initialized from, recorded by
+            `PredictedSegmentationMask.to_user()` for human-in-the-loop
+            correction workflows. `None` if the mask was created directly. This
+            is an in-memory provenance link and is **not** persisted to the SLP
+            format (it becomes `None` after a save/load round-trip).
+    """
+
+    from_predicted: "PredictedSegmentationMask | None" = attrs.field(
+        default=None, repr=False
+    )
 
 
 @attrs.define(eq=False)
@@ -422,3 +433,47 @@ class PredictedSegmentationMask(SegmentationMask):
     score_map: np.ndarray | None = attrs.field(default=None)
     score_map_scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
     score_map_offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))
+
+    def to_user(self, link: bool = True) -> "UserSegmentationMask":
+        """Convert this predicted mask to a user mask, recording provenance.
+
+        Returns a new `UserSegmentationMask` carrying a copy of the RLE raster
+        and all shared metadata (`name`, `category`, `source`, `track`,
+        `tracking_score`, `instance`, `scale`, `offset`). The prediction-only
+        fields (`score`, `score_map`, `score_map_scale`, `score_map_offset`)
+        are dropped. This is the predicted -> user adoption path for the
+        inference -> human-correct -> retrain loop, mirroring
+        `Instance.from_predicted` for poses.
+
+        Args:
+            link: If `True` (the default), set `from_predicted` on the returned
+                mask to this prediction, recording that the user annotation
+                originated from it. Pass `False` for an unlinked copy.
+
+        Returns:
+            A new `UserSegmentationMask` with an independent RLE buffer and the
+            shared metadata above. `from_predicted` points back at this mask
+            when `link` is `True`, otherwise `None`.
+
+        Notes:
+            The `track` and `instance` references are shared (not copied), so
+            mutating them affects both masks. The `from_predicted` link is
+            in-memory only and is **not** persisted to the SLP format; it
+            becomes `None` after a save/load round-trip.
+        """
+        user = UserSegmentationMask(
+            rle_counts=self.rle_counts.copy(),
+            height=self.height,
+            width=self.width,
+            name=self.name,
+            category=self.category,
+            source=self.source,
+            track=self.track,
+            tracking_score=self.tracking_score,
+            instance=self.instance,
+            scale=self.scale,
+            offset=self.offset,
+            from_predicted=self if link else None,
+        )
+        user._instance_idx = self._instance_idx
+        return user
