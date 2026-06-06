@@ -186,6 +186,8 @@ For each incoming video, AUTO runs these checks in order:
 
 **Shape is for rejection only.** Same resolution does NOT imply a match—it just means the videos aren't rejected. This prevents matching unrelated videos that happen to have the same dimensions.
 
+**Shape resolves through the source chain.** A derived video's effective shape is taken from the nearest video in its `source_video` chain that has a known shape (read from in-memory metadata — no file is opened). An **embedded subset** of frames therefore reports its **source's full shape**, so it is shape-compatible with that source and is not rejected on frame count before the definitive same-file check runs. This holds even when the deeper root shape is unknown (e.g. an embedded `.pkg.slp` whose deeper provenance file is not loaded). Genuine siblings that merely share a file but have no source relationship keep their own shapes and are still rejected when their frame counts differ.
+
 **Provenance conflict checking** only rejects when files can be verified on disk. If neither file exists (e.g., embedded videos in `.pkg.slp` files), the check is skipped to allow fall-through to content-based matching.
 
 ### Examples
@@ -216,6 +218,14 @@ Result: NOT MATCH — shape rejection (different frame counts)
 Base: project.slp with /data/fly.mp4
 Other: predictions.pkg.slp (embedded, original_video=/data/fly.mp4)
 Result: MATCH — provenance chain links to same file
+```
+
+**Embedded subset vs restored original (same file, fewer frames):**
+```
+Base:  labels.pkg.slp (embedded subset: 27 of 80 frames, source_video=/data/fly.mp4)
+Other: predictions.slp (restored original /data/fly.mp4: 80 frames)
+Result: MATCH — the subset resolves to its source's 80-frame shape, so it is
+        shape-compatible and the same-file check links them
 ```
 
 **Cross-platform embedded videos (pose matching):**
