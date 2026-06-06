@@ -658,10 +658,16 @@ geometrically meaningful:
 All conversions preserve metadata (track, instance, name,
 category, source) when applicable. `to_bbox()` and `to_bboxes()` preserve
 prediction semantics (`Predicted*` inputs produce `Predicted*` outputs with
-scores). Other conversions return `User*` types. `to_user()` is the
-predicted -> user adoption path (see [below](#user-vs-predicted-segmentation-masks)):
-it drops the prediction-only fields (`score`, `score_map`) and records the
-source prediction on `from_predicted`.
+scores). Other conversions return `User*` types.
+
+The geometry conversions above project to a different shape, so they carry the
+identifying metadata but drop `tracking_score` (the geometry, not the track
+assignment, is what's being reinterpreted). `to_user()` is different: it is the
+predicted -> user *adoption* path (see
+[below](#user-vs-predicted-segmentation-masks)), so it faithfully carries the
+full annotation — including `tracking_score`, `scale`, and `offset` — dropping
+only the prediction-only fields (`score`, `score_map`) and recording the source
+prediction on `from_predicted`.
 
 ```pycon
 >>> import sleap_io as sio
