@@ -134,6 +134,26 @@ Pass `to_user(link=False)` for an unlinked copy. The `from_predicted` link is an
 in-memory provenance pointer and is **not** persisted to the SLP format — it
 becomes `None` after a save/load round-trip.
 
+When the prediction lives in a frame, [`LabeledFrame.adopt_prediction()`][sleap_io.LabeledFrame.adopt_prediction]
+does the list surgery for you: it adopts the prediction (via `to_user()`),
+appends the user mask to `frame.masks`, and by default removes the source
+prediction ("predicted + user -> replace"). Pass `remove_source=False` to keep
+both (e.g. for a review workflow):
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> video = sio.Video(filename="example.mp4", open_backend=False)
+>>> mask_data = np.zeros((100, 100), dtype=bool)
+>>> mask_data[20:40, 30:60] = True
+>>> pred_mask = sio.PredictedSegmentationMask.from_numpy(mask_data, score=0.87)
+>>> frame = sio.LabeledFrame(video=video, frame_idx=0, masks=[pred_mask])
+>>> user_mask = frame.adopt_prediction(pred_mask)
+>>> print(frame.masks == [user_mask])
+>>> print(user_mask.from_predicted is pred_mask)
+
+```
+
 ### Multi-resolution masks
 
 Segmentation masks stored at lower resolution — e.g., from a model that
