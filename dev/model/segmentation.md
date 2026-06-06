@@ -130,9 +130,11 @@ and shared metadata (`track`, `instance`, `name`, `category`, `source`,
 
 ```
 
-Pass `to_user(link=False)` for an unlinked copy. The `from_predicted` link is an
-in-memory provenance pointer and is **not** persisted to the SLP format — it
-becomes `None` after a save/load round-trip.
+Pass `to_user(link=False)` for an unlinked copy. The `from_predicted` link is
+persisted to the SLP format as an index into the saved mask list (mirroring
+instance `from_predicted`), so it survives a save/load round-trip as long as the
+source prediction is also saved. Files written before this column existed load
+it as `None`.
 
 This mirrors the pose flow, where a user `Instance` is created from a
 `PredictedInstance` with `from_predicted=` set. To adopt a prediction within a
@@ -150,6 +152,31 @@ resolution can happen later at merge time (see [Merging](../merging.md)):
 >>> frame = sio.LabeledFrame(video=video, frame_idx=0, masks=[pred_mask])
 >>> frame.masks.append(pred_mask.to_user())
 >>> print(len(frame.masks))  # prediction stays, user mask appended alongside
+
+```
+
+To find predicted masks that have **not** yet been corrected — the segmentation
+analogue of `LabeledFrame.unused_predictions` for poses — use
+`LabeledFrame.unused_predicted_masks`. A `PredictedSegmentationMask` is treated
+as adopted (and excluded) when a `UserSegmentationMask` in the same frame links
+to it via `from_predicted` (checked first), or, lacking a link, spatially
+overlaps it (bbox-centroid within 5 px). This drives the "retrain only what a
+human corrected" workflow:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> video = sio.Video(filename="example.mp4", open_backend=False)
+>>> mask_data = np.zeros((100, 100), dtype=bool)
+>>> mask_data[20:40, 30:60] = True
+>>> pred_a = sio.PredictedSegmentationMask.from_numpy(mask_data, score=0.87)
+>>> pred_b = sio.PredictedSegmentationMask.from_numpy(mask_data, score=0.62)
+>>> pred_b.offset = (500.0, 500.0)  # a separate prediction elsewhere in the frame
+>>> frame = sio.LabeledFrame(video=video, frame_idx=0, masks=[pred_a, pred_b])
+>>> frame.masks.append(pred_a.to_user())  # adopt pred_a, leave pred_b
+>>> unused = frame.unused_predicted_masks  # only the uncorrected prediction
+>>> len(unused), unused[0] is pred_b
+(1, True)
 
 ```
 
