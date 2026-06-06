@@ -6472,11 +6472,12 @@ def test_slp_predicted_mask_roundtrip(tmp_path):
     assert format_id == 1.9
 
 
-def test_slp_mask_from_predicted_not_persisted(tmp_path):
-    """UserSegmentationMask.from_predicted is in-memory only (drops on reload).
+def test_slp_mask_from_predicted_persisted(tmp_path):
+    """UserSegmentationMask.from_predicted round-trips through the SLP format.
 
-    Both masks survive the round-trip, but the provenance link is intentionally
-    not serialized (documented behavior), so it reloads as ``None``.
+    The provenance link is serialized as an index into the saved mask list
+    (mirroring instance ``from_predicted``); on reload the user mask points back
+    at the reloaded source prediction object.
     """
     video = Video(filename="test.mp4")
     skeleton = Skeleton(nodes=["A"])
@@ -6496,6 +6497,9 @@ def test_slp_mask_from_predicted_not_persisted(tmp_path):
     path = str(tmp_path / "mask_provenance.slp")
     save_slp(labels, path)
 
+    # A persisted link bumps the format to 2.4.
+    assert read_hdf5_attrs(path, "metadata", "format_id") >= 2.4
+
     loaded = load_slp(path, open_videos=False)
     assert len(loaded.masks) == 2
     # Both subtypes survive intact in a mixed pred+user frame.
@@ -6507,8 +6511,376 @@ def test_slp_mask_from_predicted_not_persisted(tmp_path):
     np.testing.assert_array_equal(loaded_pred.data, np.ones((5, 5), dtype=bool))
     loaded_user = next(m for m in loaded.masks if isinstance(m, UserSegmentationMask))
     np.testing.assert_array_equal(loaded_user.data, np.ones((5, 5), dtype=bool))
-    # The provenance link is intentionally not persisted.
+    # The provenance link is restored and points at the reloaded source object.
+    assert loaded_user.from_predicted is loaded_pred
+
+
+def test_slp_mask_from_predicted_none_roundtrip(tmp_path):
+    """An unlinked user mask (``to_user(link=False)``) stays ``None`` on reload.
+
+    With no link recorded, the format is not bumped to 2.4 and ``from_predicted``
+    is written as the ``-1`` sentinel.
+    """
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
+    user = pred.to_user(link=False)
+    assert user.from_predicted is None
+
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.extend([pred, user])
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    path = str(tmp_path / "mask_unlinked.slp")
+    save_slp(labels, path)
+
+    # No link present, so the format is not bumped to 2.4.
+    assert read_hdf5_attrs(path, "metadata", "format_id") < 2.4
+
+    loaded = load_slp(path, open_videos=False)
+    loaded_user = next(m for m in loaded.masks if isinstance(m, UserSegmentationMask))
     assert loaded_user.from_predicted is None
+
+
+def test_slp_mask_from_predicted_shared_source(tmp_path):
+    """Multiple user masks adopting the same prediction all relink to it."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.8)
+    user1 = pred.to_user()
+    user2 = pred.to_user()
+    assert user1.from_predicted is user2.from_predicted is pred
+
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.extend([pred, user1, user2])
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    path = str(tmp_path / "mask_shared_source.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    loaded_pred = next(
+        m for m in loaded.masks if isinstance(m, PredictedSegmentationMask)
+    )
+    loaded_users = [m for m in loaded.masks if isinstance(m, UserSegmentationMask)]
+    assert len(loaded_users) == 2
+    assert all(u.from_predicted is loaded_pred for u in loaded_users)
+
+
+def test_slp_mask_from_predicted_dangling_source(tmp_path):
+    """A link to a prediction absent from the labels is written as ``-1``.
+
+    Adopting a prediction but keeping only the user mask (the source prediction
+    is not in ``labels.masks``) cannot resolve to an index, so it serializes to
+    ``-1`` and reloads as ``None``.
+    """
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.7)
+    user = pred.to_user()
+    assert user.from_predicted is pred
+
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.append(user)  # Source prediction intentionally omitted.
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    path = str(tmp_path / "mask_dangling.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 1
+    assert loaded.masks[0].from_predicted is None
+
+
+def test_slp_mask_from_predicted_persisted_lazy(tmp_path):
+    """The link round-trips through the lazy write path too.
+
+    The lazy path does not pass an ``instances`` list to ``write_masks``, but
+    ``from_predicted`` links mask-to-mask (resolved from the mask list itself),
+    so it persists regardless.
+    """
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    pred = PredictedSegmentationMask.from_numpy(np.ones((6, 6), dtype=bool), score=0.95)
+    user = pred.to_user()
+
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.extend([pred, user])
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    path = str(tmp_path / "mask_lazy_src.slp")
+    save_slp(labels, path)
+
+    lazy_labels = load_slp(path, lazy=True)
+    assert lazy_labels.is_lazy
+    assert len(lazy_labels.masks) == 2
+
+    path2 = str(tmp_path / "mask_lazy_resaved.slp")
+    save_slp(lazy_labels, path2)
+
+    reloaded = load_slp(path2, open_videos=False)
+    reloaded_pred = next(
+        m for m in reloaded.masks if isinstance(m, PredictedSegmentationMask)
+    )
+    reloaded_user = next(
+        m for m in reloaded.masks if isinstance(m, UserSegmentationMask)
+    )
+    assert reloaded_user.from_predicted is reloaded_pred
+
+
+def test_slp_mask_from_predicted_legacy_none(tmp_path):
+    """Files written before the from_predicted column load the link as ``None``.
+
+    Synthesizes a pre-2.4 ``masks`` dataset (current spatial schema but without
+    the ``from_predicted`` column) and confirms the read path's column-presence
+    gate defaults the link to ``None``.
+    """
+    from sleap_io.model.mask import _encode_rle
+
+    path = str(tmp_path / "legacy_masks.slp")
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    save_slp(Labels(videos=[video], skeletons=[skeleton]), path)
+
+    # Pre-2.4 mask dtype: has instance/is_predicted/scale columns but NO
+    # from_predicted column.
+    legacy_mask_dtype = np.dtype(
+        [
+            ("height", "u4"),
+            ("width", "u4"),
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("instance", "i4"),
+            ("is_predicted", "u1"),
+            ("score", "f4"),
+            ("tracking_score", "f4"),
+            ("rle_start", "u8"),
+            ("rle_end", "u8"),
+            ("scale_x", "f4"),
+            ("scale_y", "f4"),
+            ("offset_x", "f4"),
+            ("offset_y", "f4"),
+        ]
+    )
+    rle = _encode_rle(np.ones((5, 5), dtype=bool))
+    rle_flat = np.frombuffer(rle.astype(np.uint32).tobytes(), dtype=np.uint8)
+    rle_end = len(rle_flat)
+    # One predicted mask and one user mask, both in frame (video 0, frame 0).
+    rows = np.array(
+        [
+            (5, 5, 2, 0, 0, -1, -1, 1, 0.9, float("nan"), 0, rle_end, 1, 1, 0, 0),
+            (
+                5,
+                5,
+                2,
+                0,
+                0,
+                -1,
+                -1,
+                0,
+                float("nan"),
+                float("nan"),
+                0,
+                rle_end,
+                1,
+                1,
+                0,
+                0,
+            ),
+        ],
+        dtype=legacy_mask_dtype,
+    )
+
+    str_dt = h5py.special_dtype(vlen=str)
+    with h5py.File(path, "a") as f:
+        f.create_dataset("masks", data=rows, dtype=legacy_mask_dtype)
+        f.create_dataset("mask_rle", data=rle_flat, dtype=np.uint8)
+        f.create_dataset("mask_categories", data=["", ""], dtype=str_dt)
+        f.create_dataset("mask_names", data=["", ""], dtype=str_dt)
+        f.create_dataset("mask_sources", data=["", ""], dtype=str_dt)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 2
+    loaded_user = next(m for m in loaded.masks if isinstance(m, UserSegmentationMask))
+    assert loaded_user.from_predicted is None
+
+
+def test_slp_mask_from_predicted_out_of_range(tmp_path):
+    """An out-of-range from_predicted index (corrupt/edited file) loads as None.
+
+    The deferred re-link pass bounds-checks the stored index, so a dangling
+    index degrades gracefully instead of raising ``IndexError``.
+    """
+    from sleap_io.model.mask import _encode_rle
+
+    path = str(tmp_path / "corrupt_from_predicted.slp")
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    save_slp(Labels(videos=[video], skeletons=[skeleton]), path)
+
+    # Current (2.4) mask dtype, including the from_predicted column.
+    mask_dtype = np.dtype(
+        [
+            ("height", "u4"),
+            ("width", "u4"),
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("instance", "i4"),
+            ("from_predicted", "i4"),
+            ("is_predicted", "u1"),
+            ("score", "f4"),
+            ("tracking_score", "f4"),
+            ("rle_start", "u8"),
+            ("rle_end", "u8"),
+            ("scale_x", "f4"),
+            ("scale_y", "f4"),
+            ("offset_x", "f4"),
+            ("offset_y", "f4"),
+        ]
+    )
+    rle = _encode_rle(np.ones((5, 5), dtype=bool))
+    rle_flat = np.frombuffer(rle.astype(np.uint32).tobytes(), dtype=np.uint8)
+    rle_end = len(rle_flat)
+    # A single user mask whose from_predicted index (999) points past the list.
+    rows = np.array(
+        [
+            (
+                5,
+                5,
+                2,
+                0,
+                0,
+                -1,
+                -1,
+                999,
+                0,
+                float("nan"),
+                float("nan"),
+                0,
+                rle_end,
+                1,
+                1,
+                0,
+                0,
+            )
+        ],
+        dtype=mask_dtype,
+    )
+
+    str_dt = h5py.special_dtype(vlen=str)
+    with h5py.File(path, "a") as f:
+        f.create_dataset("masks", data=rows, dtype=mask_dtype)
+        f.create_dataset("mask_rle", data=rle_flat, dtype=np.uint8)
+        f.create_dataset("mask_categories", data=[""], dtype=str_dt)
+        f.create_dataset("mask_names", data=[""], dtype=str_dt)
+        f.create_dataset("mask_sources", data=[""], dtype=str_dt)
+
+    loaded = load_slp(path, open_videos=False)
+    assert len(loaded.masks) == 1
+    assert loaded.masks[0].from_predicted is None
+
+
+def test_slp_mask_from_predicted_multi_frame(tmp_path):
+    """The global mask index links each user mask to the prediction in its frame.
+
+    With masks spread across multiple frames, the persisted index must
+    disambiguate which prediction each user mask was adopted from (not merely
+    "some prediction"). Distinct raster contents make the link unambiguous.
+    """
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    data0 = np.zeros((6, 6), dtype=bool)
+    data0[1:3, 1:3] = True
+    data1 = np.zeros((6, 6), dtype=bool)
+    data1[4:6, 4:6] = True
+
+    pred0 = PredictedSegmentationMask.from_numpy(data0, score=0.6)
+    user0 = pred0.to_user()
+    pred1 = PredictedSegmentationMask.from_numpy(data1, score=0.7)
+    user1 = pred1.to_user()
+
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    lf0.masks.extend([pred0, user0])
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    lf1.masks.extend([pred1, user1])
+    labels = Labels(labeled_frames=[lf0, lf1], videos=[video], skeletons=[skeleton])
+
+    path = str(tmp_path / "mask_multi_frame.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    # Pair each loaded user mask with the prediction sharing its raster.
+    for um in (m for m in loaded.masks if isinstance(m, UserSegmentationMask)):
+        assert um.from_predicted is not None
+        np.testing.assert_array_equal(um.data, um.from_predicted.data)
+        # The link points at the prediction in the SAME frame, not the other one.
+        assert um.from_predicted.is_predicted
+
+
+def test_slp_mask_from_predicted_double_roundtrip(tmp_path):
+    """A persisted link stays intact across a second save/load (non-lazy)."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+
+    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
+    user = pred.to_user()
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.masks.extend([pred, user])
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    path1 = str(tmp_path / "mask_dbl_1.slp")
+    save_slp(labels, path1)
+    loaded1 = load_slp(path1, open_videos=False)
+
+    path2 = str(tmp_path / "mask_dbl_2.slp")
+    save_slp(loaded1, path2)
+    loaded2 = load_slp(path2, open_videos=False)
+
+    loaded_pred = next(
+        m for m in loaded2.masks if isinstance(m, PredictedSegmentationMask)
+    )
+    loaded_user = next(m for m in loaded2.masks if isinstance(m, UserSegmentationMask))
+    assert loaded_user.from_predicted is loaded_pred
+
+
+def test_slp_mask_from_predicted_with_instance_link(tmp_path):
+    """from_predicted and instance associations coexist (two deferred passes).
+
+    Both ``mask.instance`` (resolved via ``_instance_idx``) and
+    ``mask.from_predicted`` are re-linked on read; setting both confirms the two
+    deferred passes do not interfere.
+    """
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A", "B"])
+    inst = Instance.from_numpy(np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton)
+
+    pred = PredictedSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.9)
+    user = pred.to_user()
+    user.instance = inst
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    lf.masks.extend([pred, user])
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+
+    path = str(tmp_path / "mask_with_instance.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path, open_videos=False)
+    loaded_pred = next(
+        m for m in loaded.masks if isinstance(m, PredictedSegmentationMask)
+    )
+    loaded_user = next(m for m in loaded.masks if isinstance(m, UserSegmentationMask))
+    assert loaded_user.from_predicted is loaded_pred
+    assert loaded_user.instance is loaded.labeled_frames[0].instances[0]
 
 
 def test_slp_predicted_mask_score_map_roundtrip(tmp_path):
