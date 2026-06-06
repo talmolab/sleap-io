@@ -4146,8 +4146,9 @@ def write_masks(
 
     # Map each mask object to its global index so a UserSegmentationMask's
     # ``from_predicted`` link can be persisted as an index into this flat list,
-    # mirroring the instance ``from_predicted`` mechanism. The source prediction
-    # lives in the same frame and so is also present in this same list.
+    # mirroring the instance ``from_predicted`` mechanism. The link resolves as
+    # long as the source prediction is anywhere in this list (typically the same
+    # frame); a source absent from the saved labels resolves to -1.
     mask_id_to_idx = {id(mask): i for i, mask in enumerate(masks)}
 
     for i_mask, mask in enumerate(masks):
