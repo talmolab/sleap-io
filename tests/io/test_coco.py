@@ -1780,13 +1780,24 @@ class TestCOCOROIMaskIO:
 
         labels = coco.read_labels(json_path, dataset_root=tmp_path)
 
-        # Should have created ROIs, masks, and bboxes, not instances
+        # Should have created masks and bboxes, not instances
         assert len(labels.labeled_frames) == 1
         assert len(labels.labeled_frames[0].instances) == 0
 
-        # Polygon annotation -> ROI (annotation 2 only)
-        assert len(labels.rois) == 1
-        assert labels.rois[0].category == "plant"
+        # Default segmentation_format="mask": polygon (annotation 2) and RLE
+        # (annotation 3) both become masks; no ROIs.
+        assert len(labels.rois) == 0
+        assert len(labels.masks) == 2
+        masks_by_cat = {m.category: m for m in labels.masks}
+        # Polygon annotation -> mask rasterized at the image resolution.
+        plant_mask = masks_by_cat["plant"]
+        assert plant_mask.height == 100
+        assert plant_mask.width == 200
+        assert plant_mask.area > 0
+        # RLE annotation -> mask at its native size.
+        animal_mask = masks_by_cat["animal"]
+        assert animal_mask.height == 5
+        assert animal_mask.width == 5
 
         # Bbox-only annotation -> BoundingBox (annotation 1)
         assert len(labels.bboxes) == 1
@@ -1798,11 +1809,15 @@ class TestCOCOROIMaskIO:
         assert h == pytest.approx(40.0)
         assert isinstance(labels.bboxes[0], UserBoundingBox)
 
-        # RLE annotation -> mask
-        assert len(labels.masks) == 1
-        assert labels.masks[0].category == "animal"
-        assert labels.masks[0].height == 5
-        assert labels.masks[0].width == 5
+        # segmentation_format="roi": polygon stays a vector ROI, RLE stays a mask.
+        labels_roi = coco.read_labels(
+            json_path, dataset_root=tmp_path, segmentation_format="roi"
+        )
+        assert len(labels_roi.rois) == 1
+        assert labels_roi.rois[0].category == "plant"
+        assert len(labels_roi.masks) == 1
+        assert labels_roi.masks[0].category == "animal"
+        assert len(labels_roi.bboxes) == 1
 
     def test_coco_category_preservation(self, tmp_path):
         """Test that category names roundtrip correctly."""
@@ -1892,7 +1907,7 @@ class TestCOCOROIMaskIO:
         assert h == pytest.approx(40.0)
 
     def test_coco_detection_with_polygon_read(self, tmp_path):
-        """Test reading polygon segmentation creates ROI with correct coords."""
+        """Polygon segmentation rasterizes to a mask by default (roi opt-out)."""
         img_path = tmp_path / "img.png"
         img_path.touch()
 
@@ -1918,12 +1933,30 @@ class TestCOCOROIMaskIO:
         with open(json_path, "w") as f:
             json.dump(data, f)
 
+        # Default segmentation_format="mask": polygon -> rasterized mask.
         labels = coco.read_labels(json_path, dataset_root=tmp_path)
+        assert len(labels.rois) == 0
+        assert len(labels.masks) == 1
+        mask = labels.masks[0]
+        assert isinstance(mask, UserSegmentationMask)
+        assert mask.category == "obj"
+        assert mask.height == 100
+        assert mask.width == 100
+        # Mask bbox (in image coords) matches the polygon extent within a pixel.
+        bx, by, bw, bh = mask.bbox
+        assert bx == pytest.approx(10.0, abs=1.0)
+        assert by == pytest.approx(10.0, abs=1.0)
+        assert (bx + bw) == pytest.approx(50.0, abs=1.0)
+        assert (by + bh) == pytest.approx(50.0, abs=1.0)
 
-        assert len(labels.rois) == 1
-        roi = labels.rois[0]
+        # segmentation_format="roi": keep native vector geometry.
+        labels_roi = coco.read_labels(
+            json_path, dataset_root=tmp_path, segmentation_format="roi"
+        )
+        assert len(labels_roi.masks) == 0
+        assert len(labels_roi.rois) == 1
+        roi = labels_roi.rois[0]
         assert roi.category == "obj"
-        # Check bounds approximately
         minx, miny, maxx, maxy = roi.bounds
         assert minx == pytest.approx(10.0)
         assert miny == pytest.approx(10.0)
@@ -1982,15 +2015,21 @@ def test_read_labels_keypoints_and_segmentation(tmp_path):
     assert points[1, 0] == pytest.approx(70.0)
     assert points[1, 1] == pytest.approx(70.0)
 
-    # Should also have ROI from segmentation polygon
-    assert len(labels.rois) == 1
-    roi = labels.rois[0]
-    assert roi.category == "animal"
-    minx, miny, maxx, maxy = roi.bounds
-    assert minx == pytest.approx(10.0)
-    assert miny == pytest.approx(10.0)
-    assert maxx == pytest.approx(90.0)
-    assert maxy == pytest.approx(90.0)
+    # Should also have a mask from the segmentation polygon (default mask mode),
+    # rasterized at the image resolution and linked to the same instance.
+    assert len(labels.rois) == 0
+    assert len(labels.masks) == 1
+    mask = labels.masks[0]
+    assert isinstance(mask, UserSegmentationMask)
+    assert mask.category == "animal"
+    assert mask.instance is instance
+    assert mask.height == 100
+    assert mask.width == 100
+    bx, by, bw, bh = mask.bbox
+    assert bx == pytest.approx(10.0, abs=1.0)
+    assert by == pytest.approx(10.0, abs=1.0)
+    assert (bx + bw) == pytest.approx(90.0, abs=1.0)
+    assert (by + bh) == pytest.approx(90.0, abs=1.0)
 
     # Should also have a BoundingBox linked to the instance
     assert len(labels.bboxes) == 1
@@ -2059,6 +2098,272 @@ def test_read_labels_keypoints_and_rle_segmentation(tmp_path):
     assert mask.width == 5
     # Mask should be linked to the instance
     assert mask.instance is labels.labeled_frames[0].instances[0]
+
+
+def test_coco_read_invalid_segmentation_format(tmp_path):
+    """An unknown segmentation_format raises ValueError."""
+    data = {
+        "images": [{"id": 1, "file_name": "img.png", "height": 10, "width": 10}],
+        "annotations": [],
+        "categories": [{"id": 1, "name": "obj"}],
+    }
+    json_path = tmp_path / "x.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+    with pytest.raises(ValueError, match="segmentation_format"):
+        coco.read_labels(json_path, dataset_root=tmp_path, segmentation_format="bad")
+
+
+def test_coco_polygon_mask_falls_back_to_roi_without_dims(tmp_path):
+    """In mask mode, polygons fall back to ROI when image dims are missing."""
+    img_path = tmp_path / "img.png"
+    img_path.touch()
+    data = {
+        "images": [{"id": 1, "file_name": "img.png"}],  # no height/width
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [[1.0, 1.0, 5.0, 1.0, 5.0, 5.0, 1.0, 5.0]],
+            }
+        ],
+        "categories": [{"id": 1, "name": "obj"}],
+    }
+    json_path = tmp_path / "nodims.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+    # Default mask mode cannot rasterize without dims, so it keeps the polygon.
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+    assert len(labels.masks) == 0
+    assert len(labels.rois) == 1
+    assert labels.rois[0].category == "obj"
+
+
+def test_coco_multipolygon_annotation_single_mask(tmp_path):
+    """Multiple polygons in one annotation rasterize to a single mask."""
+    img_path = tmp_path / "img.png"
+    img_path.touch()
+    data = {
+        "images": [{"id": 1, "file_name": "img.png", "height": 50, "width": 50}],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [
+                    [1.0, 1.0, 10.0, 1.0, 10.0, 10.0, 1.0, 10.0],
+                    [20.0, 20.0, 30.0, 20.0, 30.0, 30.0, 20.0, 30.0],
+                ],
+            }
+        ],
+        "categories": [{"id": 1, "name": "obj"}],
+    }
+    json_path = tmp_path / "multipoly.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+    # Two disjoint rings of one annotation collapse into a single object mask
+    # spanning both squares.
+    assert len(labels.masks) == 1
+    m = labels.masks[0]
+    assert m.area > 0
+    bx, by, bw, bh = m.bbox
+    assert bx == pytest.approx(1.0, abs=1.0)
+    assert (bx + bw) == pytest.approx(30.0, abs=1.0)
+    assert by == pytest.approx(1.0, abs=1.0)
+    assert (by + bh) == pytest.approx(30.0, abs=1.0)
+
+
+def test_coco_polygon_degenerate_ring_skipped(tmp_path):
+    """A polygon ring with fewer than 3 vertices is skipped, not crashed on."""
+    img_path = tmp_path / "img.png"
+    img_path.touch()
+    data = {
+        "images": [{"id": 1, "file_name": "img.png", "height": 40, "width": 40}],
+        "annotations": [
+            # Degenerate ring (a single point): cannot form a polygon.
+            {"id": 1, "image_id": 1, "category_id": 1, "segmentation": [[5.0, 5.0]]},
+            # Valid ring alongside it on another object.
+            {
+                "id": 2,
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [[1.0, 1.0, 10.0, 1.0, 10.0, 10.0, 1.0, 10.0]],
+            },
+        ],
+        "categories": [{"id": 1, "name": "obj"}],
+    }
+    json_path = tmp_path / "degenerate.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+    # Does not raise; the degenerate ring yields no mask, the valid one does.
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+    assert len(labels.masks) == 1
+    assert labels.masks[0].area > 0
+
+
+def test_coco_segmentation_load_file_and_slp_roundtrip(tmp_path):
+    """Keypoint-free segmentation COCO auto-detects and round-trips via .slp."""
+    img = np.zeros((20, 20, 3), dtype=np.uint8)
+    img_path = tmp_path / "frame.png"
+    iio.imwrite(str(img_path), img)
+    data = {
+        "images": [{"id": 1, "file_name": "frame.png", "height": 20, "width": 20}],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [[2.0, 2.0, 15.0, 2.0, 15.0, 15.0, 2.0, 15.0]],
+                "bbox": [2, 2, 13, 13],
+                "area": 169,
+                "iscrowd": 0,
+            }
+        ],
+        "categories": [{"id": 1, "name": "critter"}],
+    }
+    json_path = tmp_path / "seg.coco.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    # load_file auto-detects COCO despite the absence of keypoints.
+    labels = sio.load_file(str(json_path))
+    assert sum(len(lf.masks) for lf in labels.labeled_frames) == 1
+    mask = labels.masks[0]
+    assert isinstance(mask, UserSegmentationMask)
+    assert mask.category == "critter"
+
+    # Round-trip through .slp preserves the mask, category, and area.
+    slp_path = tmp_path / "seg.slp"
+    sio.save_file(labels, str(slp_path))
+    reloaded = sio.load_file(str(slp_path))
+    rmasks = [m for lf in reloaded.labeled_frames for m in lf.masks]
+    assert len(rmasks) == 1
+    assert rmasks[0].category == "critter"
+    assert rmasks[0].area == mask.area
+
+
+def test_coco_load_file_forwards_kwargs(tmp_path):
+    """load_file forwards segmentation_format and category_as_track to load_coco."""
+    img_path = tmp_path / "frame.png"
+    img_path.touch()
+    data = {
+        "images": [{"id": 1, "file_name": "frame.png", "height": 30, "width": 30}],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [[2.0, 2.0, 15.0, 2.0, 15.0, 15.0, 2.0, 15.0]],
+            }
+        ],
+        "categories": [{"id": 1, "name": "critter"}],
+    }
+    json_path = tmp_path / "kw.coco.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    # segmentation_format="roi" forwarded -> polygon kept as vector ROI.
+    roi_labels = sio.load_file(str(json_path), segmentation_format="roi")
+    assert len(roi_labels.rois) == 1
+    assert len(roi_labels.masks) == 0
+
+    # category_as_track=True forwarded -> identity Track named after the category.
+    track_labels = sio.load_file(str(json_path), category_as_track=True)
+    assert {t.name for t in track_labels.tracks} == {"critter"}
+    assert track_labels.masks[0].track.name == "critter"
+
+
+def test_coco_category_as_track(tmp_path):
+    """category_as_track assigns one shared Track per category as identity."""
+    (tmp_path / "img1.png").touch()
+    (tmp_path / "img2.png").touch()
+    # Two categories ("a", "b") appearing across two frames.
+    data = {
+        "images": [
+            {"id": 1, "file_name": "img1.png", "height": 40, "width": 40},
+            {"id": 2, "file_name": "img2.png", "height": 40, "width": 40},
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [[1.0, 1.0, 10.0, 1.0, 10.0, 10.0, 1.0, 10.0]],
+            },
+            {
+                "id": 2,
+                "image_id": 1,
+                "category_id": 2,
+                "segmentation": [[20.0, 20.0, 30.0, 20.0, 30.0, 30.0, 20.0, 30.0]],
+            },
+            {
+                "id": 3,
+                "image_id": 2,
+                "category_id": 1,
+                "segmentation": [[2.0, 2.0, 12.0, 2.0, 12.0, 12.0, 2.0, 12.0]],
+            },
+            # A bbox-only annotation (no segmentation) for category "b".
+            {
+                "id": 4,
+                "image_id": 2,
+                "category_id": 2,
+                "bbox": [5.0, 5.0, 8.0, 8.0],
+            },
+        ],
+        "categories": [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}],
+    }
+    json_path = tmp_path / "ident.coco.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    labels = coco.read_labels(json_path, dataset_root=tmp_path, category_as_track=True)
+
+    # One Track per category, collected onto the Labels.
+    assert {t.name for t in labels.tracks} == {"a", "b"}
+    # Every mask's track name equals its category.
+    for m in labels.masks:
+        assert m.track is not None
+        assert m.track.name == m.category
+    # The bbox-only annotation also gets its category track.
+    assert len(labels.bboxes) == 1
+    assert labels.bboxes[0].track is not None
+    assert labels.bboxes[0].track.name == labels.bboxes[0].category == "b"
+    # The bbox and the masks of category "b" share the same Track object.
+    b_mask = next(m for m in labels.masks if m.category == "b")
+    assert labels.bboxes[0].track is b_mask.track
+    # The two "a" masks (different frames) share the same Track object.
+    a_masks = [m for m in labels.masks if m.category == "a"]
+    assert len(a_masks) == 2
+    assert a_masks[0].track is a_masks[1].track
+
+    # Identity tracks survive a .slp round-trip.
+    slp_path = tmp_path / "ident.slp"
+    sio.save_file(labels, str(slp_path))
+    reloaded = sio.load_file(str(slp_path))
+    assert {t.name for t in reloaded.tracks} == {"a", "b"}
+    for m in reloaded.masks:
+        assert m.track is not None
+        assert m.track.name == m.category
+
+    # roi mode also assigns category tracks to the vector ROIs.
+    roi_labels = coco.read_labels(
+        json_path,
+        dataset_root=tmp_path,
+        segmentation_format="roi",
+        category_as_track=True,
+    )
+    assert {t.name for t in roi_labels.tracks} == {"a", "b"}
+    for r in roi_labels.rois:
+        assert r.track is not None
+        assert r.track.name == r.category
+
+    # Default (category_as_track=False) leaves masks and bboxes untracked.
+    untracked = coco.read_labels(json_path, dataset_root=tmp_path)
+    assert len(untracked.tracks) == 0
+    assert all(m.track is None for m in untracked.masks)
+    assert all(b.track is None for b in untracked.bboxes)
 
 
 def test_coco_detection_reads_as_bbox(tmp_path):
