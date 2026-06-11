@@ -154,8 +154,8 @@ def write_labels(
             Default False.
         start_frame: Start frame index (inclusive) for output. If None, starts
             from 0 when include_empty=True, or from first labeled frame otherwise.
-        end_frame: End frame index (exclusive) for output. If None, ends at
-            last labeled frame + 1.
+        end_frame: End frame index (exclusive) for output. If None, ends at the
+            full video length when known, otherwise at last labeled frame + 1.
         chunk_size: Number of rows per chunk for memory-efficient writing. If None
             (default), writes entire DataFrame at once. Useful for large datasets
             that don't fit in memory. Not supported for DLC format.
