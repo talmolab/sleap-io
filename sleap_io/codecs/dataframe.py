@@ -155,7 +155,7 @@ def to_dataframe(
         start_frame: Start frame index (inclusive) for frame padding. If None, starts
             from 0 when all_frames=True, or from first labeled frame otherwise.
         end_frame: End frame index (exclusive) for frame padding. If None, ends at
-            last labeled frame + 1.
+            the full video length when known, otherwise at last labeled frame + 1.
 
     Returns:
         DataFrame in the specified format. Type depends on backend parameter.
@@ -1148,9 +1148,19 @@ def _to_instances_df(  # noqa: D417
                 # No labeled frames for this video - skip padding
                 continue
 
-            # Determine range
+            # Determine range. Default to the full video length (when known) so the
+            # output spans the whole video, mirroring the numpy/Analysis-HDF5 path
+            # (see sleap_io/codecs/numpy.py). len(vid) is an exclusive end (a frame
+            # count), and returns 0 when the shape can't be resolved, preserving the
+            # fallback to the last labeled frame.
             first = start_frame if start_frame is not None else 0
-            last = end_frame if end_frame is not None else max(vid_frame_idxs) + 1
+            if end_frame is not None:
+                last = end_frame
+            else:
+                last = max(vid_frame_idxs) + 1
+                video_length = len(vid)
+                if video_length > 0:
+                    last = max(last, video_length)
 
             # Add empty rows for missing frames
             for frame_idx in range(first, last):
@@ -1478,8 +1488,8 @@ def _to_frames_df(  # noqa: D417
         all_frames: If True, include rows for empty frames in the specified range.
         start_frame: Start frame index (inclusive) for padding. Default: 0 if
             all_frames=True, else first labeled frame.
-        end_frame: End frame index (exclusive) for padding. Default: last labeled
-            frame + 1.
+        end_frame: End frame index (exclusive) for padding. Default: the full video
+            length when known, otherwise last labeled frame + 1.
 
     Column structure (instance_id="index"):
         frame_idx | video | inst0.track | inst0.track_score | inst0.score |
@@ -1558,9 +1568,19 @@ def _to_frames_df(  # noqa: D417
                 # No labeled frames for this video - skip padding
                 continue
 
-            # Determine range
+            # Determine range. Default to the full video length (when known) so the
+            # output spans the whole video, mirroring the numpy/Analysis-HDF5 path
+            # (see sleap_io/codecs/numpy.py). len(vid) is an exclusive end (a frame
+            # count), and returns 0 when the shape can't be resolved, preserving the
+            # fallback to the last labeled frame.
             first = start_frame if start_frame is not None else 0
-            last = end_frame if end_frame is not None else max(vid_frame_idxs) + 1
+            if end_frame is not None:
+                last = end_frame
+            else:
+                last = max(vid_frame_idxs) + 1
+                video_length = len(vid)
+                if video_length > 0:
+                    last = max(last, video_length)
 
             # Add empty entries for missing frames
             for frame_idx in range(first, last):
