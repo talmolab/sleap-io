@@ -20,8 +20,8 @@ from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.mask import UserSegmentationMask
-from sleap_io.model.roi import UserROI
+from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
+from sleap_io.model.roi import PredictedROI, UserROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
@@ -242,6 +242,7 @@ def _decode_segmentation(
     height: int,
     width: int,
     segmentation_format: str,
+    score: float | None = None,
     **kwargs,
 ) -> tuple[list, list]:
     """Decode a COCO ``segmentation`` field into masks and/or ROIs.
@@ -249,13 +250,17 @@ def _decode_segmentation(
     COCO encodes segmentation either as RLE (a dict with ``counts``/``size``) or
     as polygons (a list of flat ``[x1, y1, x2, y2, ...]`` rings, where multiple
     rings belong to a single object). RLE is always materialized as a
-    `UserSegmentationMask`. Polygon handling depends on ``segmentation_format``:
+    segmentation mask. Polygon handling depends on ``segmentation_format``:
 
     - ``"mask"``: rasterize all rings of the annotation into a single
-      `UserSegmentationMask` at the image resolution. Requires positive
-      ``height`` and ``width``; if either is missing (``<= 0``), the polygon is
-      kept as ROI(s) instead since rasterization needs the image extent.
-    - ``"roi"``: keep the native vector geometry as one `UserROI` per ring.
+      segmentation mask at the image resolution. Requires positive ``height``
+      and ``width``; if either is missing (``<= 0``), the polygon is kept as
+      ROI(s) instead since rasterization needs the image extent.
+    - ``"roi"``: keep the native vector geometry as one ROI per ring.
+
+    When ``score`` is provided, predicted variants
+    (`PredictedSegmentationMask` / `PredictedROI`) carrying the score are
+    created; otherwise user variants are created.
 
     Args:
         segmentation: The COCO ``segmentation`` field (RLE dict, polygon list, or
@@ -263,8 +268,10 @@ def _decode_segmentation(
         height: Image height in pixels (used to rasterize polygons in mask mode).
         width: Image width in pixels (used to rasterize polygons in mask mode).
         segmentation_format: Either ``"mask"`` or ``"roi"``.
+        score: Optional COCO detection confidence. If not ``None``, predicted
+            mask/ROI variants are created with this score.
         **kwargs: Metadata forwarded to the created mask/ROI objects (e.g.
-            ``category``, ``instance``).
+            ``category``, ``instance``, ``track``).
 
     Returns:
         A ``(masks, rois)`` tuple of the decoded objects for this annotation.
@@ -275,10 +282,16 @@ def _decode_segmentation(
     if segmentation is None:
         return masks, rois
 
+    # Predicted variants carry a score; user variants do not.
+    predicted = score is not None
+    mask_cls = PredictedSegmentationMask if predicted else UserSegmentationMask
+    roi_cls = PredictedROI if predicted else UserROI
+    score_kw = {"score": score} if predicted else {}
+
     if isinstance(segmentation, dict):
         # RLE format: always materialize as a segmentation mask.
         mask = _decode_coco_rle(segmentation["counts"], segmentation["size"])
-        masks.append(UserSegmentationMask.from_numpy(mask, **kwargs))
+        masks.append(mask_cls.from_numpy(mask, **kwargs, **score_kw))
         return masks, rois
 
     if isinstance(segmentation, list) and len(segmentation) > 0:
@@ -298,14 +311,15 @@ def _decode_segmentation(
 
         if segmentation_format == "mask" and height > 0 and width > 0:
             if len(polygons) == 1:
-                roi = UserROI.from_polygon(polygons[0], **kwargs)
+                roi = roi_cls.from_polygon(polygons[0], **kwargs, **score_kw)
             else:
-                roi = UserROI.from_multi_polygon(polygons, **kwargs)
+                roi = roi_cls.from_multi_polygon(polygons, **kwargs, **score_kw)
+            # to_mask preserves the predicted/user variant and score from the ROI.
             masks.append(roi.to_mask(height, width))
         else:
             # ROI mode, or mask mode without image dimensions to rasterize into.
             for coords in polygons:
-                rois.append(UserROI.from_polygon(coords, **kwargs))
+                rois.append(roi_cls.from_polygon(coords, **kwargs, **score_kw))
 
     return masks, rois
 
@@ -397,10 +411,15 @@ def read_labels(
             image_annotations[image_id] = []
         image_annotations[image_id].append(annotation)
 
-    # Group images by shape (height, width) for shared Video objects
+    # Group images by shape (height, width) for shared Video objects. Each
+    # ``images`` entry becomes its own frame in its shape's video, so the frame
+    # index is the entry's position within that group. This is keyed by image_id
+    # directly (not by resolved path) so distinct images that share a file_name
+    # do not collide.
     shape_to_images = {}
     image_id_to_path = {}
     image_id_to_shape = {}
+    image_id_to_frame_idx = {}
 
     for image_info in coco_data["images"]:
         image_id = image_info["id"]
@@ -418,6 +437,7 @@ def read_labels(
             image_id_to_shape[image_id] = shape_key
             if shape_key not in shape_to_images:
                 shape_to_images[shape_key] = []
+            image_id_to_frame_idx[image_id] = len(shape_to_images[shape_key])
             shape_to_images[shape_key].append(str(image_path))
         except FileNotFoundError:
             # Skip missing images
@@ -442,16 +462,6 @@ def read_labels(
     rois = []
     masks = []
     bboxes = []
-    image_id_to_frame_idx = {}
-
-    # Build frame index mapping for each image
-    for shape_key, image_paths in shape_to_images.items():
-        for frame_idx, image_path in enumerate(image_paths):
-            # Find the image_id for this path
-            for img_id, path in image_id_to_path.items():
-                if str(path) == image_path:
-                    image_id_to_frame_idx[img_id] = frame_idx
-                    break
 
     for image_info in coco_data["images"]:
         image_id = image_info["id"]
@@ -541,7 +551,9 @@ def read_labels(
                         )
                         bboxes.append(bbox_obj)
                 else:
-                    # Detection-only annotation: create ROIs/masks/bboxes
+                    # Detection-only annotation: create ROIs/masks/bboxes. A
+                    # COCO ``score`` marks a prediction, so it selects predicted
+                    # mask/ROI/bbox variants (mirrors the bbox handling below).
                     roi_kwargs = dict(
                         category=cat_name,
                         track=_category_track(cat_name),
@@ -554,6 +566,7 @@ def read_labels(
                         img_height,
                         img_width,
                         segmentation_format,
+                        score=annotation.get("score"),
                         **roi_kwargs,
                     )
                     masks.extend(seg_masks)

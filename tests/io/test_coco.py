@@ -12,11 +12,12 @@ from sleap_io.io import coco
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.instance import Track
 from sleap_io.model.labels import Labels
-from sleap_io.model.mask import UserSegmentationMask
+from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
 from sleap_io.model.matching import (
     IMAGE_DEDUP_VIDEO_MATCHER,
     SHAPE_VIDEO_MATCHER,
 )
+from sleap_io.model.roi import PredictedROI, UserROI
 
 
 class TestCOCOBasicLoading:
@@ -659,6 +660,53 @@ def test_shared_video_objects_for_same_shape(tmp_path):
     assert sorted(frame_indices_100x100) == [0, 1, 2]
     # 200x150 video should have frame at index 0 (1 image)
     assert frame_indices_200x150 == [0]
+
+
+def test_coco_duplicate_filename_distinct_frames(tmp_path):
+    """Distinct image entries that share a file_name each get their own frame."""
+    img_path = tmp_path / "dup.png"
+    img_path.touch()
+    # Three image entries all pointing at the same file_name, with one annotation
+    # each. Previously the path-keyed frame-index map collided and raised KeyError.
+    data = {
+        "images": [
+            {"id": 10, "file_name": "dup.png", "height": 40, "width": 40},
+            {"id": 11, "file_name": "dup.png", "height": 40, "width": 40},
+            {"id": 12, "file_name": "dup.png", "height": 40, "width": 40},
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 10,
+                "category_id": 1,
+                "segmentation": [[1.0, 1.0, 10.0, 1.0, 10.0, 10.0, 1.0, 10.0]],
+            },
+            {
+                "id": 2,
+                "image_id": 11,
+                "category_id": 1,
+                "segmentation": [[2.0, 2.0, 12.0, 2.0, 12.0, 12.0, 2.0, 12.0]],
+            },
+            {
+                "id": 3,
+                "image_id": 12,
+                "category_id": 1,
+                "segmentation": [[3.0, 3.0, 13.0, 3.0, 13.0, 13.0, 3.0, 13.0]],
+            },
+        ],
+        "categories": [{"id": 1, "name": "obj"}],
+    }
+    json_path = tmp_path / "dup.coco.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    # Does not raise; one frame per image entry, each at a distinct index.
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+    assert len(labels.labeled_frames) == 3
+    assert sorted(lf.frame_idx for lf in labels.labeled_frames) == [0, 1, 2]
+    # Each frame carries exactly its own annotation's mask.
+    assert all(len(lf.masks) == 1 for lf in labels.labeled_frames)
+    assert sum(len(lf.masks) for lf in labels.labeled_frames) == 3
 
 
 def test_grayscale_loading(tmp_path):
@@ -2476,6 +2524,73 @@ def test_coco_predicted_bbox(tmp_path):
     assert y == pytest.approx(20.0)
     assert w == pytest.approx(30.0)
     assert h == pytest.approx(40.0)
+
+
+def test_coco_scored_segmentation_is_predicted(tmp_path):
+    """A `score` on a detection annotation yields predicted mask/ROI variants."""
+    img_path = tmp_path / "pred.png"
+    img_path.touch()
+    data = {
+        "images": [{"id": 1, "file_name": "pred.png", "height": 30, "width": 30}],
+        "annotations": [
+            # Scored polygon -> PredictedSegmentationMask.
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "score": 0.9,
+                "segmentation": [[2.0, 2.0, 15.0, 2.0, 15.0, 15.0, 2.0, 15.0]],
+            },
+            # Scored RLE -> PredictedSegmentationMask.
+            {
+                "id": 2,
+                "image_id": 1,
+                "category_id": 1,
+                "score": 0.7,
+                "segmentation": {"counts": [0, 5, 5, 5, 5], "size": [5, 5]},
+            },
+            # Unscored polygon -> UserSegmentationMask.
+            {
+                "id": 3,
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [[20.0, 20.0, 28.0, 20.0, 28.0, 28.0, 20.0, 28.0]],
+            },
+        ],
+        "categories": [{"id": 1, "name": "obj"}],
+    }
+    json_path = tmp_path / "pred_seg.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    # Default mask mode: scored -> predicted (with score), unscored -> user.
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+    masks = labels.labeled_frames[0].masks
+    assert len(masks) == 3
+    predicted = [m for m in masks if isinstance(m, PredictedSegmentationMask)]
+    user = [m for m in masks if type(m) is UserSegmentationMask]
+    assert len(predicted) == 2
+    assert len(user) == 1
+    assert sorted(m.score for m in predicted) == pytest.approx([0.7, 0.9])
+
+    # roi mode: scored polygon -> PredictedROI; the scored RLE is still a mask.
+    roi_labels = coco.read_labels(
+        json_path, dataset_root=tmp_path, segmentation_format="roi"
+    )
+    rois = roi_labels.labeled_frames[0].rois
+    assert [type(r) for r in rois] == [PredictedROI, UserROI]
+    assert rois[0].score == pytest.approx(0.9)
+    assert len(roi_labels.labeled_frames[0].masks) == 1  # RLE stays a mask
+
+    # Predicted masks survive a .slp round-trip with class and score intact.
+    slp_path = tmp_path / "pred_seg.slp"
+    sio.save_file(labels, str(slp_path))
+    reloaded = sio.load_file(str(slp_path))
+    rmasks = reloaded.labeled_frames[0].masks
+    rpred = [m for m in rmasks if isinstance(m, PredictedSegmentationMask)]
+    assert len(rpred) == 2
+    assert sorted(m.score for m in rpred) == pytest.approx([0.7, 0.9])
+    assert sum(1 for m in rmasks if type(m) is UserSegmentationMask) == 1
 
 
 def test_coco_bbox_roundtrip(tmp_path):
