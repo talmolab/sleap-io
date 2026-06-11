@@ -724,6 +724,33 @@ class TestIncludeEmpty:
         # Should have frames 0, 1, 2, 3
         assert list(df["frame_idx"]) == [0, 1, 2, 3]
 
+    def test_include_empty_sleap_spans_full_video(self, tmp_path):
+        """Analysis CSV export spans the whole video, not just labeled frames.
+
+        Reproduces talmolab/sleap#2774: instances stop before the end of a longer
+        video, but the exported CSV should still run to the final frame.
+        """
+        skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+        video = Video(filename="fake.mp4")
+        video.backend_metadata = {"shape": (2000, 64, 64, 1)}
+        assert len(video) == 2000
+
+        labeled_frames = []
+        for frame_idx in range(100, 1001):  # Instances only in 100..1000.
+            inst = Instance(
+                points={"a": [1.0, 2.0], "b": [3.0, 4.0]}, skeleton=skeleton
+            )
+            labeled_frames.append(
+                LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+            )
+        labels = Labels(labeled_frames=labeled_frames)
+
+        csv_path = tmp_path / "full_video.csv"
+        csv.write_labels(labels, csv_path, format="sleap", include_empty=True)
+
+        df = pd.read_csv(csv_path)
+        assert df["frame_idx"].max() == 1999
+
 
 # =============================================================================
 # Chunked Writing Tests

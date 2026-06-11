@@ -167,6 +167,12 @@ sio.save_csv(labels, "sparse.csv", include_empty=False)
 sio.save_csv(labels, "clip.csv", start_frame=100, end_frame=500)
 ```
 
+When `include_empty=True` and no explicit `end_frame` is given, padding spans the
+full video length when it is known (e.g. instances stopping at frame 1000 in a
+2000-frame video still export rows through frame 1999). This matches the Analysis
+HDF5 export. If the video length cannot be resolved, padding falls back to the last
+labeled frame.
+
 ## Metadata Sidecar
 
 CSV files cannot store all Labels information (skeleton edges, symmetries, suggestions). To enable full round-trip reconstruction, use `save_metadata=True`:

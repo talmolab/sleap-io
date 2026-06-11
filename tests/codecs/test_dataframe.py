@@ -4164,3 +4164,89 @@ def test_to_dataframe_frames_all_frames_multi_video_with_empty():
     assert list(df["frame_idx"]) == [0, 1, 2]
     # All rows should be from video1
     assert all(df["video_path"] == "video1.mp4")
+
+
+def _labels_with_known_length(format_nodes, frame_idxs, video_length):
+    """Build Labels over a video whose length is known via backend_metadata."""
+    skeleton = Skeleton(format_nodes)
+    video = Video(filename="fake.mp4")
+    video.backend_metadata = {"shape": (video_length, 64, 64, 1)}
+
+    labeled_frames = []
+    for frame_idx in frame_idxs:
+        inst = Instance.from_numpy(
+            np.array([[100.0, 200.0], [150.0, 250.0]]), skeleton=skeleton
+        )
+        labeled_frames.append(
+            LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+        )
+    return Labels(labeled_frames=labeled_frames), video
+
+
+def test_to_dataframe_frames_all_frames_spans_full_video():
+    """all_frames pads to the full video length, not just the last labeled frame."""
+    labels, video = _labels_with_known_length(["nose", "tail"], [2, 4], 10)
+    assert len(video) == 10
+
+    df = to_dataframe(labels, format="frames", all_frames=True)
+
+    # Should span 0..9 (len(video) - 1), not stop at the last labeled frame (4).
+    assert list(df["frame_idx"]) == list(range(10))
+
+
+def test_to_dataframe_instances_all_frames_spans_full_video():
+    """Instances format pads to the full video length when it is known."""
+    labels, video = _labels_with_known_length(["nose", "tail"], [1, 3], 8)
+    assert len(video) == 8
+
+    df = to_dataframe(labels, format="instances", all_frames=True)
+
+    assert set(df["frame_idx"]) == set(range(8))
+
+
+def test_to_dataframe_all_frames_unknown_video_length_unchanged():
+    """When video length is unknown, padding ends at the last labeled frame."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="unknown.mp4")  # No resolvable shape.
+    assert len(video) == 0
+
+    labeled_frames = []
+    for frame_idx in [0, 2]:
+        inst = Instance.from_numpy(
+            np.array([[100.0, 200.0], [150.0, 250.0]]), skeleton=skeleton
+        )
+        labeled_frames.append(
+            LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+        )
+    labels = Labels(labeled_frames=labeled_frames)
+
+    df_frames = to_dataframe(labels, format="frames", all_frames=True)
+    assert list(df_frames["frame_idx"]) == [0, 1, 2]
+
+    df_instances = to_dataframe(labels, format="instances", all_frames=True)
+    assert set(df_instances["frame_idx"]) == {0, 1, 2}
+
+
+def test_to_dataframe_all_frames_explicit_end_overrides_video_length():
+    """Explicit end_frame still takes precedence over the video length."""
+    labels, _ = _labels_with_known_length(["nose", "tail"], [0, 2], 100)
+
+    df_frames = to_dataframe(labels, format="frames", all_frames=True, end_frame=5)
+    assert list(df_frames["frame_idx"]) == [0, 1, 2, 3, 4]
+
+    df_instances = to_dataframe(
+        labels, format="instances", all_frames=True, end_frame=5
+    )
+    assert set(df_instances["frame_idx"]) == {0, 1, 2, 3, 4}
+
+
+def test_to_dataframe_all_frames_video_shorter_than_labels():
+    """When labels extend past the known length, padding still covers all labels."""
+    # Embedded pkg.slp case: len(video) reflects an embedded subset that can be
+    # smaller than the largest labeled frame index. The range must still cover
+    # every labeled frame.
+    labels, video = _labels_with_known_length(["nose", "tail"], [0, 6], 3)
+    assert len(video) == 3
+
+    df = to_dataframe(labels, format="frames", all_frames=True)
+    assert list(df["frame_idx"]) == [0, 1, 2, 3, 4, 5, 6]
