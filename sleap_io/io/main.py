@@ -681,27 +681,28 @@ def _is_alphatracker_data(data: object) -> bool:
 
 
 def _is_coco_data(data: object) -> bool:
-    """Classify already-parsed JSON data as COCO (pose) format.
+    """Classify already-parsed JSON data as COCO format.
+
+    Accepts pose (keypoint), detection (bbox), and instance-segmentation
+    (polygon or RLE) COCO datasets. COCO is a JSON *object* with ``images``,
+    ``annotations``, and ``categories`` arrays. Label Studio and AlphaTracker
+    exports are JSON *arrays*, so this dict-shaped check does not collide with
+    them; the presence of all three COCO arrays is an unambiguous signature.
 
     Args:
         data: The parsed JSON object.
 
     Returns:
-        True if the data matches the COCO pose schema, False otherwise.
+        True if the data matches the COCO schema, False otherwise.
     """
     if not isinstance(data, dict):
         return False
 
-    # COCO format has specific top-level fields
-    coco_fields = {"images", "annotations", "categories"}
-    has_coco_fields = all(field in data for field in coco_fields)
-
-    # Check if categories have keypoints (pose data)
-    has_keypoints = False
-    if "categories" in data:
-        has_keypoints = any("keypoints" in cat for cat in data["categories"])
-
-    return has_coco_fields and has_keypoints
+    # COCO stores images/annotations/categories as top-level arrays. Earlier
+    # versions also required keypoints, which excluded detection- and
+    # segmentation-only datasets; the array signature alone is sufficient.
+    coco_fields = ("images", "annotations", "categories")
+    return all(field in data and isinstance(data[field], list) for field in coco_fields)
 
 
 def _detect_alphatracker_format(json_path: str) -> bool:
@@ -858,9 +859,14 @@ def load_coco(
     json_path: str,
     dataset_root: str | None = None,
     grayscale: bool = False,
+    segmentation_format: str = "mask",
+    category_as_track: bool = False,
     **kwargs,
 ) -> Labels:
-    """Load a COCO-style pose dataset and return a Labels object.
+    """Load a COCO-style dataset and return a Labels object.
+
+    Supports pose (keypoint), detection (bbox), and instance-segmentation
+    (polygon or RLE) COCO datasets.
 
     Args:
         json_path: Path to the COCO annotation JSON file.
@@ -868,6 +874,14 @@ def load_coco(
                      of json_path.
         grayscale: If True, load images as grayscale (1 channel). If False, load as
                    RGB (3 channels). Default is False.
+        segmentation_format: How to represent polygon segmentation. ``"mask"`` (the
+            default) rasterizes polygons into `SegmentationMask` objects; ``"roi"``
+            keeps them as vector `ROI` objects. RLE segmentation is always read as a
+            `SegmentationMask`.
+        category_as_track: If True, treat each COCO category as a persistent
+            identity, creating one `Track` per category and assigning it to that
+            category's annotations. Useful for instance-segmentation datasets
+            where the category encodes identity. Default is False.
         **kwargs: Additional arguments (currently unused).
 
     Returns:
@@ -875,7 +889,13 @@ def load_coco(
     """
     from sleap_io.io import coco
 
-    return coco.read_labels(json_path, dataset_root=dataset_root, grayscale=grayscale)
+    return coco.read_labels(
+        json_path,
+        dataset_root=dataset_root,
+        grayscale=grayscale,
+        segmentation_format=segmentation_format,
+        category_as_track=category_as_track,
+    )
 
 
 def save_coco(
@@ -1086,6 +1106,11 @@ def load_file(
             - For "coco" format: dataset_root (Optional[str]): Root directory of the
               dataset. grayscale (bool): If True, load images as grayscale (1 channel).
               If False, load as RGB (3 channels). Default is False.
+              segmentation_format (str): How to represent polygon segmentation.
+              "mask" (default) rasterizes polygons into `SegmentationMask` objects;
+              "roi" keeps them as vector `ROI` objects. category_as_track (bool): If
+              True, treat each COCO category as a persistent identity, creating one
+              `Track` per category. Default is False.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
             - For "analysis_h5" format: video (Optional[Video | str]): Video to

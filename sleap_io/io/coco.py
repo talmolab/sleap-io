@@ -237,10 +237,85 @@ def _encode_coco_rle(mask: np.ndarray) -> dict:
     return {"counts": run_lengths, "size": [height, width]}
 
 
+def _decode_segmentation(
+    segmentation: dict | list | None,
+    height: int,
+    width: int,
+    segmentation_format: str,
+    **kwargs,
+) -> tuple[list, list]:
+    """Decode a COCO ``segmentation`` field into masks and/or ROIs.
+
+    COCO encodes segmentation either as RLE (a dict with ``counts``/``size``) or
+    as polygons (a list of flat ``[x1, y1, x2, y2, ...]`` rings, where multiple
+    rings belong to a single object). RLE is always materialized as a
+    `UserSegmentationMask`. Polygon handling depends on ``segmentation_format``:
+
+    - ``"mask"``: rasterize all rings of the annotation into a single
+      `UserSegmentationMask` at the image resolution. Requires positive
+      ``height`` and ``width``; if either is missing (``<= 0``), the polygon is
+      kept as ROI(s) instead since rasterization needs the image extent.
+    - ``"roi"``: keep the native vector geometry as one `UserROI` per ring.
+
+    Args:
+        segmentation: The COCO ``segmentation`` field (RLE dict, polygon list, or
+            ``None``).
+        height: Image height in pixels (used to rasterize polygons in mask mode).
+        width: Image width in pixels (used to rasterize polygons in mask mode).
+        segmentation_format: Either ``"mask"`` or ``"roi"``.
+        **kwargs: Metadata forwarded to the created mask/ROI objects (e.g.
+            ``category``, ``instance``).
+
+    Returns:
+        A ``(masks, rois)`` tuple of the decoded objects for this annotation.
+    """
+    masks = []
+    rois = []
+
+    if segmentation is None:
+        return masks, rois
+
+    if isinstance(segmentation, dict):
+        # RLE format: always materialize as a segmentation mask.
+        mask = _decode_coco_rle(segmentation["counts"], segmentation["size"])
+        masks.append(UserSegmentationMask.from_numpy(mask, **kwargs))
+        return masks, rois
+
+    if isinstance(segmentation, list) and len(segmentation) > 0:
+        # Polygon format: each entry is a flat [x1, y1, x2, y2, ...] ring. All
+        # rings of one annotation describe a single object. Skip degenerate rings
+        # with fewer than 3 vertices (points/lines), which cannot form a polygon.
+        polygons = []
+        for ring in segmentation:
+            coords = [
+                (float(ring[i]), float(ring[i + 1])) for i in range(0, len(ring) - 1, 2)
+            ]
+            if len(coords) >= 3:
+                polygons.append(coords)
+
+        if not polygons:
+            return masks, rois
+
+        if segmentation_format == "mask" and height > 0 and width > 0:
+            if len(polygons) == 1:
+                roi = UserROI.from_polygon(polygons[0], **kwargs)
+            else:
+                roi = UserROI.from_multi_polygon(polygons, **kwargs)
+            masks.append(roi.to_mask(height, width))
+        else:
+            # ROI mode, or mask mode without image dimensions to rasterize into.
+            for coords in polygons:
+                rois.append(UserROI.from_polygon(coords, **kwargs))
+
+    return masks, rois
+
+
 def read_labels(
     json_path: str | Path,
     dataset_root: str | Path | None = None,
     grayscale: bool = False,
+    segmentation_format: str = "mask",
+    category_as_track: bool = False,
 ) -> Labels:
     """Read COCO-style dataset and return a Labels object.
 
@@ -256,10 +331,42 @@ def read_labels(
                      of json_path.
         grayscale: If True, load images as grayscale (1 channel). If False, load as
                    RGB (3 channels). Default is False.
+        segmentation_format: How to represent polygon segmentation. ``"mask"`` (the
+            default) rasterizes each annotation's polygon(s) into a single
+            `SegmentationMask` at the image resolution; ``"roi"`` keeps the native
+            vector geometry as `ROI` objects. RLE segmentation is always read as a
+            `SegmentationMask` regardless of this setting. In ``"mask"`` mode,
+            polygons for images that lack ``height``/``width`` fall back to ROIs
+            since rasterization requires the image extent.
+        category_as_track: If True, treat each COCO category as a persistent
+            identity: one `Track` (named after the category) is created per
+            category and assigned to every annotation of that category (masks,
+            ROIs, bounding boxes, and keypoint instances without an explicit
+            track id). Useful for instance-segmentation datasets where the
+            category encodes identity rather than object class. Default is False.
 
     Returns:
         Parsed labels as a Labels instance.
+
+    Raises:
+        ValueError: If ``segmentation_format`` is not ``"mask"`` or ``"roi"``.
     """
+    if segmentation_format not in ("mask", "roi"):
+        raise ValueError(
+            f"segmentation_format must be 'mask' or 'roi', got {segmentation_format!r}."
+        )
+
+    # One shared Track per category name, created on first use.
+    category_track_dict: dict[str, Track] = {}
+
+    def _category_track(cat_name: str) -> Track | None:
+        """Return the shared Track for a category, creating it on first use."""
+        if not category_as_track or not cat_name:
+            return None
+        if cat_name not in category_track_dict:
+            category_track_dict[cat_name] = Track(name=cat_name)
+        return category_track_dict[cat_name]
+
     json_path = Path(json_path)
 
     if dataset_root is None:
@@ -355,6 +462,7 @@ def read_labels(
 
         # Get the video and frame index for this image
         shape_key = image_id_to_shape[image_id]
+        img_height, img_width = shape_key
         video = shape_to_video[shape_key]
         frame_idx = image_id_to_frame_idx[image_id]
 
@@ -382,6 +490,9 @@ def read_labels(
                         if track_id not in track_dict:
                             track_dict[track_id] = Track(name=f"track_{track_id}")
                         track = track_dict[track_id]
+                    else:
+                        # Fall back to category identity when requested.
+                        track = _category_track(cat_name)
 
                     keypoints_data = annotation["keypoints"]
                     expected_keypoints = len(skeleton.nodes)
@@ -397,33 +508,23 @@ def read_labels(
                     instances.append(instance)
 
                     # Also extract segmentation/bbox if present alongside
-                    # keypoints
+                    # keypoints. Linked annotations share the instance's track.
                     roi_kwargs = dict(
                         category=cat_name,
                         instance=instance,
+                        track=track,
                     )
 
                     segmentation = annotation.get("segmentation")
-                    if segmentation is not None:
-                        if isinstance(segmentation, dict):
-                            # RLE format
-                            mask = _decode_coco_rle(
-                                segmentation["counts"],
-                                segmentation["size"],
-                            )
-                            seg_mask = UserSegmentationMask.from_numpy(
-                                mask, **roi_kwargs
-                            )
-                            masks.append(seg_mask)
-                        elif isinstance(segmentation, list) and len(segmentation) > 0:
-                            # Polygon format
-                            for poly_flat in segmentation:
-                                coords = [
-                                    (poly_flat[i], poly_flat[i + 1])
-                                    for i in range(0, len(poly_flat), 2)
-                                ]
-                                roi = UserROI.from_polygon(coords, **roi_kwargs)
-                                rois.append(roi)
+                    seg_masks, seg_rois = _decode_segmentation(
+                        segmentation,
+                        img_height,
+                        img_width,
+                        segmentation_format,
+                        **roi_kwargs,
+                    )
+                    masks.extend(seg_masks)
+                    rois.extend(seg_rois)
 
                     # Create BoundingBox linked to instance if bbox present
                     bbox = annotation.get("bbox")
@@ -436,36 +537,27 @@ def read_labels(
                             h,
                             category=cat_name,
                             instance=instance,
+                            track=track,
                         )
                         bboxes.append(bbox_obj)
                 else:
                     # Detection-only annotation: create ROIs/masks/bboxes
                     roi_kwargs = dict(
                         category=cat_name,
+                        track=_category_track(cat_name),
                     )
 
                     # Handle segmentation field
                     segmentation = annotation.get("segmentation")
-                    if segmentation is not None:
-                        if isinstance(segmentation, dict):
-                            # RLE format
-                            mask = _decode_coco_rle(
-                                segmentation["counts"],
-                                segmentation["size"],
-                            )
-                            seg_mask = UserSegmentationMask.from_numpy(
-                                mask, **roi_kwargs
-                            )
-                            masks.append(seg_mask)
-                        elif isinstance(segmentation, list) and len(segmentation) > 0:
-                            # Polygon format
-                            for poly_flat in segmentation:
-                                coords = [
-                                    (poly_flat[i], poly_flat[i + 1])
-                                    for i in range(0, len(poly_flat), 2)
-                                ]
-                                roi = UserROI.from_polygon(coords, **roi_kwargs)
-                                rois.append(roi)
+                    seg_masks, seg_rois = _decode_segmentation(
+                        segmentation,
+                        img_height,
+                        img_width,
+                        segmentation_format,
+                        **roi_kwargs,
+                    )
+                    masks.extend(seg_masks)
+                    rois.extend(seg_rois)
 
                     # Create BoundingBox if no segmentation was processed
                     bbox = annotation.get("bbox")
@@ -511,6 +603,8 @@ def read_labels_set(
     dataset_path: str | Path,
     json_files: list[str] | None = None,
     grayscale: bool = False,
+    segmentation_format: str = "mask",
+    category_as_track: bool = False,
 ) -> dict[str, Labels]:
     """Read multiple COCO annotation files and return a dictionary of Labels.
 
@@ -523,6 +617,14 @@ def read_labels_set(
                    discovers all .json files in the dataset directory.
         grayscale: If True, load images as grayscale (1 channel). If False, load as
                    RGB (3 channels). Default is False.
+        segmentation_format: How to represent polygon segmentation. ``"mask"`` (the
+            default) rasterizes polygons into `SegmentationMask` objects; ``"roi"``
+            keeps them as vector `ROI` objects. RLE segmentation is always read as a
+            `SegmentationMask`. See `read_labels` for details.
+        category_as_track: If True, treat each COCO category as a persistent
+            identity, creating one `Track` per category and assigning it to that
+            category's annotations. See `read_labels` for details. Tracks are
+            created independently per split. Default is False.
 
     Returns:
         Dictionary mapping split names to Labels objects.
@@ -544,7 +646,13 @@ def read_labels_set(
         split_name = json_path.stem
 
         # Load labels for this split
-        labels = read_labels(json_path, dataset_root=dataset_path, grayscale=grayscale)
+        labels = read_labels(
+            json_path,
+            dataset_root=dataset_path,
+            grayscale=grayscale,
+            segmentation_format=segmentation_format,
+            category_as_track=category_as_track,
+        )
         labels_dict[split_name] = labels
 
     return labels_dict

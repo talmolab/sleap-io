@@ -1247,6 +1247,26 @@ def test_gdrive_format_from_bytes_json_coco():
     assert _gdrive_format_from_bytes(coco) == "coco"
 
 
+def test_gdrive_format_from_bytes_json_coco_segmentation():
+    """A keypoint-free segmentation COCO JSON object is classified as coco."""
+    coco = json.dumps(
+        {
+            "images": [{"id": 1, "file_name": "a.png", "height": 4, "width": 4}],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": 1,
+                    "segmentation": [[0, 0, 3, 0, 3, 3, 0, 3]],
+                    "bbox": [0, 0, 3, 3],
+                }
+            ],
+            "categories": [{"id": 1, "name": "obj"}],
+        }
+    ).encode()
+    assert _gdrive_format_from_bytes(coco) == "coco"
+
+
 def test_gdrive_format_from_bytes_json_alphatracker():
     """An AlphaTracker JSON array is classified as alphatracker."""
     at = json.dumps(
