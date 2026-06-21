@@ -9169,3 +9169,84 @@ def test_write_video_crops_omitted_when_no_crops(slp_minimal, tmp_path):
     write_video_crops(path, labels)
     with h5py.File(path, "r") as f:
         assert "video_crops" not in f
+
+
+def test_video_to_dict_prefer_metadata(centered_pair_low_quality_video):
+    """`prefer_metadata=True` serializes from backend_metadata without decoding.
+
+    For an open `MediaVideo`, reading shape/grayscale/fps through the Video facade
+    decodes a frame (and with `keep_open` leaves a resident decoder). When the values
+    are already recorded in `backend_metadata` (as they are for a video loaded from a
+    `.slp`), `prefer_metadata=True` must use them and never touch the backend.
+    """
+    video = centered_pair_low_quality_video
+    assert type(video.backend).__name__ == "MediaVideo"
+    # Freshly opened backend: nothing decoded yet.
+    assert video.backend._cached_shape is None
+    assert video.backend._open_reader is None
+
+    # Seed a sentinel metadata shape distinct from the real video so the path taken
+    # is unambiguous: the real decoded shape is (1100, 384, 384, 1).
+    video.backend_metadata["shape"] = [999, 12, 34, 1]
+    video.backend_metadata["grayscale"] = True
+    video.backend_metadata["fps"] = 25.0
+
+    result = video_to_dict(video, prefer_metadata=True)
+    # Serialized straight from metadata...
+    assert result["backend"]["type"] == "MediaVideo"
+    assert result["backend"]["shape"] == [999, 12, 34, 1]
+    assert result["backend"]["grayscale"] is True
+    assert result["backend"]["fps"] == 25.0
+    # ...with no frame decoded and no decoder left resident.
+    assert video.backend._cached_shape is None
+    assert video.backend._open_reader is None
+
+    # prefer_metadata=True is the default: a no-arg call behaves the same (and the
+    # backend is still pristine, proving no decode happened).
+    result_default = video_to_dict(video)
+    assert result_default["backend"]["shape"] == [999, 12, 34, 1]
+    assert video.backend._cached_shape is None
+    assert video.backend._open_reader is None
+
+    # Explicit prefer_metadata=False opts out and reads through the backend, decoding
+    # the real shape and ignoring the sentinel metadata.
+    result_optout = video_to_dict(video, prefer_metadata=False)
+    assert result_optout["backend"]["shape"] == video.shape
+    assert result_optout["backend"]["shape"] != [999, 12, 34, 1]
+
+
+def test_save_prefer_metadata_avoids_video_decode(tmp_path):
+    """Saving labels with open MediaVideo backends must not decode frames for shapes.
+
+    Regression for the OOM where saving reference/GT copies of labels re-opened and
+    decoded every referenced (high-resolution) video to recompute shapes already
+    present in `backend_metadata`. With `prefer_metadata=True`, the save reads those
+    shapes from metadata and never instantiates a decoder.
+    """
+    # Build minimal labels referencing the real media video and seed a `.slp` so its
+    # videos_json records the shape (mirrors a real load-from-.slp scenario).
+    video = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
+    labels = Labels(labeled_frames=[LabeledFrame(video=video, frame_idx=0)])
+    seed_path = tmp_path / "seed.slp"
+    labels.save(seed_path)
+
+    # Reload: each Video has an open MediaVideo backend and metadata-recorded shape,
+    # but nothing has been decoded yet.
+    reloaded = load_slp(seed_path)
+    video2 = reloaded.videos[0]
+    assert type(video2.backend).__name__ == "MediaVideo"
+    assert video2.backend_metadata.get("shape") is not None
+    assert video2.backend._cached_shape is None
+    assert video2.backend._open_reader is None
+
+    # Save a GT-style copy preferring metadata.
+    gt_path = tmp_path / "labels_gt.slp"
+    reloaded.save(gt_path, prefer_metadata=True)
+
+    # The save decoded nothing and left no resident decoder.
+    assert video2.backend._cached_shape is None, "save decoded a frame to get shape"
+    assert video2.backend._open_reader is None, "save left a resident video decoder"
+
+    # The serialized shape is correct (read straight from metadata).
+    gt = load_slp(gt_path)
+    assert list(gt.videos[0].backend_metadata["shape"]) == list(video.shape)
