@@ -49,13 +49,17 @@ readme = {file = ["README.md"], content-type="text/markdown"}
 # PEP 621: End-user installable extras
 opencv = ["opencv-python"]
 pyav = ["av<16.0.0"]
-mat = ["pymatreader"]
+# scipy<1.18 pinned: scipy 1.18 breaks pymatreader 1.2.3's mat-struct parsing,
+# which fails the LEAP .mat reader. Drop once pymatreader supports scipy>=1.18.
+# See https://github.com/talmolab/sleap-io/issues/484.
+mat = ["pymatreader", "scipy<1.18"]
 polars = ["polars", "pyarrow"]
 cloud = ["s3fs>=2024.10.0", "gcsfs>=2024.10.0", "adlfs>=2024.10.0"]
 all = [
     "opencv-python",
     "av<16.0.0",
     "pymatreader",
+    "scipy<1.18",  # see `mat` extra / issue #484
     "polars",
     "pyarrow",
     "s3fs>=2024.10.0",
