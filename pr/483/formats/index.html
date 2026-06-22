@@ -5545,7 +5545,7 @@ Labels.materialize: Convert lazy Labels to eager.</p>
 
 
 <h2 id="sleap_io.io.main.save_slp" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">save_slp</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">embed</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">restore_original_videos</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">embed_inplace</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">plugin</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefer_metadata</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">save_slp</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">embed</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">restore_original_videos</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">embed_inplace</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">plugin</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefer_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
 
 <a href="#sleap_io.io.main.save_slp" class="headerlink" title="Permanent link">&para;</a></h2>
 
@@ -5723,16 +5723,16 @@ progress bar is disabled in favor of the callback.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>True</code>, serialize each uncropped video's
+                <p>If <code>True</code> (the default), serialize each uncropped video's
 shape/grayscale/fps from its <code>backend_metadata</code> when recorded there
 instead of querying the live backend. For an open <code>MediaVideo</code> this
 avoids decoding a frame (and leaving a resident decoder) just to recompute
-already-known metadata, which is useful when saving reference/metadata-only
-copies of labels loaded from a <code>.slp</code>. Defaults to <code>False</code>.</p>
+already-known metadata. Set to <code>False</code> to always read shape/grayscale/fps
+through the live backend.</p>
               </div>
             </td>
             <td>
-                  <code>False</code>
+                  <code>True</code>
             </td>
           </tr>
       </tbody>
@@ -5750,7 +5750,7 @@ copies of labels loaded from a <code>.slp</code>. Defaults to <code>False</code>
 <a id="__codelineno-0-166" name="__codelineno-0-166"></a><a href="#__codelineno-0-166"><span class="linenos" data-linenos="166 "></span></a>    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-167" name="__codelineno-0-167"></a><a href="#__codelineno-0-167"><span class="linenos" data-linenos="167 "></span></a>    <span class="n">plugin</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-168" name="__codelineno-0-168"></a><a href="#__codelineno-0-168"><span class="linenos" data-linenos="168 "></span></a>    <span class="n">progress_callback</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">bool</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-169" name="__codelineno-0-169"></a><a href="#__codelineno-0-169"><span class="linenos" data-linenos="169 "></span></a>    <span class="n">prefer_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-169" name="__codelineno-0-169"></a><a href="#__codelineno-0-169"><span class="linenos" data-linenos="169 "></span></a>    <span class="n">prefer_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-170" name="__codelineno-0-170"></a><a href="#__codelineno-0-170"><span class="linenos" data-linenos="170 "></span></a><span class="p">):</span>
 <a id="__codelineno-0-171" name="__codelineno-0-171"></a><a href="#__codelineno-0-171"><span class="linenos" data-linenos="171 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save a SLEAP dataset to a `.slp` file.</span>
 <a id="__codelineno-0-172" name="__codelineno-0-172"></a><a href="#__codelineno-0-172"><span class="linenos" data-linenos="172 "></span></a>
@@ -5787,12 +5787,12 @@ copies of labels loaded from a <code>.slp</code>. Defaults to <code>False</code>
 <a id="__codelineno-0-203" name="__codelineno-0-203"></a><a href="#__codelineno-0-203"><span class="linenos" data-linenos="203 "></span></a><span class="sd">            with `(current, total)` arguments. If it returns `False`, the operation</span>
 <a id="__codelineno-0-204" name="__codelineno-0-204"></a><a href="#__codelineno-0-204"><span class="linenos" data-linenos="204 "></span></a><span class="sd">            is cancelled and `ExportCancelled` is raised. When provided, tqdm</span>
 <a id="__codelineno-0-205" name="__codelineno-0-205"></a><a href="#__codelineno-0-205"><span class="linenos" data-linenos="205 "></span></a><span class="sd">            progress bar is disabled in favor of the callback.</span>
-<a id="__codelineno-0-206" name="__codelineno-0-206"></a><a href="#__codelineno-0-206"><span class="linenos" data-linenos="206 "></span></a><span class="sd">        prefer_metadata: If `True`, serialize each uncropped video&#39;s</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a><a href="#__codelineno-0-206"><span class="linenos" data-linenos="206 "></span></a><span class="sd">        prefer_metadata: If `True` (the default), serialize each uncropped video&#39;s</span>
 <a id="__codelineno-0-207" name="__codelineno-0-207"></a><a href="#__codelineno-0-207"><span class="linenos" data-linenos="207 "></span></a><span class="sd">            shape/grayscale/fps from its `backend_metadata` when recorded there</span>
 <a id="__codelineno-0-208" name="__codelineno-0-208"></a><a href="#__codelineno-0-208"><span class="linenos" data-linenos="208 "></span></a><span class="sd">            instead of querying the live backend. For an open `MediaVideo` this</span>
 <a id="__codelineno-0-209" name="__codelineno-0-209"></a><a href="#__codelineno-0-209"><span class="linenos" data-linenos="209 "></span></a><span class="sd">            avoids decoding a frame (and leaving a resident decoder) just to recompute</span>
-<a id="__codelineno-0-210" name="__codelineno-0-210"></a><a href="#__codelineno-0-210"><span class="linenos" data-linenos="210 "></span></a><span class="sd">            already-known metadata, which is useful when saving reference/metadata-only</span>
-<a id="__codelineno-0-211" name="__codelineno-0-211"></a><a href="#__codelineno-0-211"><span class="linenos" data-linenos="211 "></span></a><span class="sd">            copies of labels loaded from a `.slp`. Defaults to `False`.</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a><a href="#__codelineno-0-210"><span class="linenos" data-linenos="210 "></span></a><span class="sd">            already-known metadata. Set to `False` to always read shape/grayscale/fps</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a><a href="#__codelineno-0-211"><span class="linenos" data-linenos="211 "></span></a><span class="sd">            through the live backend.</span>
 <a id="__codelineno-0-212" name="__codelineno-0-212"></a><a href="#__codelineno-0-212"><span class="linenos" data-linenos="212 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-213" name="__codelineno-0-213"></a><a href="#__codelineno-0-213"><span class="linenos" data-linenos="213 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">slp</span>
 <a id="__codelineno-0-214" name="__codelineno-0-214"></a><a href="#__codelineno-0-214"><span class="linenos" data-linenos="214 "></span></a>
