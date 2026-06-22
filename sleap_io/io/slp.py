@@ -491,13 +491,22 @@ def read_videos(
     return videos
 
 
-def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
+def video_to_dict(
+    video: Video, labels_path: str | None = None, prefer_metadata: bool = True
+) -> dict:
     """Convert a `Video` object to a JSON-compatible dictionary.
 
     Args:
         video: A `Video` object to convert.
         labels_path: Path to the labels file being written. Used to determine if the
             video should use a self-reference (".") or external reference.
+        prefer_metadata: If `True` (the default), serialize an uncropped video's
+            shape/grayscale/fps from `video.backend_metadata` when recorded there (e.g.
+            a video loaded from a `.slp`) instead of querying the live backend. For an
+            open `MediaVideo` the backend read decodes a frame to recompute the shape
+            (and with `keep_open` leaves a resident decoder), so this avoids needless
+            decoding. Set to `False` to always read shape/grayscale/fps through the
+            live backend.
 
     Returns:
         A dictionary containing the video metadata.
@@ -545,11 +554,22 @@ def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
         grayscale = inner.grayscale
         fps = inner.fps
     else:
-        # Uncropped path: read through the Video facade exactly as before so
-        # that uncropped serialization is unchanged (golden byte-identical).
-        shape = video.shape
-        grayscale = video.grayscale
-        fps = video.fps
+        # Uncropped path. When ``prefer_metadata`` is set and the shape was recorded
+        # in ``backend_metadata`` (e.g. a video loaded from a ``.slp``), serialize from
+        # that metadata instead of querying the live backend: for an open ``MediaVideo``
+        # the facade read below decodes a frame to recompute the shape (and with
+        # ``keep_open`` leaves a resident decoder), while the recorded values are
+        # identical and free. Otherwise read through the Video facade exactly as before
+        # so uncropped serialization stays golden byte-identical.
+        meta = video.backend_metadata
+        if prefer_metadata and meta.get("shape") is not None:
+            shape = meta["shape"]
+            grayscale = meta["grayscale"] if "grayscale" in meta else shape[-1] == 1
+            fps = meta.get("fps")
+        else:
+            shape = video.shape
+            grayscale = video.grayscale
+            fps = video.fps
 
     # Add backend metadata
     if video.backend is None:
@@ -640,7 +660,9 @@ def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
 
     # Add source_video metadata if present
     if hasattr(video, "source_video") and video.source_video is not None:
-        result["source_video"] = video_to_dict(video.source_video, labels_path)
+        result["source_video"] = video_to_dict(
+            video.source_video, labels_path, prefer_metadata=prefer_metadata
+        )
 
     # Note: original_video is now a computed property derived from source_video,
     # so we don't store it. Legacy files with original_video are handled on load.
@@ -1249,6 +1271,7 @@ def write_videos(
     reference_mode: VideoReferenceMode | None = None,
     original_videos: list[Video] | None = None,
     verbose: bool = True,
+    prefer_metadata: bool = True,
 ):
     """Write video metadata to a SLEAP labels file.
 
@@ -1266,6 +1289,11 @@ def write_videos(
         original_videos: Optional list of original video objects before embedding.
             Used when reference_mode is EMBED to preserve metadata.
         verbose: If `True` (the default), display a progress bar when embedding frames.
+        prefer_metadata: If `True` (the default), serialize each uncropped video's
+            shape/grayscale/fps from its `backend_metadata` when recorded there instead
+            of querying the live backend (avoids decoding frames just to recompute
+            already-known metadata). Set to `False` to always read through the live
+            backend. See `video_to_dict`.
     """
     # Handle backwards compatibility
     if reference_mode is None:
@@ -1434,7 +1462,7 @@ def write_videos(
     # Write video metadata
     video_jsons = []
     for video_ind, video in sorted(videos_to_write, key=lambda x: x[0]):
-        video_json = video_to_dict(video, labels_path)
+        video_json = video_to_dict(video, labels_path, prefer_metadata=prefer_metadata)
         video_jsons.append(np.bytes_(json.dumps(video_json, separators=(",", ":"))))
 
     with h5py.File(labels_path, "a") as f:
@@ -1478,7 +1506,9 @@ def write_videos(
 
                 if "source_video" not in video_group:
                     source_grp = video_group.require_group("source_video")
-                    source_json = video_to_dict(source_to_save, labels_path)
+                    source_json = video_to_dict(
+                        source_to_save, labels_path, prefer_metadata=prefer_metadata
+                    )
                     source_grp.attrs["json"] = json.dumps(
                         source_json, separators=(",", ":")
                     )
@@ -5992,6 +6022,7 @@ def _write_labels_lazy(
     embed: bool | str | list[tuple[Video, int]] | None = None,
     restore_original_videos: bool = True,
     verbose: bool = True,
+    prefer_metadata: bool = True,
 ) -> None:
     """Write lazy Labels to SLP file using fast path.
 
@@ -6015,6 +6046,10 @@ def _write_labels_lazy(
         restore_original_videos: If `True` (default) and `embed=False`, use original
             video files.
         verbose: If `True` (the default), display progress information.
+        prefer_metadata: If `True` (the default), serialize each uncropped video's
+            shape/grayscale/fps from its `backend_metadata` when recorded there
+            instead of querying the live backend. Set to `False` to always read
+            through the live backend. See `video_to_dict`.
 
     Raises:
         ValueError: If labels is not lazy.
@@ -6043,6 +6078,7 @@ def _write_labels_lazy(
         reference_mode=reference_mode,
         original_videos=None,
         verbose=verbose,
+        prefer_metadata=prefer_metadata,
     )
     # Emit virtual crop records (after videos_json so indices line up).
     write_video_crops(labels_path, labels)
@@ -6157,6 +6193,7 @@ def write_labels(
     plugin: str | None = None,
     embed_all_videos: bool = True,
     progress_callback: Callable[[int, int], bool] | None = None,
+    prefer_metadata: bool = True,
 ):
     """Write a SLEAP labels file.
 
@@ -6196,6 +6233,12 @@ def write_labels(
         progress_callback: Optional callback function called during frame embedding
             with `(current, total)` arguments. If it returns `False`, the operation
             is cancelled and `ExportCancelled` is raised.
+        prefer_metadata: If `True` (the default), serialize each uncropped video's
+            shape/grayscale/fps from its `backend_metadata` when recorded there
+            instead of querying the live backend, avoiding frame decoding when the
+            metadata is already known (e.g. saving copies of labels loaded from a
+            `.slp`). Set to `False` to always read through the live backend. See
+            `video_to_dict`.
     """
     # Fast path for lazy labels (avoids materializing frames/instances)
     # Supported for simple embed modes: None, False, "source"
@@ -6224,6 +6267,7 @@ def write_labels(
                 embed=embed,
                 restore_original_videos=restore_original_videos,
                 verbose=verbose,
+                prefer_metadata=prefer_metadata,
             )
             return
 
@@ -6276,6 +6320,7 @@ def write_labels(
         reference_mode=reference_mode,
         original_videos=original_videos,
         verbose=verbose,
+        prefer_metadata=prefer_metadata,
     )
     # Emit virtual crop records (after videos_json so indices line up). Omitted
     # entirely when no video is cropped (uncropped files stay byte-identical).

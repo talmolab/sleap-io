@@ -166,6 +166,7 @@ def save_slp(
     verbose: bool = True,
     plugin: str | None = None,
     progress_callback: Callable[[int, int], bool] | None = None,
+    prefer_metadata: bool = True,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -202,6 +203,12 @@ def save_slp(
             with `(current, total)` arguments. If it returns `False`, the operation
             is cancelled and `ExportCancelled` is raised. When provided, tqdm
             progress bar is disabled in favor of the callback.
+        prefer_metadata: If `True` (the default), serialize each uncropped video's
+            shape/grayscale/fps from its `backend_metadata` when recorded there
+            instead of querying the live backend. For an open `MediaVideo` this
+            avoids decoding a frame (and leaving a resident decoder) just to recompute
+            already-known metadata. Set to `False` to always read shape/grayscale/fps
+            through the live backend.
     """
     from sleap_io.io import slp
 
@@ -214,6 +221,7 @@ def save_slp(
         verbose=verbose,
         plugin=plugin,
         progress_callback=progress_callback,
+        prefer_metadata=prefer_metadata,
     )
 
 
