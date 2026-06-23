@@ -6194,6 +6194,13 @@ def _reencode_slp(
     default=False,
     help="Overwrite existing output file.",
 )
+@click.option(
+    "--replace",
+    is_flag=True,
+    default=False,
+    help="Reencode in place: replace the input with {stem}.mp4 and delete the "
+    "original. Mutually exclusive with -o/--output.",
+)
 def reencode(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -6207,6 +6214,7 @@ def reencode(
     use_ffmpeg: bool | None,
     dry_run: bool,
     overwrite: bool,
+    replace: bool,
 ) -> None:
     """Reencode video for improved seekability.
 
@@ -6246,6 +6254,10 @@ def reencode(
 
         $ sio reencode recording.seq -o recording.mp4
 
+        $ sio reencode video.mp4                 # -> video.reencoded.mp4
+
+        $ sio reencode video.mov --replace       # -> video.mp4 (deletes video.mov)
+
     [dim]SLP batch examples:[/]
 
         $ sio reencode project.slp -o project.reencoded.slp
@@ -6256,6 +6268,19 @@ def reencode(
     """
     # Resolve input path
     input_path = _resolve_input(input_arg, input_opt, "input file")
+
+    # --replace is an in-place destructive reencode of a single video; it is
+    # incompatible with -o/--output and with SLP batch mode.
+    if replace and output_path is not None:
+        raise click.ClickException(
+            "Cannot use --replace together with -o/--output. "
+            "--replace reencodes the input file in place."
+        )
+    if replace and input_path.suffix.lower() == ".slp":
+        raise click.ClickException(
+            "--replace is not supported for SLP files. "
+            "Use the SLP batch mode with an explicit -o/--output path."
+        )
 
     # Check if input is an SLP file - route to batch processing
     if input_path.suffix.lower() == ".slp":
@@ -6307,24 +6332,40 @@ def reencode(
         )
         return
 
-    # Resolve output path for video files
-    if output_path is None:
-        output_path = input_path.with_stem(f"{input_path.stem}.reencoded")
-        if output_path.suffix.lower() not in {".mp4", ".mkv", ".avi", ".mov"}:
-            output_path = output_path.with_suffix(".mp4")
+    # Resolve the final output path. Reencoding always produces an H.264/MP4
+    # file, so the default output uses a .mp4 extension regardless of the input
+    # container; the `.reencoded` infix keeps it distinct from the source (even
+    # for .mp4 inputs).
+    if replace:
+        final_path = input_path.with_name(f"{input_path.stem}.mp4")
+    elif output_path is None:
+        final_path = input_path.with_name(f"{input_path.stem}.reencoded.mp4")
+    else:
+        final_path = output_path
 
-    # Check for same file
-    if output_path.resolve() == input_path.resolve():
-        raise click.ClickException(
-            f"Output path cannot be the same as input: {input_path}\n"
-            "Use a different output path or rename the output file."
-        )
+    same_as_input = final_path.resolve() == input_path.resolve()
 
-    # Check output exists
-    if output_path.exists() and not overwrite:
-        raise click.ClickException(
-            f"Output file already exists: {output_path}\nUse --overwrite to replace it."
-        )
+    if replace:
+        # Guard against silently clobbering a *different* existing file at the
+        # target name (e.g. foo.mov -> foo.mp4 where an unrelated foo.mp4 exists).
+        if not same_as_input and final_path.exists() and not overwrite:
+            raise click.ClickException(
+                f"Target already exists: {final_path}\n"
+                "Use --overwrite to replace it (or drop --replace)."
+            )
+    else:
+        # Check for same file
+        if same_as_input:
+            raise click.ClickException(
+                f"Output path cannot be the same as input: {input_path}\n"
+                "Use --replace to reencode in place, or choose another output."
+            )
+        # Check output exists
+        if final_path.exists() and not overwrite:
+            raise click.ClickException(
+                f"Output file already exists: {final_path}\n"
+                "Use --overwrite to replace it."
+            )
 
     # Resolve quality/CRF
     if crf is not None and quality is not None:
@@ -6364,87 +6405,132 @@ def reencode(
         else (ffmpeg_available if use_ffmpeg is None else use_ffmpeg)
     )
 
-    if use_ffmpeg_path:
-        # FFmpeg fast path
-        try:
-            metadata = _get_video_metadata(input_path)
-            input_fps = metadata["fps"]
-            total_frames = metadata["num_frames"]
+    # Capture the original size now, before a (possibly destructive) --replace.
+    original_input_size = input_path.stat().st_size
 
-            # Resolve keyframe interval / GOP
-            if gop is not None:
-                # Convert GOP to interval for display
-                effective_fps = output_fps if output_fps is not None else input_fps
-                resolved_keyframe_interval = gop / effective_fps
-            else:
-                resolved_keyframe_interval = keyframe_interval
+    # Decide where the encoder actually writes. For --replace we encode to a temp
+    # file in the destination directory and atomically move it over the input
+    # afterwards; ffmpeg cannot read and write the same file in one pass.
+    import os
+    import tempfile
 
-            # Build command
-            cmd = _build_ffmpeg_reencode_command(
+    if replace:
+        if dry_run:
+            console.print("[bold]Dry run - would reencode in place:[/]")
+            console.print(f"  Input:  {input_path}")
+            console.print(f"  Output: {final_path}")
+            if not same_as_input:
+                console.print(f"  Then delete original: {input_path}")
+            return
+
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{final_path.stem}_reencode_",
+            suffix=".mp4",
+            dir=str(final_path.parent),
+        )
+        os.close(fd)
+        encode_path = Path(tmp_name)
+        encode_overwrite = True  # temp file already exists (0 bytes from mkstemp)
+    else:
+        encode_path = final_path
+        encode_overwrite = overwrite
+
+    try:
+        if use_ffmpeg_path:
+            # FFmpeg fast path
+            try:
+                metadata = _get_video_metadata(input_path)
+                input_fps = metadata["fps"]
+                total_frames = metadata["num_frames"]
+
+                # Resolve keyframe interval / GOP
+                if gop is not None:
+                    # Convert GOP to interval for display
+                    effective_fps = output_fps if output_fps is not None else input_fps
+                    resolved_keyframe_interval = gop / effective_fps
+                else:
+                    resolved_keyframe_interval = keyframe_interval
+
+                # Build command
+                cmd = _build_ffmpeg_reencode_command(
+                    input_path=input_path,
+                    output_path=encode_path,
+                    fps=input_fps,
+                    output_fps=output_fps,
+                    crf=resolved_crf,
+                    preset=preset,
+                    keyframe_interval=resolved_keyframe_interval,
+                    overwrite=encode_overwrite,
+                )
+
+                if dry_run:
+                    console.print("[bold]Dry run - ffmpeg command:[/]")
+                    console.print(" ".join(cmd))
+                    return
+
+                # Print info
+                console.print(f"[bold]Reencoding:[/] {input_path}")
+                console.print(f"[dim]  Output: {final_path}[/]")
+                console.print(
+                    f"[dim]  Quality: CRF {resolved_crf}, "
+                    f"Preset: {preset}, "
+                    f"Keyframes: {resolved_keyframe_interval}s[/]"
+                )
+                if output_fps is not None:
+                    console.print(f"[dim]  FPS: {input_fps} -> {output_fps}[/]")
+
+                # Run ffmpeg with progress
+                _run_ffmpeg_with_progress(cmd, total_frames)
+
+            except click.ClickException:
+                raise
+            except Exception as e:
+                raise click.ClickException(f"ffmpeg reencoding failed: {e}")
+
+        else:
+            # Python fallback path
+            if dry_run:
+                console.print("[bold]Dry run - would use Python path[/]")
+                console.print(f"  Input: {input_path}")
+                console.print(f"  Output: {final_path}")
+                console.print(f"  CRF: {resolved_crf}, Preset: {preset}")
+                return
+
+            console.print(f"[bold]Reencoding (Python path):[/] {input_path}")
+            console.print(f"[dim]  Output: {final_path}[/]")
+
+            _reencode_python_path(
                 input_path=input_path,
-                output_path=output_path,
-                fps=input_fps,
+                output_path=encode_path,
                 output_fps=output_fps,
                 crf=resolved_crf,
                 preset=preset,
-                keyframe_interval=resolved_keyframe_interval,
-                overwrite=overwrite,
+                keyframe_interval=keyframe_interval,
             )
 
-            if dry_run:
-                console.print("[bold]Dry run - ffmpeg command:[/]")
-                console.print(" ".join(cmd))
-                return
+        # For --replace, move the freshly encoded temp file over the final path
+        # and remove the original source if the extension/name changed.
+        if replace:
+            os.replace(encode_path, final_path)
+            if not same_as_input:
+                input_path.unlink()
+    except BaseException:
+        # Clean up the temp file on any failure or interruption.
+        if replace and encode_path != final_path and encode_path.exists():
+            try:
+                encode_path.unlink()
+            except OSError:
+                pass
+        raise
 
-            # Print info
-            console.print(f"[bold]Reencoding:[/] {input_path}")
-            console.print(f"[dim]  Output: {output_path}[/]")
-            console.print(
-                f"[dim]  Quality: CRF {resolved_crf}, "
-                f"Preset: {preset}, "
-                f"Keyframes: {resolved_keyframe_interval}s[/]"
-            )
-            if output_fps is not None:
-                console.print(f"[dim]  FPS: {input_fps} -> {output_fps}[/]")
-
-            # Run ffmpeg with progress
-            _run_ffmpeg_with_progress(cmd, total_frames)
-
-        except click.ClickException:
-            raise
-        except Exception as e:
-            raise click.ClickException(f"ffmpeg reencoding failed: {e}")
-
-    else:
-        # Python fallback path
-        if dry_run:
-            console.print("[bold]Dry run - would use Python path[/]")
-            console.print(f"  Input: {input_path}")
-            console.print(f"  Output: {output_path}")
-            console.print(f"  CRF: {resolved_crf}, Preset: {preset}")
-            return
-
-        console.print(f"[bold]Reencoding (Python path):[/] {input_path}")
-        console.print(f"[dim]  Output: {output_path}[/]")
-
-        _reencode_python_path(
-            input_path=input_path,
-            output_path=output_path,
-            output_fps=output_fps,
-            crf=resolved_crf,
-            preset=preset,
-            keyframe_interval=keyframe_interval,
-        )
-
-    console.print(f"[bold green]Saved:[/] {output_path}")
+    console.print(f"[bold green]Saved:[/] {final_path}")
 
     # Show file size comparison
-    input_size = input_path.stat().st_size
-    output_size = output_path.stat().st_size
-    size_change = (output_size - input_size) / input_size * 100
+    output_size = final_path.stat().st_size
+    size_change = (output_size - original_input_size) / original_input_size * 100
 
     console.print(
-        f"[dim]  Size: {_format_file_size(input_size)} -> "
+        f"[dim]  Size: {_format_file_size(original_input_size)} -> "
         f"{_format_file_size(output_size)} "
         f"({size_change:+.1f}%)[/]"
     )
