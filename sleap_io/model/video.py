@@ -967,6 +967,16 @@ class Video:
                 p.as_posix() if isinstance(p, Path) else p for p in new_filename
             ]
 
+        # A relink to a different file makes the recorded shape/grayscale/fps in
+        # ``backend_metadata`` stale: they describe the OLD file but the new file
+        # may have a different resolution/channels/frame rate. They must not be
+        # serialized under the new filename (regression from #483, where
+        # ``save_slp(prefer_metadata=True)`` prefers these recorded values), so
+        # invalidate them on a real relink and let them be recomputed from the new
+        # backend. The no-relink path leaves metadata untouched so golden
+        # byte-identical saves stay byte-identical.
+        filename_changed = new_filename != self.filename
+
         self.filename = new_filename
         self.backend_metadata["filename"] = new_filename
         # Invalidate any cached URL existence results for the previous filename.
@@ -977,6 +987,13 @@ class Video:
                 self.open()
             else:
                 self.close()
+
+        # Drop stale metadata AFTER (re)opening: ``open()`` internally calls
+        # ``close()``, which would otherwise re-stamp the OLD backend's
+        # shape/grayscale/fps back into ``backend_metadata``.
+        if filename_changed:
+            for key in ("shape", "grayscale", "fps"):
+                self.backend_metadata.pop(key, None)
 
     def matches_path(self, other: "Video", strict: bool = False) -> bool:
         """Check if this video has the same path as another video.
