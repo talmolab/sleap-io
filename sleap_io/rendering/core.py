@@ -1327,11 +1327,15 @@ def render_image(
                     c_colors.append(centroid_pal[tidx % len(centroid_pal)])
                 else:
                     c_colors.append(centroid_pal[0] if centroid_pal else (0, 255, 0))
+            # centroid_marker_size is NOT pre-scaled: the centroids are drawn
+            # here, then the whole image is upscaled once by `scale` inside
+            # render_frame, so the final radius matches pose nodes
+            # (marker_size * scale).
             render_image_data = _draw_centroids(
                 render_image_data,
                 frame_centroids,
                 colors=c_colors,
-                marker_size=centroid_marker_size * scale,
+                marker_size=centroid_marker_size,
                 offset=crop_offset,
             )
 
@@ -1966,11 +1970,14 @@ def render_video(
                     _centroid_palette[0] if _centroid_palette else (0, 255, 0)
                 )
 
+        # centroid_marker_size is NOT pre-scaled: the centroids are drawn here,
+        # then the whole image is upscaled once by `scale` inside render_frame,
+        # so the final radius matches pose nodes (marker_size * scale).
         draw_centroids(
             image,
             frame_centroids,
             colors=centroid_colors,
-            marker_size=centroid_marker_size * scale,
+            marker_size=centroid_marker_size,
             offset=crop_off,
         )
         return image
