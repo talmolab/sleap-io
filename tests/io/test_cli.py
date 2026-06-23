@@ -14,10 +14,10 @@ import sys
 import threading
 from pathlib import Path
 
-import click
 import h5py
 import numpy as np
 import pytest
+import rich_click as click
 from click.testing import CliRunner
 
 from sleap_io import load_slp, save_slp, save_video
@@ -80,6 +80,47 @@ def test_version_shows_plugin_info():
     assert "numpy:" in out
     assert "opencv:" in out
     assert "pyav:" in out
+
+
+def test_all_commands_have_help_panel():
+    """Every registered command must appear in a COMMAND_GROUPS panel.
+
+    Guards against new subcommands (or renames) silently falling into the
+    generic rich-click panel instead of an organized group.
+    """
+    grouped: set[str] = set()
+    for group in click.rich_click.COMMAND_GROUPS["sio"]:
+        grouped.update(group["commands"])
+
+    registered = set(cli.commands)
+
+    # No phantom entries: every grouped command actually exists.
+    assert grouped - registered == set()
+    # No omissions: every registered command is assigned to a panel.
+    assert registered - grouped == set()
+
+
+def test_export_command_in_command_groups():
+    """The `export` command must be assigned to a COMMAND_GROUPS panel."""
+    assert "export" in cli.commands
+    grouped = {
+        command
+        for group in click.rich_click.COMMAND_GROUPS["sio"]
+        for command in group["commands"]
+    }
+    assert "export" in grouped
+
+
+def test_module_main_runnable_via_python_m():
+    """`python -m sleap_io.io.cli` should run the CLI via the __main__ guard."""
+    result = subprocess.run(
+        [sys.executable, "-m", "sleap_io.io.cli", "--version"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() != ""
+    assert "sleap-io" in result.stdout
 
 
 def test_show_summary_typical_slp():

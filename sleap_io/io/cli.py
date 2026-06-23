@@ -121,6 +121,7 @@ click.rich_click.COMMAND_GROUPS = {
                 "apply-crops",
             ],
         },
+        {"name": "Export", "commands": ["export"]},
         {"name": "Embedding", "commands": ["embed", "unembed"]},
         {"name": "Maintenance", "commands": ["fix"]},
         {"name": "Rendering", "commands": ["render"]},
@@ -8216,3 +8217,7 @@ def _transform_video_file(
         )
 
     console.print(f"[bold green]Saved:[/] {output_path}")
+
+
+if __name__ == "__main__":
+    cli()

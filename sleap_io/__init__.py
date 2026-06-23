@@ -77,6 +77,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "draw_rois",
             "draw_masks",
             "draw_bboxes",
+            "draw_centroids",
             "draw_label_image",
             "draw_trails",
         ],
