@@ -6883,6 +6883,74 @@ def test_slp_mask_from_predicted_with_instance_link(tmp_path):
     assert loaded_user.instance is loaded.labeled_frames[0].instances[0]
 
 
+def test_slp_mask_from_predicted_survives_merge(tmp_path):
+    """A mask from_predicted link survives an auto merge + save/load.
+
+    Regression for the merge copy path dropping mask provenance: the predicted
+    mask and the user mask adopted from it are copied independently during
+    ``merge(frame="auto")``, but the copied user mask's ``from_predicted`` must
+    be relinked to the copied prediction now in the merged frame. Otherwise the
+    saved index resolves to ``-1`` and the link is lost on reload.
+    """
+    arr = np.ones((5, 5), dtype=bool)
+    pred = PredictedSegmentationMask.from_numpy(arr, score=0.9)
+    user = pred.to_user()
+    assert user.from_predicted is pred
+
+    dst = Labels([LabeledFrame(video=Video("v.mp4"), frame_idx=0, masks=[])])
+    src = Labels([LabeledFrame(video=Video("v.mp4"), frame_idx=0, masks=[pred, user])])
+    dst.merge(src, frame="auto")
+
+    path = str(tmp_path / "merged_mask_provenance.slp")
+    dst.save(path)
+    reloaded = load_file(path)
+
+    reloaded_pred = next(
+        m for m in reloaded.masks if isinstance(m, PredictedSegmentationMask)
+    )
+    reloaded_user = next(
+        m for m in reloaded.masks if isinstance(m, UserSegmentationMask)
+    )
+    assert reloaded_user.from_predicted is reloaded_pred
+
+
+def test_slp_instance_from_predicted_survives_merge(tmp_path):
+    """An instance from_predicted link survives an auto merge + save/load.
+
+    The merge remap path (``_map_instance``) rebuilds instances and must relink
+    a remapped user instance to the remapped source prediction in the same
+    frame, mirroring the mask fix.
+    """
+    skeleton = Skeleton(nodes=["A", "B"])
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+    pred = PredictedInstance.from_numpy(points_data=pts, skeleton=skeleton, score=0.9)
+    user = Instance.from_numpy(points_data=pts, skeleton=skeleton)
+    user.from_predicted = pred
+    assert user.from_predicted is pred
+
+    video = Video("v.mp4")
+    dst = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[])],
+    )
+    src = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[pred, user])],
+    )
+    dst.merge(src, frame="auto")
+
+    path = str(tmp_path / "merged_instance_provenance.slp")
+    dst.save(path)
+    reloaded = load_file(path)
+
+    reloaded_insts = reloaded.labeled_frames[0].instances
+    reloaded_pred = next(i for i in reloaded_insts if type(i) is PredictedInstance)
+    reloaded_user = next(i for i in reloaded_insts if type(i) is Instance)
+    assert reloaded_user.from_predicted is reloaded_pred
+
+
 def test_slp_predicted_mask_score_map_roundtrip(tmp_path):
     """PredictedSegmentationMask with score_map survives round-trip."""
     video = Video(filename="test.mp4")

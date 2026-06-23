@@ -24,7 +24,11 @@ from sleap_io.io.utils import sanitize_filename
 from sleap_io.model.camera import RecordingSession
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance, Track
-from sleap_io.model.labeled_frame import LabeledFrame, _resolve_merged_is_negative
+from sleap_io.model.labeled_frame import (
+    LabeledFrame,
+    _relink_from_predicted,
+    _resolve_merged_is_negative,
+)
 from sleap_io.model.skeleton import NodeOrIndex, Skeleton
 from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
@@ -3674,10 +3678,15 @@ class Labels:
                     )
 
                     # Map instances to new skeleton/track
+                    instance_memo: dict[int, Instance | PredictedInstance] = {}
                     for inst in other_frame.instances:
-                        new_inst = self._map_instance(inst, skeleton_map, track_map)
+                        new_inst = self._map_instance(
+                            inst, skeleton_map, track_map, memo=instance_memo
+                        )
                         new_frame.instances.append(new_inst)
                         result.instances_added += 1
+                    # Repair ``from_predicted`` links to the remapped source.
+                    _relink_from_predicted(new_frame.instances, instance_memo)
 
                     # Copy annotations from other frame and remap references
                     new_frame._merge_annotations(other_frame)
@@ -3702,17 +3711,21 @@ class Labels:
 
                     # Remap skeleton and track references for instances from other frame
                     remapped_instances = []
+                    instance_memo = {}
                     for inst in merged_instances:
                         # Check if instance needs remapping (from other_frame)
                         if inst.skeleton in skeleton_map:
                             # Instance needs remapping
                             remapped_inst = self._map_instance(
-                                inst, skeleton_map, track_map
+                                inst, skeleton_map, track_map, memo=instance_memo
                             )
                             remapped_instances.append(remapped_inst)
                         else:
                             # Instance already has correct skeleton (from self_frame)
                             remapped_instances.append(inst)
+                    # Repair ``from_predicted`` links so a remapped user instance
+                    # references the remapped source prediction in this frame.
+                    _relink_from_predicted(remapped_instances, instance_memo)
                     merged_instances = remapped_instances
 
                     # Count changes
@@ -3940,6 +3953,7 @@ class Labels:
         instance: Instance | PredictedInstance,
         skeleton_map: dict[Skeleton, Skeleton],
         track_map: dict[Track, Track],
+        memo: dict[int, Instance | PredictedInstance] | None = None,
     ) -> Instance | PredictedInstance:
         """Map an instance to use mapped skeleton and track.
 
@@ -3947,6 +3961,11 @@ class Labels:
             instance: Instance to map.
             skeleton_map: Dictionary mapping old skeletons to new ones.
             track_map: Dictionary mapping old tracks to new ones.
+            memo: Optional mapping from the id of the source instance to the new
+                instance, mutated in place. Used to repair ``from_predicted``
+                links so a remapped user instance references the remapped source
+                prediction now in the merged frame (see
+                ``_relink_from_predicted``).
 
         Returns:
             New instance with mapped skeleton and track.
@@ -3980,7 +3999,7 @@ class Labels:
             mapped_points["name"] = mapped_skeleton.node_names
 
         if type(instance) is PredictedInstance:
-            return PredictedInstance(
+            new_instance: Instance | PredictedInstance = PredictedInstance(
                 points=mapped_points,
                 skeleton=mapped_skeleton,
                 score=instance.score,
@@ -3989,13 +4008,16 @@ class Labels:
                 from_predicted=instance.from_predicted,
             )
         else:
-            return Instance(
+            new_instance = Instance(
                 points=mapped_points,
                 skeleton=mapped_skeleton,
                 track=mapped_track,
                 tracking_score=instance.tracking_score,
                 from_predicted=instance.from_predicted,
             )
+        if memo is not None:
+            memo[id(instance)] = new_instance
+        return new_instance
 
     def set_video_plugin(self, plugin: str) -> None:
         """Reopen all media videos with the specified plugin.
