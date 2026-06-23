@@ -225,11 +225,14 @@ def save_slp(
     )
 
 
-def load_nwb(filename: str) -> Labels:
+def load_nwb(filename: str, **kwargs) -> Labels:
     """Load an NWB dataset as a SLEAP `Labels` object.
 
     Args:
         filename: Path to a NWB file (`.nwb`).
+        **kwargs: Additional loader keyword arguments forwarded by `load_file`
+            (e.g. ``open_videos``, ``lazy``). They are accepted but ignored; this
+            format does not use them.
 
     Returns:
         The dataset as a `Labels` object.
@@ -272,7 +275,7 @@ def save_nwb(
 
 
 def load_labelstudio(
-    filename: str, skeleton: Skeleton | list[str] | None = None
+    filename: str, skeleton: Skeleton | list[str] | None = None, **kwargs
 ) -> Labels:
     """Read Label Studio-style annotations from a file and return a `Labels` object.
 
@@ -282,6 +285,9 @@ def load_labelstudio(
             (the default), skeleton will be inferred from the data. It may be useful to
             provide this so the keypoint label types can be filtered to just the ones in
             the skeleton.
+        **kwargs: Additional loader keyword arguments forwarded by `load_file`
+            (e.g. ``open_videos``, ``lazy``). They are accepted but ignored; this
+            format does not use them.
 
     Returns:
         Parsed labels as a `Labels` instance.
@@ -303,11 +309,14 @@ def save_labelstudio(labels: Labels, filename: str):
     labelstudio.write_labels(labels, filename)
 
 
-def load_alphatracker(filename: str) -> Labels:
+def load_alphatracker(filename: str, **kwargs) -> Labels:
     """Read AlphaTracker annotations from a file and return a `Labels` object.
 
     Args:
         filename: Path to the AlphaTracker annotation file in JSON format.
+        **kwargs: Additional loader keyword arguments forwarded by `load_file`
+            (e.g. ``open_videos``, ``lazy``). They are accepted but ignored; this
+            format does not use them.
 
     Returns:
         Parsed labels as a `Labels` instance.
@@ -317,12 +326,15 @@ def load_alphatracker(filename: str) -> Labels:
     return alphatracker.read_labels(filename)
 
 
-def load_jabs(filename: str, skeleton: Skeleton | None = None) -> Labels:
+def load_jabs(filename: str, skeleton: Skeleton | None = None, **kwargs) -> Labels:
     """Read JABS-style predictions from a file and return a `Labels` object.
 
     Args:
         filename: Path to the jabs h5 pose file.
         skeleton: An optional `Skeleton` object.
+        **kwargs: Additional loader keyword arguments forwarded by `load_file`
+            (e.g. ``open_videos``, ``lazy``). They are accepted but ignored; this
+            format does not use them.
 
     Returns:
         Parsed labels as a `Labels` instance.
@@ -335,6 +347,7 @@ def load_jabs(filename: str, skeleton: Skeleton | None = None) -> Labels:
 def load_analysis_h5(
     filename: str,
     video: "Video | str | None" = None,
+    **kwargs,
 ) -> Labels:
     """Load SLEAP Analysis HDF5 file.
 
@@ -342,6 +355,9 @@ def load_analysis_h5(
         filename: Path to Analysis HDF5 file.
         video: Video to associate with data. If None, uses video_path stored
             in the file. Can be a Video object or path string.
+        **kwargs: Additional loader keyword arguments forwarded by `load_file`
+            (e.g. ``open_videos``, ``lazy``). They are accepted but ignored; this
+            format does not use them.
 
     Returns:
         Labels object with loaded pose data.
@@ -777,6 +793,7 @@ def load_csv(
     format: str = "auto",
     video: "Video | str | None" = None,
     skeleton: "Skeleton | None" = None,
+    **kwargs,
 ) -> "Labels":
     """Load pose data from a CSV file.
 
@@ -786,6 +803,9 @@ def load_csv(
             "frames". Default "auto" detects format from file content.
         video: Video to associate with data. Can be Video object or path string.
         skeleton: Skeleton to use. If None, inferred from columns or metadata.
+        **kwargs: Additional loader keyword arguments forwarded by `load_file`
+            (e.g. ``open_videos``, ``lazy``). They are accepted but ignored; this
+            format does not use them.
 
     Returns:
         Labels object.

@@ -1,5 +1,6 @@
 """Tests for functions in the sleap_io.io.main file."""
 
+import inspect
 import io
 import json
 import shutil
@@ -13,6 +14,9 @@ from sleap_io import Labels, LabelsSet, RemoteIOError, Video, clear_remote_cache
 from sleap_io.io._remote import _require_package
 from sleap_io.io.main import (
     _gdrive_format_from_bytes,
+    load_alphatracker,
+    load_analysis_h5,
+    load_csv,
     load_file,
     load_jabs,
     load_labels_set,
@@ -20,6 +24,8 @@ from sleap_io.io.main import (
     load_nwb,
     load_slp,
     load_video,
+    save_analysis_h5,
+    save_csv,
     save_file,
     save_jabs,
     save_labelstudio,
@@ -84,6 +90,74 @@ def test_jabs(tmp_path, jabs_real_data_v2, jabs_real_data_v5):
     # number of labels
     assert len(labels_v5_written) == len(labels_multi)
     assert len(labels_v5_written.videos) == len(labels_multi.videos)
+
+
+def test_load_file_jabs_forwards_open_videos(jabs_real_data_v2):
+    """`load_file` forwards `open_videos` to the JABS loader without crashing.
+
+    `sio show <pose.h5>` always passes `open_videos`/`lazy` through `load_file`
+    to the routed loader; the JABS loader must absorb them.
+    """
+    labels = load_file(jabs_real_data_v2, open_videos=False)
+    assert type(labels) is Labels
+
+
+def test_load_file_labelstudio_forwards_open_videos(ls_multianimal):
+    """`load_file` forwards `open_videos` to the Label Studio loader."""
+    path = ls_multianimal[0]
+    labels = load_file(path, open_videos=False)
+    assert type(labels) is Labels
+
+
+def test_load_file_alphatracker_forwards_open_videos(alphatracker_testdata):
+    """`load_file` forwards `open_videos` to the AlphaTracker loader."""
+    labels = load_file(alphatracker_testdata, open_videos=False)
+    assert type(labels) is Labels
+
+
+def test_load_file_nwb_forwards_open_videos(tmp_path, slp_minimal):
+    """`load_file` forwards `open_videos` to the NWB loader (round-trip)."""
+    pytest.importorskip("pynwb")
+    pytest.importorskip("ndx_pose")
+    labels = load_slp(slp_minimal)
+    save_nwb(labels, tmp_path / "rt.nwb")
+    loaded = load_file(str(tmp_path / "rt.nwb"), open_videos=False)
+    assert type(loaded) is Labels
+
+
+def test_load_file_analysis_h5_forwards_open_videos(tmp_path, slp_minimal):
+    """`load_file` forwards `open_videos` to the Analysis HDF5 loader (round-trip)."""
+    labels = load_slp(slp_minimal)
+    h5_path = tmp_path / "rt.analysis.h5"
+    save_analysis_h5(labels, h5_path)
+    loaded = load_file(str(h5_path), open_videos=False)
+    assert type(loaded) is Labels
+
+
+def test_load_file_csv_forwards_open_videos(tmp_path, slp_minimal):
+    """`load_file` forwards `open_videos` to the CSV loader (round-trip)."""
+    labels = load_slp(slp_minimal)
+    csv_path = tmp_path / "rt.csv"
+    save_csv(labels, csv_path, format="sleap")
+    loaded = load_file(str(csv_path), open_videos=False)
+    assert type(loaded) is Labels
+
+
+@pytest.mark.parametrize(
+    "loader",
+    [
+        load_nwb,
+        load_alphatracker,
+        load_labelstudio,
+        load_jabs,
+        load_analysis_h5,
+        load_csv,
+    ],
+)
+def test_loader_absorbs_forwarded_kwargs(loader):
+    """Each loader wrapper accepts arbitrary keyword args forwarded by `load_file`."""
+    sig = inspect.signature(loader)
+    assert any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
 
 
 def test_load_video(centered_pair_low_quality_path):
