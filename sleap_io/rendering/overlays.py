@@ -34,8 +34,9 @@ def draw_rois(
     ``MultiLineString``, and ``GeometryCollection`` geometries.
 
     Args:
-        image: Image array of shape (H, W, 3) uint8. Modified in-place and
-            returned.
+        image: Image array of shape (H, W, 3) uint8. A 2-D grayscale
+            ``(H, W)`` (or ``(H, W, 1)``) image is accepted and promoted to
+            RGB. Modified in-place and returned.
         rois: List of ROI objects to draw.
         color: RGB color tuple for the ROI outlines. Used when ``colors`` is
             ``None``.
@@ -52,6 +53,12 @@ def draw_rois(
         return image
 
     import skia
+
+    # Ensure RGB before padding to RGBA.
+    if image.ndim == 2:
+        image = np.stack([image] * 3, axis=-1)
+    elif image.ndim == 3 and image.shape[2] == 1:
+        image = np.concatenate([image] * 3, axis=-1)
 
     # Pad to RGBA for skia surface
     frame_rgba = np.dstack([image, np.full(image.shape[:2], 255, dtype=np.uint8)])
@@ -122,8 +129,9 @@ def draw_masks(
     """Draw segmentation masks as colored overlays on an image.
 
     Args:
-        image: Image array of shape (H, W, 3) uint8. Modified in-place and
-            returned.
+        image: Image array of shape (H, W, 3) uint8. A 2-D grayscale
+            ``(H, W)`` (or ``(H, W, 1)``) image is accepted and promoted to
+            RGB. Modified in-place and returned.
         masks: List of SegmentationMask objects to draw.
         color: RGB color tuple for the mask overlay. Used when ``colors`` is
             ``None``.
@@ -134,6 +142,12 @@ def draw_masks(
     Returns:
         The modified image array.
     """
+    # Ensure RGB so grayscale images can be blended with colored overlays.
+    if image.ndim == 2:
+        image = np.stack([image] * 3, axis=-1)
+    elif image.ndim == 3 and image.shape[2] == 1:
+        image = np.concatenate([image] * 3, axis=-1)
+
     for i, mask in enumerate(masks):
         mask_color = colors[i] if colors is not None else color
         mask_data = mask.data
@@ -194,8 +208,9 @@ def draw_label_image(
     each pixel value represents a different object ID (0 = background).
 
     Args:
-        image: Image array of shape ``(H, W, 3)`` uint8. Modified in-place and
-            returned.
+        image: Image array of shape ``(H, W, 3)`` uint8. A 2-D grayscale
+            ``(H, W)`` (or ``(H, W, 1)``) image is accepted and promoted to
+            RGB. Modified in-place and returned.
         labels: Integer label array of shape ``(H, W)`` where 0 is background
             and positive values are object IDs.
         alpha: Opacity of the mask overlay (0.0 to 1.0).
@@ -214,6 +229,12 @@ def draw_label_image(
         The modified image array.
     """
     from sleap_io.rendering.colors import get_palette
+
+    # Ensure RGB so grayscale images can be blended with colored overlays.
+    if image.ndim == 2:
+        image = np.stack([image] * 3, axis=-1)
+    elif image.ndim == 3 and image.shape[2] == 1:
+        image = np.concatenate([image] * 3, axis=-1)
 
     # Get unique non-background labels
     unique_ids = np.unique(labels)
@@ -377,8 +398,9 @@ def draw_bboxes(
     near the top-left corner.
 
     Args:
-        image: Image array of shape (H, W, 3) uint8. Modified in-place and
-            returned.
+        image: Image array of shape (H, W, 3) uint8. A 2-D grayscale
+            ``(H, W)`` (or ``(H, W, 1)``) image is accepted and promoted to
+            RGB. Modified in-place and returned.
         bboxes: List of BoundingBox objects to draw.
         color: RGB color tuple for the bounding box outlines. Used when
             ``colors`` is ``None``.
@@ -399,6 +421,12 @@ def draw_bboxes(
     import skia
 
     from sleap_io.model.bbox import PredictedBoundingBox
+
+    # Ensure RGB before padding to RGBA.
+    if image.ndim == 2:
+        image = np.stack([image] * 3, axis=-1)
+    elif image.ndim == 3 and image.shape[2] == 1:
+        image = np.concatenate([image] * 3, axis=-1)
 
     # Pad to RGBA for skia surface
     frame_rgba = np.dstack([image, np.full(image.shape[:2], 255, dtype=np.uint8)])
