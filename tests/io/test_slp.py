@@ -9421,19 +9421,21 @@ def test_save_prefer_metadata_grayscale_flip_consistent(tmp_path, small_robot_pa
     labels = Labels(labeled_frames=[LabeledFrame(video=video, frame_idx=0)])
     seed_path = tmp_path / "seed.slp"
     labels.save(seed_path)
+    # Close the seed video's backend so the source file is not held open on
+    # Windows (where an open handle blocks the unlink() below).
+    video.close()
 
-    # Reload and flip grayscale on. The backend is open, but the shape is also
-    # recorded in backend_metadata.
+    # Reload and flip grayscale on. The backend is open and the shape is also
+    # recorded in backend_metadata. The setter only flips the flag; the recorded
+    # shape stays 3-channel (so e.g. ``sio fix`` can still detect the mismatch).
     reloaded = load_slp(seed_path)
     video2 = reloaded.videos[0]
     assert video2.backend_metadata.get("shape") is not None
     video2.grayscale = True
-    # The setter keeps the recorded shape consistent with the flipped flag, so
-    # the getter reflects the flip even off metadata.
-    assert video2.backend_metadata["shape"][-1] == 1
     assert video2.grayscale is True
 
-    # Default save (prefer_metadata=True).
+    # Default save (prefer_metadata=True). The serializer reconciles the emitted
+    # channel count with the grayscale flag so the entry is self-consistent.
     out_path = tmp_path / "out.slp"
     reloaded.save(out_path)
 

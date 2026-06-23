@@ -565,6 +565,15 @@ def video_to_dict(
         if prefer_metadata and meta.get("shape") is not None:
             shape = meta["shape"]
             grayscale = meta["grayscale"] if "grayscale" in meta else shape[-1] == 1
+            # The grayscale flag can be flipped after load (it updates the recorded
+            # ``grayscale`` but not the recorded ``shape``). Serializing the two
+            # independently would emit a self-inconsistent entry (e.g. a 3-channel
+            # shape with ``grayscale=true``); on reload with the backend file
+            # missing the channel count is wrong and the flip is silently lost.
+            # Keep the emitted channel count consistent with the flag for the
+            # unambiguous grayscale case (grayscale always reads as 1 channel).
+            if grayscale and shape is not None and len(shape) >= 1 and shape[-1] != 1:
+                shape = tuple(shape[:-1]) + (1,)
             fps = meta.get("fps")
         else:
             shape = video.shape
