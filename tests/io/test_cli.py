@@ -18,6 +18,7 @@ from click.testing import CliRunner
 
 from sleap_io import load_slp, save_slp, save_video
 from sleap_io.io.cli import (
+    _ensure_utf8_streams,
     _get_ffmpeg_version,
     _is_ffmpeg_available,
     _load_images,
@@ -11476,3 +11477,39 @@ def test_fix_under_cp1252_console(tmp_path):
         env=env,
     )
     assert result.returncode == 0, result.stderr.decode("cp1252", errors="replace")
+
+
+def test_ensure_utf8_streams_reconfigures():
+    """Streams exposing ``reconfigure`` are switched to UTF-8."""
+
+    class FakeStream:
+        def __init__(self):
+            self.encoding = None
+
+        def reconfigure(self, encoding=None):
+            self.encoding = encoding
+
+    stream = FakeStream()
+    _ensure_utf8_streams([stream])
+    assert stream.encoding == "utf-8"
+
+
+def test_ensure_utf8_streams_skips_without_reconfigure():
+    """A stream lacking ``reconfigure`` is skipped without error."""
+
+    class NoReconfigure:
+        pass
+
+    # Must not raise.
+    _ensure_utf8_streams([NoReconfigure()])
+
+
+def test_ensure_utf8_streams_swallows_reconfigure_errors():
+    """An exception from ``reconfigure`` is swallowed (never breaks import)."""
+
+    class RaisingStream:
+        def reconfigure(self, encoding=None):
+            raise ValueError("cannot reconfigure")
+
+    # Must not raise.
+    _ensure_utf8_streams([RaisingStream()])
