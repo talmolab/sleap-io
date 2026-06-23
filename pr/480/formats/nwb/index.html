@@ -3645,7 +3645,7 @@
 
 
 <h2 id="sleap_io.io.main.load_nwb" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">load_nwb</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">load_nwb</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
 <a href="#sleap_io.io.main.load_nwb" class="headerlink" title="Permanent link">&para;</a></h2>
 
@@ -3682,6 +3682,23 @@
                 <em>required</em>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>**kwargs</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Additional loader keyword arguments forwarded by <code>load_file</code>
+(e.g. <code>open_videos</code>, <code>lazy</code>). They are accepted but ignored; this
+format does not use them.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -3711,18 +3728,21 @@
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-220" name="__codelineno-0-220"></a><a href="#__codelineno-0-220"><span class="linenos" data-linenos="220 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_nwb</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
-<a id="__codelineno-0-221" name="__codelineno-0-221"></a><a href="#__codelineno-0-221"><span class="linenos" data-linenos="221 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load an NWB dataset as a SLEAP `Labels` object.</span>
-<a id="__codelineno-0-222" name="__codelineno-0-222"></a><a href="#__codelineno-0-222"><span class="linenos" data-linenos="222 "></span></a>
-<a id="__codelineno-0-223" name="__codelineno-0-223"></a><a href="#__codelineno-0-223"><span class="linenos" data-linenos="223 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a><a href="#__codelineno-0-224"><span class="linenos" data-linenos="224 "></span></a><span class="sd">        filename: Path to a NWB file (`.nwb`).</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a><a href="#__codelineno-0-225"><span class="linenos" data-linenos="225 "></span></a>
-<a id="__codelineno-0-226" name="__codelineno-0-226"></a><a href="#__codelineno-0-226"><span class="linenos" data-linenos="226 "></span></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-227" name="__codelineno-0-227"></a><a href="#__codelineno-0-227"><span class="linenos" data-linenos="227 "></span></a><span class="sd">        The dataset as a `Labels` object.</span>
-<a id="__codelineno-0-228" name="__codelineno-0-228"></a><a href="#__codelineno-0-228"><span class="linenos" data-linenos="228 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-229" name="__codelineno-0-229"></a><a href="#__codelineno-0-229"><span class="linenos" data-linenos="229 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">nwb</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-228" name="__codelineno-0-228"></a><a href="#__codelineno-0-228"><span class="linenos" data-linenos="228 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_nwb</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a><a href="#__codelineno-0-229"><span class="linenos" data-linenos="229 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load an NWB dataset as a SLEAP `Labels` object.</span>
 <a id="__codelineno-0-230" name="__codelineno-0-230"></a><a href="#__codelineno-0-230"><span class="linenos" data-linenos="230 "></span></a>
-<a id="__codelineno-0-231" name="__codelineno-0-231"></a><a href="#__codelineno-0-231"><span class="linenos" data-linenos="231 "></span></a>    <span class="k">return</span> <span class="n">nwb</span><span class="o">.</span><span class="n">load_nwb</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a><a href="#__codelineno-0-231"><span class="linenos" data-linenos="231 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a><a href="#__codelineno-0-232"><span class="linenos" data-linenos="232 "></span></a><span class="sd">        filename: Path to a NWB file (`.nwb`).</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a><a href="#__codelineno-0-233"><span class="linenos" data-linenos="233 "></span></a><span class="sd">        **kwargs: Additional loader keyword arguments forwarded by `load_file`</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a><a href="#__codelineno-0-234"><span class="linenos" data-linenos="234 "></span></a><span class="sd">            (e.g. ``open_videos``, ``lazy``). They are accepted but ignored; this</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a><a href="#__codelineno-0-235"><span class="linenos" data-linenos="235 "></span></a><span class="sd">            format does not use them.</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a><a href="#__codelineno-0-236"><span class="linenos" data-linenos="236 "></span></a>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a><a href="#__codelineno-0-237"><span class="linenos" data-linenos="237 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a><a href="#__codelineno-0-238"><span class="linenos" data-linenos="238 "></span></a><span class="sd">        The dataset as a `Labels` object.</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a><a href="#__codelineno-0-239"><span class="linenos" data-linenos="239 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a><a href="#__codelineno-0-240"><span class="linenos" data-linenos="240 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">nwb</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a><a href="#__codelineno-0-241"><span class="linenos" data-linenos="241 "></span></a>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a><a href="#__codelineno-0-242"><span class="linenos" data-linenos="242 "></span></a>    <span class="k">return</span> <span class="n">nwb</span><span class="o">.</span><span class="n">load_nwb</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
@@ -3852,36 +3872,36 @@ predictions format. Defaults to False.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-234" name="__codelineno-0-234"></a><a href="#__codelineno-0-234"><span class="linenos" data-linenos="234 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_nwb</span><span class="p">(</span>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a><a href="#__codelineno-0-235"><span class="linenos" data-linenos="235 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span>
-<a id="__codelineno-0-236" name="__codelineno-0-236"></a><a href="#__codelineno-0-236"><span class="linenos" data-linenos="236 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
-<a id="__codelineno-0-237" name="__codelineno-0-237"></a><a href="#__codelineno-0-237"><span class="linenos" data-linenos="237 "></span></a>    <span class="n">nwb_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-238" name="__codelineno-0-238"></a><a href="#__codelineno-0-238"><span class="linenos" data-linenos="238 "></span></a>    <span class="n">append</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-239" name="__codelineno-0-239"></a><a href="#__codelineno-0-239"><span class="linenos" data-linenos="239 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-240" name="__codelineno-0-240"></a><a href="#__codelineno-0-240"><span class="linenos" data-linenos="240 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save a SLEAP dataset to NWB format.</span>
-<a id="__codelineno-0-241" name="__codelineno-0-241"></a><a href="#__codelineno-0-241"><span class="linenos" data-linenos="241 "></span></a>
-<a id="__codelineno-0-242" name="__codelineno-0-242"></a><a href="#__codelineno-0-242"><span class="linenos" data-linenos="242 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-243" name="__codelineno-0-243"></a><a href="#__codelineno-0-243"><span class="linenos" data-linenos="243 "></span></a><span class="sd">        labels: A SLEAP `Labels` object (see `load_slp`).</span>
-<a id="__codelineno-0-244" name="__codelineno-0-244"></a><a href="#__codelineno-0-244"><span class="linenos" data-linenos="244 "></span></a><span class="sd">        filename: Path to NWB file to save to. Must end in `.nwb`.</span>
-<a id="__codelineno-0-245" name="__codelineno-0-245"></a><a href="#__codelineno-0-245"><span class="linenos" data-linenos="245 "></span></a><span class="sd">        nwb_format: Format to use for saving. Options are:</span>
-<a id="__codelineno-0-246" name="__codelineno-0-246"></a><a href="#__codelineno-0-246"><span class="linenos" data-linenos="246 "></span></a><span class="sd">            - &quot;auto&quot; (default): Automatically detect based on data</span>
-<a id="__codelineno-0-247" name="__codelineno-0-247"></a><a href="#__codelineno-0-247"><span class="linenos" data-linenos="247 "></span></a><span class="sd">            - &quot;annotations&quot;: Save training annotations (PoseTraining)</span>
-<a id="__codelineno-0-248" name="__codelineno-0-248"></a><a href="#__codelineno-0-248"><span class="linenos" data-linenos="248 "></span></a><span class="sd">            - &quot;annotations_export&quot;: Export annotations with video frames</span>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a><a href="#__codelineno-0-249"><span class="linenos" data-linenos="249 "></span></a><span class="sd">            - &quot;predictions&quot;: Save predictions (PoseEstimation)</span>
-<a id="__codelineno-0-250" name="__codelineno-0-250"></a><a href="#__codelineno-0-250"><span class="linenos" data-linenos="250 "></span></a><span class="sd">        append: If True, append to existing NWB file. Only supported for</span>
-<a id="__codelineno-0-251" name="__codelineno-0-251"></a><a href="#__codelineno-0-251"><span class="linenos" data-linenos="251 "></span></a><span class="sd">            predictions format. Defaults to False.</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-245" name="__codelineno-0-245"></a><a href="#__codelineno-0-245"><span class="linenos" data-linenos="245 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_nwb</span><span class="p">(</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a><a href="#__codelineno-0-246"><span class="linenos" data-linenos="246 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a><a href="#__codelineno-0-247"><span class="linenos" data-linenos="247 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a><a href="#__codelineno-0-248"><span class="linenos" data-linenos="248 "></span></a>    <span class="n">nwb_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><a href="#__codelineno-0-249"><span class="linenos" data-linenos="249 "></span></a>    <span class="n">append</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><a href="#__codelineno-0-250"><span class="linenos" data-linenos="250 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a><a href="#__codelineno-0-251"><span class="linenos" data-linenos="251 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save a SLEAP dataset to NWB format.</span>
 <a id="__codelineno-0-252" name="__codelineno-0-252"></a><a href="#__codelineno-0-252"><span class="linenos" data-linenos="252 "></span></a>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a><a href="#__codelineno-0-253"><span class="linenos" data-linenos="253 "></span></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-254" name="__codelineno-0-254"></a><a href="#__codelineno-0-254"><span class="linenos" data-linenos="254 "></span></a><span class="sd">        ValueError: If an invalid format is specified.</span>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a><a href="#__codelineno-0-255"><span class="linenos" data-linenos="255 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-256" name="__codelineno-0-256"></a><a href="#__codelineno-0-256"><span class="linenos" data-linenos="256 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">nwb</span>
-<a id="__codelineno-0-257" name="__codelineno-0-257"></a><a href="#__codelineno-0-257"><span class="linenos" data-linenos="257 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io.nwb</span><span class="w"> </span><span class="kn">import</span> <span class="n">NwbFormat</span>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a><a href="#__codelineno-0-258"><span class="linenos" data-linenos="258 "></span></a>
-<a id="__codelineno-0-259" name="__codelineno-0-259"></a><a href="#__codelineno-0-259"><span class="linenos" data-linenos="259 "></span></a>    <span class="c1"># Convert string to NwbFormat if needed</span>
-<a id="__codelineno-0-260" name="__codelineno-0-260"></a><a href="#__codelineno-0-260"><span class="linenos" data-linenos="260 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">nwb_format</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-<a id="__codelineno-0-261" name="__codelineno-0-261"></a><a href="#__codelineno-0-261"><span class="linenos" data-linenos="261 "></span></a>        <span class="n">nwb_format</span> <span class="o">=</span> <span class="n">NwbFormat</span><span class="p">(</span><span class="n">nwb_format</span><span class="p">)</span>
-<a id="__codelineno-0-262" name="__codelineno-0-262"></a><a href="#__codelineno-0-262"><span class="linenos" data-linenos="262 "></span></a>
-<a id="__codelineno-0-263" name="__codelineno-0-263"></a><a href="#__codelineno-0-263"><span class="linenos" data-linenos="263 "></span></a>    <span class="n">nwb</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">nwb_format</span><span class="p">,</span> <span class="n">append</span><span class="o">=</span><span class="n">append</span><span class="p">)</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><a href="#__codelineno-0-253"><span class="linenos" data-linenos="253 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a><a href="#__codelineno-0-254"><span class="linenos" data-linenos="254 "></span></a><span class="sd">        labels: A SLEAP `Labels` object (see `load_slp`).</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a><a href="#__codelineno-0-255"><span class="linenos" data-linenos="255 "></span></a><span class="sd">        filename: Path to NWB file to save to. Must end in `.nwb`.</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a><a href="#__codelineno-0-256"><span class="linenos" data-linenos="256 "></span></a><span class="sd">        nwb_format: Format to use for saving. Options are:</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a><a href="#__codelineno-0-257"><span class="linenos" data-linenos="257 "></span></a><span class="sd">            - &quot;auto&quot; (default): Automatically detect based on data</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a><a href="#__codelineno-0-258"><span class="linenos" data-linenos="258 "></span></a><span class="sd">            - &quot;annotations&quot;: Save training annotations (PoseTraining)</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a><a href="#__codelineno-0-259"><span class="linenos" data-linenos="259 "></span></a><span class="sd">            - &quot;annotations_export&quot;: Export annotations with video frames</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a><a href="#__codelineno-0-260"><span class="linenos" data-linenos="260 "></span></a><span class="sd">            - &quot;predictions&quot;: Save predictions (PoseEstimation)</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a><a href="#__codelineno-0-261"><span class="linenos" data-linenos="261 "></span></a><span class="sd">        append: If True, append to existing NWB file. Only supported for</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a><a href="#__codelineno-0-262"><span class="linenos" data-linenos="262 "></span></a><span class="sd">            predictions format. Defaults to False.</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a><a href="#__codelineno-0-263"><span class="linenos" data-linenos="263 "></span></a>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a><a href="#__codelineno-0-264"><span class="linenos" data-linenos="264 "></span></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a><a href="#__codelineno-0-265"><span class="linenos" data-linenos="265 "></span></a><span class="sd">        ValueError: If an invalid format is specified.</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a><a href="#__codelineno-0-266"><span class="linenos" data-linenos="266 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a><a href="#__codelineno-0-267"><span class="linenos" data-linenos="267 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">nwb</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><a href="#__codelineno-0-268"><span class="linenos" data-linenos="268 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io.nwb</span><span class="w"> </span><span class="kn">import</span> <span class="n">NwbFormat</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a><a href="#__codelineno-0-269"><span class="linenos" data-linenos="269 "></span></a>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><a href="#__codelineno-0-270"><span class="linenos" data-linenos="270 "></span></a>    <span class="c1"># Convert string to NwbFormat if needed</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a><a href="#__codelineno-0-271"><span class="linenos" data-linenos="271 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">nwb_format</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a><a href="#__codelineno-0-272"><span class="linenos" data-linenos="272 "></span></a>        <span class="n">nwb_format</span> <span class="o">=</span> <span class="n">NwbFormat</span><span class="p">(</span><span class="n">nwb_format</span><span class="p">)</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a><a href="#__codelineno-0-273"><span class="linenos" data-linenos="273 "></span></a>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a><a href="#__codelineno-0-274"><span class="linenos" data-linenos="274 "></span></a>    <span class="n">nwb</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">nwb_format</span><span class="p">,</span> <span class="n">append</span><span class="o">=</span><span class="n">append</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
