@@ -36,6 +36,27 @@ so the same call works for local and remote files.
     JABS, DLC, CSV, TrackMate, LEAP, GeoJSON, Ultralytics) raises
     `NotImplementedError` over a URL — download the file locally first.
 
+### Command-line interface
+
+The `sio` read commands accept a URL anywhere they accept a local input file —
+the input is streamed over the network just like the Python loaders. This works
+for `show`, `filenames`, `convert`, `split`, `render`, `export`, `fix`, `embed`,
+and `unembed`:
+
+```bash
+# Inspect a remote labels file
+sio show https://example.com/labels.slp
+
+# Convert a remote file to a local output (output paths stay local)
+sio convert s3://bucket/labels.slp -o labels.nwb
+
+# The -i/--input option accepts URLs too
+sio filenames -i https://example.com/labels.slp
+```
+
+Output paths and commands that re-encode video locally (`trim`, `reencode`,
+`transform`, `apply-crops`) require local filesystem paths.
+
 ---
 
 ## Supported schemes & install matrix

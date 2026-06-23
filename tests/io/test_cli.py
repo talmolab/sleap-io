@@ -22,6 +22,7 @@ from click.testing import CliRunner
 
 from sleap_io import load_slp, save_slp, save_video
 from sleap_io.io.cli import (
+    REMOTE_OR_LOCAL_PATH,
     _ensure_utf8_streams,
     _get_ffmpeg_version,
     _infer_input_format,
@@ -29,6 +30,7 @@ from sleap_io.io.cli import (
     _load_images,
     _load_overlay,
     _parse_overlay_outline_color,
+    _RemoteInputPath,
     _run_subprocess_with_progress,
     cli,
 )
@@ -154,6 +156,107 @@ def test_show_file_not_found():
     assert result.exit_code != 0
     # Click validates file existence before our code runs
     assert "not exist" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Remote URL inputs for read commands (RemoteOrLocalPath param type)
+# ---------------------------------------------------------------------------
+
+
+def test_remote_or_local_path_does_not_mangle_url():
+    """The remote-or-local path type passes URLs through verbatim.
+
+    A plain ``click.Path``/``pathlib.Path`` would collapse ``https://`` to
+    ``https:/`` (losing the authority). The custom type must round-trip the URL
+    unchanged so it reaches the loaders intact.
+    """
+    url = "https://example.com/dir/file.slp"
+    value = REMOTE_OR_LOCAL_PATH.convert(url, None, None)
+    assert isinstance(value, _RemoteInputPath)
+    assert str(value) == url
+    assert "https://" in str(value)
+    # Cloud schemes round-trip too.
+    s3_url = "s3://bucket/key/data.nwb"
+    assert str(REMOTE_OR_LOCAL_PATH.convert(s3_url, None, None)) == s3_url
+
+
+def test_remote_input_path_pathlike_attrs():
+    """`_RemoteInputPath` derives Path-like read attrs from URL semantics."""
+    p = _RemoteInputPath("https://host/a/b/data.pkg.slp?token=secret")
+    assert p.name == "data.pkg.slp"
+    assert p.suffix == ".slp"
+    assert p.stem == "data.pkg"
+    assert str(p.parent) == "https://host/a/b?token=secret"
+    # Mirrors Path.with_suffix: only the final extension is replaced.
+    assert str(p.with_suffix(".nwb")) == "https://host/a/b/data.pkg.nwb?token=secret"
+    assert str(p / "child") == "https://host/a/b/data.pkg.slp/child?token=secret"
+    assert p.resolve() is p
+    # A URL is not a local filesystem entry.
+    assert p.exists() is False
+    assert p.is_dir() is False
+    assert p.is_file() is False
+
+
+def test_show_url_input_passes_arg_parsing():
+    """`sio show <url>` reaches the loader instead of failing at parse.
+
+    With ``click.Path(exists=True)`` this exited 2 with a BadParameter
+    "does not exist" before any loading. The URL now passes parsing and the
+    error is a load/remote failure, not a parameter-validation error.
+    """
+    runner = CliRunner()
+    # Unresolvable host: fails during the fetch, not during arg parsing.
+    result = runner.invoke(cli, ["show", "https://invalid.invalid.invalid/x.slp"])
+    assert result.exit_code != 0
+    # Not a click BadParameter "does not exist" parse error.
+    assert "does not exist" not in result.output
+    assert "Invalid value" not in result.output
+
+
+def test_convert_url_input_passes_arg_parsing(tmp_path):
+    """`sio convert <url> -o out` reaches the loader instead of failing at parse."""
+    runner = CliRunner()
+    out = tmp_path / "out.nwb"
+    result = runner.invoke(
+        cli,
+        ["convert", "https://invalid.invalid.invalid/x.slp", "-o", str(out)],
+    )
+    assert result.exit_code != 0
+    assert "does not exist" not in result.output
+    assert "Invalid value" not in result.output
+    # Our command-level load handler ran (proving parsing succeeded).
+    assert "Failed to load input file" in result.output
+
+
+def test_convert_url_via_input_option_passes_arg_parsing(tmp_path):
+    """The -i/--input option also accepts URLs without a parse error."""
+    runner = CliRunner()
+    out = tmp_path / "out.nwb"
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", "https://invalid.invalid.invalid/x.slp", "-o", str(out)],
+    )
+    assert result.exit_code != 0
+    assert "does not exist" not in result.output
+    assert "Invalid value" not in result.output
+
+
+def test_convert_nonexistent_local_path_still_errors():
+    """A nonexistent local input still fails at parse with a BadParameter error.
+
+    rich-click wraps the message in a box, so the literal "does not exist" may be
+    line-wrapped; the stable marker is the "Invalid value" BadParameter header.
+    """
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["convert", "/nonexistent/path/file.slp", "-o", "out.nwb"],
+    )
+    assert result.exit_code == 2
+    output = _strip_ansi(result.output)
+    assert "Invalid value" in output
+    # "exist" survives the box wrapping even if "does not" is on a prior line.
+    assert "exist" in output
 
 
 def test_show_skeleton_no_edges(tmp_path):

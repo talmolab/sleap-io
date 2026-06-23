@@ -8,9 +8,11 @@ in minimal environments and CI.
 
 from __future__ import annotations
 
+import posixpath
 import re
 import subprocess
 import sys
+import urllib.parse
 from dataclasses import dataclass
 from importlib.metadata import version as pkg_version
 from pathlib import Path
@@ -27,6 +29,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from sleap_io.io import main as io_main
+from sleap_io.io._remote import _is_url
 from sleap_io.io.video_reading import HDF5Video
 from sleap_io.model.instance import PredictedInstance
 from sleap_io.model.labels import Labels
@@ -169,6 +172,113 @@ OUTPUT_EXTENSION_TO_FORMAT = {
     ".h5": "analysis_h5",  # Default .h5 output to analysis HDF5
     ".hdf5": "analysis_h5",
 }
+
+
+class _RemoteInputPath(str):
+    """A remote URL that quacks like :class:`pathlib.Path` for read inputs.
+
+    Read-input arguments accept either a local filesystem path (validated by
+    click and handed to the command as a :class:`~pathlib.Path`) or a remote
+    URL (``http(s)://``, ``s3://``, ``gs://``, ...). The downstream command code
+    treats the resolved input as a ``Path`` (calls ``.suffix`` for format
+    inference, ``.name`` for messages, etc.) and passes ``str(path)`` to the
+    loaders. A real ``Path`` cannot hold a URL: ``str(Path("https://h/f.slp"))``
+    collapses ``//`` to ``/`` (losing the authority) and, on Windows, parses the
+    scheme as a drive so ``.suffix``/``.name`` come back empty.
+
+    This ``str`` subclass holds the URL *verbatim* (so ``str(...)`` and
+    ``os.fspath(...)`` round-trip unchanged to the loaders) while deriving the
+    handful of ``Path``-like read attributes the CLI uses from URL semantics
+    (the path component, ignoring the query/fragment). Filesystem predicates
+    (:meth:`exists`, :meth:`is_dir`, :meth:`is_file`) report ``False`` because a
+    URL is not a local file; callers already guard size/stat lookups on these.
+
+    Attributes:
+        name: The final path segment of the URL (e.g. ``file.slp``).
+        suffix: The file extension of :attr:`name` (e.g. ``.slp``).
+        stem: :attr:`name` without its suffix.
+        parent: The URL with its final path segment removed, as a
+            ``_RemoteInputPath``.
+    """
+
+    @property
+    def _path(self) -> str:
+        """Return the URL's path component (no scheme/host/query/fragment)."""
+        return urllib.parse.urlparse(self).path
+
+    @property
+    def name(self) -> str:
+        """Return the final segment of the URL path."""
+        return posixpath.basename(self._path)
+
+    @property
+    def suffix(self) -> str:
+        """Return the file extension of :attr:`name` (including the dot)."""
+        return posixpath.splitext(self.name)[1]
+
+    @property
+    def stem(self) -> str:
+        """Return :attr:`name` without its suffix."""
+        return posixpath.splitext(self.name)[0]
+
+    @property
+    def parent(self) -> "_RemoteInputPath":
+        """Return the URL with its final path segment removed."""
+        parsed = urllib.parse.urlparse(self)
+        new_path = posixpath.dirname(parsed.path)
+        return _RemoteInputPath(parsed._replace(path=new_path).geturl())
+
+    def with_suffix(self, suffix: str) -> "_RemoteInputPath":
+        """Return the URL with :attr:`suffix` replaced by ``suffix``."""
+        parsed = urllib.parse.urlparse(self)
+        new_name = posixpath.splitext(self.name)[0] + suffix
+        new_path = posixpath.join(posixpath.dirname(parsed.path), new_name)
+        return _RemoteInputPath(parsed._replace(path=new_path).geturl())
+
+    def __truediv__(self, other: str) -> "_RemoteInputPath":
+        """Join ``other`` onto the URL path (mirrors ``Path / "child"``)."""
+        parsed = urllib.parse.urlparse(self)
+        new_path = posixpath.join(parsed.path, str(other))
+        return _RemoteInputPath(parsed._replace(path=new_path).geturl())
+
+    def resolve(self) -> "_RemoteInputPath":
+        """Return self (a URL is already absolute; nothing to resolve)."""
+        return self
+
+    def exists(self) -> bool:
+        """Return False (a URL is not a local filesystem path)."""
+        return False
+
+    def is_dir(self) -> bool:
+        """Return False (a URL is not a local directory)."""
+        return False
+
+    def is_file(self) -> bool:
+        """Return False (a URL is not a local file)."""
+        return False
+
+
+class RemoteOrLocalPath(click.Path):
+    """A click path type that accepts remote URLs as well as local paths.
+
+    For URL-shaped values (per :func:`sleap_io.io._remote._is_url`) the value is
+    passed through verbatim as a :class:`_RemoteInputPath` with no ``Path``
+    conversion and no existence check, so the URL reaches the loaders unmangled.
+    All other values are validated exactly like the wrapped :class:`click.Path`
+    (typically ``exists=True, path_type=Path``), preserving the existing
+    local-file error messages.
+    """
+
+    def convert(self, value, param, ctx):
+        """Pass URLs through verbatim; validate local paths as usual."""
+        if _is_url(value):
+            return _RemoteInputPath(value)
+        return super().convert(value, param, ctx)
+
+
+#: Reusable instance for read-input arguments that may be a local file or a
+#: remote URL. Local values are validated like ``click.Path(exists=True)``.
+REMOTE_OR_LOCAL_PATH = RemoteOrLocalPath(exists=True, path_type=Path)
 
 
 def _resolve_input(
@@ -1670,14 +1780,14 @@ def _print_provenance(labels: Labels, compact: bool = False) -> None:
     "path_arg",
     required=False,
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
 )
 @click.option(
     "-i",
     "--input",
     "path_opt",
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
     help="Input file (.slp, .nwb, video). Can also be passed as positional argument.",
 )
 @click.option(
@@ -1927,14 +2037,14 @@ def _infer_output_format(path: Path) -> str | None:
     "input_arg",
     required=False,
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
 )
 @click.option(
     "-i",
     "--input",
     "input_opt",
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
     help="Input file path. Can also be passed as positional argument.",
 )
 @click.option(
@@ -2176,14 +2286,14 @@ def convert(
     "input_arg",
     required=False,
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
 )
 @click.option(
     "-i",
     "--input",
     "input_opt",
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
     help="Input file path. Can also be passed as positional argument.",
 )
 @click.option(
@@ -2417,14 +2527,14 @@ def export(
     "input_arg",
     required=False,
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
 )
 @click.option(
     "-i",
     "--input",
     "input_opt",
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
     help="Input labels file. Can also be passed as positional argument.",
 )
 @click.option(
@@ -3058,14 +3168,14 @@ def merge(
     "input_arg",
     required=False,
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
 )
 @click.option(
     "-i",
     "--input",
     "input_opt",
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
     help="Input labels file. Can also be passed as positional argument.",
 )
 @click.option(
@@ -3291,14 +3401,14 @@ def filenames(
     "input_arg",
     required=False,
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
 )
 @click.option(
     "-i",
     "--input",
     "input_opt",
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
     help="Input labels file (.slp, .nwb, etc.). Can also be passed as positional arg.",
 )
 @click.option(
@@ -4139,14 +4249,14 @@ def _analyze_video_colors(labels: Labels) -> list[dict]:
     "input_arg",
     required=False,
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
 )
 @click.option(
     "-i",
     "--input",
     "input_opt",
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
     help="Input labels file. Can also be passed as positional argument.",
 )
 @click.option(
@@ -4751,14 +4861,14 @@ def fix(
     "input_arg",
     required=False,
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
 )
 @click.option(
     "-i",
     "--input",
     "input_opt",
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
     help="Input SLP file path. Can also be passed as positional argument.",
 )
 @click.option(
@@ -4889,14 +4999,14 @@ def embed(
     "input_arg",
     required=False,
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
 )
 @click.option(
     "-i",
     "--input",
     "input_opt",
     default=None,
-    type=click.Path(exists=True, path_type=Path),
+    type=REMOTE_OR_LOCAL_PATH,
     help="Input .pkg.slp file path. Can also be passed as positional argument.",
 )
 @click.option(
