@@ -169,6 +169,46 @@ def test_grayscale(centered_pair_low_quality_path):
     assert video.grayscale is False
 
 
+def test_grayscale_setter_keeps_recorded_shape_consistent():
+    """Flipping grayscale updates a recorded metadata shape to match the flag.
+
+    Without a live backend, ``Video.grayscale`` is read from ``backend_metadata``.
+    If only the ``grayscale`` flag were updated and the recorded ``shape`` were
+    left stale, the two would disagree (and the getter, which prefers ``shape``,
+    would lose the flip).
+    """
+    video = Video(
+        filename="missing.mp4",
+        backend=None,
+        open_backend=False,
+        backend_metadata={"shape": (10, 480, 640, 3), "grayscale": False},
+    )
+    assert video.grayscale is False
+
+    video.grayscale = True
+    assert video.backend_metadata["grayscale"] is True
+    assert video.backend_metadata["shape"][-1] == 1
+    assert video.grayscale is True
+
+    video.grayscale = False
+    assert video.backend_metadata["shape"][-1] == 3
+    assert video.grayscale is False
+
+
+def test_grayscale_setter_without_recorded_shape():
+    """Flipping grayscale with no recorded shape only sets the flag."""
+    video = Video(
+        filename="missing.mp4",
+        backend=None,
+        open_backend=False,
+        backend_metadata={},
+    )
+    video.grayscale = True
+    assert video.backend_metadata["grayscale"] is True
+    assert "shape" not in video.backend_metadata
+    assert video.grayscale is True
+
+
 def test_open_backend_preference(centered_pair_low_quality_path):
     video = Video(centered_pair_low_quality_path)
     assert video.is_open

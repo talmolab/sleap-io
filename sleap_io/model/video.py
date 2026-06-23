@@ -549,12 +549,27 @@ class Video:
 
     @grayscale.setter
     def grayscale(self, value: bool):
-        """Set the grayscale value and adjust the backend."""
+        """Set the grayscale value and adjust the backend.
+
+        Notes:
+            If a shape was recorded in ``backend_metadata`` (e.g. for a video
+            loaded from a ``.slp`` whose backend may later be unavailable), the
+            recorded channel count is kept consistent with ``value`` (1 channel
+            when grayscale, 3 when not). Otherwise the recorded ``shape`` would
+            disagree with the recorded ``grayscale`` flag, which on re-serialize
+            yields an inconsistent ``videos_json`` entry and silently drops the
+            flip when the backend file is missing on reload.
+        """
         if self.backend is not None:
             self.backend.grayscale = value
             self.backend._cached_shape = None
 
         self.backend_metadata["grayscale"] = value
+        recorded_shape = self.backend_metadata.get("shape")
+        if recorded_shape is not None:
+            self.backend_metadata["shape"] = tuple(recorded_shape[:-1]) + (
+                1 if value else 3,
+            )
 
     @property
     def fps(self) -> float | None:
