@@ -20,6 +20,7 @@ from sleap_io.rendering import render_video
 from sleap_io.rendering.colors import get_palette
 from sleap_io.rendering.core import render_image
 from sleap_io.rendering.overlays import (
+    _ensure_rgb,
     draw_bboxes,
     draw_label_image,
     draw_masks,
@@ -2877,6 +2878,25 @@ def test_draw_bboxes_grayscale():
     assert result[50, 50].tolist() == [0, 255, 0]
     # Outside the box stays black.
     assert result[80, 80].tolist() == [0, 0, 0]
+
+
+def test_ensure_rgb_shapes():
+    """_ensure_rgb promotes (H, W) and (H, W, 1) to RGB and passes (H, W, 3)."""
+    gray_2d = np.arange(12, dtype=np.uint8).reshape(3, 4)
+    out_2d = _ensure_rgb(gray_2d)
+    assert out_2d.shape == (3, 4, 3)
+    # Every channel equals the original grayscale plane.
+    np.testing.assert_array_equal(out_2d[..., 0], gray_2d)
+    np.testing.assert_array_equal(out_2d[..., 2], gray_2d)
+
+    gray_1ch = np.arange(12, dtype=np.uint8).reshape(3, 4, 1)
+    out_1ch = _ensure_rgb(gray_1ch)
+    assert out_1ch.shape == (3, 4, 3)
+    np.testing.assert_array_equal(out_1ch[..., 1], gray_1ch[..., 0])
+
+    rgb = np.zeros((3, 4, 3), dtype=np.uint8)
+    # A 3-channel image is returned unchanged (same array, in-place preserved).
+    assert _ensure_rgb(rgb) is rgb
 
 
 # ============================================================================
