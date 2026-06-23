@@ -112,6 +112,23 @@ def test_roi_to_mask():
     assert not data[0, 0]  # Outside the bbox
 
 
+def test_predicted_roi_to_mask_is_predicted():
+    """A PredictedROI rasterizes to a PredictedSegmentationMask with its score."""
+    from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
+
+    roi = PredictedROI.from_bbox(2, 3, 4, 5, category="cat", score=0.8)
+    mask = roi.to_mask(height=20, width=20)
+
+    assert isinstance(mask, PredictedSegmentationMask)
+    assert mask.score == pytest.approx(0.8)
+    assert mask.category == "cat"
+    assert mask.area > 0
+
+    # A user ROI still produces a user mask (no score field).
+    user_mask = UserROI.from_bbox(2, 3, 4, 5).to_mask(height=20, width=20)
+    assert type(user_mask) is UserSegmentationMask
+
+
 def test_roi_with_video():
     video = Video(filename="test.mp4")
     roi = UserROI.from_bbox(0, 0, 10, 10, video=video)

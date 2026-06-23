@@ -53,6 +53,12 @@ rois = labels.labeled_frames[0].rois
     to an `ROI` since there is no extent to rasterize into. When written back to
     COCO, `SegmentationMask` objects are exported as RLE.
 
+!!! note "Predicted vs. user segmentation"
+    A detection annotation carrying a `score` (i.e. a model prediction) is read
+    as a `PredictedSegmentationMask` / `PredictedROI` with that score; annotations
+    without a `score` become the `User*` variants. This mirrors how `bbox`
+    annotations select `PredictedBoundingBox` vs. `UserBoundingBox`.
+
 ## Categories as identities
 
 In a standard COCO dataset the `category` is an object *class* (e.g. `"person"`,
