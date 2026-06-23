@@ -689,6 +689,7 @@ def _find_project_csvs(project_dir: Path, scorer: str | None) -> list[tuple[str,
 def load_dlc_project(
     config: str | Path,
     video_search_paths: list[str | Path] | None = None,
+    **kwargs,
 ) -> Labels:
     """Load an entire DeepLabCut project from its ``config.yaml``.
 
@@ -701,6 +702,10 @@ def load_dlc_project(
         config: Path to a DLC project ``config.yaml``, or to a project directory
             containing one.
         video_search_paths: Optional paths to search for original video files.
+        **kwargs: Additional loader keyword arguments forwarded by `load_file`
+            (e.g. ``open_videos``, ``lazy``). These are accepted but ignored
+            because DLC projects reference per-image folders rather than openable
+            video files.
 
     Returns:
         A `Labels` object with frames from every labeled video in the project.
@@ -1013,6 +1018,7 @@ def load_dlc_splits(
     train_fraction: float | None = None,
     iteration: int | None = None,
     video_search_paths: list[str | Path] | None = None,
+    **kwargs,
 ) -> LabelsSet:
     """Load DeepLabCut train/test splits from a project's Documentation pickle.
 
@@ -1024,6 +1030,10 @@ def load_dlc_splits(
             if the project has more than one training fraction.
         iteration: The project iteration. Defaults to ``cfg['iteration']``.
         video_search_paths: Optional paths to search for original video files.
+        **kwargs: Additional loader keyword arguments forwarded by `load_file`
+            (e.g. ``open_videos``, ``lazy``). These are accepted but ignored
+            because DLC projects reference per-image folders rather than openable
+            video files.
 
     Returns:
         A `LabelsSet` with ``"train"`` and ``"test"`` keys, each a `Labels`

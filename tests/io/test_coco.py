@@ -12,11 +12,12 @@ from sleap_io.io import coco
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.instance import Track
 from sleap_io.model.labels import Labels
-from sleap_io.model.mask import UserSegmentationMask
+from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
 from sleap_io.model.matching import (
     IMAGE_DEDUP_VIDEO_MATCHER,
     SHAPE_VIDEO_MATCHER,
 )
+from sleap_io.model.roi import PredictedROI, UserROI
 
 
 class TestCOCOBasicLoading:
@@ -659,6 +660,53 @@ def test_shared_video_objects_for_same_shape(tmp_path):
     assert sorted(frame_indices_100x100) == [0, 1, 2]
     # 200x150 video should have frame at index 0 (1 image)
     assert frame_indices_200x150 == [0]
+
+
+def test_coco_duplicate_filename_distinct_frames(tmp_path):
+    """Distinct image entries that share a file_name each get their own frame."""
+    img_path = tmp_path / "dup.png"
+    img_path.touch()
+    # Three image entries all pointing at the same file_name, with one annotation
+    # each. Previously the path-keyed frame-index map collided and raised KeyError.
+    data = {
+        "images": [
+            {"id": 10, "file_name": "dup.png", "height": 40, "width": 40},
+            {"id": 11, "file_name": "dup.png", "height": 40, "width": 40},
+            {"id": 12, "file_name": "dup.png", "height": 40, "width": 40},
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 10,
+                "category_id": 1,
+                "segmentation": [[1.0, 1.0, 10.0, 1.0, 10.0, 10.0, 1.0, 10.0]],
+            },
+            {
+                "id": 2,
+                "image_id": 11,
+                "category_id": 1,
+                "segmentation": [[2.0, 2.0, 12.0, 2.0, 12.0, 12.0, 2.0, 12.0]],
+            },
+            {
+                "id": 3,
+                "image_id": 12,
+                "category_id": 1,
+                "segmentation": [[3.0, 3.0, 13.0, 3.0, 13.0, 13.0, 3.0, 13.0]],
+            },
+        ],
+        "categories": [{"id": 1, "name": "obj"}],
+    }
+    json_path = tmp_path / "dup.coco.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    # Does not raise; one frame per image entry, each at a distinct index.
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+    assert len(labels.labeled_frames) == 3
+    assert sorted(lf.frame_idx for lf in labels.labeled_frames) == [0, 1, 2]
+    # Each frame carries exactly its own annotation's mask.
+    assert all(len(lf.masks) == 1 for lf in labels.labeled_frames)
+    assert sum(len(lf.masks) for lf in labels.labeled_frames) == 3
 
 
 def test_grayscale_loading(tmp_path):
@@ -1865,6 +1913,124 @@ class TestCOCOROIMaskIO:
         decoded = coco._decode_coco_rle(rle["counts"], rle["size"])
         np.testing.assert_array_equal(decoded, mask)
 
+    def test_coco_compressed_rle_known_value(self):
+        """Compressed (LEB128) RLE counts decode to the expected mask.
+
+        ``b"01;000"`` is the pycocotools-compressed encoding of a 5x5 mask with
+        True pixels on the main diagonal at (0, 0), (2, 2) and (4, 4). This pins
+        decode correctness against a known-good pycocotools value, not just
+        round-trip symmetry.
+        """
+        expected = np.zeros((5, 5), dtype=bool)
+        expected[0, 0] = True
+        expected[2, 2] = True
+        expected[4, 4] = True
+
+        # Both bytes and str forms must decode identically.
+        decoded_bytes = coco._decode_coco_rle(b"01;000", [5, 5])
+        np.testing.assert_array_equal(decoded_bytes, expected)
+
+        decoded_str = coco._decode_coco_rle("01;000", [5, 5])
+        np.testing.assert_array_equal(decoded_str, expected)
+
+    def test_coco_compressed_rle_full_column_known_value(self):
+        """Compressed RLE for a full first column decodes correctly.
+
+        ``b"05d0"`` is the pycocotools-compressed encoding of a 5x5 mask whose
+        entire first column is True (column-major order).
+        """
+        expected = np.zeros((5, 5), dtype=bool)
+        expected[:, 0] = True
+
+        decoded = coco._decode_coco_rle(b"05d0", [5, 5])
+        np.testing.assert_array_equal(decoded, expected)
+
+    def test_coco_compressed_rle_counts_decoder(self):
+        """The LEB128 counts decoder returns the expected run lengths."""
+        # ``b"05d0"`` -> [0, 5, 20] (0-run of 0, then 5 True for the full first
+        # column, then 20 False to fill the remaining 4 columns of a 5x5
+        # column-major mask).
+        assert coco._decode_compressed_rle_counts(b"05d0") == [0, 5, 20]
+        # String input must match bytes input.
+        assert coco._decode_compressed_rle_counts("05d0") == [0, 5, 20]
+
+    def test_coco_compressed_rle_roundtrip(self):
+        """Uncompressed counts -> compressed string -> decode equals original."""
+
+        def encode_compressed(run_lengths: list[int]) -> bytes:
+            """Inverse of ``_decode_compressed_rle_counts`` (pycocotools scheme)."""
+            out = bytearray()
+            for i, x in enumerate(run_lengths):
+                v = int(x)
+                if i > 2:
+                    v -= int(run_lengths[i - 2])
+                more = True
+                while more:
+                    c = v & 0x1F
+                    v >>= 5
+                    if c & 0x10:
+                        more = v != -1
+                    else:
+                        more = v != 0
+                    if more:
+                        c |= 0x20
+                    out.append(c + 48)
+            return bytes(out)
+
+        mask = np.zeros((4, 6), dtype=bool)
+        mask[0, 0:3] = True
+        mask[1, 0] = True
+
+        rle = coco._encode_coco_rle(mask)
+        compressed = encode_compressed(rle["counts"])
+        decoded = coco._decode_coco_rle(compressed, rle["size"])
+        np.testing.assert_array_equal(decoded, mask)
+
+    def test_coco_load_compressed_rle_no_crash(self, tmp_path):
+        """load_coco must not crash on compressed (string-counts) RLE.
+
+        Regression for the case where a real on-disk image resolves and the
+        compressed RLE annotation is decoded (previously raised
+        ``TypeError: unsupported operand type(s) for +=: 'int' and 'str'``).
+        """
+        img_path = tmp_path / "img.png"
+        img_path.touch()
+
+        data = {
+            "images": [
+                {"id": 1, "file_name": "img.png", "height": 5, "width": 5},
+            ],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": 1,
+                    # pycocotools-compressed RLE for a known 5x5 diagonal mask.
+                    "segmentation": {"counts": "01;000", "size": [5, 5]},
+                    "iscrowd": 0,
+                },
+            ],
+            "categories": [{"id": 1, "name": "cell"}],
+        }
+
+        json_path = tmp_path / "compressed_rle.json"
+        with open(json_path, "w") as f:
+            json.dump(data, f)
+
+        labels = sio.load_coco(json_path, dataset_root=tmp_path)
+
+        assert len(labels.masks) == 1
+        mask = labels.masks[0]
+        assert mask.category == "cell"
+        assert mask.height == 5
+        assert mask.width == 5
+
+        expected = np.zeros((5, 5), dtype=bool)
+        expected[0, 0] = True
+        expected[2, 2] = True
+        expected[4, 4] = True
+        np.testing.assert_array_equal(mask.data.astype(bool), expected)
+
     def test_coco_detection_empty_segmentation_fallback_to_bbox(self, tmp_path):
         """Test that annotations with segmentation=[] fall back to bbox ROI."""
         img_path = tmp_path / "img.png"
@@ -2476,6 +2642,73 @@ def test_coco_predicted_bbox(tmp_path):
     assert y == pytest.approx(20.0)
     assert w == pytest.approx(30.0)
     assert h == pytest.approx(40.0)
+
+
+def test_coco_scored_segmentation_is_predicted(tmp_path):
+    """A `score` on a detection annotation yields predicted mask/ROI variants."""
+    img_path = tmp_path / "pred.png"
+    img_path.touch()
+    data = {
+        "images": [{"id": 1, "file_name": "pred.png", "height": 30, "width": 30}],
+        "annotations": [
+            # Scored polygon -> PredictedSegmentationMask.
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "score": 0.9,
+                "segmentation": [[2.0, 2.0, 15.0, 2.0, 15.0, 15.0, 2.0, 15.0]],
+            },
+            # Scored RLE -> PredictedSegmentationMask.
+            {
+                "id": 2,
+                "image_id": 1,
+                "category_id": 1,
+                "score": 0.7,
+                "segmentation": {"counts": [0, 5, 5, 5, 5], "size": [5, 5]},
+            },
+            # Unscored polygon -> UserSegmentationMask.
+            {
+                "id": 3,
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [[20.0, 20.0, 28.0, 20.0, 28.0, 28.0, 20.0, 28.0]],
+            },
+        ],
+        "categories": [{"id": 1, "name": "obj"}],
+    }
+    json_path = tmp_path / "pred_seg.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    # Default mask mode: scored -> predicted (with score), unscored -> user.
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+    masks = labels.labeled_frames[0].masks
+    assert len(masks) == 3
+    predicted = [m for m in masks if isinstance(m, PredictedSegmentationMask)]
+    user = [m for m in masks if type(m) is UserSegmentationMask]
+    assert len(predicted) == 2
+    assert len(user) == 1
+    assert sorted(m.score for m in predicted) == pytest.approx([0.7, 0.9])
+
+    # roi mode: scored polygon -> PredictedROI; the scored RLE is still a mask.
+    roi_labels = coco.read_labels(
+        json_path, dataset_root=tmp_path, segmentation_format="roi"
+    )
+    rois = roi_labels.labeled_frames[0].rois
+    assert [type(r) for r in rois] == [PredictedROI, UserROI]
+    assert rois[0].score == pytest.approx(0.9)
+    assert len(roi_labels.labeled_frames[0].masks) == 1  # RLE stays a mask
+
+    # Predicted masks survive a .slp round-trip with class and score intact.
+    slp_path = tmp_path / "pred_seg.slp"
+    sio.save_file(labels, str(slp_path))
+    reloaded = sio.load_file(str(slp_path))
+    rmasks = reloaded.labeled_frames[0].masks
+    rpred = [m for m in rmasks if isinstance(m, PredictedSegmentationMask)]
+    assert len(rpred) == 2
+    assert sorted(m.score for m in rpred) == pytest.approx([0.7, 0.9])
+    assert sum(1 for m in rmasks if type(m) is UserSegmentationMask) == 1
 
 
 def test_coco_bbox_roundtrip(tmp_path):

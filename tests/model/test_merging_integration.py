@@ -2156,3 +2156,207 @@ class TestTrackNameDivergenceWarning:
         # Both incoming track_0 objects collide onto self's single track_0 and
         # both diverge, so one warning per colliding other_track (two total).
         assert len(divergence) == 2
+
+
+class TestMergeNodeOrderReorder:
+    """Regression tests for point reorder when matched skeletons differ in order.
+
+    The default skeleton matcher uses STRUCTURE matching with
+    ``require_same_order=False``, so a skeleton ``[A, B, C]`` matches a
+    structurally-equal ``[C, B, A]``. Previously ``Labels._map_instance`` copied
+    points positionally, silently misaligning each node's coordinates/scores with
+    its name (see PR #447 acknowledgment of this latent hazard).
+    """
+
+    def test_new_frame_reorder_by_name(self):
+        """Reordered skeleton on a new-frame merge maps points by node name."""
+        base_skel = Skeleton(["A", "B", "C"])
+        other_skel = Skeleton(["C", "B", "A"])
+        video = Video(filename="test.mp4", open_backend=False)
+
+        base = Labels()
+        base.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[1, 1], [2, 2], [3, 3]]), skeleton=base_skel
+                    )
+                ],
+            )
+        )
+
+        # Built from rows in [C, B, A] order -> C=(10,10), B=(11,11), A=(12,12).
+        other = Labels()
+        other.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=1,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[10, 10], [11, 11], [12, 12]]), skeleton=other_skel
+                    )
+                ],
+            )
+        )
+
+        base.merge(other)
+
+        merged = base.labeled_frames[1].instances[0]
+        # Merged instance adopts the base skeleton's node order.
+        assert merged.skeleton.node_names == ["A", "B", "C"]
+        idx = merged.skeleton.index
+        pts = merged.numpy()
+        # Each node's coordinates must follow its name, not its original position.
+        np.testing.assert_array_equal(pts[idx("A")], [12, 12])
+        np.testing.assert_array_equal(pts[idx("B")], [11, 11])
+        np.testing.assert_array_equal(pts[idx("C")], [10, 10])
+
+    def test_overlapping_frame_reorder_by_name(self):
+        """Reordered skeleton merged into an existing frame maps points by name."""
+        base_skel = Skeleton(["A", "B", "C"])
+        other_skel = Skeleton(["C", "B", "A"])
+        video = Video(filename="test.mp4", open_backend=False)
+
+        base = Labels()
+        base.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[1, 1], [2, 2], [3, 3]]), skeleton=base_skel
+                    )
+                ],
+            )
+        )
+
+        # Same frame_idx so the instance is merged into the existing frame. Built in
+        # [C, B, A] order -> C=(10,10), B=(11,11), A=(12,12). Placed far from the base
+        # instance so the matcher keeps it as a distinct instance.
+        other = Labels()
+        other.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[10, 10], [11, 11], [12, 12]]), skeleton=other_skel
+                    )
+                ],
+            )
+        )
+
+        base.merge(other, frame="keep_both")
+
+        frame = base.labeled_frames[0]
+        assert len(frame.instances) == 2
+        # Locate the merged-in instance (the one carrying the other's coordinates).
+        merged = [
+            i
+            for i in frame.instances
+            if i.numpy()[i.skeleton.index("A")].tolist() == [12, 12]
+        ]
+        assert len(merged) == 1
+        m = merged[0]
+        assert m.skeleton.node_names == ["A", "B", "C"]
+        idx = m.skeleton.index
+        pts = m.numpy()
+        np.testing.assert_array_equal(pts[idx("A")], [12, 12])
+        np.testing.assert_array_equal(pts[idx("B")], [11, 11])
+        np.testing.assert_array_equal(pts[idx("C")], [10, 10])
+
+    def test_predicted_reorder_preserves_scores(self):
+        """Reordering a PredictedInstance keeps per-node scores aligned by name."""
+        base_skel = Skeleton(["A", "B", "C"])
+        other_skel = Skeleton(["C", "B", "A"])
+        video = Video(filename="test.mp4", open_backend=False)
+
+        base = Labels()
+        base.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[
+                    PredictedInstance.from_numpy(
+                        np.array([[1, 1], [2, 2], [3, 3]]),
+                        skeleton=base_skel,
+                        score=0.5,
+                    )
+                ],
+            )
+        )
+
+        # Built in [C, B, A] order with matching per-node scores.
+        other = Labels()
+        other.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=1,
+                instances=[
+                    PredictedInstance.from_numpy(
+                        np.array([[10, 10], [11, 11], [12, 12]]),
+                        skeleton=other_skel,
+                        point_scores=np.array([0.1, 0.2, 0.3]),
+                        score=0.9,
+                    )
+                ],
+            )
+        )
+
+        base.merge(other)
+
+        merged = base.labeled_frames[1].instances[0]
+        assert isinstance(merged, PredictedInstance)
+        assert merged.skeleton.node_names == ["A", "B", "C"]
+        idx = merged.skeleton.index
+        pts = merged.numpy()
+        np.testing.assert_array_equal(pts[idx("A")], [12, 12])
+        np.testing.assert_array_equal(pts[idx("C")], [10, 10])
+        # Scores follow node name: A->0.3, B->0.2, C->0.1.
+        assert merged.points["score"][idx("A")] == 0.3
+        assert merged.points["score"][idx("B")] == 0.2
+        assert merged.points["score"][idx("C")] == 0.1
+        # Instance-level metadata is preserved exactly.
+        assert merged.score == 0.9
+
+    def test_identical_node_order_unchanged(self):
+        """Control: identical node order leaves points untouched."""
+        skel1 = Skeleton(["A", "B", "C"])
+        skel2 = Skeleton(["A", "B", "C"])
+        video = Video(filename="test.mp4", open_backend=False)
+
+        base = Labels()
+        base.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[1, 1], [2, 2], [3, 3]]), skeleton=skel1
+                    )
+                ],
+            )
+        )
+
+        other = Labels()
+        other.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=1,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[7, 7], [8, 8], [9, 9]]), skeleton=skel2
+                    )
+                ],
+            )
+        )
+
+        base.merge(other)
+
+        merged = base.labeled_frames[1].instances[0]
+        assert merged.skeleton.node_names == ["A", "B", "C"]
+        np.testing.assert_array_equal(
+            merged.numpy(), np.array([[7, 7], [8, 8], [9, 9]])
+        )

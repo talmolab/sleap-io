@@ -35,6 +35,37 @@ from sleap_io.model.video import Video
 from sleap_io.version import __version__
 
 
+def _ensure_utf8_streams(streams: "list[Any] | None" = None) -> None:
+    """Reconfigure text streams to UTF-8 so non-ASCII glyphs never crash output.
+
+    rich-click renders ``--help`` during argument parsing (before any command body
+    runs) and several commands print Unicode status glyphs (e.g. ``✓ ⚠ ℹ →``). On a
+    console whose default encoding is cp1252 (Windows) or when output is piped,
+    emitting those glyphs raises ``UnicodeEncodeError``. Reconfiguring the streams to
+    UTF-8 at import time avoids the crash. Guarded so it never breaks import on a
+    stream that cannot be reconfigured.
+
+    Args:
+        streams: Text streams to reconfigure. Defaults to
+            ``[sys.stdout, sys.stderr]`` when ``None``.
+    """
+    if streams is None:
+        streams = [sys.stdout, sys.stderr]
+    for stream in streams:
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+
+# Run at import time: rich-click renders --help during argument parsing, before any
+# command body executes, so this must take effect as soon as the module loads.
+_ensure_utf8_streams()
+
+
 @dataclass
 class VideoEncodingInfo:
     """Video encoding information extracted via ffmpeg.
@@ -3499,7 +3530,7 @@ def filenames(
     default=None,
     help="Force 3-D TIFF interpretation for --images: "
     "--images-stack treats as frame stack, --no-images-stack treats as single image. "
-    "Default: auto-detect (last dim 3 or 4 → single image, otherwise → stack).",
+    "Default: auto-detect (last dim 3 or 4 -> single image, otherwise -> stack).",
 )
 # Info options
 @click.option(

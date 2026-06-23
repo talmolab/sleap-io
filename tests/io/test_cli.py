@@ -5,7 +5,9 @@ Covers summary output, labeled frame details, skeleton printing, and format conv
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -18,6 +20,7 @@ from click.testing import CliRunner
 
 from sleap_io import load_slp, save_slp, save_video
 from sleap_io.io.cli import (
+    _ensure_utf8_streams,
     _get_ffmpeg_version,
     _is_ffmpeg_available,
     _load_images,
@@ -11644,3 +11647,89 @@ def test_apply_crops_quality_crf_mutually_exclusive(tmp_path):
     assert result.exit_code != 0
     output = _strip_ansi(result.output)
     assert "Cannot use both --quality and --crf" in output
+
+
+def test_render_help_under_cp1252_console():
+    """`sio render --help` must not crash on a cp1252 console.
+
+    rich-click renders --help (which embeds non-ASCII glyphs) at argument-parse
+    time, so the import-time stdout/stderr reconfigure must make it cp1252-safe.
+    Before the fix this raised UnicodeEncodeError and exited non-zero.
+    """
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from sleap_io.io.cli import cli; cli()",
+            "render",
+            "--help",
+        ],
+        capture_output=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr.decode("cp1252", errors="replace")
+
+
+def test_fix_under_cp1252_console(tmp_path):
+    """`sio fix --dry-run` must not crash on a cp1252 console.
+
+    The fix command prints status glyphs via the rich console; on a cp1252
+    stdout these raised UnicodeEncodeError before the import-time reconfigure
+    made the stream UTF-8 capable.
+    """
+    src = _data_path("slp/minimal_instance.slp")
+    labels = load_slp(src)
+    slp_path = tmp_path / "minimal_instance.slp"
+    save_slp(labels, slp_path)
+
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from sleap_io.io.cli import cli; cli()",
+            "fix",
+            str(slp_path),
+            "--dry-run",
+        ],
+        capture_output=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr.decode("cp1252", errors="replace")
+
+
+def test_ensure_utf8_streams_reconfigures():
+    """Streams exposing ``reconfigure`` are switched to UTF-8."""
+
+    class FakeStream:
+        def __init__(self):
+            self.encoding = None
+
+        def reconfigure(self, encoding=None):
+            self.encoding = encoding
+
+    stream = FakeStream()
+    _ensure_utf8_streams([stream])
+    assert stream.encoding == "utf-8"
+
+
+def test_ensure_utf8_streams_skips_without_reconfigure():
+    """A stream lacking ``reconfigure`` is skipped without error."""
+
+    class NoReconfigure:
+        pass
+
+    # Must not raise.
+    _ensure_utf8_streams([NoReconfigure()])
+
+
+def test_ensure_utf8_streams_swallows_reconfigure_errors():
+    """An exception from ``reconfigure`` is swallowed (never breaks import)."""
+
+    class RaisingStream:
+        def reconfigure(self, encoding=None):
+            raise ValueError("cannot reconfigure")
+
+    # Must not raise.
+    _ensure_utf8_streams([RaisingStream()])

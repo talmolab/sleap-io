@@ -286,6 +286,10 @@ class ROI:
     def to_mask(self, height: int, width: int) -> "SegmentationMask":
         """Rasterize this ROI into a binary segmentation mask.
 
+        A `PredictedROI` produces a `PredictedSegmentationMask` carrying its
+        `score`; any other ROI produces a `UserSegmentationMask`. Metadata
+        (name, category, source, track, instance) is inherited either way.
+
         Args:
             height: Height of the output mask in pixels.
             width: Width of the output mask in pixels.
@@ -293,19 +297,26 @@ class ROI:
         Returns:
             A `SegmentationMask` with the rasterized geometry.
         """
-        from sleap_io.model.mask import UserSegmentationMask
+        from sleap_io.model.mask import (
+            PredictedSegmentationMask,
+            UserSegmentationMask,
+        )
 
         # Rasterize geometry to binary mask
         mask = _rasterize_geometry(self.geometry, height, width)
 
-        return UserSegmentationMask.from_numpy(
-            mask,
+        kwargs = dict(
             name=self.name,
             category=self.category,
             source=self.source,
             track=self.track,
             instance=self.instance,
         )
+        if self.is_predicted:
+            return PredictedSegmentationMask.from_numpy(
+                mask, score=self.score, **kwargs
+            )
+        return UserSegmentationMask.from_numpy(mask, **kwargs)
 
     def explode(self) -> list["ROI"]:
         """Split a multi-geometry ROI into individual ROIs.
