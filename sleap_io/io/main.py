@@ -398,7 +398,8 @@ def save_analysis_h5(
         video: Video to export. If None, uses first video. Can be a Video
             object or an integer index.
         labels_path: Source labels path (stored as metadata).
-        all_frames: Include all frames from 0 to last labeled frame.
+        all_frames: Include all frames from 0 to the end of the video (falling back
+            to the last labeled frame when the video length is unknown).
             Default True.
         min_occupancy: Minimum track occupancy ratio (0-1) to keep.
             0 = keep all non-empty tracks (SLEAP default).
@@ -851,8 +852,8 @@ def save_csv(
             Default False. Only applies to "frames" and "instances" formats.
         start_frame: Start frame index (inclusive) for output. If None, starts
             from 0 when include_empty=True, or from first labeled frame otherwise.
-        end_frame: End frame index (exclusive) for output. If None, ends at
-            last labeled frame + 1.
+        end_frame: End frame index (exclusive) for output. If None, ends at the
+            full video length when known, otherwise at last labeled frame + 1.
         scorer: Scorer name for DLC format. Default "sleap-io".
         save_metadata: Save JSON metadata file alongside CSV that enables
             full round-trip reconstruction. Default False.
