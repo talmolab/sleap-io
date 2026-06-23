@@ -178,19 +178,66 @@ def decode_keypoints(
     return np.array(points, dtype=np.float32)
 
 
-def _decode_coco_rle(counts: list[int], size: list[int]) -> np.ndarray:
+def _decode_compressed_rle_counts(counts: str | bytes) -> list[int]:
+    """Decode COCO compressed (LEB128) RLE counts to a list of run lengths.
+
+    Standard COCO/pycocotools stores RLE ``counts`` in a compressed form: a
+    string (or bytes) where each run length is LEB128-encoded with 6 bits per
+    byte (offset by 48 to stay in printable ASCII), and each run after the first
+    two is stored as a delta from the run two positions earlier. This is the
+    canonical decode used by ``pycocotools.mask.frString``.
+
+    Args:
+        counts: Compressed RLE counts as an ASCII string or bytes.
+
+    Returns:
+        The decoded run lengths as a list of ints (alternating runs of 0s and
+        1s, starting with 0s), suitable for the uncompressed decode path.
+    """
+    if isinstance(counts, str):
+        counts = counts.encode("ascii")
+    run_lengths: list[int] = []
+    p = 0
+    m = 0
+    while p < len(counts):
+        x = 0
+        k = 0
+        more = 1
+        while more:
+            c = counts[p] - 48
+            x |= (c & 0x1F) << (5 * k)
+            more = c & 0x20
+            p += 1
+            k += 1
+            if not more and (c & 0x10):
+                x |= -1 << (5 * k)
+        if m > 2:
+            x += run_lengths[m - 2]
+        run_lengths.append(x)
+        m += 1
+    return run_lengths
+
+
+def _decode_coco_rle(counts: list[int] | str | bytes, size: list[int]) -> np.ndarray:
     """Decode COCO RLE segmentation to a binary mask.
 
     COCO RLE uses column-major (Fortran) order. This function decodes the RLE
-    counts and returns a row-major numpy array.
+    counts and returns a row-major numpy array. Both uncompressed counts (a list
+    of run-length ints) and compressed counts (a LEB128-encoded string/bytes, as
+    emitted by pycocotools) are supported; compressed counts are first decoded to
+    run lengths via `_decode_compressed_rle_counts`.
 
     Args:
-        counts: RLE counts (alternating runs of 0s and 1s, starting with 0s).
+        counts: RLE counts (alternating runs of 0s and 1s, starting with 0s),
+            either as a list of ints (uncompressed) or as a LEB128-encoded
+            string/bytes (compressed).
         size: Mask dimensions as [height, width].
 
     Returns:
         A 2D boolean numpy array of shape (height, width).
     """
+    if isinstance(counts, (str, bytes)):
+        counts = _decode_compressed_rle_counts(counts)
     height, width = size
     total = height * width
     flat = np.zeros(total, dtype=bool)
