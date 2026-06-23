@@ -136,6 +136,53 @@ def _find_annotation_link_matches(
     return matches
 
 
+def _copy_with_memo(item: Any, memo: dict[int, Any]) -> Any:
+    """Shallow-copy an annotation, recording ``{id(original): copy}`` in ``memo``.
+
+    The memo lets a later :func:`_relink_from_predicted` pass repair
+    ``from_predicted`` provenance links: when both a predicted annotation and the
+    user annotation that adopted it are copied independently during a merge, the
+    user copy's ``from_predicted`` still points at the *original* predicted object
+    rather than its copy now living in the merged frame. Recording the
+    original->copy mapping here lets the link be rewritten to the in-frame copy.
+
+    Args:
+        item: The annotation to copy.
+        memo: Mapping from the id of an original annotation to its copy. Mutated
+            in place to register this copy.
+
+    Returns:
+        The shallow copy of ``item``.
+    """
+    item_copy = copy(item)
+    memo[id(item)] = item_copy
+    return item_copy
+
+
+def _relink_from_predicted(annotations: list, memo: dict[int, Any]) -> None:
+    """Rewrite ``from_predicted`` links to copied sources within a merged frame.
+
+    After annotations are copied into a merged frame, a user annotation's
+    ``from_predicted`` may still reference the *original* predicted source rather
+    than the copy that was placed in the frame. This pass redirects each such link
+    to the copied source (looked up in ``memo``) so the provenance link points at
+    the in-frame object and survives serialization (which resolves links by object
+    identity). Links whose source was not copied (not in ``memo``) are left
+    unchanged.
+
+    Args:
+        annotations: The merged annotation list to repair in place.
+        memo: Mapping from the id of an original annotation to its copy, as built
+            by :func:`_copy_with_memo`.
+    """
+    for ann in annotations:
+        src = getattr(ann, "from_predicted", None)
+        if src is not None:
+            replacement = memo.get(id(src))
+            if replacement is not None:
+                ann.from_predicted = replacement
+
+
 def _resolve_annotation_auto(
     self_list: list,
     other_list: list,
@@ -159,6 +206,9 @@ def _resolve_annotation_auto(
     """
     merged = []
     used_self_indices: set[int] = set()
+    # Track copied annotations so ``from_predicted`` links can be repaired to
+    # point at the in-frame copy of their source rather than the original.
+    memo: dict[int, Any] = {}
 
     # 1. Keep all user annotations from self
     for ann in self_list:
@@ -197,21 +247,25 @@ def _resolve_annotation_auto(
                 pass
             elif self_ann.is_predicted and not other_ann.is_predicted:
                 # predicted + user → replace with other's user
-                merged.append(copy(other_ann))
+                merged.append(_copy_with_memo(other_ann, memo))
             elif not self_ann.is_predicted and other_ann.is_predicted:
                 # user + predicted → keep self (already in merged)
                 pass
             else:
                 # predicted + predicted → keep other's (newer)
-                merged.append(copy(other_ann))
+                merged.append(_copy_with_memo(other_ann, memo))
         else:
             # No match → add from other
-            merged.append(copy(other_ann))
+            merged.append(_copy_with_memo(other_ann, memo))
 
     # 5. Keep unmatched predictions from self
     for self_idx, self_ann in enumerate(self_list):
         if self_ann.is_predicted and self_idx not in used_self_indices:
             merged.append(self_ann)
+
+    # Repair ``from_predicted`` links so a copied user annotation references the
+    # copied source prediction now in the merged frame, not the original.
+    _relink_from_predicted(merged, memo)
 
     return merged
 
@@ -825,15 +879,22 @@ class LabeledFrame:
 
         if strategy == "keep_new":
             for attr in attrs:
-                setattr(self, attr, [copy(item) for item in getattr(other, attr)])
+                memo: dict[int, Any] = {}
+                new_list = [
+                    _copy_with_memo(item, memo) for item in getattr(other, attr)
+                ]
+                _relink_from_predicted(new_list, memo)
+                setattr(self, attr, new_list)
             return
 
         if strategy == "replace_predictions":
             for attr in attrs:
+                memo = {}
                 kept = [a for a in getattr(self, attr) if not a.is_predicted]
                 for item in getattr(other, attr):
                     if item.is_predicted:
-                        kept.append(copy(item))
+                        kept.append(_copy_with_memo(item, memo))
+                _relink_from_predicted(kept, memo)
                 setattr(self, attr, kept)
             return
 
@@ -857,7 +918,10 @@ class LabeledFrame:
 
         # "keep_both" (default)
         for attr in attrs:
-            existing_ids = set(id(x) for x in getattr(self, attr))
+            memo = {}
+            target = getattr(self, attr)
+            existing_ids = set(id(x) for x in target)
             for item in getattr(other, attr):
                 if id(item) not in existing_ids:
-                    getattr(self, attr).append(copy(item))
+                    target.append(_copy_with_memo(item, memo))
+            _relink_from_predicted(target, memo)
