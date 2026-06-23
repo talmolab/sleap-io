@@ -1046,11 +1046,12 @@ def load_dlc_splits(
 
     Notes:
         Splits require the labeled images to be present on disk so that each
-        merged frame maps to a loaded `LabeledFrame`. DLC stores split membership
-        as positional indices into a globally, lexicographically sorted merge of
-        all per-video annotations; this function reconstructs that order. For
-        non-zero-padded filenames, a warning is emitted because lexicographic and
-        numeric orderings diverge.
+        merged frame maps to a loaded `LabeledFrame`. If the images are missing,
+        the returned splits are empty and a warning is emitted. DLC stores split
+        membership as positional indices into a globally, lexicographically sorted
+        merge of all per-video annotations; this function reconstructs that order.
+        For non-zero-padded filenames, a warning is emitted because lexicographic
+        and numeric orderings diverge.
     """
     config_path = _resolve_project_config_path(config)
     cfg = _read_dlc_config(config_path)
@@ -1063,6 +1064,19 @@ def load_dlc_splits(
 
     merged = _dlc_merged_order(project_dir, cfg)
     _warn_if_nonlexicographic(merged)
+
+    # Splits require the labeled images to be present so each merged frame maps to
+    # a loaded LabeledFrame. If the merge is non-empty but no frames were loaded,
+    # the referenced images are missing on disk and both splits would be silently
+    # empty; warn so the caller can restore the images or pass search paths.
+    if merged and not labels.labeled_frames:
+        warnings.warn(
+            "DLC split import: the project's labeled images were not found on "
+            "disk, so no frames could be loaded and the train/test splits will be "
+            "empty. Restore the referenced images under 'labeled-data/' (or pass "
+            "video_search_paths) and try again.",
+            stacklevel=2,
+        )
 
     pickle_path = _select_documentation_pickle(
         project_dir, cfg, train_fraction, shuffle, iteration

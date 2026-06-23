@@ -1,6 +1,7 @@
 """Tests for DeepLabCut I/O operations."""
 
 import pickle
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -880,6 +881,35 @@ def test_load_dlc_splits_selector_no_match(tmp_path):
     )
     with pytest.raises(FileNotFoundError):
         sio.load_dlc_splits(config_path, shuffle=99)
+
+
+def test_load_dlc_splits_warns_when_images_missing(tmp_path):
+    """Missing labeled images yield empty splits with a clear warning."""
+    config_path = make_dlc_project(
+        tmp_path,
+        train_indices=[0, 2, 4],
+        test_indices=[1, 3],
+        make_images=False,
+    )
+    with pytest.warns(UserWarning, match="labeled images were not found"):
+        splits = sio.load_dlc_splits(config_path)
+    assert _frame_keys(splits["train"]) == []
+    assert _frame_keys(splits["test"]) == []
+
+
+def test_load_dlc_splits_no_warning_when_images_present(tmp_path):
+    """Splits with images present resolve frames and do not warn about missing ones."""
+    config_path = make_dlc_project(
+        tmp_path,
+        train_indices=[0, 2, 4],
+        test_indices=[1, 3],
+        make_images=True,
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        splits = sio.load_dlc_splits(config_path)
+    assert len(splits["train"].labeled_frames) == 3
+    assert len(splits["test"].labeled_frames) == 2
 
 
 def test_read_dlc_split_reads_indices(tmp_path):
