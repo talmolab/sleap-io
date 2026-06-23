@@ -9250,3 +9250,39 @@ def test_save_prefer_metadata_avoids_video_decode(tmp_path):
     # The serialized shape is correct (read straight from metadata).
     gt = load_slp(gt_path)
     assert list(gt.videos[0].backend_metadata["shape"]) == list(video.shape)
+
+
+def test_save_prefer_metadata_after_resolution_changing_relink(
+    tmp_path, centered_pair_low_quality_path, small_robot_path
+):
+    """Default save (prefer_metadata=True) must serialize the relinked file's shape.
+
+    Regression for #483: `save_slp(prefer_metadata=True)` serializes the shape
+    recorded in `backend_metadata` to avoid decoding. After a `replace_filenames`
+    relink to a different-resolution file, that recorded shape describes the OLD
+    file and is now stale; `replace_filename` must invalidate it so the default
+    save serializes the NEW file's true shape, not the old one.
+    """
+    # Seed a .slp so videos_json records the original (centered_pair) shape.
+    out1 = tmp_path / "orig.slp"
+    Labels(videos=[Video.from_filename(centered_pair_low_quality_path)]).save(out1)
+
+    reloaded = load_slp(out1)
+    assert reloaded.videos[0].backend_metadata["shape"] == [1100, 384, 384, 1]
+
+    # Relink to a different-resolution file (small_robot is 3 frames, 320x560).
+    reloaded.replace_filenames(
+        filename_map={centered_pair_low_quality_path: small_robot_path}
+    )
+
+    # Save with the default prefer_metadata=True and reload without opening videos
+    # so the serialized shape is read straight from videos_json.
+    out2 = tmp_path / "relinked.slp"
+    reloaded.save(out2)
+    serialized_shape = load_slp(out2, open_videos=False).videos[0].shape
+
+    # The serialized shape must match the relinked video's true (live) shape, not
+    # the stale centered_pair shape.
+    assert list(serialized_shape) == list(reloaded.videos[0].shape)
+    assert list(serialized_shape) != [1100, 384, 384, 1]
+    assert list(serialized_shape[1:3]) == [320, 560]
