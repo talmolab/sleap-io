@@ -133,6 +133,7 @@ INPUT_FORMATS = [
     "alphatracker",
     "jabs",
     "dlc",
+    "dlc_project",
     "csv",
     "trackmate",
     "ultralytics",
@@ -1841,10 +1842,24 @@ def _infer_input_format(path: Path) -> str | None:
     """
     suffix = path.suffix.lower()
 
-    # Check for ultralytics (directory with data.yaml)
+    # Check for ultralytics (directory with data.yaml) or DLC project directory
+    # (config.yaml + labeled-data/).
     if path.is_dir():
         if (path / "data.yaml").exists():
             return "ultralytics"
+
+        from sleap_io.io import dlc
+
+        if dlc._is_dlc_project_path(path):
+            return "dlc_project"
+        return None
+
+    # A standalone DLC project config.yaml (validated by content).
+    if path.name == "config.yaml":
+        from sleap_io.io import dlc
+
+        if dlc._is_dlc_project_path(path):
+            return "dlc_project"
         return None
 
     # CSV requires content-based detection (trackmate vs dlc vs generic)
@@ -1961,6 +1976,23 @@ def _infer_output_format(path: Path) -> str | None:
     default=0.0,
     help="Filter tracks with occupancy below this ratio (0-1). analysis_h5 only.",
 )
+@click.option(
+    "--coco-category-as-track",
+    "coco_category_as_track",
+    is_flag=True,
+    default=False,
+    help="Treat each COCO category as a persistent identity track. coco input only.",
+)
+@click.option(
+    "--coco-segmentation",
+    "coco_segmentation",
+    type=click.Choice(["mask", "roi"]),
+    default="mask",
+    help=(
+        "How to represent COCO polygon segmentation: mask (rasterize) or roi "
+        "(keep as vector ROIs). coco input only. Default: mask."
+    ),
+)
 def convert(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -1973,6 +2005,8 @@ def convert(
     save_metadata: bool,
     h5_dim_order: str,
     min_occupancy: float,
+    coco_category_as_track: bool,
+    coco_segmentation: str,
 ):
     """Convert between pose data formats.
 
@@ -1981,17 +2015,24 @@ def convert(
     but can be explicitly specified using --from and --to.
 
     [bold]Supported input formats:[/]
-    slp, nwb, coco, labelstudio, alphatracker, jabs, dlc, csv,
-    trackmate, ultralytics, leap
+    slp, nwb, coco, labelstudio, alphatracker, jabs, dlc, dlc_project,
+    csv, trackmate, ultralytics, leap
 
     [bold]Supported output formats:[/]
     slp, nwb, coco, labelstudio, jabs, ultralytics, csv, analysis_h5
+
+    A DeepLabCut project (a directory with config.yaml + labeled-data/, or its
+    config.yaml directly) is auto-detected as dlc_project. For COCO input,
+    --coco-category-as-track and --coco-segmentation control identity tracks and
+    polygon handling.
 
     [dim]Examples:[/]
 
         $ sio convert labels.slp -o labels.nwb
         $ sio convert -i labels.slp -o labels.nwb
         $ sio convert annotations.json -o labels.slp --from coco
+        $ sio convert dlc_project/ -o labels.slp
+        $ sio convert seg.json -o labels.slp --from coco --coco-category-as-track
         $ sio convert labels.slp -o labels.pkg.slp --embed user
         $ sio convert labels.slp -o dataset/ --to ultralytics
         $ sio convert labels.slp -o analysis.h5 --to analysis_h5
@@ -2044,9 +2085,12 @@ def convert(
     # Load the input file
     # Note: open_videos is only valid for SLP format
     try:
-        load_kwargs = {"format": resolved_input_format}
+        load_kwargs: dict = {"format": resolved_input_format}
         if resolved_input_format == "slp":
             load_kwargs["open_videos"] = needs_video
+        elif resolved_input_format == "coco":
+            load_kwargs["category_as_track"] = coco_category_as_track
+            load_kwargs["segmentation_format"] = coco_segmentation
         labels = io_main.load_file(str(input_path), **load_kwargs)
     except Exception as e:
         raise click.ClickException(f"Failed to load input file: {e}")

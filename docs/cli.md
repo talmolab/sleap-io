@@ -473,10 +473,12 @@ sio convert spots.csv -o labels.slp --from trackmate
 | `--save-metadata` | Save JSON metadata file for CSV round-trip support |
 | `--h5-dim-order` | HDF5 axis ordering: `matlab` or `standard` (analysis_h5 only) |
 | `--min-occupancy` | Filter tracks below this occupancy ratio (analysis_h5 only) |
+| `--coco-category-as-track` | Treat each COCO category as a persistent identity track (coco input only) |
+| `--coco-segmentation` | COCO polygon handling: `mask` (rasterize) or `roi` (keep as vector ROIs); default `mask` (coco input only) |
 
 ### Supported Formats
 
-**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `csv`, `trackmate`, `ultralytics`, `leap`
+**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `dlc_project`, `csv`, `trackmate`, `ultralytics`, `leap`
 
 **Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`, `analysis_h5`
 
@@ -492,8 +494,25 @@ The CLI automatically detects formats from file extensions:
 | `.csv` | TrackMate or DeepLabCut (auto-detected from headers) | CSV |
 | `.h5` / `.hdf5` | (ambiguous) | Analysis HDF5 |
 | Directory with `data.yaml` | Ultralytics | Ultralytics |
+| Directory with `config.yaml` + `labeled-data/` (or a project `config.yaml`) | DeepLabCut project | - |
 
 For `.csv` inputs, the CLI first sniffs the file header: TrackMate spots exports are detected via their `LABEL,ID,TRACK_ID,...` schema, otherwise DeepLabCut multi-index headers are matched, and everything else falls back to the generic `csv` reader. Pass `--from trackmate` or `--from dlc` to bypass sniffing.
+
+A whole DeepLabCut project is auto-detected as `dlc_project` and merged into a single `Labels` (use `--from dlc_project` to be explicit). This differs from `--from dlc`, which reads a single DLC annotation CSV:
+
+```bash
+# Import an entire DeepLabCut project (config.yaml + labeled-data/)
+sio convert my_dlc_project/ -o labels.slp
+sio convert my_dlc_project/config.yaml -o labels.slp --from dlc_project
+```
+
+For COCO instance-segmentation datasets, `--coco-category-as-track` turns each category into a persistent identity track and `--coco-segmentation roi` preserves polygons as vector ROIs instead of rasterizing them into masks:
+
+```bash
+# Identity tracks from COCO categories, polygons kept as vector ROIs
+sio convert annotations.json -o labels.slp --from coco \
+    --coco-category-as-track --coco-segmentation roi
+```
 
 **Ambiguous extensions** (`.json`, `.h5`) require explicit `--from`:
 
