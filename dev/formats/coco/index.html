@@ -3542,6 +3542,13 @@ entry. In <code>"mask"</code> mode, a polygon whose image lacks those fields fal
 to an <code>ROI</code> since there is no extent to rasterize into. When written back to
 COCO, <code>SegmentationMask</code> objects are exported as RLE.</p>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Predicted vs. user segmentation</p>
+<p>A detection annotation carrying a <code>score</code> (i.e. a model prediction) is read
+as a <code>PredictedSegmentationMask</code> / <code>PredictedROI</code> with that score; annotations
+without a <code>score</code> become the <code>User*</code> variants. This mirrors how <code>bbox</code>
+annotations select <code>PredictedBoundingBox</code> vs. <code>UserBoundingBox</code>.</p>
+</div>
 <h2 id="categories-as-identities">Categories as identities<a class="headerlink" href="#categories-as-identities" title="Permanent link">&para;</a></h2>
 <p>In a standard COCO dataset the <code>category</code> is an object <em>class</em> (e.g. <code>"person"</code>,
 <code>"car"</code>). Some datasets instead use the category to encode a persistent
