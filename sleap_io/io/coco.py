@@ -601,9 +601,25 @@ def read_labels(
                     # Detection-only annotation: create ROIs/masks/bboxes. A
                     # COCO ``score`` marks a prediction, so it selects predicted
                     # mask/ROI/bbox variants (mirrors the bbox handling below).
+                    # Restore explicit track identity from attributes.object_id
+                    # (mirrors the keypoint branch above), falling back to the
+                    # category identity when requested.
+                    track = None
+                    track_id = (
+                        annotation.get("attributes", {}).get("object_id")
+                        or annotation.get("track_id")
+                        or annotation.get("instance_id")
+                    )
+                    if track_id is not None:
+                        if track_id not in track_dict:
+                            track_dict[track_id] = Track(name=f"track_{track_id}")
+                        track = track_dict[track_id]
+                    else:
+                        track = _category_track(cat_name)
+
                     roi_kwargs = dict(
                         category=cat_name,
-                        track=_category_track(cat_name),
+                        track=track,
                     )
 
                     # Handle segmentation field
@@ -990,6 +1006,10 @@ def convert_labels(
             ]
             annotation["area"] = float(roi.area)
 
+            # Preserve track identity (mirrors keypoint annotation path above).
+            if roi.track is not None:
+                annotation["attributes"] = {"object_id": track_to_id[roi.track]}
+
             coco_data["annotations"].append(annotation)
             annotation_id_counter += 1
 
@@ -1036,6 +1056,10 @@ def convert_labels(
                 "iscrowd": 1,
             }
 
+            # Preserve track identity (mirrors keypoint annotation path above).
+            if seg_mask.track is not None:
+                annotation["attributes"] = {"object_id": track_to_id[seg_mask.track]}
+
             coco_data["annotations"].append(annotation)
             annotation_id_counter += 1
 
@@ -1079,6 +1103,10 @@ def convert_labels(
 
             if isinstance(bbox_obj, PredictedBoundingBox):
                 annotation["score"] = float(bbox_obj.score)
+
+            # Preserve track identity (mirrors keypoint annotation path above).
+            if bbox_obj.track is not None:
+                annotation["attributes"] = {"object_id": track_to_id[bbox_obj.track]}
 
             coco_data["annotations"].append(annotation)
             annotation_id_counter += 1

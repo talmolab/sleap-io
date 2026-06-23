@@ -1775,6 +1775,91 @@ class TestCOCOROIMaskIO:
         # Resampled to image extent: 10x10
         assert ann["segmentation"]["size"] == [10, 10]
 
+    def test_coco_mask_track_identity_roundtrip(self, tmp_path):
+        """Track on a SegmentationMask is written and restored via object_id."""
+        mask_arr = np.zeros((10, 10), dtype=bool)
+        mask_arr[2:5, 3:7] = True
+
+        video = sio.Video.from_filename(["img1.png"])
+        track = Track("id_7")
+        seg_mask = UserSegmentationMask.from_numpy(
+            mask_arr, category="cell", track=track
+        )
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.masks.append(seg_mask)
+        labels = sio.Labels(labeled_frames=[lf])
+
+        json_path = tmp_path / "mask_track.json"
+        coco.write_labels(labels, json_path)
+
+        # The JSON annotation carries the track identity as attributes.object_id.
+        with open(json_path, "r") as f:
+            data = json.load(f)
+        ann = data["annotations"][0]
+        assert "attributes" in ann
+        assert "object_id" in ann["attributes"]
+
+        # Read back: the mask's track is restored and registered on the Labels.
+        for img_info in data["images"]:
+            (tmp_path / img_info["file_name"]).touch()
+        labels_rt = coco.read_labels(json_path, dataset_root=tmp_path)
+        assert len(labels_rt.masks) == 1
+        assert labels_rt.masks[0].track is not None
+        assert len(labels_rt.tracks) > 0
+
+    def test_coco_roi_track_identity_roundtrip(self, tmp_path):
+        """Track on an ROI is written and restored via object_id."""
+        from sleap_io.model.roi import UserROI
+
+        coords = [(10.0, 20.0), (50.0, 20.0), (50.0, 60.0), (10.0, 60.0)]
+        video = sio.Video.from_filename(["img1.png"])
+        track = Track("id_7")
+        roi = UserROI.from_polygon(coords, category="region", track=track, video=video)
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.rois.append(roi)
+        labels = sio.Labels(labeled_frames=[lf])
+
+        json_path = tmp_path / "roi_track.json"
+        coco.write_labels(labels, json_path)
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+        ann = data["annotations"][0]
+        assert ann["attributes"]["object_id"] is not None
+
+        for img_info in data["images"]:
+            (tmp_path / img_info["file_name"]).touch()
+        labels_rt = coco.read_labels(
+            json_path, dataset_root=tmp_path, segmentation_format="roi"
+        )
+        assert len(labels_rt.rois) == 1
+        assert labels_rt.rois[0].track is not None
+        assert len(labels_rt.tracks) > 0
+
+    def test_coco_bbox_track_identity_roundtrip(self, tmp_path):
+        """Track on a standalone BoundingBox is written and restored."""
+        video = sio.Video.from_filename(["img1.png"])
+        track = Track("id_7")
+        bbox = UserBoundingBox.from_xywh(10, 20, 50, 30, category="dog", track=track)
+        lf = sio.LabeledFrame(video=video, frame_idx=0)
+        lf.bboxes.append(bbox)
+        labels = sio.Labels(labeled_frames=[lf])
+
+        json_path = tmp_path / "bbox_track.json"
+        coco.write_labels(labels, json_path)
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+        ann = data["annotations"][0]
+        assert ann["attributes"]["object_id"] is not None
+
+        for img_info in data["images"]:
+            (tmp_path / img_info["file_name"]).touch()
+        labels_rt = coco.read_labels(json_path, dataset_root=tmp_path)
+        assert len(labels_rt.bboxes) == 1
+        assert labels_rt.bboxes[0].track is not None
+        assert len(labels_rt.tracks) > 0
+
     def test_coco_detection_only_read(self, tmp_path):
         """Test reading a detection-only COCO JSON (no keypoints)."""
         # Create image files so they can be resolved
