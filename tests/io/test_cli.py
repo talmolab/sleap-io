@@ -5,7 +5,9 @@ Covers summary output, labeled frame details, skeleton printing, and format conv
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11424,3 +11426,53 @@ def test_apply_crops_quality_crf_mutually_exclusive(tmp_path):
     assert result.exit_code != 0
     output = _strip_ansi(result.output)
     assert "Cannot use both --quality and --crf" in output
+
+
+def test_render_help_under_cp1252_console():
+    """`sio render --help` must not crash on a cp1252 console.
+
+    rich-click renders --help (which embeds non-ASCII glyphs) at argument-parse
+    time, so the import-time stdout/stderr reconfigure must make it cp1252-safe.
+    Before the fix this raised UnicodeEncodeError and exited non-zero.
+    """
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from sleap_io.io.cli import cli; cli()",
+            "render",
+            "--help",
+        ],
+        capture_output=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr.decode("cp1252", errors="replace")
+
+
+def test_fix_under_cp1252_console(tmp_path):
+    """`sio fix --dry-run` must not crash on a cp1252 console.
+
+    The fix command prints status glyphs via the rich console; on a cp1252
+    stdout these raised UnicodeEncodeError before the import-time reconfigure
+    made the stream UTF-8 capable.
+    """
+    src = _data_path("slp/minimal_instance.slp")
+    labels = load_slp(src)
+    slp_path = tmp_path / "minimal_instance.slp"
+    save_slp(labels, slp_path)
+
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from sleap_io.io.cli import cli; cli()",
+            "fix",
+            str(slp_path),
+            "--dry-run",
+        ],
+        capture_output=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr.decode("cp1252", errors="replace")

@@ -34,6 +34,17 @@ from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
 from sleap_io.version import __version__
 
+# Ensure stdout/stderr can emit non-ASCII glyphs (e.g. ✓ ⚠ ℹ →) even on consoles
+# whose default encoding is cp1252 (Windows) or when output is piped. This must run
+# at import time because rich-click renders --help during argument parsing, before any
+# command body executes. Guarded so it never breaks import on exotic streams.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
 
 @dataclass
 class VideoEncodingInfo:
@@ -3499,7 +3510,7 @@ def filenames(
     default=None,
     help="Force 3-D TIFF interpretation for --images: "
     "--images-stack treats as frame stack, --no-images-stack treats as single image. "
-    "Default: auto-detect (last dim 3 or 4 → single image, otherwise → stack).",
+    "Default: auto-detect (last dim 3 or 4 -> single image, otherwise -> stack).",
 )
 # Info options
 @click.option(
