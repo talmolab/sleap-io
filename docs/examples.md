@@ -545,8 +545,8 @@ nwb_labels.save("converted.slp")
 
 !!! note "See also"
     - [NWB Format Documentation](formats/nwb.md): Complete NWB format reference
-    - [`load_nwb`](formats/nwb.md#sleap_io.load_nwb): NWB loading function
-    - [`save_nwb`](formats/nwb.md#sleap_io.save_nwb): NWB saving function with format options
+    - [`load_nwb`](formats/nwb.md#sleap_io.io.main.load_nwb): NWB loading function
+    - [`save_nwb`](formats/nwb.md#sleap_io.io.main.save_nwb): NWB saving function with format options
 
 ### Convert to Ultralytics YOLO format
 
@@ -622,8 +622,8 @@ sio.save_coco(
     - Integration with COCO-compatible evaluation tools
 
 !!! note "See also"
-    - [`save_coco`](formats/coco.md#sleap_io.save_coco): Full COCO export documentation
-    - [`load_coco`](formats/coco.md#sleap_io.load_coco): COCO import documentation
+    - [`save_coco`](formats/coco.md#sleap_io.io.main.save_coco): Full COCO export documentation
+    - [`load_coco`](formats/coco.md#sleap_io.io.main.load_coco): COCO import documentation
     - [COCO Format](formats/coco.md): COCO format details
 
 ## Loading from URLs
@@ -1201,8 +1201,8 @@ labels.save("segmentation.slp")
 
 !!! note "See also"
     - [Regions: Label images](model/segmentation.md#label-images): Full label image data model documentation
-    - [`PredictedLabelImage.from_stack`](model/segmentation.md#sleap_io.PredictedLabelImage.from_stack): Stack conversion API
-    - [`PredictedLabelImage.from_numpy`](model/segmentation.md#sleap_io.PredictedLabelImage.from_numpy): Per-frame conversion API
+    - [`PredictedLabelImage.from_stack`](model/segmentation.md#sleap_io.LabelImage.from_stack): Stack conversion API
+    - [`PredictedLabelImage.from_numpy`](model/segmentation.md#sleap_io.LabelImage.from_numpy): Per-frame conversion API
 
 ### Import per-object binary masks to SLP
 
@@ -1243,7 +1243,7 @@ labels.save("sam_output.slp")
 
 !!! note "See also"
     - [Regions: From binary masks](model/segmentation.md#from-binary-masks): Full `from_binary_masks` documentation
-    - [`PredictedLabelImage.from_binary_masks`](model/segmentation.md#sleap_io.PredictedLabelImage.from_binary_masks): API reference
+    - [`PredictedLabelImage.from_binary_masks`](model/segmentation.md#sleap_io.LabelImage.from_binary_masks): API reference
 
 ### Stream large segmentation results to SLP
 

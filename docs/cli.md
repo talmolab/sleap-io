@@ -140,7 +140,7 @@ sio render predictions.slp                                 # -> predictions.viz.
 sio render predictions.slp --preset preview                # Fast 0.25x preview
 sio render predictions.slp --start 100 --end 200
 sio render predictions.slp --lf 0                          # Single frame -> PNG
-sio render predictions.slp --lf 0 --crop auto              # Auto-fit to instances
+sio render predictions.slp --lf 0 --crop 100,100,300,300  # Crop to region
 sio render predictions.slp --color-by track --marker-shape diamond
 sio render predictions.slp --trails --trail-length 10           # Motion trails
 
@@ -1896,8 +1896,7 @@ temporal context).
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--crop` | none | Crop region: `auto` or `x1,y1,x2,y2` (pixels or normalized 0.0-1.0) |
-| `--crop-padding` | 0.2 | Padding for auto-crop as fraction of bounding box |
+| `--crop` | none | Crop region: `x1,y1,x2,y2` (pixels or normalized 0.0-1.0) |
 
 ### Single Image Rendering
 
@@ -1922,15 +1921,9 @@ sio render predictions.slp --lf 5 -o frame.png
 
 ### Cropping (Single Image Only)
 
-Crop the output image to focus on specific regions or automatically fit around detected instances:
+Crop the output image to focus on specific regions:
 
 ```bash
-# Auto-fit: crop to bounding box of all instances with 20% padding (default)
-sio render predictions.slp --lf 0 --crop auto
-
-# Auto-fit with custom padding (30% of bounding box)
-sio render predictions.slp --lf 0 --crop auto --crop-padding 0.3
-
 # Pixel coordinates (x1, y1, x2, y2)
 sio render predictions.slp --lf 0 --crop 100,100,300,300
 
@@ -1940,7 +1933,6 @@ sio render predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75
 
 The crop modes:
 
-- **`auto`**: Automatically fit to the bounding box of all instances, with padding. Best for focusing on animals.
 - **Pixel coordinates**: `x1,y1,x2,y2` as integers. Use for precise cropping when you know exact pixel locations.
 - **Normalized coordinates**: `x1,y1,x2,y2` as floats between 0.0-1.0. Use for relative cropping that works across different video resolutions.
 

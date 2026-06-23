@@ -35,6 +35,14 @@ the `segmentation_format` argument of `load_coco` / `coco.read_labels`:
 - `"roi"`: keep the native vector geometry as [`ROI`][sleap_io.ROI] objects (one
   per ring), without rasterizing.
 
+!!! warning "Breaking change in 0.8.0"
+    The default polygon segmentation handling changed in v0.8.0. In v0.7.1,
+    polygon segmentation was read as vector [`ROI`][sleap_io.ROI] objects (one per
+    ring). The new default (`segmentation_format="mask"`) rasterizes each
+    annotation's polygon(s) into a single [`SegmentationMask`][sleap_io.SegmentationMask].
+    **To restore the pre-0.8.0 vector-ROI behavior, pass
+    `segmentation_format="roi"`.**
+
 ```python
 import sleap_io as sio
 
