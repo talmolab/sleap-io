@@ -29,7 +29,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from sleap_io.io import main as io_main
-from sleap_io.io._remote import _is_url
+from sleap_io.io._remote import _is_url, _redact_url
 from sleap_io.io.video_reading import HDF5Video
 from sleap_io.model.instance import PredictedInstance
 from sleap_io.model.labels import Labels
@@ -3888,6 +3888,14 @@ def render(
     # Resolve input path from positional arg or -i option
     input_path = _resolve_input(input_arg, input_opt, "input file")
 
+    # A remote URL input has no usable local directory to derive a default output
+    # from (deriving one would crash on URL path semantics), so require an explicit
+    # local -o for URL inputs. Check up front so it fails fast before any fetch.
+    if output_path is None and _is_url(str(input_path)):
+        raise click.ClickException(
+            "An output path (-o/--output) is required when the input is a URL."
+        )
+
     # Load labels
     try:
         labels = io_main.load_file(str(input_path), open_videos=True)
@@ -3932,7 +3940,7 @@ def render(
     if lf_ind is not None and frame_idx is not None:
         raise click.ClickException("Cannot use both --lf and --frame. Choose one.")
 
-    # Determine output path
+    # Determine output path (URL inputs without -o were rejected up front).
     if output_path is None:
         input_stem = input_path.stem
         if single_image_mode:
@@ -4421,16 +4429,26 @@ def fix(
     """
     # Resolve input
     input_path = _resolve_input(input_arg, input_opt, "input labels file")
+    input_is_url = _is_url(str(input_path))
 
     # Determine default output path
     if output_path is None:
-        output_path = _get_default_output_path(input_path)
+        # A remote URL input has no usable local output to derive a default from
+        # (and writing back to a URL is unsupported), so require an explicit local
+        # -o when the command would actually write. --dry-run never writes.
+        if input_is_url and not dry_run:
+            raise click.ClickException(
+                "An output path (-o/--output) is required when the input is a URL."
+            )
+        if not input_is_url:
+            output_path = _get_default_output_path(input_path)
 
     # Check for filename options
     has_filename_opts = len(prefix_map) > 0 or len(filename_map) > 0
 
-    # Load the input file
-    console.print(f"[bold]Loading:[/] {input_path}")
+    # Load the input file (redact credentials from URLs before display)
+    display_input = _redact_url(str(input_path)) if input_is_url else input_path
+    console.print(f"[bold]Loading:[/] {display_input}")
     try:
         labels = io_main.load_file(str(input_path), open_videos=False)
     except Exception as e:
@@ -4928,8 +4946,8 @@ def embed(
     # Resolve input from positional arg or -i option
     input_path = _resolve_input(input_arg, input_opt, "input file")
 
-    # Validate input is SLP format
-    if not str(input_path).lower().endswith(".slp"):
+    # Validate input is SLP format (``.suffix`` ignores any URL query string).
+    if input_path.suffix.lower() != ".slp":
         raise click.ClickException("Input file must be a .slp file.")
 
     # Load the input file with video access for embedding
@@ -5040,8 +5058,8 @@ def unembed(
     # Resolve input from positional arg or -i option
     input_path = _resolve_input(input_arg, input_opt, "input file")
 
-    # Validate input is SLP format
-    if not str(input_path).lower().endswith(".slp"):
+    # Validate input is SLP format (``.suffix`` ignores any URL query string).
+    if input_path.suffix.lower() != ".slp":
         raise click.ClickException("Input file must be a .slp file.")
 
     # Load the input file

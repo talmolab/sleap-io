@@ -54,6 +54,12 @@ sio convert s3://bucket/labels.slp -o labels.nwb
 sio filenames -i https://example.com/labels.slp
 ```
 
+Commands that write a result require a local output path when the input is a
+URL. `render` and `fix` derive a default output next to the input for local
+files, but a URL has no local location to write to, so they require an explicit
+local `-o/--output` (for `fix`, `--dry-run` works on a URL without `-o`). The
+`embed` and `unembed` commands already require `-o`, which must be local.
+
 Output paths and commands that re-encode video locally (`trim`, `reencode`,
 `transform`, `apply-crops`) require local filesystem paths.
 
