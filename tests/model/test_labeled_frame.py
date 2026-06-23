@@ -1667,6 +1667,71 @@ def test_merge_annotations_auto_masks_link_source_absent():
     assert all(not m.is_predicted for m in lf1.masks)
 
 
+def test_merge_annotations_auto_mask_from_predicted_relinked():
+    """Auto merge relinks a copied user mask to the copied source prediction.
+
+    Both the prediction and the user correction adopted from it live in the
+    incoming frame, so both are copied into the merged frame. The copied user
+    mask's ``from_predicted`` must point at the copied prediction now in the
+    frame, not the original object outside it (which would resolve to ``-1`` and
+    drop the link on save).
+    """
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.ones((10, 10), dtype=bool)
+    pred = PredictedSegmentationMask.from_numpy(mask_data, score=0.9, offset=(5.0, 5.0))
+    user = pred.to_user()
+    user.offset = (500.0, 500.0)  # far enough to require the link, not spatial
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[pred, user])
+
+    lf1._merge_annotations(lf2, strategy="auto")
+
+    merged_preds = [m for m in lf1.masks if m.is_predicted]
+    merged_users = [m for m in lf1.masks if not m.is_predicted]
+    assert len(merged_preds) == 1
+    assert len(merged_users) == 1
+    # The link points at the in-frame copy, not the original object.
+    assert merged_users[0].from_predicted is merged_preds[0]
+    assert merged_users[0].from_predicted is not pred
+
+
+def test_merge_annotations_keep_both_mask_from_predicted_relinked():
+    """keep_both relinks a copied user mask to the copied source prediction."""
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.ones((10, 10), dtype=bool)
+    pred = PredictedSegmentationMask.from_numpy(mask_data, score=0.9)
+    user = pred.to_user()
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[pred, user])
+
+    lf1._merge_annotations(lf2, strategy="keep_both")
+
+    merged_preds = [m for m in lf1.masks if m.is_predicted]
+    merged_users = [m for m in lf1.masks if not m.is_predicted]
+    assert merged_users[0].from_predicted is merged_preds[0]
+    assert merged_users[0].from_predicted is not pred
+
+
+def test_merge_annotations_keep_new_mask_from_predicted_relinked():
+    """keep_new relinks a copied user mask to the copied source prediction."""
+    video = Video(filename="test.mp4", open_backend=False)
+    mask_data = np.ones((10, 10), dtype=bool)
+    pred = PredictedSegmentationMask.from_numpy(mask_data, score=0.9)
+    user = pred.to_user()
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, masks=[])
+    lf2 = LabeledFrame(video=video, frame_idx=0, masks=[pred, user])
+
+    lf1._merge_annotations(lf2, strategy="keep_new")
+
+    merged_preds = [m for m in lf1.masks if m.is_predicted]
+    merged_users = [m for m in lf1.masks if not m.is_predicted]
+    assert merged_users[0].from_predicted is merged_preds[0]
+    assert merged_users[0].from_predicted is not pred
+
+
 def test_merge_annotations_update_tracks_cascades():
     """Update_tracks updates annotation tracks from spatially matched other."""
     from sleap_io.model.centroid import UserCentroid
