@@ -619,9 +619,12 @@ def read_labels(
                     masks.extend(seg_masks)
                     rois.extend(seg_rois)
 
-                    # Create BoundingBox if no segmentation was processed
+                    # Create BoundingBox if segmentation yielded no geometry. We
+                    # key off the decoded results rather than raw ``segmentation``
+                    # truthiness so that a degenerate ring (e.g. a single point)
+                    # still falls back to the bbox instead of being dropped.
                     bbox = annotation.get("bbox")
-                    if bbox is not None and not segmentation:
+                    if bbox is not None and not seg_masks and not seg_rois:
                         x, y, w, h = bbox
                         # COCO score field is only present in prediction results,
                         # so its presence distinguishes predicted from user
