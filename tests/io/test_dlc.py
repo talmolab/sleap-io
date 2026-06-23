@@ -734,6 +734,42 @@ def test_load_file_routes_config_yaml(tmp_path):
     assert len(labels.videos) == 2
 
 
+def test_load_dlc_project_ignores_loader_kwargs(tmp_path):
+    """load_dlc_project swallows benign loader kwargs forwarded by load_file."""
+    config_path = make_dlc_project(tmp_path)
+    # open_videos/lazy are always passed by load_file / `sio show`; they must not
+    # raise a TypeError for DLC projects (their videos may not exist on disk).
+    labels = sio.load_dlc_project(config_path, open_videos=False, lazy=True)
+    assert isinstance(labels, sio.Labels)
+    assert len(labels.videos) == 2
+
+
+def test_load_file_routes_config_yaml_with_open_videos(tmp_path):
+    """load_file forwards open_videos to a DLC project without crashing."""
+    config_path = make_dlc_project(tmp_path)
+    labels = sio.load_file(str(config_path), open_videos=False)
+    assert isinstance(labels, sio.Labels)
+    assert len(labels.videos) == 2
+
+
+def test_load_file_routes_dlc_project_dir_with_open_videos(tmp_path):
+    """load_file forwards open_videos to a DLC project directory without crashing."""
+    make_dlc_project(tmp_path)
+    labels = sio.load_file(str(tmp_path), open_videos=False)
+    assert isinstance(labels, sio.Labels)
+    assert len(labels.videos) == 2
+
+
+def test_load_dlc_splits_ignores_loader_kwargs(tmp_path):
+    """load_dlc_splits swallows benign loader kwargs (parity with load_dlc_project)."""
+    config_path = make_dlc_project(
+        tmp_path, train_indices=[0, 2, 4], test_indices=[1, 3]
+    )
+    splits = dlc.load_dlc_splits(config_path, open_videos=False, lazy=True)
+    assert isinstance(splits, LabelsSet)
+    assert set(splits.labels.keys()) == {"train", "test"}
+
+
 def test_is_dlc_project_path(tmp_path):
     """Project path detection accepts dirs and config.yaml, rejects others."""
     config_path = make_dlc_project(tmp_path)
