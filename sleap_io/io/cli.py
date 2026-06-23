@@ -5519,7 +5519,7 @@ def _run_ffmpeg_with_progress(
     total_frames: int,
     description: str = "Reencoding",
 ) -> None:
-    """Run ffmpeg command with progress bar.
+    """Run an ffmpeg command with a progress bar.
 
     Args:
         cmd: FFmpeg command as list of arguments.
@@ -5529,8 +5529,49 @@ def _run_ffmpeg_with_progress(
     Raises:
         click.ClickException: If ffmpeg fails.
     """
+    # Add progress flags to ffmpeg so it emits machine-readable progress on
+    # stdout. Insert right after the ffmpeg executable path.
+    # Note: -stats_period not supported in ffmpeg 4.x, use -progress alone.
+    cmd_with_progress = cmd.copy()
+    cmd_with_progress[1:1] = ["-progress", "pipe:1"]
+
+    _run_subprocess_with_progress(cmd_with_progress, total_frames, description)
+
+
+def _run_subprocess_with_progress(
+    cmd: list[str],
+    total_frames: int,
+    description: str = "Reencoding",
+) -> None:
+    """Run a subprocess that streams ``frame=N`` progress on stdout.
+
+    The command is expected to write machine-readable progress (lines containing
+    ``frame=<n>``) to stdout. stderr is drained concurrently on a background
+    thread and only surfaced if the process fails.
+
+    .. note::
+
+        Draining stderr concurrently is required for correctness, not just
+        tidiness. ffmpeg writes its banner, stream info, and periodic stats to
+        stderr even with ``-progress pipe:1``. If only stdout is read, the
+        stderr pipe buffer fills (~4 KB on Windows, ~64 KB on Linux), ffmpeg
+        blocks on the stderr write, stops emitting stdout progress, and the
+        ``readline()`` below parks forever -- the progress bar freezes (often at
+        frame 0) while the rich spinner, which animates on its own thread, keeps
+        spinning. Reading stderr on a separate thread keeps the child unblocked.
+
+    Args:
+        cmd: Full command to run, including any progress flags.
+        total_frames: Total number of frames for progress tracking.
+        description: Description for the progress bar.
+
+    Raises:
+        click.ClickException: If the subprocess exits with a non-zero code.
+        click.Abort: If interrupted by the user (Ctrl+C).
+    """
     import re
     import subprocess
+    import threading
 
     from rich.progress import (
         BarColumn,
@@ -5542,52 +5583,69 @@ def _run_ffmpeg_with_progress(
         TimeRemainingColumn,
     )
 
-    # Add progress flag to ffmpeg
-    cmd_with_progress = cmd.copy()
-    # Insert progress flags after the ffmpeg executable path
-    # Note: -stats_period not supported in ffmpeg 4.x, use -progress alone
-    progress_flags = ["-progress", "pipe:1"]
-    cmd_with_progress[1:1] = progress_flags
-
     process = subprocess.Popen(
-        cmd_with_progress,
+        cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
     )
 
-    # Progress bar
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        TimeRemainingColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task(description, total=total_frames)
+    # Drain stderr on a background thread to avoid a pipe-buffer deadlock (see
+    # the note in this function's docstring).
+    stderr_lines: list[str] = []
 
-        # Parse ffmpeg progress output
-        frame_pattern = re.compile(r"frame=(\d+)")
+    def _drain_stderr() -> None:
+        # process.stderr is always a pipe here (we passed stderr=PIPE).
+        for line in process.stderr:  # type: ignore[union-attr]
+            stderr_lines.append(line)
 
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
+    stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+    stderr_thread.start()
 
-            match = frame_pattern.search(line)
-            if match:
-                current_frame = int(match.group(1))
-                progress.update(task, completed=current_frame)
+    # Parse progress output (e.g. ffmpeg's `frame=<n>`).
+    frame_pattern = re.compile(r"frame=(\d+)")
 
-        progress.update(task, completed=total_frames)
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(description, total=total_frames)
+
+            while True:
+                line = process.stdout.readline()  # type: ignore[union-attr]
+                if not line and process.poll() is not None:
+                    break
+
+                match = frame_pattern.search(line)
+                if match:
+                    current_frame = int(match.group(1))
+                    progress.update(task, completed=current_frame)
+
+            progress.update(task, completed=total_frames)
+    except KeyboardInterrupt:
+        # Don't leave the child running after a Ctrl+C; tear it down and abort.
+        process.kill()
+        process.wait()
+        stderr_thread.join(timeout=5)
+        raise click.Abort()
+    finally:
+        # Safety net: never leave a child process behind.
+        if process.poll() is None:
+            process.kill()
+            process.wait()
 
     # Check for errors
     returncode = process.wait()
+    stderr_thread.join(timeout=5)
     if returncode != 0:
-        stderr = process.stderr.read()
+        stderr = "".join(stderr_lines)
         raise click.ClickException(f"ffmpeg failed (exit code {returncode}):\n{stderr}")
 
 

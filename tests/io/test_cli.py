@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import re
 import sys
+import threading
 from pathlib import Path
 
+import click
 import h5py
 import numpy as np
 import pytest
@@ -21,6 +23,7 @@ from sleap_io.io.cli import (
     _load_images,
     _load_overlay,
     _parse_overlay_outline_color,
+    _run_subprocess_with_progress,
     cli,
 )
 from sleap_io.model.instance import Instance, PredictedInstance
@@ -8361,6 +8364,80 @@ def test_reencode_basic(tmp_path, centered_pair_low_quality_path):
     assert "Saved:" in output
     assert output_path.exists()
     assert output_path.stat().st_size > 0
+
+
+# Build a stand-in for ffmpeg: a child that writes far more to stderr than any OS
+# pipe buffer (~4 KB Windows / ~64 KB Linux) while emitting `frame=N` progress on
+# stdout. Under the old undrained-stderr code the child blocks on the stderr write
+# and the progress reader deadlocks; with concurrent stderr draining it completes.
+_FAKE_FFMPEG_OK = (
+    "import sys\n"
+    "chunk = 'e' * 4000\n"  # ~4 KB of stderr per frame -> ~320 KB total
+    "for i in range(1, 81):\n"
+    "    sys.stderr.write(chunk + '\\n'); sys.stderr.flush()\n"
+    "    sys.stdout.write('frame=%d\\n' % i); sys.stdout.flush()\n"
+    "sys.exit(0)\n"
+)
+
+_FAKE_FFMPEG_FAIL = (
+    "import sys\n"
+    "chunk = 'x' * 4000\n"
+    "for i in range(1, 51):\n"
+    "    sys.stderr.write(chunk + '\\n'); sys.stderr.flush()\n"
+    "    sys.stdout.write('frame=%d\\n' % i); sys.stdout.flush()\n"
+    "sys.stderr.write('BOOM_MARKER\\n'); sys.stderr.flush()\n"
+    "sys.exit(3)\n"
+)
+
+
+def _run_in_guard_thread(fn, timeout: float = 60.0):
+    """Run ``fn`` in a daemon thread so a deadlock fails the test, not hangs it.
+
+    Returns a tuple ``(finished, error)`` where ``finished`` is False if the call
+    did not return within ``timeout`` (i.e. it deadlocked) and ``error`` is any
+    exception raised by ``fn`` (or None).
+    """
+    done = threading.Event()
+    box: list[BaseException] = []
+
+    def runner() -> None:
+        try:
+            fn()
+        except BaseException as e:  # noqa: BLE001 - surface any failure to caller
+            box.append(e)
+        finally:
+            done.set()
+
+    threading.Thread(target=runner, daemon=True).start()
+    finished = done.wait(timeout=timeout)
+    return finished, (box[0] if box else None)
+
+
+def test_run_subprocess_with_progress_drains_stderr_no_deadlock():
+    """Regression: large stderr must not deadlock the progress reader.
+
+    Reproduces the `sio reencode` hang where the progress bar froze at frame 0
+    (spinner still animating) because stderr was never drained while ffmpeg
+    filled the OS pipe buffer.
+    """
+    cmd = [sys.executable, "-c", _FAKE_FFMPEG_OK]
+    finished, error = _run_in_guard_thread(
+        lambda: _run_subprocess_with_progress(cmd, total_frames=80, description="t")
+    )
+    assert finished, "deadlocked: stderr was not drained concurrently"
+    assert error is None, f"unexpected error: {error!r}"
+
+
+def test_run_subprocess_with_progress_reports_stderr_on_failure():
+    """A non-zero exit raises ClickException with the (drained) stderr, no hang."""
+    cmd = [sys.executable, "-c", _FAKE_FFMPEG_FAIL]
+    finished, error = _run_in_guard_thread(
+        lambda: _run_subprocess_with_progress(cmd, total_frames=50, description="t")
+    )
+    assert finished, "deadlocked on the failure path"
+    assert isinstance(error, click.ClickException)
+    assert "exit code 3" in str(error)
+    assert "BOOM_MARKER" in str(error)
 
 
 @skip_slow_video_on_windows
