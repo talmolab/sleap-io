@@ -3950,15 +3950,38 @@ class Labels:
 
         Returns:
             New instance with mapped skeleton and track.
+
+        Notes:
+            When the source instance's node order differs from the mapped skeleton's
+            node order (e.g. the default structure matcher matched ``[A, B, C]`` with
+            ``[C, B, A]``), the points are reordered by node name so that each node's
+            coordinates and score follow its name rather than its position. When the
+            node orders are identical (the common case), the points are copied as-is to
+            avoid any overhead on the hot path.
         """
         mapped_skeleton = skeleton_map.get(instance.skeleton, instance.skeleton)
         mapped_track = (
             track_map.get(instance.track, instance.track) if instance.track else None
         )
 
+        # Reorder points by node name when the source order differs from the mapped
+        # skeleton's order, otherwise the per-node coordinates/scores would be carried
+        # over positionally and silently misaligned (see #447). Reuse the source array
+        # type (e.g. PredictedPointsArray) so per-point scores are preserved.
+        source_points = instance.points
+        if list(source_points["name"]) == mapped_skeleton.node_names:
+            mapped_points = source_points.copy()
+        else:
+            new_node_inds, old_node_inds = mapped_skeleton.match_nodes(
+                source_points["name"]
+            )
+            mapped_points = type(source_points).empty(len(mapped_skeleton))
+            mapped_points[new_node_inds] = source_points[old_node_inds]
+            mapped_points["name"] = mapped_skeleton.node_names
+
         if type(instance) is PredictedInstance:
             return PredictedInstance(
-                points=instance.points.copy(),
+                points=mapped_points,
                 skeleton=mapped_skeleton,
                 score=instance.score,
                 track=mapped_track,
@@ -3967,7 +3990,7 @@ class Labels:
             )
         else:
             return Instance(
-                points=instance.points.copy(),
+                points=mapped_points,
                 skeleton=mapped_skeleton,
                 track=mapped_track,
                 tracking_score=instance.tracking_score,
