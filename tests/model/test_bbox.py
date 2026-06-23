@@ -251,6 +251,15 @@ def test_bbox_to_roi_preserves_metadata():
     assert roi.category == "mouse"
 
 
+def test_bbox_to_roi_preserves_tracking_score():
+    """to_roi() carries tracking_score through (regression for L4)."""
+    bbox = PredictedBoundingBox(
+        x1=40, y1=45, x2=60, y2=55, score=0.9, tracking_score=0.7
+    )
+    roi = bbox.to_roi()
+    assert roi.tracking_score == pytest.approx(0.7)
+
+
 def test_bbox_to_mask():
     bbox = UserBoundingBox(x1=7, y1=8, x2=13, y2=12)
     mask = bbox.to_mask(height=20, width=20)

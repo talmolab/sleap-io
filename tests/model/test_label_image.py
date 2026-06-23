@@ -565,6 +565,23 @@ def test_label_image_resampled():
     assert resampled.objects[1].category == "a"
 
 
+def test_label_image_resampled_preserves_instance_idx():
+    """resampled() keeps each Info's deferred _instance_idx (regression for L7)."""
+    data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+    info1 = LabelImage.Info(category="a")
+    info1._instance_idx = 3
+    info2 = LabelImage.Info(category="b")
+    info2._instance_idx = 5
+    li = UserLabelImage(
+        data=data,
+        objects={1: info1, 2: info2},
+        scale=(0.5, 0.5),
+    )
+    resampled = li.resampled(4, 4)
+    assert resampled.objects[1]._instance_idx == 3
+    assert resampled.objects[2]._instance_idx == 5
+
+
 def test_predicted_label_image_resampled():
     data = np.array([[0, 1], [2, 0]], dtype=np.int32)
     score_map = np.random.rand(2, 2).astype(np.float32)

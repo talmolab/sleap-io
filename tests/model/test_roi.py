@@ -129,6 +129,13 @@ def test_predicted_roi_to_mask_is_predicted():
     assert type(user_mask) is UserSegmentationMask
 
 
+def test_roi_to_mask_preserves_tracking_score():
+    """to_mask() carries tracking_score through (regression for L4)."""
+    roi = UserROI.from_bbox(2, 3, 4, 5, tracking_score=0.7)
+    mask = roi.to_mask(height=20, width=20)
+    assert mask.tracking_score == pytest.approx(0.7)
+
+
 def test_roi_with_video():
     video = Video(filename="test.mp4")
     roi = UserROI.from_bbox(0, 0, 10, 10, video=video)
@@ -266,6 +273,19 @@ def test_roi_explode_multi_polygon():
         assert part.category == "cat"
     assert parts[0].area == pytest.approx(100.0)
     assert parts[1].area == pytest.approx(100.0)
+
+
+def test_roi_explode_preserves_tracking_score():
+    """explode() carries tracking_score onto each part (regression for L4)."""
+    polygons = [
+        [(0, 0), (10, 0), (10, 10), (0, 10)],
+        [(20, 20), (30, 20), (30, 30), (20, 30)],
+    ]
+    roi = UserROI.from_multi_polygon(polygons, tracking_score=0.7)
+    parts = roi.explode()
+    assert len(parts) == 2
+    for part in parts:
+        assert part.tracking_score == pytest.approx(0.7)
 
 
 def test_roi_explode_single_polygon():

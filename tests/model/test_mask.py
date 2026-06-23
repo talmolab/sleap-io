@@ -373,6 +373,45 @@ def test_resampled_unlinked_stays_none():
     assert resampled.from_predicted is None
 
 
+def test_resampled_preserves_tracking_score():
+    """resampled() carries tracking_score through (regression for L4)."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    mask = PredictedSegmentationMask.from_numpy(
+        data, score=0.9, tracking_score=0.7, scale=(0.5, 0.5)
+    )
+    resampled = mask.resampled(20, 20)
+    assert resampled.tracking_score == pytest.approx(0.7)
+
+
+def test_resampled_preserves_instance_idx():
+    """resampled() keeps the deferred _instance_idx (regression for L7)."""
+    data = np.zeros((6, 6), dtype=bool)
+    data[1:3, 1:3] = True
+    mask = UserSegmentationMask.from_numpy(data, scale=(0.5, 0.5))
+    mask._instance_idx = 3
+    resampled = mask.resampled(12, 12)
+    assert resampled._instance_idx == 3
+
+
+def test_to_bbox_preserves_tracking_score():
+    """to_bbox() carries tracking_score through (regression for L4)."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    mask = PredictedSegmentationMask.from_numpy(data, score=0.9, tracking_score=0.7)
+    bb = mask.to_bbox()
+    assert bb.tracking_score == pytest.approx(0.7)
+
+
+def test_to_polygon_preserves_tracking_score():
+    """to_polygon() carries tracking_score through (regression for L4)."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:7] = True
+    mask = PredictedSegmentationMask.from_numpy(data, score=0.9, tracking_score=0.7)
+    roi = mask.to_polygon()
+    assert roi.tracking_score == pytest.approx(0.7)
+
+
 def test_predicted_segmentation_mask_score_map_spatial():
     mask = PredictedSegmentationMask.from_numpy(
         np.zeros((5, 5), dtype=bool),
