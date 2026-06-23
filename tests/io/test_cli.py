@@ -9,8 +9,10 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
+import click
 import h5py
 import numpy as np
 import pytest
@@ -24,6 +26,7 @@ from sleap_io.io.cli import (
     _load_images,
     _load_overlay,
     _parse_overlay_outline_color,
+    _run_subprocess_with_progress,
     cli,
 )
 from sleap_io.model.instance import Instance, PredictedInstance
@@ -8364,6 +8367,223 @@ def test_reencode_basic(tmp_path, centered_pair_low_quality_path):
     assert "Saved:" in output
     assert output_path.exists()
     assert output_path.stat().st_size > 0
+
+
+# Build a stand-in for ffmpeg: a child that writes far more to stderr than any OS
+# pipe buffer (~4 KB Windows / ~64 KB Linux) while emitting `frame=N` progress on
+# stdout. Under the old undrained-stderr code the child blocks on the stderr write
+# and the progress reader deadlocks; with concurrent stderr draining it completes.
+_FAKE_FFMPEG_OK = (
+    "import sys\n"
+    "chunk = 'e' * 4000\n"  # ~4 KB of stderr per frame -> ~320 KB total
+    "for i in range(1, 81):\n"
+    "    sys.stderr.write(chunk + '\\n'); sys.stderr.flush()\n"
+    "    sys.stdout.write('frame=%d\\n' % i); sys.stdout.flush()\n"
+    "sys.exit(0)\n"
+)
+
+_FAKE_FFMPEG_FAIL = (
+    "import sys\n"
+    "chunk = 'x' * 4000\n"
+    "for i in range(1, 51):\n"
+    "    sys.stderr.write(chunk + '\\n'); sys.stderr.flush()\n"
+    "    sys.stdout.write('frame=%d\\n' % i); sys.stdout.flush()\n"
+    "sys.stderr.write('BOOM_MARKER\\n'); sys.stderr.flush()\n"
+    "sys.exit(3)\n"
+)
+
+
+def _run_in_guard_thread(fn, timeout: float = 60.0):
+    """Run ``fn`` in a daemon thread so a deadlock fails the test, not hangs it.
+
+    Returns a tuple ``(finished, error)`` where ``finished`` is False if the call
+    did not return within ``timeout`` (i.e. it deadlocked) and ``error`` is any
+    exception raised by ``fn`` (or None).
+    """
+    done = threading.Event()
+    box: list[BaseException] = []
+
+    def runner() -> None:
+        try:
+            fn()
+        except BaseException as e:  # noqa: BLE001 - surface any failure to caller
+            box.append(e)
+        finally:
+            done.set()
+
+    threading.Thread(target=runner, daemon=True).start()
+    finished = done.wait(timeout=timeout)
+    return finished, (box[0] if box else None)
+
+
+def test_run_subprocess_with_progress_drains_stderr_no_deadlock():
+    """Regression: large stderr must not deadlock the progress reader.
+
+    Reproduces the `sio reencode` hang where the progress bar froze at frame 0
+    (spinner still animating) because stderr was never drained while ffmpeg
+    filled the OS pipe buffer.
+    """
+    cmd = [sys.executable, "-c", _FAKE_FFMPEG_OK]
+    finished, error = _run_in_guard_thread(
+        lambda: _run_subprocess_with_progress(cmd, total_frames=80, description="t")
+    )
+    assert finished, "deadlocked: stderr was not drained concurrently"
+    assert error is None, f"unexpected error: {error!r}"
+
+
+def test_run_subprocess_with_progress_reports_stderr_on_failure():
+    """A non-zero exit raises ClickException with the (drained) stderr, no hang."""
+    cmd = [sys.executable, "-c", _FAKE_FFMPEG_FAIL]
+    finished, error = _run_in_guard_thread(
+        lambda: _run_subprocess_with_progress(cmd, total_frames=50, description="t")
+    )
+    assert finished, "deadlocked on the failure path"
+    assert isinstance(error, click.ClickException)
+    assert "exit code 3" in str(error)
+    assert "BOOM_MARKER" in str(error)
+
+
+def test_reencode_default_output_forces_mp4(tmp_path, centered_pair_low_quality_path):
+    """Default output is always .mp4, even for a non-mp4 input container."""
+    import shutil
+
+    clip = tmp_path / "clip.mov"
+    shutil.copy(centered_pair_low_quality_path, clip)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reencode", str(clip), "--dry-run"])
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "clip.reencoded.mp4" in output
+    assert "clip.reencoded.mov" not in output
+
+
+def test_reencode_replace_dry_run_in_place(tmp_path, centered_pair_low_quality_path):
+    """--replace --dry-run on a .mp4 reports in-place replacement, no deletion."""
+    import shutil
+
+    clip = tmp_path / "clip.mp4"
+    shutil.copy(centered_pair_low_quality_path, clip)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reencode", str(clip), "--replace", "--dry-run"])
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "reencode in place" in output.lower()
+    assert "clip.mp4" in output
+    # Same path in and out -> nothing to delete.
+    assert "delete original" not in output.lower()
+    # Dry run must not touch anything.
+    assert clip.exists()
+    assert not list(tmp_path.glob(".*reencode*"))
+
+
+def test_reencode_replace_dry_run_changes_extension(
+    tmp_path, centered_pair_low_quality_path
+):
+    """--replace --dry-run on a .mov targets {stem}.mp4 and deletes the original."""
+    import shutil
+
+    clip = tmp_path / "clip.mov"
+    shutil.copy(centered_pair_low_quality_path, clip)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reencode", str(clip), "--replace", "--dry-run"])
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "clip.mp4" in output
+    assert "delete original" in output.lower()
+    assert "clip.mov" in output
+    assert clip.exists()  # dry run keeps the original
+
+
+def test_reencode_replace_conflicts_with_output(
+    tmp_path, centered_pair_low_quality_path
+):
+    """--replace and -o/--output are mutually exclusive."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "--replace",
+            "-o",
+            str(tmp_path / "out.mp4"),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Cannot use --replace together with -o" in _strip_ansi(result.output)
+
+
+def test_reencode_replace_slp_error(tmp_path, slp_real_data):
+    """--replace is rejected for SLP inputs."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reencode", slp_real_data, "--replace"])
+    assert result.exit_code != 0
+    assert "not supported for SLP" in _strip_ansi(result.output)
+
+
+def test_reencode_replace_existing_target_requires_overwrite(
+    tmp_path, centered_pair_low_quality_path
+):
+    """--replace won't clobber a *different* existing {stem}.mp4 without --overwrite."""
+    import shutil
+
+    clip = tmp_path / "clip.mov"
+    shutil.copy(centered_pair_low_quality_path, clip)
+    # An unrelated file already occupies the target name.
+    (tmp_path / "clip.mp4").write_text("do not clobber me")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reencode", str(clip), "--replace"])
+    assert result.exit_code != 0
+    assert "Target already exists" in _strip_ansi(result.output)
+    # Original and existing target both untouched.
+    assert clip.exists()
+    assert (tmp_path / "clip.mp4").read_text() == "do not clobber me"
+
+
+@skip_slow_video_on_windows
+def test_reencode_replace_in_place_mp4(tmp_path, centered_pair_low_quality_path):
+    """--replace reencodes a .mp4 in place (same filename), no temp/extra files."""
+    import shutil
+
+    clip = tmp_path / "clip.mp4"
+    shutil.copy(centered_pair_low_quality_path, clip)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reencode", str(clip), "--replace"])
+    assert result.exit_code == 0, _strip_ansi(result.output)
+
+    assert clip.exists()
+    assert clip.stat().st_size > 0
+    # No side-car output and no leftover temp file.
+    assert not (tmp_path / "clip.reencoded.mp4").exists()
+    assert not list(tmp_path.glob(".*reencode*"))
+
+
+@skip_slow_video_on_windows
+def test_reencode_replace_deletes_original_on_extension_change(
+    tmp_path, centered_pair_low_quality_path
+):
+    """--replace on a .mov produces {stem}.mp4 and deletes the original .mov."""
+    import shutil
+
+    clip = tmp_path / "clip.mov"
+    shutil.copy(centered_pair_low_quality_path, clip)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reencode", str(clip), "--replace"])
+    assert result.exit_code == 0, _strip_ansi(result.output)
+
+    assert (tmp_path / "clip.mp4").exists()
+    assert (tmp_path / "clip.mp4").stat().st_size > 0
+    assert not clip.exists()  # original .mov removed
+    assert not list(tmp_path.glob(".*reencode*"))
 
 
 @skip_slow_video_on_windows
