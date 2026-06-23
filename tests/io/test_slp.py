@@ -6951,6 +6951,50 @@ def test_slp_instance_from_predicted_survives_merge(tmp_path):
     assert reloaded_user.from_predicted is reloaded_pred
 
 
+def test_slp_instance_from_predicted_survives_new_frame_merge(tmp_path):
+    """An instance from_predicted link survives an auto merge that creates a frame.
+
+    This covers the NEW-frame merge branch in ``Labels.merge`` (where no matching
+    destination frame exists, so a brand-new ``LabeledFrame`` is built and the
+    instances are remapped via ``_map_instance`` then relinked with
+    ``_relink_from_predicted``). The sibling test
+    ``test_slp_instance_from_predicted_survives_merge`` covers the
+    existing/overlapping-frame branch instead; here the destination has no frame
+    at the source's ``frame_idx`` so the merge takes the new-frame path.
+    """
+    skeleton = Skeleton(nodes=["A", "B"])
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+    pred = PredictedInstance.from_numpy(points_data=pts, skeleton=skeleton, score=0.9)
+    user = Instance.from_numpy(points_data=pts, skeleton=skeleton)
+    user.from_predicted = pred
+    assert user.from_predicted is pred
+
+    video = Video("v.mp4")
+    # Destination has a frame at a DIFFERENT frame_idx, so merging the source
+    # frame (at frame_idx=0) creates a brand-new LabeledFrame (new-frame path).
+    dst = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=99, instances=[])],
+    )
+    src = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[pred, user])],
+    )
+    dst.merge(src, frame="auto")
+
+    path = str(tmp_path / "merged_new_frame_instance_provenance.slp")
+    dst.save(path)
+    reloaded = load_file(path)
+
+    new_frame = next(lf for lf in reloaded.labeled_frames if lf.frame_idx == 0)
+    reloaded_insts = new_frame.instances
+    reloaded_pred = next(i for i in reloaded_insts if type(i) is PredictedInstance)
+    reloaded_user = next(i for i in reloaded_insts if type(i) is Instance)
+    assert reloaded_user.from_predicted is reloaded_pred
+
+
 def test_slp_predicted_mask_score_map_roundtrip(tmp_path):
     """PredictedSegmentationMask with score_map survives round-trip."""
     video = Video(filename="test.mp4")
