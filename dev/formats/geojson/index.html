@@ -3571,22 +3571,22 @@
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-630" name="__codelineno-0-630"></a><a href="#__codelineno-0-630"><span class="linenos" data-linenos="630 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_geojson</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
-<a id="__codelineno-0-631" name="__codelineno-0-631"></a><a href="#__codelineno-0-631"><span class="linenos" data-linenos="631 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load ROIs from a GeoJSON file.</span>
-<a id="__codelineno-0-632" name="__codelineno-0-632"></a><a href="#__codelineno-0-632"><span class="linenos" data-linenos="632 "></span></a>
-<a id="__codelineno-0-633" name="__codelineno-0-633"></a><a href="#__codelineno-0-633"><span class="linenos" data-linenos="633 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-634" name="__codelineno-0-634"></a><a href="#__codelineno-0-634"><span class="linenos" data-linenos="634 "></span></a><span class="sd">        filename: Path to a ``.geojson`` file containing ROI features.</span>
-<a id="__codelineno-0-635" name="__codelineno-0-635"></a><a href="#__codelineno-0-635"><span class="linenos" data-linenos="635 "></span></a>
-<a id="__codelineno-0-636" name="__codelineno-0-636"></a><a href="#__codelineno-0-636"><span class="linenos" data-linenos="636 "></span></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-637" name="__codelineno-0-637"></a><a href="#__codelineno-0-637"><span class="linenos" data-linenos="637 "></span></a><span class="sd">        A list of `ROI` objects.</span>
-<a id="__codelineno-0-638" name="__codelineno-0-638"></a><a href="#__codelineno-0-638"><span class="linenos" data-linenos="638 "></span></a>
-<a id="__codelineno-0-639" name="__codelineno-0-639"></a><a href="#__codelineno-0-639"><span class="linenos" data-linenos="639 "></span></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-640" name="__codelineno-0-640"></a><a href="#__codelineno-0-640"><span class="linenos" data-linenos="640 "></span></a><span class="sd">        `ROI`: Region of interest data structure.</span>
-<a id="__codelineno-0-641" name="__codelineno-0-641"></a><a href="#__codelineno-0-641"><span class="linenos" data-linenos="641 "></span></a><span class="sd">        `save_geojson`: Write ROIs to GeoJSON.</span>
-<a id="__codelineno-0-642" name="__codelineno-0-642"></a><a href="#__codelineno-0-642"><span class="linenos" data-linenos="642 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-643" name="__codelineno-0-643"></a><a href="#__codelineno-0-643"><span class="linenos" data-linenos="643 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">geojson</span>
-<a id="__codelineno-0-644" name="__codelineno-0-644"></a><a href="#__codelineno-0-644"><span class="linenos" data-linenos="644 "></span></a>
-<a id="__codelineno-0-645" name="__codelineno-0-645"></a><a href="#__codelineno-0-645"><span class="linenos" data-linenos="645 "></span></a>    <span class="k">return</span> <span class="n">geojson</span><span class="o">.</span><span class="n">read_rois</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-631" name="__codelineno-0-631"></a><a href="#__codelineno-0-631"><span class="linenos" data-linenos="631 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_geojson</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+<a id="__codelineno-0-632" name="__codelineno-0-632"></a><a href="#__codelineno-0-632"><span class="linenos" data-linenos="632 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load ROIs from a GeoJSON file.</span>
+<a id="__codelineno-0-633" name="__codelineno-0-633"></a><a href="#__codelineno-0-633"><span class="linenos" data-linenos="633 "></span></a>
+<a id="__codelineno-0-634" name="__codelineno-0-634"></a><a href="#__codelineno-0-634"><span class="linenos" data-linenos="634 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a><a href="#__codelineno-0-635"><span class="linenos" data-linenos="635 "></span></a><span class="sd">        filename: Path to a ``.geojson`` file containing ROI features.</span>
+<a id="__codelineno-0-636" name="__codelineno-0-636"></a><a href="#__codelineno-0-636"><span class="linenos" data-linenos="636 "></span></a>
+<a id="__codelineno-0-637" name="__codelineno-0-637"></a><a href="#__codelineno-0-637"><span class="linenos" data-linenos="637 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-638" name="__codelineno-0-638"></a><a href="#__codelineno-0-638"><span class="linenos" data-linenos="638 "></span></a><span class="sd">        A list of `ROI` objects.</span>
+<a id="__codelineno-0-639" name="__codelineno-0-639"></a><a href="#__codelineno-0-639"><span class="linenos" data-linenos="639 "></span></a>
+<a id="__codelineno-0-640" name="__codelineno-0-640"></a><a href="#__codelineno-0-640"><span class="linenos" data-linenos="640 "></span></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-641" name="__codelineno-0-641"></a><a href="#__codelineno-0-641"><span class="linenos" data-linenos="641 "></span></a><span class="sd">        `ROI`: Region of interest data structure.</span>
+<a id="__codelineno-0-642" name="__codelineno-0-642"></a><a href="#__codelineno-0-642"><span class="linenos" data-linenos="642 "></span></a><span class="sd">        `save_geojson`: Write ROIs to GeoJSON.</span>
+<a id="__codelineno-0-643" name="__codelineno-0-643"></a><a href="#__codelineno-0-643"><span class="linenos" data-linenos="643 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-644" name="__codelineno-0-644"></a><a href="#__codelineno-0-644"><span class="linenos" data-linenos="644 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">geojson</span>
+<a id="__codelineno-0-645" name="__codelineno-0-645"></a><a href="#__codelineno-0-645"><span class="linenos" data-linenos="645 "></span></a>
+<a id="__codelineno-0-646" name="__codelineno-0-646"></a><a href="#__codelineno-0-646"><span class="linenos" data-linenos="646 "></span></a>    <span class="k">return</span> <span class="n">geojson</span><span class="o">.</span><span class="n">read_rois</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
@@ -3662,20 +3662,20 @@
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-648" name="__codelineno-0-648"></a><a href="#__codelineno-0-648"><span class="linenos" data-linenos="648 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_geojson</span><span class="p">(</span><span class="n">rois</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-649" name="__codelineno-0-649"></a><a href="#__codelineno-0-649"><span class="linenos" data-linenos="649 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save ROIs to a GeoJSON file.</span>
-<a id="__codelineno-0-650" name="__codelineno-0-650"></a><a href="#__codelineno-0-650"><span class="linenos" data-linenos="650 "></span></a>
-<a id="__codelineno-0-651" name="__codelineno-0-651"></a><a href="#__codelineno-0-651"><span class="linenos" data-linenos="651 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-652" name="__codelineno-0-652"></a><a href="#__codelineno-0-652"><span class="linenos" data-linenos="652 "></span></a><span class="sd">        rois: A list of `ROI` objects to save.</span>
-<a id="__codelineno-0-653" name="__codelineno-0-653"></a><a href="#__codelineno-0-653"><span class="linenos" data-linenos="653 "></span></a><span class="sd">        filename: Path to the output ``.geojson`` file.</span>
-<a id="__codelineno-0-654" name="__codelineno-0-654"></a><a href="#__codelineno-0-654"><span class="linenos" data-linenos="654 "></span></a>
-<a id="__codelineno-0-655" name="__codelineno-0-655"></a><a href="#__codelineno-0-655"><span class="linenos" data-linenos="655 "></span></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-656" name="__codelineno-0-656"></a><a href="#__codelineno-0-656"><span class="linenos" data-linenos="656 "></span></a><span class="sd">        `ROI`: Region of interest data structure.</span>
-<a id="__codelineno-0-657" name="__codelineno-0-657"></a><a href="#__codelineno-0-657"><span class="linenos" data-linenos="657 "></span></a><span class="sd">        `load_geojson`: Read ROIs from GeoJSON.</span>
-<a id="__codelineno-0-658" name="__codelineno-0-658"></a><a href="#__codelineno-0-658"><span class="linenos" data-linenos="658 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-659" name="__codelineno-0-659"></a><a href="#__codelineno-0-659"><span class="linenos" data-linenos="659 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">geojson</span>
-<a id="__codelineno-0-660" name="__codelineno-0-660"></a><a href="#__codelineno-0-660"><span class="linenos" data-linenos="660 "></span></a>
-<a id="__codelineno-0-661" name="__codelineno-0-661"></a><a href="#__codelineno-0-661"><span class="linenos" data-linenos="661 "></span></a>    <span class="n">geojson</span><span class="o">.</span><span class="n">write_rois</span><span class="p">(</span><span class="n">rois</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-649" name="__codelineno-0-649"></a><a href="#__codelineno-0-649"><span class="linenos" data-linenos="649 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_geojson</span><span class="p">(</span><span class="n">rois</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-650" name="__codelineno-0-650"></a><a href="#__codelineno-0-650"><span class="linenos" data-linenos="650 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save ROIs to a GeoJSON file.</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a><a href="#__codelineno-0-651"><span class="linenos" data-linenos="651 "></span></a>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a><a href="#__codelineno-0-652"><span class="linenos" data-linenos="652 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a><a href="#__codelineno-0-653"><span class="linenos" data-linenos="653 "></span></a><span class="sd">        rois: A list of `ROI` objects to save.</span>
+<a id="__codelineno-0-654" name="__codelineno-0-654"></a><a href="#__codelineno-0-654"><span class="linenos" data-linenos="654 "></span></a><span class="sd">        filename: Path to the output ``.geojson`` file.</span>
+<a id="__codelineno-0-655" name="__codelineno-0-655"></a><a href="#__codelineno-0-655"><span class="linenos" data-linenos="655 "></span></a>
+<a id="__codelineno-0-656" name="__codelineno-0-656"></a><a href="#__codelineno-0-656"><span class="linenos" data-linenos="656 "></span></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-657" name="__codelineno-0-657"></a><a href="#__codelineno-0-657"><span class="linenos" data-linenos="657 "></span></a><span class="sd">        `ROI`: Region of interest data structure.</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a><a href="#__codelineno-0-658"><span class="linenos" data-linenos="658 "></span></a><span class="sd">        `load_geojson`: Read ROIs from GeoJSON.</span>
+<a id="__codelineno-0-659" name="__codelineno-0-659"></a><a href="#__codelineno-0-659"><span class="linenos" data-linenos="659 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660"></a><a href="#__codelineno-0-660"><span class="linenos" data-linenos="660 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">geojson</span>
+<a id="__codelineno-0-661" name="__codelineno-0-661"></a><a href="#__codelineno-0-661"><span class="linenos" data-linenos="661 "></span></a>
+<a id="__codelineno-0-662" name="__codelineno-0-662"></a><a href="#__codelineno-0-662"><span class="linenos" data-linenos="662 "></span></a>    <span class="n">geojson</span><span class="o">.</span><span class="n">write_rois</span><span class="p">(</span><span class="n">rois</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
