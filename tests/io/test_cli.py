@@ -35,7 +35,8 @@ from sleap_io.io.cli import (
 from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.mask import PredictedSegmentationMask
+from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
+from sleap_io.model.roi import UserROI
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
 from sleap_io.version import __version__
@@ -425,6 +426,89 @@ def test_show_header_shows_instance_counts():
     # typical.slp has both user and predicted instances
     assert "user instances" in out
     assert "predicted" in out
+
+
+def _mask_only_slp(tmp_path: Path) -> Path:
+    """Write a mask-only SLP (two masks on one frame, no instances)."""
+    video = Video(filename="test.mp4")
+    mask_a = UserSegmentationMask.from_numpy(
+        np.array([[True, False], [False, True]], dtype=bool), category="cell"
+    )
+    mask_b = UserSegmentationMask.from_numpy(
+        np.array([[False, True], [True, False]], dtype=bool), category="cell"
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, masks=[mask_a, mask_b])
+    labels = Labels(
+        labeled_frames=[lf], videos=[video], skeletons=[Skeleton(nodes=["A"])]
+    )
+    path = tmp_path / "masks_only.slp"
+    save_slp(labels, str(path))
+    return path
+
+
+def test_show_header_shows_mask_counts(tmp_path):
+    """Header counts segmentation masks for a mask-only file."""
+    path = _mask_only_slp(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "2 masks" in out
+
+
+def test_show_lf_lists_mask_counts(tmp_path):
+    """Per-frame listing reports mask counts for a mask-only frame."""
+    path = _mask_only_slp(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", str(path), "--lf", "0", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Masks:" in out
+    assert "2" in out
+
+
+def _roi_slp(tmp_path: Path) -> Path:
+    """Write an SLP with a frame-bound ROI and no instances."""
+    video = Video(filename="test.mp4")
+    roi = UserROI.from_polygon([(0, 0), (10, 0), (10, 10), (0, 10)], category="arena")
+    lf = LabeledFrame(video=video, frame_idx=0, rois=[roi])
+    labels = Labels(
+        labeled_frames=[lf], videos=[video], skeletons=[Skeleton(nodes=["A"])]
+    )
+    path = tmp_path / "rois.slp"
+    save_slp(labels, str(path))
+    return path
+
+
+def test_show_header_shows_roi_counts(tmp_path):
+    """Header counts ROIs for an ROI-only file."""
+    path = _roi_slp(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "1 ROI" in out
+
+
+def test_show_lf_lists_roi_counts(tmp_path):
+    """Per-frame listing reports ROI counts for an ROI frame."""
+    path = _roi_slp(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", str(path), "--lf", "0", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "ROIs:" in out
+
+
+def test_show_pose_only_omits_mask_and_roi_lines():
+    """Pose-only files do not show mask/ROI stats (kept tidy)."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(cli, ["show", str(path), "--lf", "0", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "mask" not in out.lower()
+    assert "roi" not in out.lower()
 
 
 def test_show_header_shows_user_frames_vs_total():
