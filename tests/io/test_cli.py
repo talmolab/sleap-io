@@ -10595,6 +10595,25 @@ def test_transform_parse_fill_value_invalid():
         _parse_fill_value("abc")
 
 
+def test_parse_transform_param_with_index():
+    """_parse_transform_param parses an optional integer video-index prefix."""
+    from sleap_io.io.cli import _parse_transform_param
+
+    assert _parse_transform_param("100,100,200,200") == (None, "100,100,200,200")
+    assert _parse_transform_param("0:100,100,200,200") == (0, "100,100,200,200")
+    assert _parse_transform_param("12:2.0") == (12, "2.0")
+
+
+def test_parse_transform_param_invalid_index_raises_clickexception():
+    """Non-integer index prefix raises ClickException, not raw ValueError (L14)."""
+    import click
+
+    from sleap_io.io.cli import _parse_transform_param
+
+    with pytest.raises(click.ClickException, match="integer video index"):
+        _parse_transform_param("foo:1,2,3,4")
+
+
 def test_transform_fill_rgb_option(tmp_path, slp_real_data):
     """Test transform with RGB fill value."""
     runner = CliRunner()

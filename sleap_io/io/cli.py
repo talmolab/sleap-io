@@ -7004,7 +7004,14 @@ def _parse_transform_param(
     """
     if ":" in value:
         idx_str, param = value.split(":", 1)
-        return int(idx_str), param
+        try:
+            return int(idx_str), param
+        except ValueError:
+            raise click.ClickException(
+                f"Invalid transform parameter {value!r}: the part before ':' must be "
+                "an integer video index. Expected '[idx:]value' "
+                "(e.g. '100,100,200,200' or '0:100,100,200,200')."
+            )
     return None, value
 
 
