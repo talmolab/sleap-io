@@ -5,8 +5,10 @@ Covers summary output, labeled frame details, skeleton printing, and format conv
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -22,6 +24,7 @@ from sleap_io import load_slp, save_slp, save_video
 from sleap_io.io.cli import (
     _ensure_utf8_streams,
     _get_ffmpeg_version,
+    _infer_input_format,
     _is_ffmpeg_available,
     _load_images,
     _load_overlay,
@@ -1860,6 +1863,172 @@ def test_convert_trackmate_explicit_from(tmp_path):
     )
     assert result.exit_code == 0, result.output
     assert output.exists()
+
+
+def _make_dlc_project(dest: Path) -> Path:
+    """Build a DLC project directory from the test fixtures under ``dest``.
+
+    Copies ``tests/data/dlc/labeled-data`` and the multi-animal config into
+    ``dest`` as a self-contained DLC project (config.yaml + labeled-data/).
+
+    Args:
+        dest: Directory to populate as the project root.
+
+    Returns:
+        The project root path (``dest``).
+    """
+    shutil.copytree(_data_path("dlc/labeled-data"), dest / "labeled-data")
+    shutil.copy(_data_path("dlc/madlc_230_config.yaml"), dest / "config.yaml")
+    return dest
+
+
+def test_infer_input_format_dlc_project_directory(tmp_path):
+    """A directory with config.yaml + labeled-data/ is detected as dlc_project."""
+    project = _make_dlc_project(tmp_path / "proj")
+    assert _infer_input_format(project) == "dlc_project"
+
+
+def test_infer_input_format_dlc_project_config_file(tmp_path):
+    """A standalone DLC project config.yaml is detected as dlc_project."""
+    project = _make_dlc_project(tmp_path / "proj")
+    assert _infer_input_format(project / "config.yaml") == "dlc_project"
+
+
+def test_infer_input_format_non_dlc_config_file(tmp_path):
+    """A config.yaml that is not a DLC project config is not misclassified."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("foo: bar\nbaz: 1\n")
+    assert _infer_input_format(cfg) is None
+
+
+def test_convert_dlc_project_directory(tmp_path):
+    """`sio convert <dlcproject>` auto-detects dlc_project and writes frames."""
+    project = _make_dlc_project(tmp_path / "proj")
+    output = tmp_path / "out.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["convert", str(project), "-o", str(output)])
+    assert result.exit_code == 0, result.output
+    assert "dlc_project -> slp" in result.output
+    assert output.exists()
+
+    labels = load_slp(str(output))
+    assert len(labels.labeled_frames) > 0
+
+
+def test_convert_dlc_project_explicit_from(tmp_path):
+    """`sio convert --from dlc_project` loads a project config.yaml directly."""
+    project = _make_dlc_project(tmp_path / "proj")
+    output = tmp_path / "out.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "convert",
+            str(project / "config.yaml"),
+            "-o",
+            str(output),
+            "--from",
+            "dlc_project",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+    assert len(load_slp(str(output)).labeled_frames) > 0
+
+
+def _write_identity_coco(dest: Path) -> Path:
+    """Write a small two-category, polygon-segmentation COCO dataset.
+
+    Args:
+        dest: Directory to place the image files and JSON into.
+
+    Returns:
+        Path to the written COCO JSON file.
+    """
+    (dest / "img1.png").touch()
+    (dest / "img2.png").touch()
+    data = {
+        "images": [
+            {"id": 1, "file_name": "img1.png", "height": 40, "width": 40},
+            {"id": 2, "file_name": "img2.png", "height": 40, "width": 40},
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [[1.0, 1.0, 10.0, 1.0, 10.0, 10.0, 1.0, 10.0]],
+            },
+            {
+                "id": 2,
+                "image_id": 1,
+                "category_id": 2,
+                "segmentation": [[20.0, 20.0, 30.0, 20.0, 30.0, 30.0, 20.0, 30.0]],
+            },
+            {
+                "id": 3,
+                "image_id": 2,
+                "category_id": 1,
+                "segmentation": [[2.0, 2.0, 12.0, 2.0, 12.0, 12.0, 2.0, 12.0]],
+            },
+        ],
+        "categories": [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}],
+    }
+    json_path = dest / "seg.json"
+    json_path.write_text(json.dumps(data))
+    return json_path
+
+
+def test_convert_coco_category_as_track_and_roi(tmp_path):
+    """COCO convert with --coco-category-as-track --coco-segmentation roi."""
+    json_path = _write_identity_coco(tmp_path)
+    output = tmp_path / "out.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "convert",
+            str(json_path),
+            "-o",
+            str(output),
+            "--from",
+            "coco",
+            "--coco-category-as-track",
+            "--coco-segmentation",
+            "roi",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+    labels = load_slp(str(output))
+    # roi mode keeps polygons as vector ROIs (no rasterized masks).
+    assert len(labels.rois) == 3
+    assert len(labels.masks) == 0
+    # category_as_track creates one identity track per category.
+    assert {t.name for t in labels.tracks} == {"a", "b"}
+
+
+def test_convert_coco_defaults_no_track_mask(tmp_path):
+    """COCO convert defaults: rasterized masks and no identity tracks."""
+    json_path = _write_identity_coco(tmp_path)
+    output = tmp_path / "out.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["convert", str(json_path), "-o", str(output), "--from", "coco"],
+    )
+    assert result.exit_code == 0, result.output
+
+    labels = load_slp(str(output))
+    # Default mask mode rasterizes the polygons; no ROIs, no identity tracks.
+    assert len(labels.masks) == 3
+    assert len(labels.rois) == 0
+    assert len(labels.tracks) == 0
 
 
 def test_infer_output_format_directory(tmp_path):
