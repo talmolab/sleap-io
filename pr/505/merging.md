@@ -740,6 +740,12 @@ Key behavior:
     options:
         heading_level: 4
 
+### Labels.match
+
+::: sleap_io.model.labels.Labels.match
+    options:
+        heading_level: 4
+
 ### Labels.add_video
 
 ::: sleap_io.model.labels.Labels.add_video
@@ -785,5 +791,11 @@ Key behavior:
 ### MergeResult
 
 ::: sleap_io.model.matching.MergeResult
+    options:
+        heading_level: 4
+
+### MatchResult
+
+::: sleap_io.model.matching.MatchResult
     options:
         heading_level: 4
