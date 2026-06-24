@@ -719,10 +719,13 @@ img = sio.render_image(
     overlay_outline=True,
 )
 
-# SegmentationMask, ROI, or BoundingBox objects
+# SegmentationMask, ROI, or BoundingBox objects (a list, or a single object)
 img = sio.render_image(image=frame, overlay=masks, overlay_alpha=0.3)
 img = sio.render_image(image=frame, overlay=rois, overlay_alpha=0.3)
 img = sio.render_image(image=frame, overlay=bboxes, overlay_alpha=0.3)
+
+# A single annotation object also works (treated like a one-element list)
+img = sio.render_image(image=frame, overlay=masks[0], overlay_alpha=0.3)
 
 # Overlay on a labeled frame (poses render on top)
 img = sio.render_image(lf, overlay=label_mask, overlay_alpha=0.4)
