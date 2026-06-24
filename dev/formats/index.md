@@ -215,7 +215,7 @@ with h5py.File("output.h5", "r") as f:
 
 ::: sleap_io.io.main.save_labelstudio
 
-### DeepLabCut Format (.h5, .csv)
+### DeepLabCut Format (.csv)
 
 Load annotations from [DeepLabCut](http://www.mackenziemathislab.org/deeplabcut). See the
 **[DeepLabCut Format](dlc.md)** page for single-CSV loading with `config.yaml`
@@ -407,7 +407,7 @@ Load and save skeleton definitions separately:
 sleap-io automatically detects file formats based on:
 
 1. **File extension**: `.slp`, `.nwb`, `.h5`, `.json`, `.geojson`, `.mat`, `.csv`, `.tif`, `.tiff`
-2. **File content**: For ambiguous extensions like `.h5` (JABS vs DLC) or `.json` (Label Studio vs COCO)
+2. **File content**: For ambiguous extensions like `.h5` (JABS vs Analysis HDF5) or `.json` (Label Studio vs COCO)
 3. **Explicit format**: Pass `format` parameter to override auto-detection
 
 For URLs, ambiguous extensions (`.h5`, `.json`, `.csv`) are disambiguated with a magic-byte sniff via a Range request, controllable with [`load_file`][sleap_io.load_file]'s `sniff=` argument. See [Loading from URLs](../remote.md).

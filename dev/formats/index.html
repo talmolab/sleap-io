@@ -3598,10 +3598,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#deeplabcut-format-h5-csv" class="md-nav__link">
+  <a href="#deeplabcut-format-csv" class="md-nav__link">
     <span class="md-ellipsis">
       
-        DeepLabCut Format (.h5, .csv)
+        DeepLabCut Format (.csv)
       
     </span>
   </a>
@@ -6861,7 +6861,7 @@ format does not use them.</p>
             </details>
     </div>
 
-</div><h3 id="deeplabcut-format-h5-csv">DeepLabCut Format (.h5, .csv)<a class="headerlink" href="#deeplabcut-format-h5-csv" title="Permanent link">&para;</a></h3>
+</div><h3 id="deeplabcut-format-csv">DeepLabCut Format (.csv)<a class="headerlink" href="#deeplabcut-format-csv" title="Permanent link">&para;</a></h3>
 <p>Load annotations from <a href="http://www.mackenziemathislab.org/deeplabcut">DeepLabCut</a>. See the
 <strong><a href="dlc/">DeepLabCut Format</a></strong> page for single-CSV loading with <code>config.yaml</code>
 discovery (skeleton edges + source-video links), whole-project imports with
@@ -8902,7 +8902,7 @@ while YAML files use a simplified human-readable format.</p>
 <p>sleap-io automatically detects file formats based on:</p>
 <ol>
 <li><strong>File extension</strong>: <code>.slp</code>, <code>.nwb</code>, <code>.h5</code>, <code>.json</code>, <code>.geojson</code>, <code>.mat</code>, <code>.csv</code>, <code>.tif</code>, <code>.tiff</code></li>
-<li><strong>File content</strong>: For ambiguous extensions like <code>.h5</code> (JABS vs DLC) or <code>.json</code> (Label Studio vs COCO)</li>
+<li><strong>File content</strong>: For ambiguous extensions like <code>.h5</code> (JABS vs Analysis HDF5) or <code>.json</code> (Label Studio vs COCO)</li>
 <li><strong>Explicit format</strong>: Pass <code>format</code> parameter to override auto-detection</li>
 </ol>
 <p>For URLs, ambiguous extensions (<code>.h5</code>, <code>.json</code>, <code>.csv</code>) are disambiguated with a magic-byte sniff via a Range request, controllable with <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;load_file&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;format&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sniff&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kwargs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../reference/sleap_io/#sleap_io.load_file"><code>load_file</code></a>'s <code>sniff=</code> argument. See <a href="../remote/">Loading from URLs</a>.</p>

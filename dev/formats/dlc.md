@@ -1,6 +1,6 @@
-# DeepLabCut Format (.h5, .csv)
+# DeepLabCut Format (.csv)
 
-Load annotations from [DeepLabCut](http://www.mackenziemathislab.org/deeplabcut), a popular markerless pose estimation tool.
+Load annotations from [DeepLabCut](http://www.mackenziemathislab.org/deeplabcut), a popular markerless pose estimation tool. sleap-io reads DLC annotations from the project's CSV files (optionally augmented by a `config.yaml`); it does not read DLC `.h5` outputs.
 
 `load_dlc` reads a single DLC annotation CSV. When a project `config.yaml` is
 available — either passed explicitly via `config=` or auto-discovered by walking

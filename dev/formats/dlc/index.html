@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#deeplabcut-format-h5-csv" class="md-skip">
+        <a href="#deeplabcut-format-csv" class="md-skip">
           Skip to content
         </a>
       
@@ -3513,8 +3513,8 @@
 
 
 <div class="md-source-file"><a href="../dlc.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
-<h1 id="deeplabcut-format-h5-csv">DeepLabCut Format (.h5, .csv)<a class="headerlink" href="#deeplabcut-format-h5-csv" title="Permanent link">&para;</a></h1>
-<p>Load annotations from <a href="http://www.mackenziemathislab.org/deeplabcut">DeepLabCut</a>, a popular markerless pose estimation tool.</p>
+<h1 id="deeplabcut-format-csv">DeepLabCut Format (.csv)<a class="headerlink" href="#deeplabcut-format-csv" title="Permanent link">&para;</a></h1>
+<p>Load annotations from <a href="http://www.mackenziemathislab.org/deeplabcut">DeepLabCut</a>, a popular markerless pose estimation tool. sleap-io reads DLC annotations from the project's CSV files (optionally augmented by a <code>config.yaml</code>); it does not read DLC <code>.h5</code> outputs.</p>
 <p><code>load_dlc</code> reads a single DLC annotation CSV. When a project <code>config.yaml</code> is
 available — either passed explicitly via <code>config=</code> or auto-discovered by walking
 up from the CSV — the following extra metadata is imported:</p>

@@ -746,7 +746,7 @@ sio.render_video(labels, "output.mp4", overlay=masks)
 
 ### Standalone functions
 
-For direct control, use `sio.draw_label_image`, `sio.draw_masks`, `sio.draw_rois`, or `sio.draw_bboxes`:
+For direct control, use `sio.draw_label_image`, `sio.draw_masks`, `sio.draw_rois`, `sio.draw_bboxes`, or `sio.draw_centroids`:
 
 #### Label images (instance/panoptic segmentation)
 
@@ -807,6 +807,15 @@ For `BoundingBox` objects, use `sio.draw_bboxes`:
 
 ```python
 sio.draw_bboxes(image, bboxes, color=(0, 255, 0), line_width=2, fill_alpha=0.1)
+```
+
+#### Centroids
+
+For `Centroid` objects, use `sio.draw_centroids` to draw a filled marker at each
+position:
+
+```python
+sio.draw_centroids(image, centroids, color=(0, 255, 0), marker_size=5.0)
 ```
 
 ---
@@ -952,6 +961,11 @@ sio render --list-colors
       heading_level: 3
 
 ::: sleap_io.draw_bboxes
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.draw_centroids
     options:
       show_root_heading: true
       heading_level: 3

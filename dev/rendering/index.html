@@ -1210,6 +1210,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#sleap_io.draw_centroids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        draw_centroids
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#sleap_io.draw_rois" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4606,6 +4617,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#sleap_io.draw_centroids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        draw_centroids
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#sleap_io.draw_rois" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5196,7 +5218,7 @@ positional coloring from <code>overlay_palette</code> (default <code>"distinct"<
 <a id="__codelineno-50-8" name="__codelineno-50-8" href="#__codelineno-50-8"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">overlay</span><span class="o">=</span><span class="n">masks</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="standalone-functions">Standalone functions<a class="headerlink" href="#standalone-functions" title="Permanent link">&para;</a></h3>
-<p>For direct control, use <code>sio.draw_label_image</code>, <code>sio.draw_masks</code>, <code>sio.draw_rois</code>, or <code>sio.draw_bboxes</code>:</p>
+<p>For direct control, use <code>sio.draw_label_image</code>, <code>sio.draw_masks</code>, <code>sio.draw_rois</code>, <code>sio.draw_bboxes</code>, or <code>sio.draw_centroids</code>:</p>
 <h4 id="label-images-instancepanoptic-segmentation">Label images (instance/panoptic segmentation)<a class="headerlink" href="#label-images-instancepanoptic-segmentation" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a><span class="c1"># label_image: (H, W) int array, 0=background, 1..N=object IDs</span>
 <a id="__codelineno-51-2" name="__codelineno-51-2" href="#__codelineno-51-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">draw_label_image</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">label_image</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;distinct&quot;</span><span class="p">)</span>
@@ -5237,84 +5259,89 @@ positional coloring from <code>overlay_palette</code> (default <code>"distinct"<
 <p>For <code>BoundingBox</code> objects, use <code>sio.draw_bboxes</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">draw_bboxes</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">bboxes</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">line_width</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">fill_alpha</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
 </code></pre></div>
+<h4 id="centroids">Centroids<a class="headerlink" href="#centroids" title="Permanent link">&para;</a></h4>
+<p>For <code>Centroid</code> objects, use <code>sio.draw_centroids</code> to draw a filled marker at each
+position:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">draw_centroids</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">centroids</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
+</code></pre></div>
 <hr />
 <h2 id="video-rendering">Video Rendering<a class="headerlink" href="#video-rendering" title="Permanent link">&para;</a></h2>
 <h3 id="basic-video-rendering">Basic video rendering<a class="headerlink" href="#basic-video-rendering" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="render-a-clip">Render a clip<a class="headerlink" href="#render-a-clip" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;clip.mp4&quot;</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;clip.mp4&quot;</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="quality-presets">Quality presets<a class="headerlink" href="#quality-presets" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="c1"># Fast preview (0.25x resolution)</span>
-<a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;preview.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;preview&quot;</span><span class="p">)</span>
-<a id="__codelineno-59-3" name="__codelineno-59-3" href="#__codelineno-59-3"></a>
-<a id="__codelineno-59-4" name="__codelineno-59-4" href="#__codelineno-59-4"></a><span class="c1"># Draft quality (0.5x resolution)</span>
-<a id="__codelineno-59-5" name="__codelineno-59-5" href="#__codelineno-59-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;draft.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;draft&quot;</span><span class="p">)</span>
-<a id="__codelineno-59-6" name="__codelineno-59-6" href="#__codelineno-59-6"></a>
-<a id="__codelineno-59-7" name="__codelineno-59-7" href="#__codelineno-59-7"></a><span class="c1"># Full quality (default)</span>
-<a id="__codelineno-59-8" name="__codelineno-59-8" href="#__codelineno-59-8"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;final.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;final&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a><span class="c1"># Fast preview (0.25x resolution)</span>
+<a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;preview.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;preview&quot;</span><span class="p">)</span>
+<a id="__codelineno-60-3" name="__codelineno-60-3" href="#__codelineno-60-3"></a>
+<a id="__codelineno-60-4" name="__codelineno-60-4" href="#__codelineno-60-4"></a><span class="c1"># Draft quality (0.5x resolution)</span>
+<a id="__codelineno-60-5" name="__codelineno-60-5" href="#__codelineno-60-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;draft.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;draft&quot;</span><span class="p">)</span>
+<a id="__codelineno-60-6" name="__codelineno-60-6" href="#__codelineno-60-6"></a>
+<a id="__codelineno-60-7" name="__codelineno-60-7" href="#__codelineno-60-7"></a><span class="c1"># Full quality (default)</span>
+<a id="__codelineno-60-8" name="__codelineno-60-8" href="#__codelineno-60-8"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;final.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;final&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="encoding-options">Encoding options<a class="headerlink" href="#encoding-options" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a>    <span class="n">labels</span><span class="p">,</span>
-<a id="__codelineno-60-3" name="__codelineno-60-3" href="#__codelineno-60-3"></a>    <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-60-4" name="__codelineno-60-4" href="#__codelineno-60-4"></a>    <span class="n">fps</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>           <span class="c1"># Output frame rate</span>
-<a id="__codelineno-60-5" name="__codelineno-60-5" href="#__codelineno-60-5"></a>    <span class="n">crf</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span>             <span class="c1"># Quality (2-32, lower=better)</span>
-<a id="__codelineno-60-6" name="__codelineno-60-6" href="#__codelineno-60-6"></a>    <span class="n">x264_preset</span><span class="o">=</span><span class="s2">&quot;slow&quot;</span><span class="p">,</span> <span class="c1"># Encoding speed</span>
-<a id="__codelineno-60-7" name="__codelineno-60-7" href="#__codelineno-60-7"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
+<a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a>    <span class="n">labels</span><span class="p">,</span>
+<a id="__codelineno-61-3" name="__codelineno-61-3" href="#__codelineno-61-3"></a>    <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span>
+<a id="__codelineno-61-4" name="__codelineno-61-4" href="#__codelineno-61-4"></a>    <span class="n">fps</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>           <span class="c1"># Output frame rate</span>
+<a id="__codelineno-61-5" name="__codelineno-61-5" href="#__codelineno-61-5"></a>    <span class="n">crf</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span>             <span class="c1"># Quality (2-32, lower=better)</span>
+<a id="__codelineno-61-6" name="__codelineno-61-6" href="#__codelineno-61-6"></a>    <span class="n">x264_preset</span><span class="o">=</span><span class="s2">&quot;slow&quot;</span><span class="p">,</span> <span class="c1"># Encoding speed</span>
+<a id="__codelineno-61-7" name="__codelineno-61-7" href="#__codelineno-61-7"></a><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="cli-reference">CLI Reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h2>
 <p>For CLI usage, see the <a href="../cli/#sio-render">CLI Guide</a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a><span class="c1"># Basic rendering</span>
-<a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4
-<a id="__codelineno-61-3" name="__codelineno-61-3" href="#__codelineno-61-3"></a>
-<a id="__codelineno-61-4" name="__codelineno-61-4" href="#__codelineno-61-4"></a><span class="c1"># Fast preview</span>
-<a id="__codelineno-61-5" name="__codelineno-61-5" href="#__codelineno-61-5"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--preset<span class="w"> </span>preview
-<a id="__codelineno-61-6" name="__codelineno-61-6" href="#__codelineno-61-6"></a>
-<a id="__codelineno-61-7" name="__codelineno-61-7" href="#__codelineno-61-7"></a><span class="c1"># Single frame to PNG</span>
-<a id="__codelineno-61-8" name="__codelineno-61-8" href="#__codelineno-61-8"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>-o<span class="w"> </span>frame.png
-<a id="__codelineno-61-9" name="__codelineno-61-9" href="#__codelineno-61-9"></a>
-<a id="__codelineno-61-10" name="__codelineno-61-10" href="#__codelineno-61-10"></a><span class="c1"># Custom styling</span>
-<a id="__codelineno-61-11" name="__codelineno-61-11" href="#__codelineno-61-11"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>styled.mp4<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-61-12" name="__codelineno-61-12" href="#__codelineno-61-12"></a><span class="w">    </span>--color-by<span class="w"> </span>track<span class="w"> </span>--palette<span class="w"> </span>tableau10<span class="w"> </span>--marker-shape<span class="w"> </span>diamond
-<a id="__codelineno-61-13" name="__codelineno-61-13" href="#__codelineno-61-13"></a>
-<a id="__codelineno-61-14" name="__codelineno-61-14" href="#__codelineno-61-14"></a><span class="c1"># Motion trails</span>
-<a id="__codelineno-61-15" name="__codelineno-61-15" href="#__codelineno-61-15"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w"> </span>--trails<span class="w"> </span>--trail-length<span class="w"> </span><span class="m">10</span>
-<a id="__codelineno-61-16" name="__codelineno-61-16" href="#__codelineno-61-16"></a>
-<a id="__codelineno-61-17" name="__codelineno-61-17" href="#__codelineno-61-17"></a><span class="c1"># Trails for specific nodes</span>
-<a id="__codelineno-61-18" name="__codelineno-61-18" href="#__codelineno-61-18"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w"> </span>--trails<span class="w"> </span>--trail-node<span class="w"> </span>head,thorax
-<a id="__codelineno-61-19" name="__codelineno-61-19" href="#__codelineno-61-19"></a>
-<a id="__codelineno-61-20" name="__codelineno-61-20" href="#__codelineno-61-20"></a><span class="c1"># Styled trails (uniform color, faint, no fade)</span>
-<a id="__codelineno-61-21" name="__codelineno-61-21" href="#__codelineno-61-21"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w"> </span>--trails<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-61-22" name="__codelineno-61-22" href="#__codelineno-61-22"></a><span class="w">    </span>--trail-color<span class="w"> </span>white<span class="w"> </span>--trail-alpha<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>--no-trail-fade
-<a id="__codelineno-61-23" name="__codelineno-61-23" href="#__codelineno-61-23"></a>
-<a id="__codelineno-61-24" name="__codelineno-61-24" href="#__codelineno-61-24"></a><span class="c1"># Disable the progress bar</span>
-<a id="__codelineno-61-25" name="__codelineno-61-25" href="#__codelineno-61-25"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w"> </span>--no-progress
-<a id="__codelineno-61-26" name="__codelineno-61-26" href="#__codelineno-61-26"></a>
-<a id="__codelineno-61-27" name="__codelineno-61-27" href="#__codelineno-61-27"></a><span class="c1"># Segmentation overlay from TIFF stack</span>
-<a id="__codelineno-61-28" name="__codelineno-61-28" href="#__codelineno-61-28"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>--overlay-alpha<span class="w"> </span><span class="m">0</span>.4
-<a id="__codelineno-61-29" name="__codelineno-61-29" href="#__codelineno-61-29"></a>
-<a id="__codelineno-61-30" name="__codelineno-61-30" href="#__codelineno-61-30"></a><span class="c1"># Overlay from directory of per-frame TIFFs</span>
-<a id="__codelineno-61-31" name="__codelineno-61-31" href="#__codelineno-61-31"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--overlay<span class="w"> </span>masks/
-<a id="__codelineno-61-32" name="__codelineno-61-32" href="#__codelineno-61-32"></a>
-<a id="__codelineno-61-33" name="__codelineno-61-33" href="#__codelineno-61-33"></a><span class="c1"># Single frame with overlay and outlines</span>
-<a id="__codelineno-61-34" name="__codelineno-61-34" href="#__codelineno-61-34"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-61-35" name="__codelineno-61-35" href="#__codelineno-61-35"></a><span class="w">    </span>--overlay-outline<span class="w"> </span>--overlay-outline-color<span class="w"> </span>white
-<a id="__codelineno-61-36" name="__codelineno-61-36" href="#__codelineno-61-36"></a>
-<a id="__codelineno-61-37" name="__codelineno-61-37" href="#__codelineno-61-37"></a><span class="c1"># Overlay-only mode (no labels file needed)</span>
-<a id="__codelineno-61-38" name="__codelineno-61-38" href="#__codelineno-61-38"></a>sio<span class="w"> </span>render<span class="w"> </span>--images<span class="w"> </span>frames/<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>-o<span class="w"> </span>output.mp4
-<a id="__codelineno-61-39" name="__codelineno-61-39" href="#__codelineno-61-39"></a>
-<a id="__codelineno-61-40" name="__codelineno-61-40" href="#__codelineno-61-40"></a><span class="c1"># Overlay-only with TIFF stack images</span>
-<a id="__codelineno-61-41" name="__codelineno-61-41" href="#__codelineno-61-41"></a>sio<span class="w"> </span>render<span class="w"> </span>--images<span class="w"> </span>frames.tif<span class="w"> </span>--overlay<span class="w"> </span>masks/<span class="w"> </span>--overlay-outline<span class="w"> </span>-o<span class="w"> </span>output.mp4
-<a id="__codelineno-61-42" name="__codelineno-61-42" href="#__codelineno-61-42"></a>
-<a id="__codelineno-61-43" name="__codelineno-61-43" href="#__codelineno-61-43"></a><span class="c1"># Color overlay with a specific palette</span>
-<a id="__codelineno-61-44" name="__codelineno-61-44" href="#__codelineno-61-44"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>--overlay-palette<span class="w"> </span>tableau10
-<a id="__codelineno-61-45" name="__codelineno-61-45" href="#__codelineno-61-45"></a>
-<a id="__codelineno-61-46" name="__codelineno-61-46" href="#__codelineno-61-46"></a><span class="c1"># Discover palettes and named colors</span>
-<a id="__codelineno-61-47" name="__codelineno-61-47" href="#__codelineno-61-47"></a>sio<span class="w"> </span>render<span class="w"> </span>--list-palettes
-<a id="__codelineno-61-48" name="__codelineno-61-48" href="#__codelineno-61-48"></a>sio<span class="w"> </span>render<span class="w"> </span>--list-colors
+<div class="highlight"><pre><span></span><code><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="c1"># Basic rendering</span>
+<a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4
+<a id="__codelineno-62-3" name="__codelineno-62-3" href="#__codelineno-62-3"></a>
+<a id="__codelineno-62-4" name="__codelineno-62-4" href="#__codelineno-62-4"></a><span class="c1"># Fast preview</span>
+<a id="__codelineno-62-5" name="__codelineno-62-5" href="#__codelineno-62-5"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--preset<span class="w"> </span>preview
+<a id="__codelineno-62-6" name="__codelineno-62-6" href="#__codelineno-62-6"></a>
+<a id="__codelineno-62-7" name="__codelineno-62-7" href="#__codelineno-62-7"></a><span class="c1"># Single frame to PNG</span>
+<a id="__codelineno-62-8" name="__codelineno-62-8" href="#__codelineno-62-8"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>-o<span class="w"> </span>frame.png
+<a id="__codelineno-62-9" name="__codelineno-62-9" href="#__codelineno-62-9"></a>
+<a id="__codelineno-62-10" name="__codelineno-62-10" href="#__codelineno-62-10"></a><span class="c1"># Custom styling</span>
+<a id="__codelineno-62-11" name="__codelineno-62-11" href="#__codelineno-62-11"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>styled.mp4<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-62-12" name="__codelineno-62-12" href="#__codelineno-62-12"></a><span class="w">    </span>--color-by<span class="w"> </span>track<span class="w"> </span>--palette<span class="w"> </span>tableau10<span class="w"> </span>--marker-shape<span class="w"> </span>diamond
+<a id="__codelineno-62-13" name="__codelineno-62-13" href="#__codelineno-62-13"></a>
+<a id="__codelineno-62-14" name="__codelineno-62-14" href="#__codelineno-62-14"></a><span class="c1"># Motion trails</span>
+<a id="__codelineno-62-15" name="__codelineno-62-15" href="#__codelineno-62-15"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w"> </span>--trails<span class="w"> </span>--trail-length<span class="w"> </span><span class="m">10</span>
+<a id="__codelineno-62-16" name="__codelineno-62-16" href="#__codelineno-62-16"></a>
+<a id="__codelineno-62-17" name="__codelineno-62-17" href="#__codelineno-62-17"></a><span class="c1"># Trails for specific nodes</span>
+<a id="__codelineno-62-18" name="__codelineno-62-18" href="#__codelineno-62-18"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w"> </span>--trails<span class="w"> </span>--trail-node<span class="w"> </span>head,thorax
+<a id="__codelineno-62-19" name="__codelineno-62-19" href="#__codelineno-62-19"></a>
+<a id="__codelineno-62-20" name="__codelineno-62-20" href="#__codelineno-62-20"></a><span class="c1"># Styled trails (uniform color, faint, no fade)</span>
+<a id="__codelineno-62-21" name="__codelineno-62-21" href="#__codelineno-62-21"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w"> </span>--trails<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-62-22" name="__codelineno-62-22" href="#__codelineno-62-22"></a><span class="w">    </span>--trail-color<span class="w"> </span>white<span class="w"> </span>--trail-alpha<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>--no-trail-fade
+<a id="__codelineno-62-23" name="__codelineno-62-23" href="#__codelineno-62-23"></a>
+<a id="__codelineno-62-24" name="__codelineno-62-24" href="#__codelineno-62-24"></a><span class="c1"># Disable the progress bar</span>
+<a id="__codelineno-62-25" name="__codelineno-62-25" href="#__codelineno-62-25"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w"> </span>--no-progress
+<a id="__codelineno-62-26" name="__codelineno-62-26" href="#__codelineno-62-26"></a>
+<a id="__codelineno-62-27" name="__codelineno-62-27" href="#__codelineno-62-27"></a><span class="c1"># Segmentation overlay from TIFF stack</span>
+<a id="__codelineno-62-28" name="__codelineno-62-28" href="#__codelineno-62-28"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>--overlay-alpha<span class="w"> </span><span class="m">0</span>.4
+<a id="__codelineno-62-29" name="__codelineno-62-29" href="#__codelineno-62-29"></a>
+<a id="__codelineno-62-30" name="__codelineno-62-30" href="#__codelineno-62-30"></a><span class="c1"># Overlay from directory of per-frame TIFFs</span>
+<a id="__codelineno-62-31" name="__codelineno-62-31" href="#__codelineno-62-31"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--overlay<span class="w"> </span>masks/
+<a id="__codelineno-62-32" name="__codelineno-62-32" href="#__codelineno-62-32"></a>
+<a id="__codelineno-62-33" name="__codelineno-62-33" href="#__codelineno-62-33"></a><span class="c1"># Single frame with overlay and outlines</span>
+<a id="__codelineno-62-34" name="__codelineno-62-34" href="#__codelineno-62-34"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-62-35" name="__codelineno-62-35" href="#__codelineno-62-35"></a><span class="w">    </span>--overlay-outline<span class="w"> </span>--overlay-outline-color<span class="w"> </span>white
+<a id="__codelineno-62-36" name="__codelineno-62-36" href="#__codelineno-62-36"></a>
+<a id="__codelineno-62-37" name="__codelineno-62-37" href="#__codelineno-62-37"></a><span class="c1"># Overlay-only mode (no labels file needed)</span>
+<a id="__codelineno-62-38" name="__codelineno-62-38" href="#__codelineno-62-38"></a>sio<span class="w"> </span>render<span class="w"> </span>--images<span class="w"> </span>frames/<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>-o<span class="w"> </span>output.mp4
+<a id="__codelineno-62-39" name="__codelineno-62-39" href="#__codelineno-62-39"></a>
+<a id="__codelineno-62-40" name="__codelineno-62-40" href="#__codelineno-62-40"></a><span class="c1"># Overlay-only with TIFF stack images</span>
+<a id="__codelineno-62-41" name="__codelineno-62-41" href="#__codelineno-62-41"></a>sio<span class="w"> </span>render<span class="w"> </span>--images<span class="w"> </span>frames.tif<span class="w"> </span>--overlay<span class="w"> </span>masks/<span class="w"> </span>--overlay-outline<span class="w"> </span>-o<span class="w"> </span>output.mp4
+<a id="__codelineno-62-42" name="__codelineno-62-42" href="#__codelineno-62-42"></a>
+<a id="__codelineno-62-43" name="__codelineno-62-43" href="#__codelineno-62-43"></a><span class="c1"># Color overlay with a specific palette</span>
+<a id="__codelineno-62-44" name="__codelineno-62-44" href="#__codelineno-62-44"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--overlay<span class="w"> </span>masks.tif<span class="w"> </span>--overlay-palette<span class="w"> </span>tableau10
+<a id="__codelineno-62-45" name="__codelineno-62-45" href="#__codelineno-62-45"></a>
+<a id="__codelineno-62-46" name="__codelineno-62-46" href="#__codelineno-62-46"></a><span class="c1"># Discover palettes and named colors</span>
+<a id="__codelineno-62-47" name="__codelineno-62-47" href="#__codelineno-62-47"></a>sio<span class="w"> </span>render<span class="w"> </span>--list-palettes
+<a id="__codelineno-62-48" name="__codelineno-62-48" href="#__codelineno-62-48"></a>sio<span class="w"> </span>render<span class="w"> </span>--list-colors
 </code></pre></div>
 <hr />
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
@@ -8994,7 +9021,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.rendering.RenderContext.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fe94dd962a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f50eb8a22a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -9983,7 +10010,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.rendering.InstanceContext.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fe94dd962a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f50eb8a22a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -11610,6 +11637,243 @@ length as <code>bboxes</code>. Overrides <code>color</code>.</p>
 <a id="__codelineno-0-542" name="__codelineno-0-542"></a><a href="#__codelineno-0-542"><span class="linenos" data-linenos="542 "></span></a>    <span class="n">image</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">frame_rgba</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span>
 <a id="__codelineno-0-543" name="__codelineno-0-543"></a><a href="#__codelineno-0-543"><span class="linenos" data-linenos="543 "></span></a>
 <a id="__codelineno-0-544" name="__codelineno-0-544"></a><a href="#__codelineno-0-544"><span class="linenos" data-linenos="544 "></span></a>    <span class="k">return</span> <span class="n">image</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="sleap_io.draw_centroids" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">draw_centroids</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">centroids</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">colors</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span></code>
+
+<a href="#sleap_io.draw_centroids" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Draw centroid markers on an image.</p>
+<p>Draws filled circles at each centroid position using skia-python.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>image</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Image array of shape <code>(H, W, 3)</code> uint8. Modified in-place
+and returned.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>centroids</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Centroid&lt;/code&gt; (&lt;code&gt;sleap_io.model.centroid.Centroid&lt;/code&gt;)" href="../reference/sleap_io/model/centroid/#sleap_io.model.centroid.Centroid">Centroid</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>List of <code>Centroid</code> objects to draw.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>color</code>
+            </td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="int">int</span>, <span title="int">int</span>, <span title="int">int</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>RGB color tuple used when <code>colors</code> is <code>None</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>(0, 255, 0)</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>colors</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span>[<span title="tuple">tuple</span>[<span title="int">int</span>, <span title="int">int</span>, <span title="int">int</span>]] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Per-centroid RGB color tuples. If provided, must have the
+same length as <code>centroids</code>. Overrides <code>color</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>marker_size</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Radius of the marker circle in pixels.</p>
+              </div>
+            </td>
+            <td>
+                  <code>5.0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>alpha</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Opacity for the markers (0.0 to 1.0).</p>
+              </div>
+            </td>
+            <td>
+                  <code>1.0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>offset</code>
+            </td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="float">float</span>, <span title="float">float</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>(ox, oy)</code> offset to subtract from centroid coordinates
+(used for cropped images).</p>
+              </div>
+            </td>
+            <td>
+                  <code>(0.0, 0.0)</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The modified image array.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/rendering/overlays.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-677" name="__codelineno-0-677"></a><a href="#__codelineno-0-677"><span class="linenos" data-linenos="677 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">draw_centroids</span><span class="p">(</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a><a href="#__codelineno-0-678"><span class="linenos" data-linenos="678 "></span></a>    <span class="n">image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a><a href="#__codelineno-0-679"><span class="linenos" data-linenos="679 "></span></a>    <span class="n">centroids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="s2">&quot;Centroid&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-680" name="__codelineno-0-680"></a><a href="#__codelineno-0-680"><span class="linenos" data-linenos="680 "></span></a>    <span class="n">color</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+<a id="__codelineno-0-681" name="__codelineno-0-681"></a><a href="#__codelineno-0-681"><span class="linenos" data-linenos="681 "></span></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682"></a><a href="#__codelineno-0-682"><span class="linenos" data-linenos="682 "></span></a>    <span class="n">marker_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683"></a><a href="#__codelineno-0-683"><span class="linenos" data-linenos="683 "></span></a>    <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684"></a><a href="#__codelineno-0-684"><span class="linenos" data-linenos="684 "></span></a>    <span class="n">offset</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685"></a><a href="#__codelineno-0-685"><span class="linenos" data-linenos="685 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-686" name="__codelineno-0-686"></a><a href="#__codelineno-0-686"><span class="linenos" data-linenos="686 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Draw centroid markers on an image.</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687"></a><a href="#__codelineno-0-687"><span class="linenos" data-linenos="687 "></span></a>
+<a id="__codelineno-0-688" name="__codelineno-0-688"></a><a href="#__codelineno-0-688"><span class="linenos" data-linenos="688 "></span></a><span class="sd">    Draws filled circles at each centroid position using skia-python.</span>
+<a id="__codelineno-0-689" name="__codelineno-0-689"></a><a href="#__codelineno-0-689"><span class="linenos" data-linenos="689 "></span></a>
+<a id="__codelineno-0-690" name="__codelineno-0-690"></a><a href="#__codelineno-0-690"><span class="linenos" data-linenos="690 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-691" name="__codelineno-0-691"></a><a href="#__codelineno-0-691"><span class="linenos" data-linenos="691 "></span></a><span class="sd">        image: Image array of shape ``(H, W, 3)`` uint8. Modified in-place</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692"></a><a href="#__codelineno-0-692"><span class="linenos" data-linenos="692 "></span></a><span class="sd">            and returned.</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693"></a><a href="#__codelineno-0-693"><span class="linenos" data-linenos="693 "></span></a><span class="sd">        centroids: List of ``Centroid`` objects to draw.</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694"></a><a href="#__codelineno-0-694"><span class="linenos" data-linenos="694 "></span></a><span class="sd">        color: RGB color tuple used when ``colors`` is ``None``.</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a><a href="#__codelineno-0-695"><span class="linenos" data-linenos="695 "></span></a><span class="sd">        colors: Per-centroid RGB color tuples. If provided, must have the</span>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a><a href="#__codelineno-0-696"><span class="linenos" data-linenos="696 "></span></a><span class="sd">            same length as ``centroids``. Overrides ``color``.</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a><a href="#__codelineno-0-697"><span class="linenos" data-linenos="697 "></span></a><span class="sd">        marker_size: Radius of the marker circle in pixels.</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a><a href="#__codelineno-0-698"><span class="linenos" data-linenos="698 "></span></a><span class="sd">        alpha: Opacity for the markers (0.0 to 1.0).</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a><a href="#__codelineno-0-699"><span class="linenos" data-linenos="699 "></span></a><span class="sd">        offset: ``(ox, oy)`` offset to subtract from centroid coordinates</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a><a href="#__codelineno-0-700"><span class="linenos" data-linenos="700 "></span></a><span class="sd">            (used for cropped images).</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a><a href="#__codelineno-0-701"><span class="linenos" data-linenos="701 "></span></a>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a><a href="#__codelineno-0-702"><span class="linenos" data-linenos="702 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a><a href="#__codelineno-0-703"><span class="linenos" data-linenos="703 "></span></a><span class="sd">        The modified image array.</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a><a href="#__codelineno-0-704"><span class="linenos" data-linenos="704 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a><a href="#__codelineno-0-705"><span class="linenos" data-linenos="705 "></span></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">centroids</span><span class="p">:</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a><a href="#__codelineno-0-706"><span class="linenos" data-linenos="706 "></span></a>        <span class="k">return</span> <span class="n">image</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a><a href="#__codelineno-0-707"><span class="linenos" data-linenos="707 "></span></a>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a><a href="#__codelineno-0-708"><span class="linenos" data-linenos="708 "></span></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">skia</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a><a href="#__codelineno-0-709"><span class="linenos" data-linenos="709 "></span></a>
+<a id="__codelineno-0-710" name="__codelineno-0-710"></a><a href="#__codelineno-0-710"><span class="linenos" data-linenos="710 "></span></a>    <span class="n">alpha_int</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="mi">255</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">alpha</span> <span class="o">*</span> <span class="mi">255</span><span class="p">)))</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711"></a><a href="#__codelineno-0-711"><span class="linenos" data-linenos="711 "></span></a>    <span class="n">ox</span><span class="p">,</span> <span class="n">oy</span> <span class="o">=</span> <span class="n">offset</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712"></a><a href="#__codelineno-0-712"><span class="linenos" data-linenos="712 "></span></a>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a><a href="#__codelineno-0-713"><span class="linenos" data-linenos="713 "></span></a>    <span class="c1"># Ensure RGB before padding to RGBA.</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714"></a><a href="#__codelineno-0-714"><span class="linenos" data-linenos="714 "></span></a>    <span class="n">image</span> <span class="o">=</span> <span class="n">_ensure_rgb</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+<a id="__codelineno-0-715" name="__codelineno-0-715"></a><a href="#__codelineno-0-715"><span class="linenos" data-linenos="715 "></span></a>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a><a href="#__codelineno-0-716"><span class="linenos" data-linenos="716 "></span></a>    <span class="c1"># Pad to RGBA for skia surface.</span>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a><a href="#__codelineno-0-717"><span class="linenos" data-linenos="717 "></span></a>    <span class="n">frame_rgba</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dstack</span><span class="p">([</span><span class="n">image</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">],</span> <span class="mi">255</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)])</span>
+<a id="__codelineno-0-718" name="__codelineno-0-718"></a><a href="#__codelineno-0-718"><span class="linenos" data-linenos="718 "></span></a>    <span class="n">surface</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Surface</span><span class="p">(</span><span class="n">frame_rgba</span><span class="p">,</span> <span class="n">colorType</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">kRGBA_8888_ColorType</span><span class="p">)</span>
+<a id="__codelineno-0-719" name="__codelineno-0-719"></a><a href="#__codelineno-0-719"><span class="linenos" data-linenos="719 "></span></a>    <span class="n">canvas</span> <span class="o">=</span> <span class="n">surface</span><span class="o">.</span><span class="n">getCanvas</span><span class="p">()</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a><a href="#__codelineno-0-720"><span class="linenos" data-linenos="720 "></span></a>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a><a href="#__codelineno-0-721"><span class="linenos" data-linenos="721 "></span></a>    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">centroid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">centroids</span><span class="p">):</span>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a><a href="#__codelineno-0-722"><span class="linenos" data-linenos="722 "></span></a>        <span class="n">c</span> <span class="o">=</span> <span class="n">colors</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">colors</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">color</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a><a href="#__codelineno-0-723"><span class="linenos" data-linenos="723 "></span></a>        <span class="n">paint</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a><a href="#__codelineno-0-724"><span class="linenos" data-linenos="724 "></span></a>            <span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">Color</span><span class="p">(</span><span class="n">c</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">c</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">c</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">alpha_int</span><span class="p">),</span>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a><a href="#__codelineno-0-725"><span class="linenos" data-linenos="725 "></span></a>            <span class="n">AntiAlias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a><a href="#__codelineno-0-726"><span class="linenos" data-linenos="726 "></span></a>            <span class="n">Style</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="o">.</span><span class="n">kFill_Style</span><span class="p">,</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a><a href="#__codelineno-0-727"><span class="linenos" data-linenos="727 "></span></a>        <span class="p">)</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a><a href="#__codelineno-0-728"><span class="linenos" data-linenos="728 "></span></a>        <span class="n">cx</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">centroid</span><span class="o">.</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="n">ox</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a><a href="#__codelineno-0-729"><span class="linenos" data-linenos="729 "></span></a>        <span class="n">cy</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">centroid</span><span class="o">.</span><span class="n">y</span><span class="p">)</span> <span class="o">-</span> <span class="n">oy</span>
+<a id="__codelineno-0-730" name="__codelineno-0-730"></a><a href="#__codelineno-0-730"><span class="linenos" data-linenos="730 "></span></a>        <span class="n">canvas</span><span class="o">.</span><span class="n">drawCircle</span><span class="p">(</span><span class="n">cx</span><span class="p">,</span> <span class="n">cy</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">marker_size</span><span class="p">),</span> <span class="n">paint</span><span class="p">)</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a><a href="#__codelineno-0-731"><span class="linenos" data-linenos="731 "></span></a>
+<a id="__codelineno-0-732" name="__codelineno-0-732"></a><a href="#__codelineno-0-732"><span class="linenos" data-linenos="732 "></span></a>    <span class="n">surface</span><span class="o">.</span><span class="n">flushAndSubmit</span><span class="p">()</span>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a><a href="#__codelineno-0-733"><span class="linenos" data-linenos="733 "></span></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">frame_rgba</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a><a href="#__codelineno-0-734"><span class="linenos" data-linenos="734 "></span></a>    <span class="k">if</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a><a href="#__codelineno-0-735"><span class="linenos" data-linenos="735 "></span></a>        <span class="n">image</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">result</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a><a href="#__codelineno-0-736"><span class="linenos" data-linenos="736 "></span></a>        <span class="k">return</span> <span class="n">image</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a><a href="#__codelineno-0-737"><span class="linenos" data-linenos="737 "></span></a>    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
 </code></pre></div>
             </details>
     </div>
