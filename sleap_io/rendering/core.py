@@ -474,6 +474,7 @@ def _apply_overlay(
     image: np.ndarray,
     overlay: (
         "np.ndarray | LabelImage"
+        " | SegmentationMask | ROI | BoundingBox"
         " | list[SegmentationMask] | list[ROI] | list[BoundingBox]"
     ),
     alpha: float = 0.3,
@@ -495,6 +496,8 @@ def _apply_overlay(
 
             - ``np.ndarray``: Integer label image ``(H, W)`` with 0 =
               background and positive values as object IDs.
+            - ``SegmentationMask``, ``ROI``, or ``BoundingBox``: A single
+              annotation object (normalized to a one-element list).
             - ``list[SegmentationMask]``: Binary segmentation masks.
             - ``list[ROI]``: Vector geometries (polygons, points, etc.).
             - ``list[BoundingBox]``: Axis-aligned or rotated bounding boxes.
@@ -511,12 +514,21 @@ def _apply_overlay(
     Returns:
         The modified image array.
     """
+    from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.mask import SegmentationMask
+    from sleap_io.model.roi import ROI
     from sleap_io.rendering.overlays import (
         draw_bboxes,
         draw_label_image,
         draw_masks,
         draw_rois,
     )
+
+    # Normalize a single annotation object to a one-element list so a bare
+    # ``SegmentationMask``/``ROI``/``BoundingBox`` (or a User/Predicted subclass)
+    # "just works" like a one-element list. ndarray/LabelImage are handled below.
+    if isinstance(overlay, (SegmentationMask, ROI, BoundingBox)):
+        overlay = [overlay]
 
     if isinstance(overlay, np.ndarray):
         draw_label_image(
@@ -541,10 +553,6 @@ def _apply_overlay(
             offset=overlay.offset,
         )
     elif isinstance(overlay, list) and overlay:
-        from sleap_io.model.bbox import BoundingBox
-        from sleap_io.model.mask import SegmentationMask
-        from sleap_io.model.roi import ROI
-
         first = overlay[0]
 
         if _is_label_image(first):
@@ -808,6 +816,7 @@ def render_image(
     # Annotation overlay
     overlay: (
         "np.ndarray | LabelImage"
+        " | SegmentationMask | ROI | BoundingBox"
         " | list[SegmentationMask] | list[ROI] | list[BoundingBox]"
         " | None"
     ) = None,
@@ -861,6 +870,8 @@ def render_image(
 
             - ``np.ndarray``: Integer label image ``(H, W)`` where 0 is
               background and positive values are object IDs.
+            - ``SegmentationMask``, ``ROI``, or ``BoundingBox``: A single
+              annotation object (treated like a one-element list).
             - ``list[SegmentationMask]``: Binary segmentation masks.
             - ``list[ROI]``: Vector geometries (polygons, points, etc.).
             - ``list[BoundingBox]``: Bounding boxes.

@@ -2955,6 +2955,53 @@ def test_render_image_overlay_bboxes():
     assert result[50, 50].any()
 
 
+def test_render_image_overlay_single_mask_matches_list():
+    """A bare SegmentationMask overlay paints the same as a one-element list.
+
+    Regression (L18): ``_apply_overlay`` previously dispatched only on
+    ndarray/LabelImage/non-empty-list, so a bare mask silently no-op'd.
+    """
+    base = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    mask_data = np.zeros((50, 50), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = UserSegmentationMask.from_numpy(mask_data)
+
+    single = render_image(image=base.copy(), overlay=mask, overlay_alpha=1.0)
+    listed = render_image(image=base.copy(), overlay=[mask], overlay_alpha=1.0)
+
+    # The bare object must actually paint pixels (not no-op).
+    n_painted = int(np.any(single != base, axis=-1).sum())
+    assert n_painted > 0
+    # And paint exactly the same pixels as the one-element list.
+    assert np.array_equal(single, listed)
+
+
+def test_render_image_overlay_single_roi_matches_list():
+    """A bare ROI overlay paints the same as a one-element list (L18)."""
+    base = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = UserROI(geometry=box(20, 20, 60, 60))
+
+    single = render_image(image=base.copy(), overlay=roi, overlay_alpha=1.0)
+    listed = render_image(image=base.copy(), overlay=[roi], overlay_alpha=1.0)
+
+    n_painted = int(np.any(single != base, axis=-1).sum())
+    assert n_painted > 0
+    assert np.array_equal(single, listed)
+
+
+def test_render_image_overlay_single_bbox_matches_list():
+    """A bare BoundingBox overlay paints the same as a one-element list (L18)."""
+    base = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox = UserBoundingBox(x1=30, y1=30, x2=70, y2=70)
+
+    single = render_image(image=base.copy(), overlay=bbox, overlay_alpha=1.0)
+    listed = render_image(image=base.copy(), overlay=[bbox], overlay_alpha=1.0)
+
+    n_painted = int(np.any(single != base, axis=-1).sum())
+    assert n_painted > 0
+    assert np.array_equal(single, listed)
+
+
 def test_render_image_overlay_with_scale():
     """render_image with overlay and scale should scale the output."""
     img = np.ones((100, 100, 3), dtype=np.uint8) * 128
