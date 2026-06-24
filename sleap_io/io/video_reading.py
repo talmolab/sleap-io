@@ -597,6 +597,33 @@ class VideoBackend:
                         f"{_remote._redact_url(filename)}. Download the file "
                         "locally first."
                     )
+                # Remote media video is decoded by handing the raw URL to
+                # ``av.open`` (via imageio's pyav plugin), which has no hook for
+                # forwarding HTTP request headers or selecting an fsspec stream
+                # mode. Auth/streaming kwargs that work for remote .slp/.pkg.slp
+                # (HDF5Video) therefore cannot be honored here. Rather than
+                # silently drop them and return an unauthenticated backend,
+                # reject them with an actionable error. ``url_headers`` /
+                # ``url_stream_mode`` are the explicit ``from_filename``
+                # parameters; ``headers`` / ``stream_mode`` arrive via
+                # ``**kwargs`` (e.g. from ``load_video(url, headers=...)``).
+                if (
+                    url_headers is not None
+                    or url_stream_mode != "blockcache"
+                    or kwargs.get("headers") is not None
+                    or kwargs.get("stream_mode") not in (None, "auto")
+                ):
+                    raise ValueError(
+                        "Remote media video cannot be authenticated with "
+                        "'headers'/'url_headers' or configured with a stream "
+                        "mode: it is decoded by handing the URL directly to "
+                        "FFmpeg (via pyav), which does not support custom HTTP "
+                        "headers or fsspec streaming. Use a pre-signed URL that "
+                        "embeds credentials in the query string, or download "
+                        "the file locally first. (These options do work for "
+                        "remote .slp/.pkg.slp labels.) (URL: "
+                        f"{_remote._redact_url(filename)})"
+                    )
                 # Default to pyav when the caller did not request a specific
                 # plugin, and require the ``av`` package up front for a clear
                 # error.

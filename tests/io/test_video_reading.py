@@ -1646,6 +1646,66 @@ def test_from_filename_url_with_query_string_matches_extension(
     assert backend[0].shape == (384, 384, 1)
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"headers": {"Authorization": "Bearer SECRET"}},
+        {"url_headers": {"Authorization": "Bearer SECRET"}},
+        {"stream_mode": "filecache"},
+        {"url_stream_mode": "download"},
+    ],
+)
+def test_from_filename_url_media_rejects_auth_kwargs(kwargs):
+    """Auth/stream kwargs on a remote media URL raise instead of being dropped.
+
+    Regression: remote media video is decoded by handing the URL to ``av.open``,
+    which cannot forward HTTP headers or use an fsspec stream mode. Previously
+    these kwargs were silently dropped, returning an unauthenticated backend.
+    """
+    url = "https://example.com/video.mp4?token=abc"
+    with pytest.raises(ValueError, match="Remote media video cannot be"):
+        VideoBackend.from_filename(url, **kwargs)
+
+
+def test_from_filename_url_media_redacts_token_in_auth_error():
+    """The auth-kwarg rejection error redacts the URL's token query param."""
+    url = "https://example.com/video.mp4?token=supersecret"
+    with pytest.raises(ValueError) as excinfo:
+        VideoBackend.from_filename(url, headers={"Authorization": "Bearer X"})
+    assert "supersecret" not in str(excinfo.value)
+
+
+def test_load_video_url_media_rejects_headers():
+    """``load_video(url, headers=...)`` rejects rather than silently dropping.
+
+    This is the documented auth surface (docs/remote.md), so a user following
+    the docs must get a clear error rather than an unauthenticated backend.
+    """
+    url = "https://example.com/video.mp4"
+    with pytest.raises(ValueError, match="Remote media video cannot be"):
+        sio.load_video(url, headers={"Authorization": "Bearer SECRET"})
+
+
+def test_from_filename_url_media_default_stream_mode_ok(
+    httpserver, centered_pair_low_quality_path
+):
+    """Passing the default ``stream_mode='auto'`` does not trip the auth guard."""
+    url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
+    backend = VideoBackend.from_filename(url, stream_mode="auto")
+    assert type(backend) is MediaVideo
+
+
+def test_from_filename_local_media_ignores_auth_kwargs(centered_pair_low_quality_path):
+    """Local media files are unaffected: auth kwargs are still no-ops, no error."""
+    backend = VideoBackend.from_filename(
+        centered_pair_low_quality_path,
+        headers={"Authorization": "Bearer X"},
+        stream_mode="filecache",
+    )
+    assert type(backend) is MediaVideo
+    assert backend.filename == centered_pair_low_quality_path
+
+
 def test_load_video_url_reads_first_frame(httpserver, centered_pair_low_quality_path):
     """A frame read over http matches the frame read from the local file."""
     url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
