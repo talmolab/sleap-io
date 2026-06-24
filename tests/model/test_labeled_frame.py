@@ -1289,6 +1289,23 @@ def test_labeled_frame_is_user_labeled_with_annotations():
     assert not lf2.is_user_labeled
 
 
+def test_labeled_frame_is_user_labeled_with_rois():
+    """is_user_labeled is True for a UserROI-only frame, False for predicted-only."""
+    from sleap_io.model.roi import PredictedROI, UserROI
+
+    video = Video(filename="test.mp4", open_backend=False)
+
+    # Frame with only a user ROI — is user labeled (regression for L6).
+    roi_user = UserROI.from_bbox(0, 0, 10, 10)
+    lf = LabeledFrame(video=video, frame_idx=0, rois=[roi_user])
+    assert lf.is_user_labeled
+
+    # Frame with only a predicted ROI — not user labeled.
+    roi_pred = PredictedROI.from_bbox(0, 0, 10, 10, score=0.5)
+    lf2 = LabeledFrame(video=video, frame_idx=1, rois=[roi_pred])
+    assert not lf2.is_user_labeled
+
+
 def test_labeled_frame_remove_predictions_annotations():
     """remove_predictions removes predicted annotations from frame."""
     from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
