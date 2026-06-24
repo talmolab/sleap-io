@@ -9398,3 +9398,60 @@ def test_save_prefer_metadata_after_resolution_changing_relink(
     assert list(serialized_shape) == list(reloaded.videos[0].shape)
     assert list(serialized_shape) != [1100, 384, 384, 1]
     assert list(serialized_shape[1:3]) == [320, 560]
+
+
+def test_save_prefer_metadata_grayscale_flip_consistent(tmp_path, small_robot_path):
+    """A post-load grayscale flip stays consistent through default (metadata) save.
+
+    Regression: with `prefer_metadata=True` (the save default), flipping
+    `video.grayscale` after loading from a `.slp` updated the recorded
+    `grayscale` flag but left the recorded `shape` channel count stale.
+    `video_to_dict` then read shape and grayscale independently, serializing an
+    inconsistent entry (e.g. shape=[N, H, W, 3] with grayscale=true). On reload
+    with the backend file missing, the channel count was wrong and the grayscale
+    flip was silently lost.
+    """
+    # Work off a private copy of the 3-channel (RGB) fixture so we can delete the
+    # source file without touching the shared fixture. videos_json then records a
+    # 3-channel shape and grayscale=False.
+    robot_copy = tmp_path / "robot.mp4"
+    shutil.copy(small_robot_path, robot_copy)
+    video = Video.from_filename(robot_copy.as_posix())
+    assert video.shape[-1] == 3
+    labels = Labels(labeled_frames=[LabeledFrame(video=video, frame_idx=0)])
+    seed_path = tmp_path / "seed.slp"
+    labels.save(seed_path)
+    # Close the seed video's backend so the source file is not held open on
+    # Windows (where an open handle blocks the unlink() below).
+    video.close()
+
+    # Reload and flip grayscale on. The backend is open and the shape is also
+    # recorded in backend_metadata. The setter only flips the flag; the recorded
+    # shape stays 3-channel (so e.g. ``sio fix`` can still detect the mismatch).
+    reloaded = load_slp(seed_path)
+    video2 = reloaded.videos[0]
+    assert video2.backend_metadata.get("shape") is not None
+    video2.grayscale = True
+    assert video2.grayscale is True
+
+    # Default save (prefer_metadata=True). The serializer reconciles the emitted
+    # channel count with the grayscale flag so the entry is self-consistent.
+    out_path = tmp_path / "out.slp"
+    reloaded.save(out_path)
+
+    # The raw videos_json entry is self-consistent: channels match grayscale.
+    with h5py.File(out_path, "r") as f:
+        videos_json = [json.loads(v) for v in f["videos_json"][:]]
+    backend_json = videos_json[0]["backend"]
+    assert backend_json["grayscale"] is True
+    assert backend_json["shape"][-1] == 1
+
+    # Close backends and delete the source video so reload must fall back to the
+    # recorded metadata.
+    reloaded.videos[0].close()
+    robot_copy.unlink()
+    recovered = load_slp(out_path, open_videos=False)
+    rec_video = recovered.videos[0]
+    # The flip survives and shape/grayscale agree off metadata.
+    assert rec_video.backend_metadata["shape"][-1] == 1
+    assert rec_video.grayscale is True
