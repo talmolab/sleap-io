@@ -10,23 +10,28 @@ byte-identical to what baking a `Transform(crop=...)` would write.
 
 ## Quick start
 
-```python
-import sleap_io as sio
-
-full = sio.load_video("session.mp4")              # (1000, 1080, 1920, 3)
-
-# A cropped view. crop = (x1, y1, x2, y2), with x2/y2 EXCLUSIVE.
-view = full.crop((320, 200, 576, 456))
-view.shape            # (1000, 256, 256, 3)  -- cropped
-view[0].shape         # (256, 256, 3)        -- a cropped frame
-view.crop             # not a thing; use view._crop_tuple() -> (320, 200, 576, 456)
-view.source_video is full   # True  -- provenance to the uncropped original
+```pycon
+>>> import sleap_io as sio
+>>>
+>>> full = sio.load_video("tests/data/videos/centered_pair_low_quality.mp4")
+>>> print(full.shape)
+>>>
+>>> # A cropped view. crop = (x1, y1, x2, y2), with x2/y2 EXCLUSIVE.
+>>> view = full.crop((64, 64, 192, 192))
+>>> print(view.shape)                  # cropped view
+>>> print(view[0].shape)               # a single cropped frame
+>>> print(view._crop_tuple())          # (x1, y1, x2, y2) -- view.crop is not the rect
+>>> print(view.source_video is full)   # provenance to the uncropped original
 ```
 
 `Video.from_crop` opens a file and crops it in one call:
 
-```python
-view = sio.Video.from_crop("session.mp4", crop=(320, 200, 576, 456))
+```pycon
+>>> import sleap_io as sio
+>>> view = sio.Video.from_crop(
+...     "tests/data/videos/centered_pair_low_quality.mp4", crop=(64, 64, 192, 192)
+... )
+>>> print(view.shape)
 ```
 
 The returned object is a normal [`Video`](model/video.md): `shape`, `len()`, `grayscale`,
@@ -44,10 +49,13 @@ Coordinates may be **negative or extend past the source** — out-of-bounds regi
 **padded** with `fill` (default `0`), never clamped, so the output shape is always
 exactly `(y2 - y1, x2 - x1)`. This makes fixed-size, centroid-following windows easy:
 
-```python
-# Fixed 128x128 window centered on a point (may run off the frame edge -> padded).
-view = full.crop(center=(cx, cy), size=(128, 128), fill=0)
-view.shape            # (n_frames, 128, 128, 3)
+```pycon
+>>> import sleap_io as sio
+>>> full = sio.load_video("tests/data/videos/centered_pair_low_quality.mp4")
+>>> cx, cy = 192, 192
+>>> # Fixed 128x128 window centered on a point (may run off the edge -> padded).
+>>> view = full.crop(center=(cx, cy), size=(128, 128), fill=0)
+>>> print(view.shape)            # (n_frames, 128, 128, channels)
 ```
 
 `Video.crop` accepts one region spec — an explicit `crop` rect, a `bbox=(x1,y1,x2,y2)`,
@@ -68,9 +76,16 @@ full.crop(center=(cx, cy), size=(w, h))      # fixed-size window
 A crop is a pure integer translation by `(x1, y1)`, so mapping landmark coordinates
 between source and cropped frames is exact and NaN-preserving:
 
-```python
-pts_crop   = view.to_crop_coords(pts_source)     # subtract (x1, y1)
-pts_source = view.to_source_coords(pts_crop)      # add (x1, y1)
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> full = sio.load_video("tests/data/videos/centered_pair_low_quality.mp4")
+>>> view = full.crop((64, 64, 192, 192))
+>>> pts_source = np.array([[100.0, 120.0]])
+>>> pts_crop = view.to_crop_coords(pts_source)      # subtract (x1, y1)
+>>> print(pts_crop)
+>>> pts_source = view.to_source_coords(pts_crop)    # add (x1, y1)
+>>> print(pts_source)
 ```
 
 On an uncropped video these are identity passthroughs, so the same call works
@@ -88,14 +103,16 @@ regardless of whether a video happens to be cropped. The underlying functions li
 Multiple differently-cropped views of one physical file can share a single decoder, so
 the source frame is decoded once per read rather than once per tile:
 
-```python
-full = sio.load_video("session.mp4")
-tiles = [
-    full.crop((x, y, x + 128, y + 128))       # share_decode=True (default)
-    for y in range(0, 1080 - 128, 128)
-    for x in range(0, 1920 - 128, 128)
-]
-labels = sio.Labels(videos=tiles)
+```pycon
+>>> import sleap_io as sio
+>>> full = sio.load_video("tests/data/videos/centered_pair_low_quality.mp4")
+>>> tiles = [
+...     full.crop((x, y, x + 128, y + 128))       # share_decode=True (default)
+...     for y in range(0, full.shape[1] - 128, 128)
+...     for x in range(0, full.shape[2] - 128, 128)
+... ]
+>>> labels = sio.Labels(videos=tiles)
+>>> print(len(labels.videos))
 ```
 
 Each tile reuses `full`'s backend as its inner reader. The tiles do **not** own that
