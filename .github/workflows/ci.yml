@@ -74,7 +74,7 @@ jobs:
   tests:
     needs: changes
     if: needs.changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
-    timeout-minutes: 30  # Allow buffer for Windows (video encoding tests skipped)
+    timeout-minutes: 60  # Buffer for GitHub windows-runner variance (suite is ~4-6 min real)
     strategy:
       fail-fast: false
       matrix:
@@ -109,6 +109,11 @@ jobs:
           sudo apt-get update && sudo apt-get install libglapi-mesa libegl-mesa0 libegl1 libopengl0 libgl1 libglx-mesa0
 
       - name: Test with pytest (with coverage)
+        env:
+          # Use coverage's fast PEP 669 sys.monitoring core on Python 3.12+
+          # (much lower overhead than the settrace-based C tracer). Empty on
+          # 3.10 -> coverage's default core.
+          COVERAGE_CORE: ${{ matrix.python == '3.13' && 'sysmon' || '' }}
         run: |
           uv run pytest --cov=sleap_io --cov-report=xml --durations=-1 tests/
 
