@@ -436,7 +436,7 @@ class LabeledFrame:
 
         This property indicates whether the frame represents intentional user
         annotation, either through labeled instances, user annotations
-        (centroids, bboxes, masks, label images), or explicit marking as a
+        (centroids, bboxes, ROIs, masks, label images), or explicit marking as a
         negative/background frame.
         """
         from sleap_io.model.label_image import PredictedLabelImage
@@ -447,6 +447,7 @@ class LabeledFrame:
             or self.is_negative
             or any(not c.is_predicted for c in self.centroids)
             or any(not b.is_predicted for b in self.bboxes)
+            or any(not r.is_predicted for r in self.rois)
             or any(not isinstance(m, PredictedSegmentationMask) for m in self.masks)
             or any(not isinstance(li, PredictedLabelImage) for li in self.label_images)
         )
