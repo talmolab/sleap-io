@@ -330,6 +330,34 @@ def test_round_trip_isolated_node():
     assert len(skeleton2.edges) == 1
 
 
+def test_round_trip_isolated_node_order():
+    """Isolated (edge-less) nodes keep their declared position on round-trip (L3)."""
+    # Isolated node first.
+    a, b, iso = sio.Node("a"), sio.Node("b"), sio.Node("iso")
+    skel = sio.Skeleton(nodes=[iso, a, b], edges=[sio.Edge(a, b)], name="iso_first")
+    decoded = decode_skeleton(encode_skeleton(skel))
+    assert [n.name for n in decoded.nodes] == ["iso", "a", "b"]
+
+    # Isolated node in the middle.
+    a2, b2, iso2 = sio.Node("a"), sio.Node("b"), sio.Node("iso")
+    skel2 = sio.Skeleton(nodes=[a2, iso2, b2], edges=[sio.Edge(a2, b2)], name="iso_mid")
+    decoded2 = decode_skeleton(encode_skeleton(skel2))
+    assert [n.name for n in decoded2.nodes] == ["a", "iso", "b"]
+
+
+def test_round_trip_isolated_node_order_with_symmetry():
+    """Isolated node keeps its declared slot alongside a symmetry edge (L3)."""
+    iso, left, right = sio.Node("iso"), sio.Node("L"), sio.Node("R")
+    skel = sio.Skeleton(
+        nodes=[iso, left, right],
+        symmetries=[sio.Symmetry([left, right])],
+        name="iso_sym",
+    )
+    decoded = decode_skeleton(encode_skeleton(skel))
+    assert [n.name for n in decoded.nodes] == ["iso", "L", "R"]
+    assert len(decoded.symmetries) == 1
+
+
 # File I/O tests using fixtures
 def test_load_minimal_skeleton_fixture(skeleton_json_minimal):
     """Test loading the minimal skeleton fixture."""
