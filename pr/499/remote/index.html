@@ -3833,6 +3833,14 @@ explicit <code>cache_storage</code> you used when loading.</p>
 <p>Cloud schemes (<code>s3://</code>, <code>gs://</code>, …) ignore <code>headers=</code> and use their own
 per-provider credential chains (environment variables, credential files,
 instance metadata).</p>
+<div class="admonition note">
+<p class="admonition-title"><code>headers=</code> is for labels, not media video</p>
+<p><code>headers=</code> (and the streaming options below) authenticate and configure
+remote <code>.slp</code>/<code>.pkg.slp</code> <strong>label</strong> loading. They are <strong>not</strong> supported for
+remote media video, which FFmpeg decodes from the URL directly — see
+<a href="#remote-video">Remote video</a>. For an auth-gated remote video, use a
+pre-signed URL instead.</p>
+</div>
 <div class="admonition warning">
 <p class="admonition-title">Headers are stripped on cross-origin redirect</p>
 <p>For security, sensitive headers (<code>Authorization</code>, <code>Cookie</code>,
@@ -3877,6 +3885,18 @@ ignored for extension detection, so pre-signed URLs like
 <code>https://host/video.mp4?token=...</code> route correctly. Remote video requires the
 <code>pyav</code> extra (auto-selected as the backend); without it, <code>load_video(url)</code>
 raises an <code>ImportError</code> with the install hint.</p>
+<div class="admonition warning">
+<p class="admonition-title">Auth headers and stream modes do not apply to remote video</p>
+<p>Unlike remote <code>.slp</code>/<code>.pkg.slp</code> labels, remote media video is decoded by
+handing the URL straight to FFmpeg (via pyav), which has no hook for custom
+HTTP request headers or fsspec stream modes. Passing <code>headers=</code>,
+<code>url_headers=</code>, <code>stream_mode=</code>, or <code>url_stream_mode=</code> to <code>load_video</code> (or
+<code>Video.from_filename</code>) for an <code>http</code>/<code>https</code> media URL raises a <code>ValueError</code>
+rather than silently returning an unauthenticated backend. To read an
+auth-gated remote video, use a <strong>pre-signed URL</strong> that embeds credentials in
+the query string (e.g. <code>https://host/video.mp4?X-Amz-...</code>), or download the
+file locally first.</p>
+</div>
 <div class="admonition danger">
 <p class="admonition-title">Security: remote video hands untrusted data to FFmpeg</p>
 <p>Decoding a remote video streams bytes from the URL into FFmpeg (via pyav).
