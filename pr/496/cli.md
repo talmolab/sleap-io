@@ -2258,7 +2258,22 @@ sio reencode video.mp4 -o output.mp4 --dry-run
 
 # Force Python path (for HDF5-embedded sources or when ffmpeg unavailable)
 sio reencode video.mp4 -o output.mp4 --no-ffmpeg
+
+# Default output (no -o) is always {stem}.reencoded.mp4
+sio reencode video.mov            # -> video.reencoded.mp4
+
+# Reencode in place: replace the input with {stem}.mp4 and delete the original
+sio reencode video.mov --replace  # -> video.mp4 (deletes video.mov)
 ```
+
+!!! note "Output is always MP4"
+    Reencoding always produces an H.264/MP4 file. The default output therefore
+    uses a `.mp4` extension regardless of the input container, and the
+    `.reencoded` infix keeps it distinct from the source (even for `.mp4`
+    inputs). `--replace` drops the infix and writes `{stem}.mp4` in place,
+    deleting the original when the extension changes (e.g. `.mov` → `.mp4`).
+    `--replace` cannot be combined with `-o/--output` and is not supported for
+    SLP inputs.
 
 ### SLP Batch Processing
 
@@ -2301,7 +2316,8 @@ This is particularly useful for:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `-i, --input` | (required) | Input video or SLP file (can also pass as positional argument) |
-| `-o, --output` | `{input}.reencoded.mp4` or `.slp` | Output video/SLP path |
+| `-o, --output` | `{input}.reencoded.mp4` or `.slp` | Output video/SLP path (always `.mp4` for the video default) |
+| `--replace` | False | Reencode in place: replace the input with `{stem}.mp4` and delete the original. Mutually exclusive with `-o/--output`; not supported for SLP inputs |
 | `--overwrite` | False | Overwrite existing output file |
 | `--dry-run` | False | Show ffmpeg command without executing |
 

@@ -9100,7 +9100,23 @@ temporal context).</p>
 <a id="__codelineno-115-15" name="__codelineno-115-15" href="#__codelineno-115-15"></a>
 <a id="__codelineno-115-16" name="__codelineno-115-16" href="#__codelineno-115-16"></a><span class="c1"># Force Python path (for HDF5-embedded sources or when ffmpeg unavailable)</span>
 <a id="__codelineno-115-17" name="__codelineno-115-17" href="#__codelineno-115-17"></a>sio<span class="w"> </span>reencode<span class="w"> </span>video.mp4<span class="w"> </span>-o<span class="w"> </span>output.mp4<span class="w"> </span>--no-ffmpeg
+<a id="__codelineno-115-18" name="__codelineno-115-18" href="#__codelineno-115-18"></a>
+<a id="__codelineno-115-19" name="__codelineno-115-19" href="#__codelineno-115-19"></a><span class="c1"># Default output (no -o) is always {stem}.reencoded.mp4</span>
+<a id="__codelineno-115-20" name="__codelineno-115-20" href="#__codelineno-115-20"></a>sio<span class="w"> </span>reencode<span class="w"> </span>video.mov<span class="w">            </span><span class="c1"># -&gt; video.reencoded.mp4</span>
+<a id="__codelineno-115-21" name="__codelineno-115-21" href="#__codelineno-115-21"></a>
+<a id="__codelineno-115-22" name="__codelineno-115-22" href="#__codelineno-115-22"></a><span class="c1"># Reencode in place: replace the input with {stem}.mp4 and delete the original</span>
+<a id="__codelineno-115-23" name="__codelineno-115-23" href="#__codelineno-115-23"></a>sio<span class="w"> </span>reencode<span class="w"> </span>video.mov<span class="w"> </span>--replace<span class="w">  </span><span class="c1"># -&gt; video.mp4 (deletes video.mov)</span>
 </code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Output is always MP4</p>
+<p>Reencoding always produces an H.264/MP4 file. The default output therefore
+uses a <code>.mp4</code> extension regardless of the input container, and the
+<code>.reencoded</code> infix keeps it distinct from the source (even for <code>.mp4</code>
+inputs). <code>--replace</code> drops the infix and writes <code>{stem}.mp4</code> in place,
+deleting the original when the extension changes (e.g. <code>.mov</code> → <code>.mp4</code>).
+<code>--replace</code> cannot be combined with <code>-o/--output</code> and is not supported for
+SLP inputs.</p>
+</div>
 <h3 id="slp-batch-processing">SLP Batch Processing<a class="headerlink" href="#slp-batch-processing" title="Permanent link">&para;</a></h3>
 <p>When given an <code>.slp</code> file as input, the reencode command processes all videos in the SLEAP project:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-116-1" name="__codelineno-116-1" href="#__codelineno-116-1"></a><span class="c1"># Reencode all videos in an SLP project</span>
@@ -9150,7 +9166,12 @@ temporal context).</p>
 <tr>
 <td><code>-o, --output</code></td>
 <td><code>{input}.reencoded.mp4</code> or <code>.slp</code></td>
-<td>Output video/SLP path</td>
+<td>Output video/SLP path (always <code>.mp4</code> for the video default)</td>
+</tr>
+<tr>
+<td><code>--replace</code></td>
+<td>False</td>
+<td>Reencode in place: replace the input with <code>{stem}.mp4</code> and delete the original. Mutually exclusive with <code>-o/--output</code>; not supported for SLP inputs</td>
 </tr>
 <tr>
 <td><code>--overwrite</code></td>
