@@ -19,6 +19,24 @@ if TYPE_CHECKING:
     from sleap_io.model.roi import ROI
 
 
+def _ensure_rgb(image: np.ndarray) -> np.ndarray:
+    """Promote a grayscale image to 3-channel RGB.
+
+    Args:
+        image: Image array of shape ``(H, W)``, ``(H, W, 1)``, or ``(H, W, 3)``.
+
+    Returns:
+        The image as ``(H, W, 3)`` uint8. A ``(H, W, 3)`` input is returned
+        unchanged (same array, preserving in-place semantics); a ``(H, W)`` or
+        ``(H, W, 1)`` grayscale input is promoted to a new RGB array.
+    """
+    if image.ndim == 2:
+        return np.stack([image] * 3, axis=-1)
+    if image.shape[-1] == 1:
+        return np.concatenate([image] * 3, axis=-1)
+    return image
+
+
 def draw_rois(
     image: np.ndarray,
     rois: list["ROI"],
@@ -34,8 +52,9 @@ def draw_rois(
     ``MultiLineString``, and ``GeometryCollection`` geometries.
 
     Args:
-        image: Image array of shape (H, W, 3) uint8. Modified in-place and
-            returned.
+        image: Image array of shape (H, W, 3) uint8. A 2-D grayscale
+            ``(H, W)`` (or ``(H, W, 1)``) image is accepted and promoted to
+            RGB. Modified in-place and returned.
         rois: List of ROI objects to draw.
         color: RGB color tuple for the ROI outlines. Used when ``colors`` is
             ``None``.
@@ -52,6 +71,9 @@ def draw_rois(
         return image
 
     import skia
+
+    # Ensure RGB before padding to RGBA.
+    image = _ensure_rgb(image)
 
     # Pad to RGBA for skia surface
     frame_rgba = np.dstack([image, np.full(image.shape[:2], 255, dtype=np.uint8)])
@@ -122,8 +144,9 @@ def draw_masks(
     """Draw segmentation masks as colored overlays on an image.
 
     Args:
-        image: Image array of shape (H, W, 3) uint8. Modified in-place and
-            returned.
+        image: Image array of shape (H, W, 3) uint8. A 2-D grayscale
+            ``(H, W)`` (or ``(H, W, 1)``) image is accepted and promoted to
+            RGB. Modified in-place and returned.
         masks: List of SegmentationMask objects to draw.
         color: RGB color tuple for the mask overlay. Used when ``colors`` is
             ``None``.
@@ -134,6 +157,9 @@ def draw_masks(
     Returns:
         The modified image array.
     """
+    # Ensure RGB so grayscale images can be blended with colored overlays.
+    image = _ensure_rgb(image)
+
     for i, mask in enumerate(masks):
         mask_color = colors[i] if colors is not None else color
         mask_data = mask.data
@@ -194,8 +220,9 @@ def draw_label_image(
     each pixel value represents a different object ID (0 = background).
 
     Args:
-        image: Image array of shape ``(H, W, 3)`` uint8. Modified in-place and
-            returned.
+        image: Image array of shape ``(H, W, 3)`` uint8. A 2-D grayscale
+            ``(H, W)`` (or ``(H, W, 1)``) image is accepted and promoted to
+            RGB. Modified in-place and returned.
         labels: Integer label array of shape ``(H, W)`` where 0 is background
             and positive values are object IDs.
         alpha: Opacity of the mask overlay (0.0 to 1.0).
@@ -214,6 +241,9 @@ def draw_label_image(
         The modified image array.
     """
     from sleap_io.rendering.colors import get_palette
+
+    # Ensure RGB so grayscale images can be blended with colored overlays.
+    image = _ensure_rgb(image)
 
     # Get unique non-background labels
     unique_ids = np.unique(labels)
@@ -377,8 +407,9 @@ def draw_bboxes(
     near the top-left corner.
 
     Args:
-        image: Image array of shape (H, W, 3) uint8. Modified in-place and
-            returned.
+        image: Image array of shape (H, W, 3) uint8. A 2-D grayscale
+            ``(H, W)`` (or ``(H, W, 1)``) image is accepted and promoted to
+            RGB. Modified in-place and returned.
         bboxes: List of BoundingBox objects to draw.
         color: RGB color tuple for the bounding box outlines. Used when
             ``colors`` is ``None``.
@@ -399,6 +430,9 @@ def draw_bboxes(
     import skia
 
     from sleap_io.model.bbox import PredictedBoundingBox
+
+    # Ensure RGB before padding to RGBA.
+    image = _ensure_rgb(image)
 
     # Pad to RGBA for skia surface
     frame_rgba = np.dstack([image, np.full(image.shape[:2], 255, dtype=np.uint8)])
@@ -677,10 +711,7 @@ def draw_centroids(
     ox, oy = offset
 
     # Ensure RGB before padding to RGBA.
-    if image.ndim == 2:
-        image = np.stack([image] * 3, axis=-1)
-    elif image.ndim == 3 and image.shape[2] == 1:
-        image = np.concatenate([image] * 3, axis=-1)
+    image = _ensure_rgb(image)
 
     # Pad to RGBA for skia surface.
     frame_rgba = np.dstack([image, np.full(image.shape[:2], 255, dtype=np.uint8)])
@@ -765,10 +796,7 @@ def draw_trails(
     ox, oy = offset
 
     # Ensure RGB so trail pixels can be composited back.
-    if image.ndim == 2:
-        image = np.stack([image] * 3, axis=-1)
-    elif image.ndim == 3 and image.shape[2] == 1:
-        image = np.concatenate([image] * 3, axis=-1)
+    image = _ensure_rgb(image)
 
     # Rasterize the trails into a separate transparent RGBA buffer. Drawing into
     # a dedicated buffer (rather than the frame) lets the kSrc blend mode below

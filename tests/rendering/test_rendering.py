@@ -20,6 +20,7 @@ from sleap_io.rendering import render_video
 from sleap_io.rendering.colors import get_palette
 from sleap_io.rendering.core import render_image
 from sleap_io.rendering.overlays import (
+    _ensure_rgb,
     draw_bboxes,
     draw_label_image,
     draw_masks,
@@ -2806,6 +2807,96 @@ def test_draw_label_image_with_offset():
     assert not np.array_equal(result[47, 37], [128, 128, 128])
     # Origin should be unchanged
     assert result[0, 0].tolist() == [128, 128, 128]
+
+
+# ============================================================================
+# Grayscale input tests for overlay helpers
+# ============================================================================
+
+
+def test_draw_rois_grayscale():
+    """draw_rois should accept a 2-D grayscale image and promote it to RGB."""
+    img = np.zeros((100, 100), dtype=np.uint8)
+    roi = UserROI.from_bbox(10, 10, 30, 30)
+
+    result = draw_rois(img, [roi], color=(0, 255, 0), line_width=1)
+
+    # Promoted to RGB without raising.
+    assert result.shape == (100, 100, 3)
+    # The outline should be drawn in the requested color.
+    assert result[10, 10].tolist() == [0, 255, 0]
+    # Outside the ROI stays black.
+    assert result[50, 50].tolist() == [0, 0, 0]
+
+
+def test_draw_masks_grayscale():
+    """draw_masks should accept a 2-D grayscale image and promote it to RGB."""
+    img = np.ones((50, 50), dtype=np.uint8) * 100
+    mask_data = np.zeros((50, 50), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = UserSegmentationMask.from_numpy(mask_data)
+
+    result = draw_masks(img, [mask], color=(255, 0, 0), alpha=0.5)
+
+    # Promoted to RGB without raising.
+    assert result.shape == (50, 50, 3)
+    # Masked region should be blended toward red.
+    assert result[20, 20, 0] > 100
+    # Non-masked region keeps the grayscale value across all channels.
+    assert result[5, 5].tolist() == [100, 100, 100]
+
+
+def test_draw_label_image_grayscale():
+    """draw_label_image should accept a 2-D grayscale image and promote to RGB."""
+    img = np.ones((50, 50), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:20, 10:20] = 1
+    labels[30:40, 30:40] = 2
+
+    result = draw_label_image(img, labels, alpha=0.5, palette="distinct")
+
+    # Promoted to RGB without raising.
+    assert result.shape == (50, 50, 3)
+    # Labeled regions differ from the original gray.
+    assert not np.array_equal(result[15, 15], [128, 128, 128])
+    assert not np.array_equal(result[35, 35], [128, 128, 128])
+    # Background keeps the grayscale value across all channels.
+    np.testing.assert_array_equal(result[0, 0], [128, 128, 128])
+
+
+def test_draw_bboxes_grayscale():
+    """draw_bboxes should accept a 2-D grayscale image and promote it to RGB."""
+    img = np.zeros((100, 100), dtype=np.uint8)
+    bbox = UserBoundingBox.from_xyxy(10, 10, 50, 50)
+
+    result = draw_bboxes(img, [bbox], color=(0, 255, 0), line_width=1)
+
+    # Promoted to RGB without raising.
+    assert result.shape == (100, 100, 3)
+    # The outline should be drawn in the requested color.
+    assert result[10, 10].tolist() == [0, 255, 0]
+    assert result[50, 50].tolist() == [0, 255, 0]
+    # Outside the box stays black.
+    assert result[80, 80].tolist() == [0, 0, 0]
+
+
+def test_ensure_rgb_shapes():
+    """_ensure_rgb promotes (H, W) and (H, W, 1) to RGB and passes (H, W, 3)."""
+    gray_2d = np.arange(12, dtype=np.uint8).reshape(3, 4)
+    out_2d = _ensure_rgb(gray_2d)
+    assert out_2d.shape == (3, 4, 3)
+    # Every channel equals the original grayscale plane.
+    np.testing.assert_array_equal(out_2d[..., 0], gray_2d)
+    np.testing.assert_array_equal(out_2d[..., 2], gray_2d)
+
+    gray_1ch = np.arange(12, dtype=np.uint8).reshape(3, 4, 1)
+    out_1ch = _ensure_rgb(gray_1ch)
+    assert out_1ch.shape == (3, 4, 3)
+    np.testing.assert_array_equal(out_1ch[..., 1], gray_1ch[..., 0])
+
+    rgb = np.zeros((3, 4, 3), dtype=np.uint8)
+    # A 3-channel image is returned unchanged (same array, in-place preserved).
+    assert _ensure_rgb(rgb) is rgb
 
 
 # ============================================================================
