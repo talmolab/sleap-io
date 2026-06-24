@@ -803,6 +803,16 @@ def _print_header(path: Path, labels: Labels) -> None:
             f"track{'s' if len(labels.tracks) != 1 else ''}"
         )
 
+    # Segmentation masks and ROIs - only shown when present to avoid cluttering
+    # pose-only files.
+    n_masks = len(labels.masks)
+    if n_masks > 0:
+        stats_parts.append(f"[bold]{n_masks}[/] mask{'s' if n_masks != 1 else ''}")
+
+    n_rois = len(labels.rois)
+    if n_rois > 0:
+        stats_parts.append(f"[bold]{n_rois}[/] ROI{'s' if n_rois != 1 else ''}")
+
     header_lines.append("")
     header_lines.append(" | ".join(stats_parts))
 
@@ -1562,6 +1572,13 @@ def _print_labeled_frame(labels: Labels, frame_idx: int) -> None:
     console.print(f"  [dim]Video:[/]     {video_name}")
     console.print(f"  [dim]Frame:[/]     {lf.frame_idx}")
     console.print(f"  [dim]Instances:[/] {len(lf)}")
+
+    # Masks and ROIs are separate frame-level fields; only show when present so
+    # pose-only frames stay tidy.
+    if lf.masks:
+        console.print(f"  [dim]Masks:[/]     {len(lf.masks)}")
+    if lf.rois:
+        console.print(f"  [dim]ROIs:[/]      {len(lf.rois)}")
 
     # Instances as blocks
     for idx, inst in enumerate(lf.instances):
