@@ -2129,6 +2129,84 @@ class TestCOCOROIMaskIO:
         assert maxx == pytest.approx(50.0)
         assert maxy == pytest.approx(50.0)
 
+    def test_coco_detection_degenerate_segmentation_fallback_to_bbox(self, tmp_path):
+        """Degenerate (sub-polygon) segmentation falls back to bbox, not dropped."""
+        img_path = tmp_path / "img.png"
+        img_path.touch()
+
+        data = {
+            "images": [
+                {"id": 1, "file_name": "img.png", "height": 100, "width": 200},
+            ],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": 1,
+                    # Single-point ring: truthy but cannot form a polygon, so
+                    # _decode_segmentation yields no geometry.
+                    "segmentation": [[5.0, 5.0]],
+                    "bbox": [2, 2, 10, 10],
+                    "area": 100,
+                    "iscrowd": 0,
+                },
+            ],
+            "categories": [{"id": 1, "name": "animal"}],
+        }
+
+        json_path = tmp_path / "degenerate_bbox.json"
+        with open(json_path, "w") as f:
+            json.dump(data, f)
+
+        labels = coco.read_labels(json_path, dataset_root=tmp_path)
+
+        # No mask/roi geometry, but the bbox is preserved.
+        assert len(labels.masks) == 0
+        assert len(labels.rois) == 0
+        assert len(labels.bboxes) == 1
+        bbox = labels.bboxes[0]
+        assert isinstance(bbox, UserBoundingBox)
+        assert bbox.category == "animal"
+        x, y, w, h = bbox.xywh
+        assert x == pytest.approx(2.0)
+        assert y == pytest.approx(2.0)
+        assert w == pytest.approx(10.0)
+        assert h == pytest.approx(10.0)
+
+    def test_coco_detection_valid_polygon_no_spurious_bbox(self, tmp_path):
+        """A valid polygon yields a mask and does not also emit a bbox."""
+        img_path = tmp_path / "img.png"
+        img_path.touch()
+
+        data = {
+            "images": [
+                {"id": 1, "file_name": "img.png", "height": 100, "width": 100},
+            ],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": 1,
+                    "segmentation": [[10.0, 10.0, 50.0, 10.0, 50.0, 50.0, 10.0, 50.0]],
+                    "bbox": [10, 10, 40, 40],
+                    "area": 1600,
+                    "iscrowd": 0,
+                },
+            ],
+            "categories": [{"id": 1, "name": "obj"}],
+        }
+
+        json_path = tmp_path / "valid_poly_no_bbox.json"
+        with open(json_path, "w") as f:
+            json.dump(data, f)
+
+        labels = coco.read_labels(json_path, dataset_root=tmp_path)
+
+        # Geometry was decoded, so the bbox fallback must not fire.
+        assert len(labels.masks) == 1
+        assert len(labels.rois) == 0
+        assert len(labels.bboxes) == 0
+
 
 def test_read_labels_keypoints_and_segmentation(tmp_path):
     """Annotations with both keypoints and segmentation should preserve both."""
