@@ -1111,6 +1111,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#labelsmatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Labels.match
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#labelsadd_video" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1192,6 +1203,17 @@
     <span class="md-ellipsis">
       
         MergeResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MatchResult
       
     </span>
   </a>
@@ -4530,6 +4552,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#labelsmatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Labels.match
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#labelsadd_video" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4611,6 +4644,17 @@
     <span class="md-ellipsis">
       
         MergeResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MatchResult
       
     </span>
   </a>
@@ -6323,6 +6367,313 @@ handle common workflows like merging predictions back into a project.</p>
 <a id="__codelineno-0-3815" name="__codelineno-0-3815"></a><a href="#__codelineno-0-3815"><span class="linenos" data-linenos="3815 "></span></a>        <span class="n">progress_callback</span><span class="p">(</span><span class="n">total_frames</span><span class="p">,</span> <span class="n">total_frames</span><span class="p">,</span> <span class="s2">&quot;Merge complete&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-3816" name="__codelineno-0-3816"></a><a href="#__codelineno-0-3816"><span class="linenos" data-linenos="3816 "></span></a>
 <a id="__codelineno-0-3817" name="__codelineno-0-3817"></a><a href="#__codelineno-0-3817"><span class="linenos" data-linenos="3817 "></span></a>    <span class="k">return</span> <span class="n">result</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div><h3 id="labelsmatch">Labels.match<a class="headerlink" href="#labelsmatch" title="Permanent link">&para;</a></h3>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.model.labels.Labels.match" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">labels</span><span class="o">.</span><span class="n">Labels</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">track</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.labels.Labels.match" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Match videos, skeletons, and tracks between this Labels and another.</p>
+<p>This method builds correspondence maps without modifying either Labels object.
+Useful for evaluation workflows where you need to align predictions with
+ground truth without merging them.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>other</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Labels&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels.Labels&lt;/code&gt;)" href="../reference/sleap_io/model/labels/#sleap_io.model.labels.Labels">Labels</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Another Labels object to match against.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>video</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <span title="VideoMatcher">VideoMatcher</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Video matching method. Can be a string ("auto", "path",
+"basename", "content", "shape", "image_dedup") or a VideoMatcher
+object for advanced configuration. Default is "auto".</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>skeleton</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <span title="SkeletonMatcher">SkeletonMatcher</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Skeleton matching method. Can be a string ("structure",
+"subset", "overlap", "exact") or a SkeletonMatcher object.
+Default is "structure".</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>track</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <span title="TrackMatcher">TrackMatcher</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Track matching method. Can be a string ("identity", "name") or
+a TrackMatcher object. Default is "identity", which matches tracks
+only by object identity (the same Track instance) and appends all
+other tracks as new -- a correctness-first default that never
+collapses distinct tracks by their (often arbitrary,
+tracker-assigned) names. Pass "name" to match tracks by their name
+attribute instead, for cases where track names are semantically
+meaningful (e.g. user-assigned identities or identity-classification
+model outputs).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.model.matching.MatchResult&lt;/code&gt;" href="#sleap_io.model.matching.MatchResult">MatchResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>MatchResult object containing correspondence maps.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="example" open>
+  <summary>Example</summary>
+  <p>Match prediction videos to ground truth for evaluation::</p>
+<div class="highlight"><pre><span></span><code>&gt;&gt;&gt; gt_labels = sio.load_slp(&quot;ground_truth.slp&quot;)
+&gt;&gt;&gt; pred_labels = sio.load_slp(&quot;predictions.slp&quot;)
+&gt;&gt;&gt; result = gt_labels.match(pred_labels)
+&gt;&gt;&gt; for pred_video, gt_video in result.video_map.items():
+...     if gt_video is not None:
+...         print(f&quot;{pred_video.filename} -&gt; {gt_video.filename}&quot;)
+</code></pre></div>
+<p>Check if all videos were matched::</p>
+<div class="highlight"><pre><span></span><code>&gt;&gt;&gt; if not result.all_videos_matched:
+...     print(f&quot;Warning: {len(result.unmatched_videos)} unmatched&quot;)
+</code></pre></div>
+</details>
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>For video matching with the AUTO method (default), the matching cascade
+uses multiple strategies in order:</p>
+<ol>
+<li>Shape rejection (filter obviously incompatible candidates)</li>
+<li>original_video conflict rejection</li>
+<li>Definitive file identity (is_same_file)</li>
+<li>Strict path match</li>
+<li>Leaf uniqueness matching at increasing depths</li>
+<li>Pose-based matching (compares annotations between labels)</li>
+</ol>
+<p>The match result maps <code>other</code>'s items to <code>self</code>'s items. For eval
+workflows, typically <code>self</code> is ground truth and <code>other</code> is predictions.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/model/labels.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-3189" name="__codelineno-0-3189"></a><a href="#__codelineno-0-3189"><span class="linenos" data-linenos="3189 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">match</span><span class="p">(</span>
+<a id="__codelineno-0-3190" name="__codelineno-0-3190"></a><a href="#__codelineno-0-3190"><span class="linenos" data-linenos="3190 "></span></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-3191" name="__codelineno-0-3191"></a><a href="#__codelineno-0-3191"><span class="linenos" data-linenos="3191 "></span></a>    <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;Labels&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3192" name="__codelineno-0-3192"></a><a href="#__codelineno-0-3192"><span class="linenos" data-linenos="3192 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="s2">&quot;str | VideoMatcher | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3193" name="__codelineno-0-3193"></a><a href="#__codelineno-0-3193"><span class="linenos" data-linenos="3193 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="s2">&quot;str | SkeletonMatcher | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3194" name="__codelineno-0-3194"></a><a href="#__codelineno-0-3194"><span class="linenos" data-linenos="3194 "></span></a>    <span class="n">track</span><span class="p">:</span> <span class="s2">&quot;str | TrackMatcher | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3195" name="__codelineno-0-3195"></a><a href="#__codelineno-0-3195"><span class="linenos" data-linenos="3195 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;MatchResult&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-3196" name="__codelineno-0-3196"></a><a href="#__codelineno-0-3196"><span class="linenos" data-linenos="3196 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Match videos, skeletons, and tracks between this Labels and another.</span>
+<a id="__codelineno-0-3197" name="__codelineno-0-3197"></a><a href="#__codelineno-0-3197"><span class="linenos" data-linenos="3197 "></span></a>
+<a id="__codelineno-0-3198" name="__codelineno-0-3198"></a><a href="#__codelineno-0-3198"><span class="linenos" data-linenos="3198 "></span></a><span class="sd">    This method builds correspondence maps without modifying either Labels object.</span>
+<a id="__codelineno-0-3199" name="__codelineno-0-3199"></a><a href="#__codelineno-0-3199"><span class="linenos" data-linenos="3199 "></span></a><span class="sd">    Useful for evaluation workflows where you need to align predictions with</span>
+<a id="__codelineno-0-3200" name="__codelineno-0-3200"></a><a href="#__codelineno-0-3200"><span class="linenos" data-linenos="3200 "></span></a><span class="sd">    ground truth without merging them.</span>
+<a id="__codelineno-0-3201" name="__codelineno-0-3201"></a><a href="#__codelineno-0-3201"><span class="linenos" data-linenos="3201 "></span></a>
+<a id="__codelineno-0-3202" name="__codelineno-0-3202"></a><a href="#__codelineno-0-3202"><span class="linenos" data-linenos="3202 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-3203" name="__codelineno-0-3203"></a><a href="#__codelineno-0-3203"><span class="linenos" data-linenos="3203 "></span></a><span class="sd">        other: Another Labels object to match against.</span>
+<a id="__codelineno-0-3204" name="__codelineno-0-3204"></a><a href="#__codelineno-0-3204"><span class="linenos" data-linenos="3204 "></span></a><span class="sd">        video: Video matching method. Can be a string (&quot;auto&quot;, &quot;path&quot;,</span>
+<a id="__codelineno-0-3205" name="__codelineno-0-3205"></a><a href="#__codelineno-0-3205"><span class="linenos" data-linenos="3205 "></span></a><span class="sd">            &quot;basename&quot;, &quot;content&quot;, &quot;shape&quot;, &quot;image_dedup&quot;) or a VideoMatcher</span>
+<a id="__codelineno-0-3206" name="__codelineno-0-3206"></a><a href="#__codelineno-0-3206"><span class="linenos" data-linenos="3206 "></span></a><span class="sd">            object for advanced configuration. Default is &quot;auto&quot;.</span>
+<a id="__codelineno-0-3207" name="__codelineno-0-3207"></a><a href="#__codelineno-0-3207"><span class="linenos" data-linenos="3207 "></span></a><span class="sd">        skeleton: Skeleton matching method. Can be a string (&quot;structure&quot;,</span>
+<a id="__codelineno-0-3208" name="__codelineno-0-3208"></a><a href="#__codelineno-0-3208"><span class="linenos" data-linenos="3208 "></span></a><span class="sd">            &quot;subset&quot;, &quot;overlap&quot;, &quot;exact&quot;) or a SkeletonMatcher object.</span>
+<a id="__codelineno-0-3209" name="__codelineno-0-3209"></a><a href="#__codelineno-0-3209"><span class="linenos" data-linenos="3209 "></span></a><span class="sd">            Default is &quot;structure&quot;.</span>
+<a id="__codelineno-0-3210" name="__codelineno-0-3210"></a><a href="#__codelineno-0-3210"><span class="linenos" data-linenos="3210 "></span></a><span class="sd">        track: Track matching method. Can be a string (&quot;identity&quot;, &quot;name&quot;) or</span>
+<a id="__codelineno-0-3211" name="__codelineno-0-3211"></a><a href="#__codelineno-0-3211"><span class="linenos" data-linenos="3211 "></span></a><span class="sd">            a TrackMatcher object. Default is &quot;identity&quot;, which matches tracks</span>
+<a id="__codelineno-0-3212" name="__codelineno-0-3212"></a><a href="#__codelineno-0-3212"><span class="linenos" data-linenos="3212 "></span></a><span class="sd">            only by object identity (the same Track instance) and appends all</span>
+<a id="__codelineno-0-3213" name="__codelineno-0-3213"></a><a href="#__codelineno-0-3213"><span class="linenos" data-linenos="3213 "></span></a><span class="sd">            other tracks as new -- a correctness-first default that never</span>
+<a id="__codelineno-0-3214" name="__codelineno-0-3214"></a><a href="#__codelineno-0-3214"><span class="linenos" data-linenos="3214 "></span></a><span class="sd">            collapses distinct tracks by their (often arbitrary,</span>
+<a id="__codelineno-0-3215" name="__codelineno-0-3215"></a><a href="#__codelineno-0-3215"><span class="linenos" data-linenos="3215 "></span></a><span class="sd">            tracker-assigned) names. Pass &quot;name&quot; to match tracks by their name</span>
+<a id="__codelineno-0-3216" name="__codelineno-0-3216"></a><a href="#__codelineno-0-3216"><span class="linenos" data-linenos="3216 "></span></a><span class="sd">            attribute instead, for cases where track names are semantically</span>
+<a id="__codelineno-0-3217" name="__codelineno-0-3217"></a><a href="#__codelineno-0-3217"><span class="linenos" data-linenos="3217 "></span></a><span class="sd">            meaningful (e.g. user-assigned identities or identity-classification</span>
+<a id="__codelineno-0-3218" name="__codelineno-0-3218"></a><a href="#__codelineno-0-3218"><span class="linenos" data-linenos="3218 "></span></a><span class="sd">            model outputs).</span>
+<a id="__codelineno-0-3219" name="__codelineno-0-3219"></a><a href="#__codelineno-0-3219"><span class="linenos" data-linenos="3219 "></span></a>
+<a id="__codelineno-0-3220" name="__codelineno-0-3220"></a><a href="#__codelineno-0-3220"><span class="linenos" data-linenos="3220 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-3221" name="__codelineno-0-3221"></a><a href="#__codelineno-0-3221"><span class="linenos" data-linenos="3221 "></span></a><span class="sd">        MatchResult object containing correspondence maps.</span>
+<a id="__codelineno-0-3222" name="__codelineno-0-3222"></a><a href="#__codelineno-0-3222"><span class="linenos" data-linenos="3222 "></span></a>
+<a id="__codelineno-0-3223" name="__codelineno-0-3223"></a><a href="#__codelineno-0-3223"><span class="linenos" data-linenos="3223 "></span></a><span class="sd">    Example:</span>
+<a id="__codelineno-0-3224" name="__codelineno-0-3224"></a><a href="#__codelineno-0-3224"><span class="linenos" data-linenos="3224 "></span></a><span class="sd">        Match prediction videos to ground truth for evaluation::</span>
+<a id="__codelineno-0-3225" name="__codelineno-0-3225"></a><a href="#__codelineno-0-3225"><span class="linenos" data-linenos="3225 "></span></a>
+<a id="__codelineno-0-3226" name="__codelineno-0-3226"></a><a href="#__codelineno-0-3226"><span class="linenos" data-linenos="3226 "></span></a><span class="sd">            &gt;&gt;&gt; gt_labels = sio.load_slp(&quot;ground_truth.slp&quot;)</span>
+<a id="__codelineno-0-3227" name="__codelineno-0-3227"></a><a href="#__codelineno-0-3227"><span class="linenos" data-linenos="3227 "></span></a><span class="sd">            &gt;&gt;&gt; pred_labels = sio.load_slp(&quot;predictions.slp&quot;)</span>
+<a id="__codelineno-0-3228" name="__codelineno-0-3228"></a><a href="#__codelineno-0-3228"><span class="linenos" data-linenos="3228 "></span></a><span class="sd">            &gt;&gt;&gt; result = gt_labels.match(pred_labels)</span>
+<a id="__codelineno-0-3229" name="__codelineno-0-3229"></a><a href="#__codelineno-0-3229"><span class="linenos" data-linenos="3229 "></span></a><span class="sd">            &gt;&gt;&gt; for pred_video, gt_video in result.video_map.items():</span>
+<a id="__codelineno-0-3230" name="__codelineno-0-3230"></a><a href="#__codelineno-0-3230"><span class="linenos" data-linenos="3230 "></span></a><span class="sd">            ...     if gt_video is not None:</span>
+<a id="__codelineno-0-3231" name="__codelineno-0-3231"></a><a href="#__codelineno-0-3231"><span class="linenos" data-linenos="3231 "></span></a><span class="sd">            ...         print(f&quot;{pred_video.filename} -&gt; {gt_video.filename}&quot;)</span>
+<a id="__codelineno-0-3232" name="__codelineno-0-3232"></a><a href="#__codelineno-0-3232"><span class="linenos" data-linenos="3232 "></span></a>
+<a id="__codelineno-0-3233" name="__codelineno-0-3233"></a><a href="#__codelineno-0-3233"><span class="linenos" data-linenos="3233 "></span></a><span class="sd">        Check if all videos were matched::</span>
+<a id="__codelineno-0-3234" name="__codelineno-0-3234"></a><a href="#__codelineno-0-3234"><span class="linenos" data-linenos="3234 "></span></a>
+<a id="__codelineno-0-3235" name="__codelineno-0-3235"></a><a href="#__codelineno-0-3235"><span class="linenos" data-linenos="3235 "></span></a><span class="sd">            &gt;&gt;&gt; if not result.all_videos_matched:</span>
+<a id="__codelineno-0-3236" name="__codelineno-0-3236"></a><a href="#__codelineno-0-3236"><span class="linenos" data-linenos="3236 "></span></a><span class="sd">            ...     print(f&quot;Warning: {len(result.unmatched_videos)} unmatched&quot;)</span>
+<a id="__codelineno-0-3237" name="__codelineno-0-3237"></a><a href="#__codelineno-0-3237"><span class="linenos" data-linenos="3237 "></span></a>
+<a id="__codelineno-0-3238" name="__codelineno-0-3238"></a><a href="#__codelineno-0-3238"><span class="linenos" data-linenos="3238 "></span></a><span class="sd">    Notes:</span>
+<a id="__codelineno-0-3239" name="__codelineno-0-3239"></a><a href="#__codelineno-0-3239"><span class="linenos" data-linenos="3239 "></span></a><span class="sd">        For video matching with the AUTO method (default), the matching cascade</span>
+<a id="__codelineno-0-3240" name="__codelineno-0-3240"></a><a href="#__codelineno-0-3240"><span class="linenos" data-linenos="3240 "></span></a><span class="sd">        uses multiple strategies in order:</span>
+<a id="__codelineno-0-3241" name="__codelineno-0-3241"></a><a href="#__codelineno-0-3241"><span class="linenos" data-linenos="3241 "></span></a>
+<a id="__codelineno-0-3242" name="__codelineno-0-3242"></a><a href="#__codelineno-0-3242"><span class="linenos" data-linenos="3242 "></span></a><span class="sd">        1. Shape rejection (filter obviously incompatible candidates)</span>
+<a id="__codelineno-0-3243" name="__codelineno-0-3243"></a><a href="#__codelineno-0-3243"><span class="linenos" data-linenos="3243 "></span></a><span class="sd">        2. original_video conflict rejection</span>
+<a id="__codelineno-0-3244" name="__codelineno-0-3244"></a><a href="#__codelineno-0-3244"><span class="linenos" data-linenos="3244 "></span></a><span class="sd">        3. Definitive file identity (is_same_file)</span>
+<a id="__codelineno-0-3245" name="__codelineno-0-3245"></a><a href="#__codelineno-0-3245"><span class="linenos" data-linenos="3245 "></span></a><span class="sd">        4. Strict path match</span>
+<a id="__codelineno-0-3246" name="__codelineno-0-3246"></a><a href="#__codelineno-0-3246"><span class="linenos" data-linenos="3246 "></span></a><span class="sd">        5. Leaf uniqueness matching at increasing depths</span>
+<a id="__codelineno-0-3247" name="__codelineno-0-3247"></a><a href="#__codelineno-0-3247"><span class="linenos" data-linenos="3247 "></span></a><span class="sd">        6. Pose-based matching (compares annotations between labels)</span>
+<a id="__codelineno-0-3248" name="__codelineno-0-3248"></a><a href="#__codelineno-0-3248"><span class="linenos" data-linenos="3248 "></span></a>
+<a id="__codelineno-0-3249" name="__codelineno-0-3249"></a><a href="#__codelineno-0-3249"><span class="linenos" data-linenos="3249 "></span></a><span class="sd">        The match result maps `other`&#39;s items to `self`&#39;s items. For eval</span>
+<a id="__codelineno-0-3250" name="__codelineno-0-3250"></a><a href="#__codelineno-0-3250"><span class="linenos" data-linenos="3250 "></span></a><span class="sd">        workflows, typically `self` is ground truth and `other` is predictions.</span>
+<a id="__codelineno-0-3251" name="__codelineno-0-3251"></a><a href="#__codelineno-0-3251"><span class="linenos" data-linenos="3251 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-3252" name="__codelineno-0-3252"></a><a href="#__codelineno-0-3252"><span class="linenos" data-linenos="3252 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-0-3253" name="__codelineno-0-3253"></a><a href="#__codelineno-0-3253"><span class="linenos" data-linenos="3253 "></span></a>        <span class="n">MatchResult</span><span class="p">,</span>
+<a id="__codelineno-0-3254" name="__codelineno-0-3254"></a><a href="#__codelineno-0-3254"><span class="linenos" data-linenos="3254 "></span></a>        <span class="n">SkeletonMatcher</span><span class="p">,</span>
+<a id="__codelineno-0-3255" name="__codelineno-0-3255"></a><a href="#__codelineno-0-3255"><span class="linenos" data-linenos="3255 "></span></a>        <span class="n">SkeletonMatchMethod</span><span class="p">,</span>
+<a id="__codelineno-0-3256" name="__codelineno-0-3256"></a><a href="#__codelineno-0-3256"><span class="linenos" data-linenos="3256 "></span></a>        <span class="n">TrackMatcher</span><span class="p">,</span>
+<a id="__codelineno-0-3257" name="__codelineno-0-3257"></a><a href="#__codelineno-0-3257"><span class="linenos" data-linenos="3257 "></span></a>        <span class="n">TrackMatchMethod</span><span class="p">,</span>
+<a id="__codelineno-0-3258" name="__codelineno-0-3258"></a><a href="#__codelineno-0-3258"><span class="linenos" data-linenos="3258 "></span></a>        <span class="n">VideoMatcher</span><span class="p">,</span>
+<a id="__codelineno-0-3259" name="__codelineno-0-3259"></a><a href="#__codelineno-0-3259"><span class="linenos" data-linenos="3259 "></span></a>        <span class="n">VideoMatchMethod</span><span class="p">,</span>
+<a id="__codelineno-0-3260" name="__codelineno-0-3260"></a><a href="#__codelineno-0-3260"><span class="linenos" data-linenos="3260 "></span></a>    <span class="p">)</span>
+<a id="__codelineno-0-3261" name="__codelineno-0-3261"></a><a href="#__codelineno-0-3261"><span class="linenos" data-linenos="3261 "></span></a>
+<a id="__codelineno-0-3262" name="__codelineno-0-3262"></a><a href="#__codelineno-0-3262"><span class="linenos" data-linenos="3262 "></span></a>    <span class="c1"># Coerce string arguments to Matcher objects</span>
+<a id="__codelineno-0-3263" name="__codelineno-0-3263"></a><a href="#__codelineno-0-3263"><span class="linenos" data-linenos="3263 "></span></a>    <span class="k">if</span> <span class="n">skeleton</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-3264" name="__codelineno-0-3264"></a><a href="#__codelineno-0-3264"><span class="linenos" data-linenos="3264 "></span></a>        <span class="n">skeleton_matcher</span> <span class="o">=</span> <span class="n">SkeletonMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="n">SkeletonMatchMethod</span><span class="o">.</span><span class="n">STRUCTURE</span><span class="p">)</span>
+<a id="__codelineno-0-3265" name="__codelineno-0-3265"></a><a href="#__codelineno-0-3265"><span class="linenos" data-linenos="3265 "></span></a>    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">skeleton</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-3266" name="__codelineno-0-3266"></a><a href="#__codelineno-0-3266"><span class="linenos" data-linenos="3266 "></span></a>        <span class="n">skeleton_matcher</span> <span class="o">=</span> <span class="n">SkeletonMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="n">SkeletonMatchMethod</span><span class="p">(</span><span class="n">skeleton</span><span class="p">))</span>
+<a id="__codelineno-0-3267" name="__codelineno-0-3267"></a><a href="#__codelineno-0-3267"><span class="linenos" data-linenos="3267 "></span></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-3268" name="__codelineno-0-3268"></a><a href="#__codelineno-0-3268"><span class="linenos" data-linenos="3268 "></span></a>        <span class="n">skeleton_matcher</span> <span class="o">=</span> <span class="n">skeleton</span>
+<a id="__codelineno-0-3269" name="__codelineno-0-3269"></a><a href="#__codelineno-0-3269"><span class="linenos" data-linenos="3269 "></span></a>
+<a id="__codelineno-0-3270" name="__codelineno-0-3270"></a><a href="#__codelineno-0-3270"><span class="linenos" data-linenos="3270 "></span></a>    <span class="k">if</span> <span class="n">video</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-3271" name="__codelineno-0-3271"></a><a href="#__codelineno-0-3271"><span class="linenos" data-linenos="3271 "></span></a>        <span class="n">video_matcher</span> <span class="o">=</span> <span class="n">VideoMatcher</span><span class="p">()</span>
+<a id="__codelineno-0-3272" name="__codelineno-0-3272"></a><a href="#__codelineno-0-3272"><span class="linenos" data-linenos="3272 "></span></a>    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">video</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-3273" name="__codelineno-0-3273"></a><a href="#__codelineno-0-3273"><span class="linenos" data-linenos="3273 "></span></a>        <span class="n">video_matcher</span> <span class="o">=</span> <span class="n">VideoMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="n">VideoMatchMethod</span><span class="p">(</span><span class="n">video</span><span class="p">))</span>
+<a id="__codelineno-0-3274" name="__codelineno-0-3274"></a><a href="#__codelineno-0-3274"><span class="linenos" data-linenos="3274 "></span></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-3275" name="__codelineno-0-3275"></a><a href="#__codelineno-0-3275"><span class="linenos" data-linenos="3275 "></span></a>        <span class="n">video_matcher</span> <span class="o">=</span> <span class="n">video</span>
+<a id="__codelineno-0-3276" name="__codelineno-0-3276"></a><a href="#__codelineno-0-3276"><span class="linenos" data-linenos="3276 "></span></a>
+<a id="__codelineno-0-3277" name="__codelineno-0-3277"></a><a href="#__codelineno-0-3277"><span class="linenos" data-linenos="3277 "></span></a>    <span class="k">if</span> <span class="n">track</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-3278" name="__codelineno-0-3278"></a><a href="#__codelineno-0-3278"><span class="linenos" data-linenos="3278 "></span></a>        <span class="n">track_matcher</span> <span class="o">=</span> <span class="n">TrackMatcher</span><span class="p">()</span>
+<a id="__codelineno-0-3279" name="__codelineno-0-3279"></a><a href="#__codelineno-0-3279"><span class="linenos" data-linenos="3279 "></span></a>    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">track</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-3280" name="__codelineno-0-3280"></a><a href="#__codelineno-0-3280"><span class="linenos" data-linenos="3280 "></span></a>        <span class="n">track_matcher</span> <span class="o">=</span> <span class="n">TrackMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="n">TrackMatchMethod</span><span class="p">(</span><span class="n">track</span><span class="p">))</span>
+<a id="__codelineno-0-3281" name="__codelineno-0-3281"></a><a href="#__codelineno-0-3281"><span class="linenos" data-linenos="3281 "></span></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-3282" name="__codelineno-0-3282"></a><a href="#__codelineno-0-3282"><span class="linenos" data-linenos="3282 "></span></a>        <span class="n">track_matcher</span> <span class="o">=</span> <span class="n">track</span>
+<a id="__codelineno-0-3283" name="__codelineno-0-3283"></a><a href="#__codelineno-0-3283"><span class="linenos" data-linenos="3283 "></span></a>
+<a id="__codelineno-0-3284" name="__codelineno-0-3284"></a><a href="#__codelineno-0-3284"><span class="linenos" data-linenos="3284 "></span></a>    <span class="c1"># Initialize result</span>
+<a id="__codelineno-0-3285" name="__codelineno-0-3285"></a><a href="#__codelineno-0-3285"><span class="linenos" data-linenos="3285 "></span></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">MatchResult</span><span class="p">()</span>
+<a id="__codelineno-0-3286" name="__codelineno-0-3286"></a><a href="#__codelineno-0-3286"><span class="linenos" data-linenos="3286 "></span></a>
+<a id="__codelineno-0-3287" name="__codelineno-0-3287"></a><a href="#__codelineno-0-3287"><span class="linenos" data-linenos="3287 "></span></a>    <span class="c1"># Match skeletons</span>
+<a id="__codelineno-0-3288" name="__codelineno-0-3288"></a><a href="#__codelineno-0-3288"><span class="linenos" data-linenos="3288 "></span></a>    <span class="k">for</span> <span class="n">other_skel</span> <span class="ow">in</span> <span class="n">other</span><span class="o">.</span><span class="n">skeletons</span><span class="p">:</span>
+<a id="__codelineno-0-3289" name="__codelineno-0-3289"></a><a href="#__codelineno-0-3289"><span class="linenos" data-linenos="3289 "></span></a>        <span class="n">matched_skel</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-3290" name="__codelineno-0-3290"></a><a href="#__codelineno-0-3290"><span class="linenos" data-linenos="3290 "></span></a>        <span class="k">for</span> <span class="n">self_skel</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">skeletons</span><span class="p">:</span>
+<a id="__codelineno-0-3291" name="__codelineno-0-3291"></a><a href="#__codelineno-0-3291"><span class="linenos" data-linenos="3291 "></span></a>            <span class="k">if</span> <span class="n">skeleton_matcher</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">self_skel</span><span class="p">,</span> <span class="n">other_skel</span><span class="p">):</span>
+<a id="__codelineno-0-3292" name="__codelineno-0-3292"></a><a href="#__codelineno-0-3292"><span class="linenos" data-linenos="3292 "></span></a>                <span class="n">matched_skel</span> <span class="o">=</span> <span class="n">self_skel</span>
+<a id="__codelineno-0-3293" name="__codelineno-0-3293"></a><a href="#__codelineno-0-3293"><span class="linenos" data-linenos="3293 "></span></a>                <span class="k">break</span>
+<a id="__codelineno-0-3294" name="__codelineno-0-3294"></a><a href="#__codelineno-0-3294"><span class="linenos" data-linenos="3294 "></span></a>        <span class="n">result</span><span class="o">.</span><span class="n">skeleton_map</span><span class="p">[</span><span class="n">other_skel</span><span class="p">]</span> <span class="o">=</span> <span class="n">matched_skel</span>
+<a id="__codelineno-0-3295" name="__codelineno-0-3295"></a><a href="#__codelineno-0-3295"><span class="linenos" data-linenos="3295 "></span></a>
+<a id="__codelineno-0-3296" name="__codelineno-0-3296"></a><a href="#__codelineno-0-3296"><span class="linenos" data-linenos="3296 "></span></a>    <span class="c1"># Match videos</span>
+<a id="__codelineno-0-3297" name="__codelineno-0-3297"></a><a href="#__codelineno-0-3297"><span class="linenos" data-linenos="3297 "></span></a>    <span class="c1"># Use find_match for AUTO method to get full matching cascade</span>
+<a id="__codelineno-0-3298" name="__codelineno-0-3298"></a><a href="#__codelineno-0-3298"><span class="linenos" data-linenos="3298 "></span></a>    <span class="k">for</span> <span class="n">other_video</span> <span class="ow">in</span> <span class="n">other</span><span class="o">.</span><span class="n">videos</span><span class="p">:</span>
+<a id="__codelineno-0-3299" name="__codelineno-0-3299"></a><a href="#__codelineno-0-3299"><span class="linenos" data-linenos="3299 "></span></a>        <span class="k">if</span> <span class="n">video_matcher</span><span class="o">.</span><span class="n">method</span> <span class="o">==</span> <span class="n">VideoMatchMethod</span><span class="o">.</span><span class="n">AUTO</span><span class="p">:</span>
+<a id="__codelineno-0-3300" name="__codelineno-0-3300"></a><a href="#__codelineno-0-3300"><span class="linenos" data-linenos="3300 "></span></a>            <span class="n">matched_video</span> <span class="o">=</span> <span class="n">video_matcher</span><span class="o">.</span><span class="n">find_match</span><span class="p">(</span>
+<a id="__codelineno-0-3301" name="__codelineno-0-3301"></a><a href="#__codelineno-0-3301"><span class="linenos" data-linenos="3301 "></span></a>                <span class="n">other_video</span><span class="p">,</span>
+<a id="__codelineno-0-3302" name="__codelineno-0-3302"></a><a href="#__codelineno-0-3302"><span class="linenos" data-linenos="3302 "></span></a>                <span class="bp">self</span><span class="o">.</span><span class="n">videos</span><span class="p">,</span>
+<a id="__codelineno-0-3303" name="__codelineno-0-3303"></a><a href="#__codelineno-0-3303"><span class="linenos" data-linenos="3303 "></span></a>                <span class="n">labels_incoming</span><span class="o">=</span><span class="n">other</span><span class="p">,</span>
+<a id="__codelineno-0-3304" name="__codelineno-0-3304"></a><a href="#__codelineno-0-3304"><span class="linenos" data-linenos="3304 "></span></a>                <span class="n">labels_base</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-3305" name="__codelineno-0-3305"></a><a href="#__codelineno-0-3305"><span class="linenos" data-linenos="3305 "></span></a>            <span class="p">)</span>
+<a id="__codelineno-0-3306" name="__codelineno-0-3306"></a><a href="#__codelineno-0-3306"><span class="linenos" data-linenos="3306 "></span></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-3307" name="__codelineno-0-3307"></a><a href="#__codelineno-0-3307"><span class="linenos" data-linenos="3307 "></span></a>            <span class="n">matched_video</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-3308" name="__codelineno-0-3308"></a><a href="#__codelineno-0-3308"><span class="linenos" data-linenos="3308 "></span></a>            <span class="k">for</span> <span class="n">self_video</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">videos</span><span class="p">:</span>
+<a id="__codelineno-0-3309" name="__codelineno-0-3309"></a><a href="#__codelineno-0-3309"><span class="linenos" data-linenos="3309 "></span></a>                <span class="k">if</span> <span class="n">video_matcher</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">self_video</span><span class="p">,</span> <span class="n">other_video</span><span class="p">):</span>
+<a id="__codelineno-0-3310" name="__codelineno-0-3310"></a><a href="#__codelineno-0-3310"><span class="linenos" data-linenos="3310 "></span></a>                    <span class="n">matched_video</span> <span class="o">=</span> <span class="n">self_video</span>
+<a id="__codelineno-0-3311" name="__codelineno-0-3311"></a><a href="#__codelineno-0-3311"><span class="linenos" data-linenos="3311 "></span></a>                    <span class="k">break</span>
+<a id="__codelineno-0-3312" name="__codelineno-0-3312"></a><a href="#__codelineno-0-3312"><span class="linenos" data-linenos="3312 "></span></a>        <span class="n">result</span><span class="o">.</span><span class="n">video_map</span><span class="p">[</span><span class="n">other_video</span><span class="p">]</span> <span class="o">=</span> <span class="n">matched_video</span>
+<a id="__codelineno-0-3313" name="__codelineno-0-3313"></a><a href="#__codelineno-0-3313"><span class="linenos" data-linenos="3313 "></span></a>
+<a id="__codelineno-0-3314" name="__codelineno-0-3314"></a><a href="#__codelineno-0-3314"><span class="linenos" data-linenos="3314 "></span></a>    <span class="c1"># Match tracks</span>
+<a id="__codelineno-0-3315" name="__codelineno-0-3315"></a><a href="#__codelineno-0-3315"><span class="linenos" data-linenos="3315 "></span></a>    <span class="k">for</span> <span class="n">other_track</span> <span class="ow">in</span> <span class="n">other</span><span class="o">.</span><span class="n">tracks</span><span class="p">:</span>
+<a id="__codelineno-0-3316" name="__codelineno-0-3316"></a><a href="#__codelineno-0-3316"><span class="linenos" data-linenos="3316 "></span></a>        <span class="n">matched_track</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-3317" name="__codelineno-0-3317"></a><a href="#__codelineno-0-3317"><span class="linenos" data-linenos="3317 "></span></a>        <span class="k">for</span> <span class="n">self_track</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracks</span><span class="p">:</span>
+<a id="__codelineno-0-3318" name="__codelineno-0-3318"></a><a href="#__codelineno-0-3318"><span class="linenos" data-linenos="3318 "></span></a>            <span class="k">if</span> <span class="n">track_matcher</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">self_track</span><span class="p">,</span> <span class="n">other_track</span><span class="p">):</span>
+<a id="__codelineno-0-3319" name="__codelineno-0-3319"></a><a href="#__codelineno-0-3319"><span class="linenos" data-linenos="3319 "></span></a>                <span class="n">matched_track</span> <span class="o">=</span> <span class="n">self_track</span>
+<a id="__codelineno-0-3320" name="__codelineno-0-3320"></a><a href="#__codelineno-0-3320"><span class="linenos" data-linenos="3320 "></span></a>                <span class="k">break</span>
+<a id="__codelineno-0-3321" name="__codelineno-0-3321"></a><a href="#__codelineno-0-3321"><span class="linenos" data-linenos="3321 "></span></a>        <span class="n">result</span><span class="o">.</span><span class="n">track_map</span><span class="p">[</span><span class="n">other_track</span><span class="p">]</span> <span class="o">=</span> <span class="n">matched_track</span>
+<a id="__codelineno-0-3322" name="__codelineno-0-3322"></a><a href="#__codelineno-0-3322"><span class="linenos" data-linenos="3322 "></span></a>
+<a id="__codelineno-0-3323" name="__codelineno-0-3323"></a><a href="#__codelineno-0-3323"><span class="linenos" data-linenos="3323 "></span></a>    <span class="k">return</span> <span class="n">result</span>
 </code></pre></div>
             </details>
     </div>
@@ -8129,7 +8480,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.VideoMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f8df5f362a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f01476be2a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -9287,7 +9638,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.SkeletonMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f8df5f362a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f01476be2a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -10080,7 +10431,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.TrackMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f8df5f362a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f01476be2a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -10937,7 +11288,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.InstanceMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f8df5f362a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f01476be2a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -11903,7 +12254,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.MergeResult.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f8df5f362a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f01476be2a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -12473,6 +12824,1071 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-1335" name="__codelineno-0-1335"></a><a href="#__codelineno-0-1335"><span class="linenos" data-linenos="1335 "></span></a>            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    ... and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">errors</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">5</span><span class="si">}</span><span class="s2"> more&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-1336" name="__codelineno-0-1336"></a><a href="#__codelineno-0-1336"><span class="linenos" data-linenos="1336 "></span></a>
 <a id="__codelineno-0-1337" name="__codelineno-0-1337"></a><a href="#__codelineno-0-1337"><span class="linenos" data-linenos="1337 "></span></a>    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div><h3 id="matchresult">MatchResult<a class="headerlink" href="#matchresult" title="Permanent link">&para;</a></h3>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h4 id="sleap_io.model.matching.MatchResult" class="doc doc-heading">
+            <code>sleap_io.model.matching.MatchResult</code>
+
+
+<a href="#sleap_io.model.matching.MatchResult" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Result of matching two Labels objects.</p>
+<p>This class holds correspondence maps between items in two Labels objects,
+without modifying either. Useful for evaluation workflows where you need
+to align predictions with ground truth without merging them.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.video_map">video_map</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dictionary mapping videos from the <code>other</code> Labels to videos in
+<code>self</code>. Values are None if no match was found.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.skeleton_map">skeleton_map</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dictionary mapping skeletons from <code>other</code> to <code>self</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.track_map">track_map</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dictionary mapping tracks from <code>other</code> to <code>self</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="example" open>
+  <summary>Example</summary>
+  <p>Match prediction videos to ground truth for evaluation::</p>
+<div class="highlight"><pre><span></span><code>&gt;&gt;&gt; gt_labels = sio.load_slp(&quot;ground_truth.slp&quot;)
+&gt;&gt;&gt; pred_labels = sio.load_slp(&quot;predictions.slp&quot;)
+&gt;&gt;&gt; result = gt_labels.match(pred_labels)
+&gt;&gt;&gt; for pred_video, gt_video in result.video_map.items():
+...     if gt_video is not None:
+...         print(f&quot;{pred_video.filename} -&gt; {gt_video.filename}&quot;)
+</code></pre></div>
+</details>
+
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__eq__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;other&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.matching.MatchResult.__eq__&lt;/code&gt;)" href="#sleap_io.model.matching.MatchResult.__eq__">__eq__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class MatchResult.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;video_map&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;NOTHING&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;skeleton_map&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;NOTHING&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;track_map&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;NOTHING&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.matching.MatchResult.__init__&lt;/code&gt;)" href="#sleap_io.model.matching.MatchResult.__init__">__init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class MatchResult.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.matching.MatchResult.__repr__&lt;/code&gt;)" href="#sleap_io.model.matching.MatchResult.__repr__">__repr__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class MatchResult.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;summary&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.matching.MatchResult.summary&lt;/code&gt;)" href="#sleap_io.model.matching.MatchResult.summary">summary</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Generate a human-readable summary of the match result.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>sleap_io/model/matching.py</code></summary>
+                <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1340" name="__codelineno-0-1340"></a><a href="#__codelineno-0-1340"><span class="linenos" data-linenos="1340 "></span></a><span class="nd">@attrs</span><span class="o">.</span><span class="n">define</span>
+<a id="__codelineno-0-1341" name="__codelineno-0-1341"></a><a href="#__codelineno-0-1341"><span class="linenos" data-linenos="1341 "></span></a><span class="k">class</span><span class="w"> </span><span class="nc">MatchResult</span><span class="p">:</span>
+<a id="__codelineno-0-1342" name="__codelineno-0-1342"></a><a href="#__codelineno-0-1342"><span class="linenos" data-linenos="1342 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Result of matching two Labels objects.</span>
+<a id="__codelineno-0-1343" name="__codelineno-0-1343"></a><a href="#__codelineno-0-1343"><span class="linenos" data-linenos="1343 "></span></a>
+<a id="__codelineno-0-1344" name="__codelineno-0-1344"></a><a href="#__codelineno-0-1344"><span class="linenos" data-linenos="1344 "></span></a><span class="sd">    This class holds correspondence maps between items in two Labels objects,</span>
+<a id="__codelineno-0-1345" name="__codelineno-0-1345"></a><a href="#__codelineno-0-1345"><span class="linenos" data-linenos="1345 "></span></a><span class="sd">    without modifying either. Useful for evaluation workflows where you need</span>
+<a id="__codelineno-0-1346" name="__codelineno-0-1346"></a><a href="#__codelineno-0-1346"><span class="linenos" data-linenos="1346 "></span></a><span class="sd">    to align predictions with ground truth without merging them.</span>
+<a id="__codelineno-0-1347" name="__codelineno-0-1347"></a><a href="#__codelineno-0-1347"><span class="linenos" data-linenos="1347 "></span></a>
+<a id="__codelineno-0-1348" name="__codelineno-0-1348"></a><a href="#__codelineno-0-1348"><span class="linenos" data-linenos="1348 "></span></a><span class="sd">    Attributes:</span>
+<a id="__codelineno-0-1349" name="__codelineno-0-1349"></a><a href="#__codelineno-0-1349"><span class="linenos" data-linenos="1349 "></span></a><span class="sd">        video_map: Dictionary mapping videos from the `other` Labels to videos in</span>
+<a id="__codelineno-0-1350" name="__codelineno-0-1350"></a><a href="#__codelineno-0-1350"><span class="linenos" data-linenos="1350 "></span></a><span class="sd">            `self`. Values are None if no match was found.</span>
+<a id="__codelineno-0-1351" name="__codelineno-0-1351"></a><a href="#__codelineno-0-1351"><span class="linenos" data-linenos="1351 "></span></a><span class="sd">        skeleton_map: Dictionary mapping skeletons from `other` to `self`.</span>
+<a id="__codelineno-0-1352" name="__codelineno-0-1352"></a><a href="#__codelineno-0-1352"><span class="linenos" data-linenos="1352 "></span></a><span class="sd">        track_map: Dictionary mapping tracks from `other` to `self`.</span>
+<a id="__codelineno-0-1353" name="__codelineno-0-1353"></a><a href="#__codelineno-0-1353"><span class="linenos" data-linenos="1353 "></span></a>
+<a id="__codelineno-0-1354" name="__codelineno-0-1354"></a><a href="#__codelineno-0-1354"><span class="linenos" data-linenos="1354 "></span></a><span class="sd">    Example:</span>
+<a id="__codelineno-0-1355" name="__codelineno-0-1355"></a><a href="#__codelineno-0-1355"><span class="linenos" data-linenos="1355 "></span></a><span class="sd">        Match prediction videos to ground truth for evaluation::</span>
+<a id="__codelineno-0-1356" name="__codelineno-0-1356"></a><a href="#__codelineno-0-1356"><span class="linenos" data-linenos="1356 "></span></a>
+<a id="__codelineno-0-1357" name="__codelineno-0-1357"></a><a href="#__codelineno-0-1357"><span class="linenos" data-linenos="1357 "></span></a><span class="sd">            &gt;&gt;&gt; gt_labels = sio.load_slp(&quot;ground_truth.slp&quot;)</span>
+<a id="__codelineno-0-1358" name="__codelineno-0-1358"></a><a href="#__codelineno-0-1358"><span class="linenos" data-linenos="1358 "></span></a><span class="sd">            &gt;&gt;&gt; pred_labels = sio.load_slp(&quot;predictions.slp&quot;)</span>
+<a id="__codelineno-0-1359" name="__codelineno-0-1359"></a><a href="#__codelineno-0-1359"><span class="linenos" data-linenos="1359 "></span></a><span class="sd">            &gt;&gt;&gt; result = gt_labels.match(pred_labels)</span>
+<a id="__codelineno-0-1360" name="__codelineno-0-1360"></a><a href="#__codelineno-0-1360"><span class="linenos" data-linenos="1360 "></span></a><span class="sd">            &gt;&gt;&gt; for pred_video, gt_video in result.video_map.items():</span>
+<a id="__codelineno-0-1361" name="__codelineno-0-1361"></a><a href="#__codelineno-0-1361"><span class="linenos" data-linenos="1361 "></span></a><span class="sd">            ...     if gt_video is not None:</span>
+<a id="__codelineno-0-1362" name="__codelineno-0-1362"></a><a href="#__codelineno-0-1362"><span class="linenos" data-linenos="1362 "></span></a><span class="sd">            ...         print(f&quot;{pred_video.filename} -&gt; {gt_video.filename}&quot;)</span>
+<a id="__codelineno-0-1363" name="__codelineno-0-1363"></a><a href="#__codelineno-0-1363"><span class="linenos" data-linenos="1363 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1364" name="__codelineno-0-1364"></a><a href="#__codelineno-0-1364"><span class="linenos" data-linenos="1364 "></span></a>
+<a id="__codelineno-0-1365" name="__codelineno-0-1365"></a><a href="#__codelineno-0-1365"><span class="linenos" data-linenos="1365 "></span></a>    <span class="n">video_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Video</span><span class="p">,</span> <span class="n">Video</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+<a id="__codelineno-0-1366" name="__codelineno-0-1366"></a><a href="#__codelineno-0-1366"><span class="linenos" data-linenos="1366 "></span></a>    <span class="n">skeleton_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="n">Skeleton</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+<a id="__codelineno-0-1367" name="__codelineno-0-1367"></a><a href="#__codelineno-0-1367"><span class="linenos" data-linenos="1367 "></span></a>    <span class="n">track_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Track</span><span class="p">,</span> <span class="n">Track</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+<a id="__codelineno-0-1368" name="__codelineno-0-1368"></a><a href="#__codelineno-0-1368"><span class="linenos" data-linenos="1368 "></span></a>
+<a id="__codelineno-0-1369" name="__codelineno-0-1369"></a><a href="#__codelineno-0-1369"><span class="linenos" data-linenos="1369 "></span></a>    <span class="nd">@property</span>
+<a id="__codelineno-0-1370" name="__codelineno-0-1370"></a><a href="#__codelineno-0-1370"><span class="linenos" data-linenos="1370 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">unmatched_videos</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Video</span><span class="p">]:</span>
+<a id="__codelineno-0-1371" name="__codelineno-0-1371"></a><a href="#__codelineno-0-1371"><span class="linenos" data-linenos="1371 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Videos from other Labels that had no match in self.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1372" name="__codelineno-0-1372"></a><a href="#__codelineno-0-1372"><span class="linenos" data-linenos="1372 "></span></a>        <span class="k">return</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span><span class="p">,</span> <span class="n">match</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">video_map</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">]</span>
+<a id="__codelineno-0-1373" name="__codelineno-0-1373"></a><a href="#__codelineno-0-1373"><span class="linenos" data-linenos="1373 "></span></a>
+<a id="__codelineno-0-1374" name="__codelineno-0-1374"></a><a href="#__codelineno-0-1374"><span class="linenos" data-linenos="1374 "></span></a>    <span class="nd">@property</span>
+<a id="__codelineno-0-1375" name="__codelineno-0-1375"></a><a href="#__codelineno-0-1375"><span class="linenos" data-linenos="1375 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">unmatched_skeletons</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]:</span>
+<a id="__codelineno-0-1376" name="__codelineno-0-1376"></a><a href="#__codelineno-0-1376"><span class="linenos" data-linenos="1376 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Skeletons from other Labels that had no match in self.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1377" name="__codelineno-0-1377"></a><a href="#__codelineno-0-1377"><span class="linenos" data-linenos="1377 "></span></a>        <span class="k">return</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span><span class="p">,</span> <span class="n">match</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">skeleton_map</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">]</span>
+<a id="__codelineno-0-1378" name="__codelineno-0-1378"></a><a href="#__codelineno-0-1378"><span class="linenos" data-linenos="1378 "></span></a>
+<a id="__codelineno-0-1379" name="__codelineno-0-1379"></a><a href="#__codelineno-0-1379"><span class="linenos" data-linenos="1379 "></span></a>    <span class="nd">@property</span>
+<a id="__codelineno-0-1380" name="__codelineno-0-1380"></a><a href="#__codelineno-0-1380"><span class="linenos" data-linenos="1380 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">unmatched_tracks</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Track</span><span class="p">]:</span>
+<a id="__codelineno-0-1381" name="__codelineno-0-1381"></a><a href="#__codelineno-0-1381"><span class="linenos" data-linenos="1381 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Tracks from other Labels that had no match in self.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1382" name="__codelineno-0-1382"></a><a href="#__codelineno-0-1382"><span class="linenos" data-linenos="1382 "></span></a>        <span class="k">return</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">match</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">track_map</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">]</span>
+<a id="__codelineno-0-1383" name="__codelineno-0-1383"></a><a href="#__codelineno-0-1383"><span class="linenos" data-linenos="1383 "></span></a>
+<a id="__codelineno-0-1384" name="__codelineno-0-1384"></a><a href="#__codelineno-0-1384"><span class="linenos" data-linenos="1384 "></span></a>    <span class="nd">@property</span>
+<a id="__codelineno-0-1385" name="__codelineno-0-1385"></a><a href="#__codelineno-0-1385"><span class="linenos" data-linenos="1385 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">all_videos_matched</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<a id="__codelineno-0-1386" name="__codelineno-0-1386"></a><a href="#__codelineno-0-1386"><span class="linenos" data-linenos="1386 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if all videos from other were matched.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1387" name="__codelineno-0-1387"></a><a href="#__codelineno-0-1387"><span class="linenos" data-linenos="1387 "></span></a>        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+<a id="__codelineno-0-1388" name="__codelineno-0-1388"></a><a href="#__codelineno-0-1388"><span class="linenos" data-linenos="1388 "></span></a>
+<a id="__codelineno-0-1389" name="__codelineno-0-1389"></a><a href="#__codelineno-0-1389"><span class="linenos" data-linenos="1389 "></span></a>    <span class="nd">@property</span>
+<a id="__codelineno-0-1390" name="__codelineno-0-1390"></a><a href="#__codelineno-0-1390"><span class="linenos" data-linenos="1390 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">all_skeletons_matched</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<a id="__codelineno-0-1391" name="__codelineno-0-1391"></a><a href="#__codelineno-0-1391"><span class="linenos" data-linenos="1391 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if all skeletons from other were matched.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1392" name="__codelineno-0-1392"></a><a href="#__codelineno-0-1392"><span class="linenos" data-linenos="1392 "></span></a>        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unmatched_skeletons</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+<a id="__codelineno-0-1393" name="__codelineno-0-1393"></a><a href="#__codelineno-0-1393"><span class="linenos" data-linenos="1393 "></span></a>
+<a id="__codelineno-0-1394" name="__codelineno-0-1394"></a><a href="#__codelineno-0-1394"><span class="linenos" data-linenos="1394 "></span></a>    <span class="nd">@property</span>
+<a id="__codelineno-0-1395" name="__codelineno-0-1395"></a><a href="#__codelineno-0-1395"><span class="linenos" data-linenos="1395 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">all_tracks_matched</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<a id="__codelineno-0-1396" name="__codelineno-0-1396"></a><a href="#__codelineno-0-1396"><span class="linenos" data-linenos="1396 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if all tracks from other were matched.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1397" name="__codelineno-0-1397"></a><a href="#__codelineno-0-1397"><span class="linenos" data-linenos="1397 "></span></a>        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unmatched_tracks</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+<a id="__codelineno-0-1398" name="__codelineno-0-1398"></a><a href="#__codelineno-0-1398"><span class="linenos" data-linenos="1398 "></span></a>
+<a id="__codelineno-0-1399" name="__codelineno-0-1399"></a><a href="#__codelineno-0-1399"><span class="linenos" data-linenos="1399 "></span></a>    <span class="nd">@property</span>
+<a id="__codelineno-0-1400" name="__codelineno-0-1400"></a><a href="#__codelineno-0-1400"><span class="linenos" data-linenos="1400 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">n_videos_matched</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-1401" name="__codelineno-0-1401"></a><a href="#__codelineno-0-1401"><span class="linenos" data-linenos="1401 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Number of videos that were successfully matched.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1402" name="__codelineno-0-1402"></a><a href="#__codelineno-0-1402"><span class="linenos" data-linenos="1402 "></span></a>        <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">video_map</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-1403" name="__codelineno-0-1403"></a><a href="#__codelineno-0-1403"><span class="linenos" data-linenos="1403 "></span></a>
+<a id="__codelineno-0-1404" name="__codelineno-0-1404"></a><a href="#__codelineno-0-1404"><span class="linenos" data-linenos="1404 "></span></a>    <span class="nd">@property</span>
+<a id="__codelineno-0-1405" name="__codelineno-0-1405"></a><a href="#__codelineno-0-1405"><span class="linenos" data-linenos="1405 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">n_skeletons_matched</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-1406" name="__codelineno-0-1406"></a><a href="#__codelineno-0-1406"><span class="linenos" data-linenos="1406 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Number of skeletons that were successfully matched.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1407" name="__codelineno-0-1407"></a><a href="#__codelineno-0-1407"><span class="linenos" data-linenos="1407 "></span></a>        <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">skeleton_map</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">if</span> <span class="n">s</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-1408" name="__codelineno-0-1408"></a><a href="#__codelineno-0-1408"><span class="linenos" data-linenos="1408 "></span></a>
+<a id="__codelineno-0-1409" name="__codelineno-0-1409"></a><a href="#__codelineno-0-1409"><span class="linenos" data-linenos="1409 "></span></a>    <span class="nd">@property</span>
+<a id="__codelineno-0-1410" name="__codelineno-0-1410"></a><a href="#__codelineno-0-1410"><span class="linenos" data-linenos="1410 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">n_tracks_matched</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-1411" name="__codelineno-0-1411"></a><a href="#__codelineno-0-1411"><span class="linenos" data-linenos="1411 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Number of tracks that were successfully matched.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1412" name="__codelineno-0-1412"></a><a href="#__codelineno-0-1412"><span class="linenos" data-linenos="1412 "></span></a>        <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">track_map</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">if</span> <span class="n">t</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-1413" name="__codelineno-0-1413"></a><a href="#__codelineno-0-1413"><span class="linenos" data-linenos="1413 "></span></a>
+<a id="__codelineno-0-1414" name="__codelineno-0-1414"></a><a href="#__codelineno-0-1414"><span class="linenos" data-linenos="1414 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">summary</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-1415" name="__codelineno-0-1415"></a><a href="#__codelineno-0-1415"><span class="linenos" data-linenos="1415 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate a human-readable summary of the match result.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1416" name="__codelineno-0-1416"></a><a href="#__codelineno-0-1416"><span class="linenos" data-linenos="1416 "></span></a>        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-1417" name="__codelineno-0-1417"></a><a href="#__codelineno-0-1417"><span class="linenos" data-linenos="1417 "></span></a>        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Videos: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_videos_matched</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">video_map</span><span class="p">)</span><span class="si">}</span><span class="s2"> matched&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1418" name="__codelineno-0-1418"></a><a href="#__codelineno-0-1418"><span class="linenos" data-linenos="1418 "></span></a>        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="__codelineno-0-1419" name="__codelineno-0-1419"></a><a href="#__codelineno-0-1419"><span class="linenos" data-linenos="1419 "></span></a>            <span class="sa">f</span><span class="s2">&quot;Skeletons: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_skeletons_matched</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">skeleton_map</span><span class="p">)</span><span class="si">}</span><span class="s2"> matched&quot;</span>
+<a id="__codelineno-0-1420" name="__codelineno-0-1420"></a><a href="#__codelineno-0-1420"><span class="linenos" data-linenos="1420 "></span></a>        <span class="p">)</span>
+<a id="__codelineno-0-1421" name="__codelineno-0-1421"></a><a href="#__codelineno-0-1421"><span class="linenos" data-linenos="1421 "></span></a>        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Tracks: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_tracks_matched</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">track_map</span><span class="p">)</span><span class="si">}</span><span class="s2"> matched&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1422" name="__codelineno-0-1422"></a><a href="#__codelineno-0-1422"><span class="linenos" data-linenos="1422 "></span></a>
+<a id="__codelineno-0-1423" name="__codelineno-0-1423"></a><a href="#__codelineno-0-1423"><span class="linenos" data-linenos="1423 "></span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">:</span>
+<a id="__codelineno-0-1424" name="__codelineno-0-1424"></a><a href="#__codelineno-0-1424"><span class="linenos" data-linenos="1424 "></span></a>            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;Unmatched videos:&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1425" name="__codelineno-0-1425"></a><a href="#__codelineno-0-1425"><span class="linenos" data-linenos="1425 "></span></a>            <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">[:</span><span class="mi">5</span><span class="p">]:</span>
+<a id="__codelineno-0-1426" name="__codelineno-0-1426"></a><a href="#__codelineno-0-1426"><span class="linenos" data-linenos="1426 "></span></a>                <span class="n">fn</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">filename</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">v</span><span class="o">.</span><span class="n">filename</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a><a href="#__codelineno-0-1427"><span class="linenos" data-linenos="1427 "></span></a>                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">fn</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1428" name="__codelineno-0-1428"></a><a href="#__codelineno-0-1428"><span class="linenos" data-linenos="1428 "></span></a>            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">5</span><span class="p">:</span>
+<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a><a href="#__codelineno-0-1429"><span class="linenos" data-linenos="1429 "></span></a>                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ... and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">5</span><span class="si">}</span><span class="s2"> more&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a><a href="#__codelineno-0-1430"><span class="linenos" data-linenos="1430 "></span></a>
+<a id="__codelineno-0-1431" name="__codelineno-0-1431"></a><a href="#__codelineno-0-1431"><span class="linenos" data-linenos="1431 "></span></a>        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+</code></pre></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__annotations__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="vm">__annotations__</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;video_map&#39;</span><span class="p">:</span> <span class="s1">&#39;dict[Video, Video | None]&#39;</span><span class="p">,</span> <span class="s1">&#39;skeleton_map&#39;</span><span class="p">:</span> <span class="s1">&#39;dict[Skeleton, Skeleton | None]&#39;</span><span class="p">,</span> <span class="s1">&#39;track_map&#39;</span><span class="p">:</span> <span class="s1">&#39;dict[Track, Track | None]&#39;</span><span class="p">}</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__annotations__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>dict() -&gt; new empty dictionary
+dict(mapping) -&gt; new dictionary initialized from a mapping object's
+    (key, value) pairs
+dict(iterable) -&gt; new dictionary initialized as if via:
+    d = {}
+    for k, v in iterable:
+        d[k] = v
+dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
+    in the keyword argument list.  For example:  dict(one=1, two=2)</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__attrs_own_setattr__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__attrs_own_setattr__</span> <span class="o">=</span> <span class="kc">False</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__attrs_own_setattr__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Returns True when the argument is true, False otherwise.
+The builtins True and False are the only two instances of the class bool.
+The class bool is a subclass of the class int, and cannot be subclassed.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__attrs_props__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f01476be2a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__attrs_props__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Effective class properties as derived from parameters to <code>attr.s()</code> or
+<code>define()</code> decorators.</p>
+<p>This is the same data structure that <em>attrs</em> uses internally to decide how
+to construct the final class.</p>
+<p>Warning:</p>
+<div class="highlight"><pre><span></span><code>This feature is currently **experimental** and is not covered by our
+strict backwards-compatibility guarantees.
+</code></pre></div>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.is_exception">is_exception</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class is treated as an exception class.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.is_slotted">is_slotted</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class is <code>slotted &lt;slotted classes&gt;</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.has_weakref_slot">has_weakref_slot</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class has a slot for weak references.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.is_frozen">is_frozen</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class is frozen.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.kw_only">kw_only</span></code></td>
+            <td>
+                  <code><span title="KeywordOnly">KeywordOnly</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether / how the class enforces keyword-only arguments on the
+<code>__init__</code> method.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.collected_fields_by_mro">collected_fields_by_mro</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class fields were collected by method resolution order.
+That is, correctly but unlike <code>dataclasses</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.added_init">added_init</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class has an <em>attrs</em>-generated <code>__init__</code> method.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.added_repr">added_repr</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class has an <em>attrs</em>-generated <code>__repr__</code> method.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.added_eq">added_eq</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class has <em>attrs</em>-generated equality methods.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.added_ordering">added_ordering</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class has <em>attrs</em>-generated ordering methods.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.hashability">hashability</span></code></td>
+            <td>
+                  <code><span title="Hashability">Hashability</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>How <code>hashable &lt;hashing&gt;</code> the class is.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.added_match_args">added_match_args</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class supports positional <code>match &lt;match&gt;</code> over its
+fields.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.added_str">added_str</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class has an <em>attrs</em>-generated <code>__str__</code> method.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.added_pickling">added_pickling</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the class has <em>attrs</em>-generated <code>__getstate__</code> and
+<code>__setstate__</code> methods for <code>pickle</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.on_setattr_hook">on_setattr_hook</span></code></td>
+            <td>
+                  <code><span title="Callable">Callable</span>[[<span title="typing.Any">Any</span>, <span title="Attribute">Attribute</span>[<span title="typing.Any">Any</span>], <span title="typing.Any">Any</span>], <span title="typing.Any">Any</span>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The class's <code>__setattr__</code> hook.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.MatchResult.__attrs_props__.field_transformer">field_transformer</span></code></td>
+            <td>
+                  <code><span title="Callable">Callable</span>[[<span title="Attribute">Attribute</span>[<span title="typing.Any">Any</span>]], <span title="Attribute">Attribute</span>[<span title="typing.Any">Any</span>]] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The class's <code>field transformers &lt;transform-fields&gt;</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+        <p>.. versionadded:: 25.4.0</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__doc__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Result of matching two Labels objects.</span><span class="se">\n\n</span><span class="s1">This class holds correspondence maps between items in two Labels objects,</span><span class="se">\n</span><span class="s1">without modifying either. Useful for evaluation workflows where you need</span><span class="se">\n</span><span class="s1">to align predictions with ground truth without merging them.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    video_map: Dictionary mapping videos from the `other` Labels to videos in</span><span class="se">\n</span><span class="s1">        `self`. Values are None if no match was found.</span><span class="se">\n</span><span class="s1">    skeleton_map: Dictionary mapping skeletons from `other` to `self`.</span><span class="se">\n</span><span class="s1">    track_map: Dictionary mapping tracks from `other` to `self`.</span><span class="se">\n\n</span><span class="s1">Example:</span><span class="se">\n</span><span class="s1">    Match prediction videos to ground truth for evaluation::</span><span class="se">\n\n</span><span class="s1">        &gt;&gt;&gt; gt_labels = sio.load_slp(&quot;ground_truth.slp&quot;)</span><span class="se">\n</span><span class="s1">        &gt;&gt;&gt; pred_labels = sio.load_slp(&quot;predictions.slp&quot;)</span><span class="se">\n</span><span class="s1">        &gt;&gt;&gt; result = gt_labels.match(pred_labels)</span><span class="se">\n</span><span class="s1">        &gt;&gt;&gt; for pred_video, gt_video in result.video_map.items():</span><span class="se">\n</span><span class="s1">        ...     if gt_video is not None:</span><span class="se">\n</span><span class="s1">        ...         print(f&quot;</span><span class="si">{pred_video.filename}</span><span class="s1"> -&gt; </span><span class="si">{gt_video.filename}</span><span class="s1">&quot;)</span><span class="se">\n</span><span class="s1">&#39;</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__doc__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>str(object='') -&gt; str
+str(bytes_or_buffer[, encoding[, errors]]) -&gt; str</p>
+<p>Create a new string object from the given object. If encoding or
+errors is specified, then the object must expose a data buffer
+that will be decoded using the given encoding and error handler.
+Otherwise, returns the result of object.<strong>str</strong>() (if defined)
+or repr(object).
+encoding defaults to 'utf-8'.
+errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">1340</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer
+iteral.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__match_args__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__match_args__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;video_map&#39;</span><span class="p">,</span> <span class="s1">&#39;skeleton_map&#39;</span><span class="p">,</span> <span class="s1">&#39;track_map&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__match_args__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__module__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="vm">__module__</span> <span class="o">=</span> <span class="s1">&#39;sleap_io.model.matching&#39;</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__module__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>str(object='') -&gt; str
+str(bytes_or_buffer[, encoding[, errors]]) -&gt; str</p>
+<p>Create a new string object from the given object. If encoding or
+errors is specified, then the object must expose a data buffer
+that will be decoded using the given encoding and error handler.
+Otherwise, returns the result of object.<strong>str</strong>() (if defined)
+or repr(object).
+encoding defaults to 'utf-8'.
+errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__slots__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;video_map&#39;</span><span class="p">,</span> <span class="s1">&#39;skeleton_map&#39;</span><span class="p">,</span> <span class="s1">&#39;track_map&#39;</span><span class="p">,</span> <span class="s1">&#39;__weakref__&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__slots__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__weakref__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="vm">__weakref__</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.__weakref__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>list of weak references to the object</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.all_skeletons_matched" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">all_skeletons_matched</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.all_skeletons_matched" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>True if all skeletons from other were matched.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.all_tracks_matched" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">all_tracks_matched</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.all_tracks_matched" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>True if all tracks from other were matched.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.all_videos_matched" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">all_videos_matched</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.all_videos_matched" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>True if all videos from other were matched.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.n_skeletons_matched" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">n_skeletons_matched</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.n_skeletons_matched" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Number of skeletons that were successfully matched.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.n_tracks_matched" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">n_tracks_matched</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.n_tracks_matched" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Number of tracks that were successfully matched.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.n_videos_matched" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">n_videos_matched</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.n_videos_matched" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Number of videos that were successfully matched.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.unmatched_skeletons" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">unmatched_skeletons</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.unmatched_skeletons" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Skeletons from other Labels that had no match in self.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.unmatched_tracks" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">unmatched_tracks</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.unmatched_tracks" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Tracks from other Labels that had no match in self.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.MatchResult.unmatched_videos" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">unmatched_videos</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.MatchResult.unmatched_videos" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Videos from other Labels that had no match in self.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__eq__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__eq__</span><span class="p">(</span><span class="n">other</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.matching.MatchResult.__eq__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class MatchResult.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/model/matching.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-16" name="__codelineno-0-16"></a><a href="#__codelineno-0-16"><span class="linenos" data-linenos="16 "></span></a><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17"></a><a href="#__codelineno-0-17"><span class="linenos" data-linenos="17 "></span></a>
+<a id="__codelineno-0-18" name="__codelineno-0-18"></a><a href="#__codelineno-0-18"><span class="linenos" data-linenos="18 "></span></a><span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19"></a><a href="#__codelineno-0-19"><span class="linenos" data-linenos="19 "></span></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20"></a><a href="#__codelineno-0-20"><span class="linenos" data-linenos="20 "></span></a>
+<a id="__codelineno-0-21" name="__codelineno-0-21"></a><a href="#__codelineno-0-21"><span class="linenos" data-linenos="21 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">attrs</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22"></a><a href="#__codelineno-0-22"><span class="linenos" data-linenos="22 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">video_map</span><span class="o">=</span><span class="n">NOTHING</span><span class="p">,</span> <span class="n">skeleton_map</span><span class="o">=</span><span class="n">NOTHING</span><span class="p">,</span> <span class="n">track_map</span><span class="o">=</span><span class="n">NOTHING</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.matching.MatchResult.__init__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class MatchResult.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/model/matching.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-24" name="__codelineno-0-24"></a><a href="#__codelineno-0-24"><span class="linenos" data-linenos="24 "></span></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.instance</span><span class="w"> </span><span class="kn">import</span> <span class="n">Instance</span><span class="p">,</span> <span class="n">Track</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25"></a><a href="#__codelineno-0-25"><span class="linenos" data-linenos="25 "></span></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.labeled_frame</span><span class="w"> </span><span class="kn">import</span> <span class="n">LabeledFrame</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26"></a><a href="#__codelineno-0-26"><span class="linenos" data-linenos="26 "></span></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.skeleton</span><span class="w"> </span><span class="kn">import</span> <span class="n">Skeleton</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27"></a><a href="#__codelineno-0-27"><span class="linenos" data-linenos="27 "></span></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.video</span><span class="w"> </span><span class="kn">import</span> <span class="n">Video</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28"></a><a href="#__codelineno-0-28"><span class="linenos" data-linenos="28 "></span></a>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a><a href="#__codelineno-0-29"><span class="linenos" data-linenos="29 "></span></a><span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30"></a><a href="#__codelineno-0-30"><span class="linenos" data-linenos="30 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.labels</span><span class="w"> </span><span class="kn">import</span> <span class="n">Labels</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31"></a><a href="#__codelineno-0-31"><span class="linenos" data-linenos="31 "></span></a>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a><a href="#__codelineno-0-32"><span class="linenos" data-linenos="32 "></span></a>
+<a id="__codelineno-0-33" name="__codelineno-0-33"></a><a href="#__codelineno-0-33"><span class="linenos" data-linenos="33 "></span></a><span class="k">class</span><span class="w"> </span><span class="nc">SkeletonMatchMethod</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Enum</span><span class="p">):</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34"></a><a href="#__codelineno-0-34"><span class="linenos" data-linenos="34 "></span></a>    <span class="s2">&quot;&quot;&quot;Methods for matching skeletons.</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="sleap_io.model.matching.MatchResult.__repr__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__repr__</span><span class="p">()</span></code>
+
+<a href="#sleap_io.model.matching.MatchResult.__repr__" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class MatchResult.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/model/matching.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1"></a><a href="#__codelineno-0-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="sd">&quot;&quot;&quot;Unified matcher system for comparing and matching data structures during merging.</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2"></a><a href="#__codelineno-0-2"><span class="linenos" data-linenos=" 2 "></span></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3"></a><a href="#__codelineno-0-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="sd">This module provides configurable matchers for comparing skeletons, instances, tracks,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4"></a><a href="#__codelineno-0-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="sd">and videos during merge operations. The matchers use various strategies to determine</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5"></a><a href="#__codelineno-0-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="sd">when data structures should be considered equivalent during merging.</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6"></a><a href="#__codelineno-0-6"><span class="linenos" data-linenos=" 6 "></span></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7"></a><a href="#__codelineno-0-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="sd">Key features:</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8"></a><a href="#__codelineno-0-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="sd">- Skeleton matching: exact, structure-based, overlap, and subset matching</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9"></a><a href="#__codelineno-0-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="sd">- Instance matching: spatial proximity, track identity, and bounding box IoU</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10"></a><a href="#__codelineno-0-10"><span class="linenos" data-linenos="10 "></span></a><span class="sd">- Track matching: by name or object identity</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11"></a><a href="#__codelineno-0-11"><span class="linenos" data-linenos="11 "></span></a><span class="sd">- Video matching: path, basename, content, and auto matching</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12"></a><a href="#__codelineno-0-12"><span class="linenos" data-linenos="12 "></span></a>
+<a id="__codelineno-0-13" name="__codelineno-0-13"></a><a href="#__codelineno-0-13"><span class="linenos" data-linenos="13 "></span></a><span class="sd">Video matching supports path-based, filename-based, content-based, and</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14"></a><a href="#__codelineno-0-14"><span class="linenos" data-linenos="14 "></span></a><span class="sd">automatic strategies.</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15"></a><a href="#__codelineno-0-15"><span class="linenos" data-linenos="15 "></span></a><span class="sd">&quot;&quot;&quot;</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="sleap_io.model.matching.MatchResult.summary" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">summary</span><span class="p">()</span></code>
+
+<a href="#sleap_io.model.matching.MatchResult.summary" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Generate a human-readable summary of the match result.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/model/matching.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1414" name="__codelineno-0-1414"></a><a href="#__codelineno-0-1414"><span class="linenos" data-linenos="1414 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">summary</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-1415" name="__codelineno-0-1415"></a><a href="#__codelineno-0-1415"><span class="linenos" data-linenos="1415 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a human-readable summary of the match result.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1416" name="__codelineno-0-1416"></a><a href="#__codelineno-0-1416"><span class="linenos" data-linenos="1416 "></span></a>    <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-1417" name="__codelineno-0-1417"></a><a href="#__codelineno-0-1417"><span class="linenos" data-linenos="1417 "></span></a>    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Videos: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_videos_matched</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">video_map</span><span class="p">)</span><span class="si">}</span><span class="s2"> matched&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1418" name="__codelineno-0-1418"></a><a href="#__codelineno-0-1418"><span class="linenos" data-linenos="1418 "></span></a>    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="__codelineno-0-1419" name="__codelineno-0-1419"></a><a href="#__codelineno-0-1419"><span class="linenos" data-linenos="1419 "></span></a>        <span class="sa">f</span><span class="s2">&quot;Skeletons: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_skeletons_matched</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">skeleton_map</span><span class="p">)</span><span class="si">}</span><span class="s2"> matched&quot;</span>
+<a id="__codelineno-0-1420" name="__codelineno-0-1420"></a><a href="#__codelineno-0-1420"><span class="linenos" data-linenos="1420 "></span></a>    <span class="p">)</span>
+<a id="__codelineno-0-1421" name="__codelineno-0-1421"></a><a href="#__codelineno-0-1421"><span class="linenos" data-linenos="1421 "></span></a>    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Tracks: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_tracks_matched</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">track_map</span><span class="p">)</span><span class="si">}</span><span class="s2"> matched&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1422" name="__codelineno-0-1422"></a><a href="#__codelineno-0-1422"><span class="linenos" data-linenos="1422 "></span></a>
+<a id="__codelineno-0-1423" name="__codelineno-0-1423"></a><a href="#__codelineno-0-1423"><span class="linenos" data-linenos="1423 "></span></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">:</span>
+<a id="__codelineno-0-1424" name="__codelineno-0-1424"></a><a href="#__codelineno-0-1424"><span class="linenos" data-linenos="1424 "></span></a>        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;Unmatched videos:&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1425" name="__codelineno-0-1425"></a><a href="#__codelineno-0-1425"><span class="linenos" data-linenos="1425 "></span></a>        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">[:</span><span class="mi">5</span><span class="p">]:</span>
+<a id="__codelineno-0-1426" name="__codelineno-0-1426"></a><a href="#__codelineno-0-1426"><span class="linenos" data-linenos="1426 "></span></a>            <span class="n">fn</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">filename</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">v</span><span class="o">.</span><span class="n">filename</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a><a href="#__codelineno-0-1427"><span class="linenos" data-linenos="1427 "></span></a>            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">fn</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1428" name="__codelineno-0-1428"></a><a href="#__codelineno-0-1428"><span class="linenos" data-linenos="1428 "></span></a>        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">5</span><span class="p">:</span>
+<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a><a href="#__codelineno-0-1429"><span class="linenos" data-linenos="1429 "></span></a>            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ... and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">5</span><span class="si">}</span><span class="s2"> more&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a><a href="#__codelineno-0-1430"><span class="linenos" data-linenos="1430 "></span></a>
+<a id="__codelineno-0-1431" name="__codelineno-0-1431"></a><a href="#__codelineno-0-1431"><span class="linenos" data-linenos="1431 "></span></a>    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>

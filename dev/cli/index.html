@@ -6430,7 +6430,7 @@ The <code>[all]</code> extra installs faster video backends (OpenCV, PyAV) for i
 <a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--preset<span class="w"> </span>preview<span class="w">                </span><span class="c1"># Fast 0.25x preview</span>
 <a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--start<span class="w"> </span><span class="m">100</span><span class="w"> </span>--end<span class="w"> </span><span class="m">200</span>
 <a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w">                          </span><span class="c1"># Single frame -&gt; PNG</span>
-<a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--crop<span class="w"> </span>auto<span class="w">              </span><span class="c1"># Auto-fit to instances</span>
+<a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--crop<span class="w"> </span><span class="m">100</span>,100,300,300<span class="w">  </span><span class="c1"># Crop to region</span>
 <a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--color-by<span class="w"> </span>track<span class="w"> </span>--marker-shape<span class="w"> </span>diamond
 <a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--trails<span class="w"> </span>--trail-length<span class="w"> </span><span class="m">10</span><span class="w">           </span><span class="c1"># Motion trails</span>
 <a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a>
@@ -8749,12 +8749,7 @@ temporal context).</p>
 <tr>
 <td><code>--crop</code></td>
 <td>none</td>
-<td>Crop region: <code>auto</code> or <code>x1,y1,x2,y2</code> (pixels or normalized 0.0-1.0)</td>
-</tr>
-<tr>
-<td><code>--crop-padding</code></td>
-<td>0.2</td>
-<td>Padding for auto-crop as fraction of bounding box</td>
+<td>Crop region: <code>x1,y1,x2,y2</code> (pixels or normalized 0.0-1.0)</td>
 </tr>
 </tbody>
 </table>
@@ -8779,22 +8774,15 @@ temporal context).</p>
 </ul>
 </div>
 <h3 id="cropping-single-image-only">Cropping (Single Image Only)<a class="headerlink" href="#cropping-single-image-only" title="Permanent link">&para;</a></h3>
-<p>Crop the output image to focus on specific regions or automatically fit around detected instances:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-99-1" name="__codelineno-99-1" href="#__codelineno-99-1"></a><span class="c1"># Auto-fit: crop to bounding box of all instances with 20% padding (default)</span>
-<a id="__codelineno-99-2" name="__codelineno-99-2" href="#__codelineno-99-2"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--crop<span class="w"> </span>auto
+<p>Crop the output image to focus on specific regions:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-99-1" name="__codelineno-99-1" href="#__codelineno-99-1"></a><span class="c1"># Pixel coordinates (x1, y1, x2, y2)</span>
+<a id="__codelineno-99-2" name="__codelineno-99-2" href="#__codelineno-99-2"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--crop<span class="w"> </span><span class="m">100</span>,100,300,300
 <a id="__codelineno-99-3" name="__codelineno-99-3" href="#__codelineno-99-3"></a>
-<a id="__codelineno-99-4" name="__codelineno-99-4" href="#__codelineno-99-4"></a><span class="c1"># Auto-fit with custom padding (30% of bounding box)</span>
-<a id="__codelineno-99-5" name="__codelineno-99-5" href="#__codelineno-99-5"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--crop<span class="w"> </span>auto<span class="w"> </span>--crop-padding<span class="w"> </span><span class="m">0</span>.3
-<a id="__codelineno-99-6" name="__codelineno-99-6" href="#__codelineno-99-6"></a>
-<a id="__codelineno-99-7" name="__codelineno-99-7" href="#__codelineno-99-7"></a><span class="c1"># Pixel coordinates (x1, y1, x2, y2)</span>
-<a id="__codelineno-99-8" name="__codelineno-99-8" href="#__codelineno-99-8"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--crop<span class="w"> </span><span class="m">100</span>,100,300,300
-<a id="__codelineno-99-9" name="__codelineno-99-9" href="#__codelineno-99-9"></a>
-<a id="__codelineno-99-10" name="__codelineno-99-10" href="#__codelineno-99-10"></a><span class="c1"># Normalized coordinates (center 50% of frame)</span>
-<a id="__codelineno-99-11" name="__codelineno-99-11" href="#__codelineno-99-11"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--crop<span class="w"> </span><span class="m">0</span>.25,0.25,0.75,0.75
+<a id="__codelineno-99-4" name="__codelineno-99-4" href="#__codelineno-99-4"></a><span class="c1"># Normalized coordinates (center 50% of frame)</span>
+<a id="__codelineno-99-5" name="__codelineno-99-5" href="#__codelineno-99-5"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>--crop<span class="w"> </span><span class="m">0</span>.25,0.25,0.75,0.75
 </code></pre></div>
 <p>The crop modes:</p>
 <ul>
-<li><strong><code>auto</code></strong>: Automatically fit to the bounding box of all instances, with padding. Best for focusing on animals.</li>
 <li><strong>Pixel coordinates</strong>: <code>x1,y1,x2,y2</code> as integers. Use for precise cropping when you know exact pixel locations.</li>
 <li><strong>Normalized coordinates</strong>: <code>x1,y1,x2,y2</code> as floats between 0.0-1.0. Use for relative cropping that works across different video resolutions.</li>
 </ul>

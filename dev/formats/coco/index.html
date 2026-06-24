@@ -3525,6 +3525,15 @@ the <code>segmentation_format</code> argument of <code>load_coco</code> / <code>
 <li><code>"roi"</code>: keep the native vector geometry as <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.ROI&lt;/code&gt;" href="../../model/rois/#sleap_io.ROI"><code>ROI</code></a> objects (one
   per ring), without rasterizing.</li>
 </ul>
+<div class="admonition warning">
+<p class="admonition-title">Breaking change in 0.8.0</p>
+<p>The default polygon segmentation handling changed in v0.8.0. In v0.7.1,
+polygon segmentation was read as vector <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.ROI&lt;/code&gt;" href="../../model/rois/#sleap_io.ROI"><code>ROI</code></a> objects (one per
+ring). The new default (<code>segmentation_format="mask"</code>) rasterizes each
+annotation's polygon(s) into a single <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.SegmentationMask&lt;/code&gt;" href="../../model/segmentation/#sleap_io.SegmentationMask"><code>SegmentationMask</code></a>.
+<strong>To restore the pre-0.8.0 vector-ROI behavior, pass
+<code>segmentation_format="roi"</code>.</strong></p>
+</div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Polygon segmentation -&gt; SegmentationMask (default).</span>
