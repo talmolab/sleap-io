@@ -310,6 +310,7 @@ class ROI:
             category=self.category,
             source=self.source,
             track=self.track,
+            tracking_score=self.tracking_score,
             instance=self.instance,
         )
         if self.is_predicted:
@@ -344,6 +345,7 @@ class ROI:
                     source=self.source,
                     video=self.video,
                     track=self.track,
+                    tracking_score=self.tracking_score,
                     instance=self.instance,
                     **extra,
                 )

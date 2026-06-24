@@ -206,6 +206,7 @@ class SegmentationMask:
             category=self.category,
             source=self.source,
             track=self.track,
+            tracking_score=self.tracking_score,
             instance=self.instance,
             scale=(1.0, 1.0),
             offset=(0.0, 0.0),
@@ -222,7 +223,11 @@ class SegmentationMask:
                 )
             kwargs["score_map_scale"] = (1.0, 1.0)
             kwargs["score_map_offset"] = (0.0, 0.0)
-        return type(self).from_numpy(resized, **kwargs)
+        resampled = type(self).from_numpy(resized, **kwargs)
+        # Carry the deferred instance index through (init=False, so set after
+        # construction; mirrors to_user() preserving the lazy association).
+        resampled._instance_idx = self._instance_idx
+        return resampled
 
     @classmethod
     def from_numpy(
@@ -342,6 +347,7 @@ class SegmentationMask:
         cls = PredictedBoundingBox if self.is_predicted else UserBoundingBox
         kwargs: dict = dict(
             track=self.track,
+            tracking_score=self.tracking_score,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -396,6 +402,7 @@ class SegmentationMask:
             category=self.category,
             source=self.source,
             track=self.track,
+            tracking_score=self.tracking_score,
             instance=self.instance,
         )
 

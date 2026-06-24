@@ -259,9 +259,17 @@ class LabelImage:
         from sleap_io.model.mask import _resize_nearest
 
         resized = _resize_nearest(self.data, target_height, target_width)
+        objects: dict[int, LabelImage.Info] = {}
+        for lid, info in self.objects.items():
+            new_info = attrs.evolve(info)
+            # Carry the deferred instance index through (init=False, so it is not
+            # reproduced by attrs.evolve and must be set after construction;
+            # mirrors how __deepcopy__ preserves the lazy association).
+            new_info._instance_idx = info._instance_idx
+            objects[lid] = new_info
         kwargs: dict = dict(
             data=resized,
-            objects={lid: attrs.evolve(info) for lid, info in self.objects.items()},
+            objects=objects,
             source=self.source,
             scale=(1.0, 1.0),
             offset=(0.0, 0.0),

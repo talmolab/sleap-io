@@ -272,6 +272,7 @@ class BoundingBox:
             category=self.category,
             source=self.source,
             track=self.track,
+            tracking_score=self.tracking_score,
             instance=self.instance,
         )
 
