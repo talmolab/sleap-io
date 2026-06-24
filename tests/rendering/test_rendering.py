@@ -4510,6 +4510,87 @@ def test_render_video_centroids_no_track():
     assert len(frames) == 1
 
 
+def test_render_image_centroid_marker_scales_linearly():
+    """Centroid marker area scales linearly (not quadratically) with ``scale``.
+
+    Regression test: the centroid marker used to be pre-scaled by ``scale``
+    before render_frame upscaled the whole canvas by ``scale`` again, so its
+    radius grew by ``scale**2`` (painted area by ``scale**4``). Mirroring how
+    pose nodes/edges and trails are handled, the marker must be passed
+    un-prescaled so the single canvas upscale produces a linear relationship:
+    doubling ``scale`` should roughly quadruple the painted area (~4x), not
+    grow it ~16x.
+    """
+    from sleap_io.model.centroid import UserCentroid
+
+    track = Track(name="t1")
+    video = sio.Video(filename="dummy.mp4", open_backend=False)
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.centroids.append(UserCentroid(x=50.0, y=50.0, track=track))
+    labels = sio.Labels(
+        labeled_frames=[lf],
+        skeletons=[sio.Skeleton(["A"])],
+        tracks=[track],
+    )
+
+    def painted(scale: float) -> int:
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        rendered = render_image(
+            labels,
+            frame_idx=0,
+            video=video,
+            image=img,
+            show_centroids=True,
+            centroid_marker_size=5,
+            scale=scale,
+            show_nodes=False,
+            show_edges=False,
+        )
+        return int(np.any(rendered != 0, axis=-1).sum())
+
+    ratio = painted(2.0) / painted(1.0)
+    # Linear scaling => area ratio ~4x (allow margin for anti-aliasing). The
+    # quadratic bug produced ~16x, far outside this band.
+    assert 2.5 < ratio < 8.0
+
+
+def test_render_video_centroid_marker_scales_linearly():
+    """render_video centroid marker area scales linearly with ``scale``.
+
+    Same regression as render_image but exercising the render_video
+    ``_draw_frame_centroids`` call site.
+    """
+    from sleap_io.model.centroid import UserCentroid
+
+    track = Track(name="t1")
+    video = sio.Video(filename="test.mp4", open_backend=False)
+    video.backend_metadata["shape"] = (3, 100, 100, 3)
+    lf = sio.LabeledFrame(video=video, frame_idx=0)
+    lf.centroids.append(UserCentroid(x=50.0, y=50.0, track=track))
+    labels = sio.Labels(
+        labeled_frames=[lf],
+        skeletons=[sio.Skeleton(["A"])],
+        tracks=[track],
+    )
+
+    def painted(scale: float) -> int:
+        frames = render_video(
+            labels,
+            background="black",
+            show_progress=False,
+            frame_inds=[0],
+            show_centroids=True,
+            centroid_marker_size=5,
+            scale=scale,
+            show_nodes=False,
+            show_edges=False,
+        )
+        return int(np.any(frames[0] != 0, axis=-1).sum())
+
+    ratio = painted(2.0) / painted(1.0)
+    assert 2.5 < ratio < 8.0
+
+
 # ============================================================================
 # Motion trail tests
 # ============================================================================
