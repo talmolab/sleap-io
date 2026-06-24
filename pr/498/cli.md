@@ -473,10 +473,12 @@ sio convert spots.csv -o labels.slp --from trackmate
 | `--save-metadata` | Save JSON metadata file for CSV round-trip support |
 | `--h5-dim-order` | HDF5 axis ordering: `matlab` or `standard` (analysis_h5 only) |
 | `--min-occupancy` | Filter tracks below this occupancy ratio (analysis_h5 only) |
+| `--coco-category-as-track` | Treat each COCO category as a persistent identity track (coco input only) |
+| `--coco-segmentation` | COCO polygon handling: `mask` (rasterize) or `roi` (keep as vector ROIs); default `mask` (coco input only) |
 
 ### Supported Formats
 
-**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `csv`, `trackmate`, `ultralytics`, `leap`
+**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `dlc_project`, `csv`, `trackmate`, `ultralytics`, `leap`
 
 **Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`, `analysis_h5`
 
@@ -492,8 +494,25 @@ The CLI automatically detects formats from file extensions:
 | `.csv` | TrackMate or DeepLabCut (auto-detected from headers) | CSV |
 | `.h5` / `.hdf5` | (ambiguous) | Analysis HDF5 |
 | Directory with `data.yaml` | Ultralytics | Ultralytics |
+| Directory with `config.yaml` + `labeled-data/` (or a project `config.yaml`) | DeepLabCut project | - |
 
 For `.csv` inputs, the CLI first sniffs the file header: TrackMate spots exports are detected via their `LABEL,ID,TRACK_ID,...` schema, otherwise DeepLabCut multi-index headers are matched, and everything else falls back to the generic `csv` reader. Pass `--from trackmate` or `--from dlc` to bypass sniffing.
+
+A whole DeepLabCut project is auto-detected as `dlc_project` and merged into a single `Labels` (use `--from dlc_project` to be explicit). This differs from `--from dlc`, which reads a single DLC annotation CSV:
+
+```bash
+# Import an entire DeepLabCut project (config.yaml + labeled-data/)
+sio convert my_dlc_project/ -o labels.slp
+sio convert my_dlc_project/config.yaml -o labels.slp --from dlc_project
+```
+
+For COCO instance-segmentation datasets, `--coco-category-as-track` turns each category into a persistent identity track and `--coco-segmentation roi` preserves polygons as vector ROIs instead of rasterizing them into masks:
+
+```bash
+# Identity tracks from COCO categories, polygons kept as vector ROIs
+sio convert annotations.json -o labels.slp --from coco \
+    --coco-category-as-track --coco-segmentation roi
+```
 
 **Ambiguous extensions** (`.json`, `.h5`) require explicit `--from`:
 
@@ -2239,7 +2258,22 @@ sio reencode video.mp4 -o output.mp4 --dry-run
 
 # Force Python path (for HDF5-embedded sources or when ffmpeg unavailable)
 sio reencode video.mp4 -o output.mp4 --no-ffmpeg
+
+# Default output (no -o) is always {stem}.reencoded.mp4
+sio reencode video.mov            # -> video.reencoded.mp4
+
+# Reencode in place: replace the input with {stem}.mp4 and delete the original
+sio reencode video.mov --replace  # -> video.mp4 (deletes video.mov)
 ```
+
+!!! note "Output is always MP4"
+    Reencoding always produces an H.264/MP4 file. The default output therefore
+    uses a `.mp4` extension regardless of the input container, and the
+    `.reencoded` infix keeps it distinct from the source (even for `.mp4`
+    inputs). `--replace` drops the infix and writes `{stem}.mp4` in place,
+    deleting the original when the extension changes (e.g. `.mov` → `.mp4`).
+    `--replace` cannot be combined with `-o/--output` and is not supported for
+    SLP inputs.
 
 ### SLP Batch Processing
 
@@ -2282,7 +2316,8 @@ This is particularly useful for:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `-i, --input` | (required) | Input video or SLP file (can also pass as positional argument) |
-| `-o, --output` | `{input}.reencoded.mp4` or `.slp` | Output video/SLP path |
+| `-o, --output` | `{input}.reencoded.mp4` or `.slp` | Output video/SLP path (always `.mp4` for the video default) |
+| `--replace` | False | Reencode in place: replace the input with `{stem}.mp4` and delete the original. Mutually exclusive with `-o/--output`; not supported for SLP inputs |
 | `--overwrite` | False | Overwrite existing output file |
 | `--dry-run` | False | Show ffmpeg command without executing |
 
