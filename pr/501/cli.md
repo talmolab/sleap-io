@@ -140,7 +140,7 @@ sio render predictions.slp                                 # -> predictions.viz.
 sio render predictions.slp --preset preview                # Fast 0.25x preview
 sio render predictions.slp --start 100 --end 200
 sio render predictions.slp --lf 0                          # Single frame -> PNG
-sio render predictions.slp --lf 0 --crop auto              # Auto-fit to instances
+sio render predictions.slp --lf 0 --crop 100,100,300,300  # Crop to region
 sio render predictions.slp --color-by track --marker-shape diamond
 sio render predictions.slp --trails --trail-length 10           # Motion trails
 
@@ -473,10 +473,12 @@ sio convert spots.csv -o labels.slp --from trackmate
 | `--save-metadata` | Save JSON metadata file for CSV round-trip support |
 | `--h5-dim-order` | HDF5 axis ordering: `matlab` or `standard` (analysis_h5 only) |
 | `--min-occupancy` | Filter tracks below this occupancy ratio (analysis_h5 only) |
+| `--coco-category-as-track` | Treat each COCO category as a persistent identity track (coco input only) |
+| `--coco-segmentation` | COCO polygon handling: `mask` (rasterize) or `roi` (keep as vector ROIs); default `mask` (coco input only) |
 
 ### Supported Formats
 
-**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `csv`, `trackmate`, `ultralytics`, `leap`
+**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `dlc_project`, `csv`, `trackmate`, `ultralytics`, `leap`
 
 **Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`, `analysis_h5`
 
@@ -492,8 +494,25 @@ The CLI automatically detects formats from file extensions:
 | `.csv` | TrackMate or DeepLabCut (auto-detected from headers) | CSV |
 | `.h5` / `.hdf5` | (ambiguous) | Analysis HDF5 |
 | Directory with `data.yaml` | Ultralytics | Ultralytics |
+| Directory with `config.yaml` + `labeled-data/` (or a project `config.yaml`) | DeepLabCut project | - |
 
 For `.csv` inputs, the CLI first sniffs the file header: TrackMate spots exports are detected via their `LABEL,ID,TRACK_ID,...` schema, otherwise DeepLabCut multi-index headers are matched, and everything else falls back to the generic `csv` reader. Pass `--from trackmate` or `--from dlc` to bypass sniffing.
+
+A whole DeepLabCut project is auto-detected as `dlc_project` and merged into a single `Labels` (use `--from dlc_project` to be explicit). This differs from `--from dlc`, which reads a single DLC annotation CSV:
+
+```bash
+# Import an entire DeepLabCut project (config.yaml + labeled-data/)
+sio convert my_dlc_project/ -o labels.slp
+sio convert my_dlc_project/config.yaml -o labels.slp --from dlc_project
+```
+
+For COCO instance-segmentation datasets, `--coco-category-as-track` turns each category into a persistent identity track and `--coco-segmentation roi` preserves polygons as vector ROIs instead of rasterizing them into masks:
+
+```bash
+# Identity tracks from COCO categories, polygons kept as vector ROIs
+sio convert annotations.json -o labels.slp --from coco \
+    --coco-category-as-track --coco-segmentation roi
+```
 
 **Ambiguous extensions** (`.json`, `.h5`) require explicit `--from`:
 
@@ -1877,8 +1896,7 @@ temporal context).
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--crop` | none | Crop region: `auto` or `x1,y1,x2,y2` (pixels or normalized 0.0-1.0) |
-| `--crop-padding` | 0.2 | Padding for auto-crop as fraction of bounding box |
+| `--crop` | none | Crop region: `x1,y1,x2,y2` (pixels or normalized 0.0-1.0) |
 
 ### Single Image Rendering
 
@@ -1903,15 +1921,9 @@ sio render predictions.slp --lf 5 -o frame.png
 
 ### Cropping (Single Image Only)
 
-Crop the output image to focus on specific regions or automatically fit around detected instances:
+Crop the output image to focus on specific regions:
 
 ```bash
-# Auto-fit: crop to bounding box of all instances with 20% padding (default)
-sio render predictions.slp --lf 0 --crop auto
-
-# Auto-fit with custom padding (30% of bounding box)
-sio render predictions.slp --lf 0 --crop auto --crop-padding 0.3
-
 # Pixel coordinates (x1, y1, x2, y2)
 sio render predictions.slp --lf 0 --crop 100,100,300,300
 
@@ -1921,7 +1933,6 @@ sio render predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75
 
 The crop modes:
 
-- **`auto`**: Automatically fit to the bounding box of all instances, with padding. Best for focusing on animals.
 - **Pixel coordinates**: `x1,y1,x2,y2` as integers. Use for precise cropping when you know exact pixel locations.
 - **Normalized coordinates**: `x1,y1,x2,y2` as floats between 0.0-1.0. Use for relative cropping that works across different video resolutions.
 
@@ -2239,7 +2250,22 @@ sio reencode video.mp4 -o output.mp4 --dry-run
 
 # Force Python path (for HDF5-embedded sources or when ffmpeg unavailable)
 sio reencode video.mp4 -o output.mp4 --no-ffmpeg
+
+# Default output (no -o) is always {stem}.reencoded.mp4
+sio reencode video.mov            # -> video.reencoded.mp4
+
+# Reencode in place: replace the input with {stem}.mp4 and delete the original
+sio reencode video.mov --replace  # -> video.mp4 (deletes video.mov)
 ```
+
+!!! note "Output is always MP4"
+    Reencoding always produces an H.264/MP4 file. The default output therefore
+    uses a `.mp4` extension regardless of the input container, and the
+    `.reencoded` infix keeps it distinct from the source (even for `.mp4`
+    inputs). `--replace` drops the infix and writes `{stem}.mp4` in place,
+    deleting the original when the extension changes (e.g. `.mov` → `.mp4`).
+    `--replace` cannot be combined with `-o/--output` and is not supported for
+    SLP inputs.
 
 ### SLP Batch Processing
 
@@ -2282,7 +2308,8 @@ This is particularly useful for:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `-i, --input` | (required) | Input video or SLP file (can also pass as positional argument) |
-| `-o, --output` | `{input}.reencoded.mp4` or `.slp` | Output video/SLP path |
+| `-o, --output` | `{input}.reencoded.mp4` or `.slp` | Output video/SLP path (always `.mp4` for the video default) |
+| `--replace` | False | Reencode in place: replace the input with `{stem}.mp4` and delete the original. Mutually exclusive with `-o/--output`; not supported for SLP inputs |
 | `--overwrite` | False | Overwrite existing output file |
 | `--dry-run` | False | Show ffmpeg command without executing |
 

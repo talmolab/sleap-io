@@ -54,6 +54,12 @@ sio convert s3://bucket/labels.slp -o labels.nwb
 sio filenames -i https://example.com/labels.slp
 ```
 
+Commands that write a result require a local output path when the input is a
+URL. `render` and `fix` derive a default output next to the input for local
+files, but a URL has no local location to write to, so they require an explicit
+local `-o/--output` (for `fix`, `--dry-run` works on a URL without `-o`). The
+`embed` and `unembed` commands already require `-o`, which must be local.
+
 Output paths and commands that re-encode video locally (`trim`, `reencode`,
 `transform`, `apply-crops`) require local filesystem paths.
 
@@ -179,6 +185,13 @@ Cloud schemes (`s3://`, `gs://`, …) ignore `headers=` and use their own
 per-provider credential chains (environment variables, credential files,
 instance metadata).
 
+!!! note "`headers=` is for labels, not media video"
+    `headers=` (and the streaming options below) authenticate and configure
+    remote `.slp`/`.pkg.slp` **label** loading. They are **not** supported for
+    remote media video, which FFmpeg decodes from the URL directly — see
+    [Remote video](#remote-video). For an auth-gated remote video, use a
+    pre-signed URL instead.
+
 !!! warning "Headers are stripped on cross-origin redirect"
     For security, sensitive headers (`Authorization`, `Cookie`,
     `Proxy-Authorization`) are **dropped automatically** if a request is
@@ -234,6 +247,17 @@ ignored for extension detection, so pre-signed URLs like
 `https://host/video.mp4?token=...` route correctly. Remote video requires the
 `pyav` extra (auto-selected as the backend); without it, `load_video(url)`
 raises an `ImportError` with the install hint.
+
+!!! warning "Auth headers and stream modes do not apply to remote video"
+    Unlike remote `.slp`/`.pkg.slp` labels, remote media video is decoded by
+    handing the URL straight to FFmpeg (via pyav), which has no hook for custom
+    HTTP request headers or fsspec stream modes. Passing `headers=`,
+    `url_headers=`, `stream_mode=`, or `url_stream_mode=` to `load_video` (or
+    `Video.from_filename`) for an `http`/`https` media URL raises a `ValueError`
+    rather than silently returning an unauthenticated backend. To read an
+    auth-gated remote video, use a **pre-signed URL** that embeds credentials in
+    the query string (e.g. `https://host/video.mp4?X-Amz-...`), or download the
+    file locally first.
 
 !!! danger "Security: remote video hands untrusted data to FFmpeg"
     Decoding a remote video streams bytes from the URL into FFmpeg (via pyav).
