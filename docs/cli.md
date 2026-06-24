@@ -522,9 +522,8 @@ sio convert -i data.json -o labels.slp --from coco
 sio convert -i data.json -o labels.slp --from labelstudio
 sio convert -i data.json -o labels.slp --from alphatracker
 
-# .h5 could be JABS or DeepLabCut
+# .h5 is read as JABS
 sio convert -i data.h5 -o labels.slp --from jabs
-sio convert -i data.h5 -o labels.slp --from dlc
 ```
 
 ### Embedding Frames
@@ -1848,7 +1847,7 @@ sio render --images frames/ --overlay masks.tif -o output.mp4
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--color-by` | auto | Color scheme: `auto`, `track`, `instance`, `node` |
-| `--palette` | glasbey | Color palette (glasbey, tableau10, distinct, rainbow, etc.) |
+| `--palette` | standard | Color palette (standard, tableau10, distinct, glasbey, rainbow, etc.) |
 | `--marker-shape` | circle | Node marker: `circle`, `square`, `diamond`, `triangle`, `cross` |
 | `--marker-size` | 4.0 | Node marker radius in pixels |
 | `--line-width` | 2.0 | Edge line width in pixels |
@@ -1936,8 +1935,8 @@ The crop modes:
 - **Pixel coordinates**: `x1,y1,x2,y2` as integers. Use for precise cropping when you know exact pixel locations.
 - **Normalized coordinates**: `x1,y1,x2,y2` as floats between 0.0-1.0. Use for relative cropping that works across different video resolutions.
 
-!!! note "Video mode limitation"
-    Cropping is currently only supported for single image mode (`--lf` or `--frame`). Video cropping is not yet implemented.
+!!! note "Video cropping"
+    `--crop` applies to video rendering as well as single-image mode. A static `x1,y1,x2,y2` region (pixel coordinates or normalized 0.0-1.0) is applied uniformly to every frame.
 
 ### Video Frame Ranges
 
@@ -2026,7 +2025,7 @@ sio render predictions.slp --palette glasbey  # 256 distinct colors
 sio render predictions.slp --palette glasbey_warm
 ```
 
-Available built-in palettes: `distinct`, `rainbow`, `warm`, `cool`, `pastel`, `seaborn`, `tableau10`, `viridis`
+Available built-in palettes: `standard` (default), `distinct`, `rainbow`, `warm`, `cool`, `pastel`, `seaborn`, `tableau10`, `viridis`
 
 !!! tip "Discover available options"
     Use the discovery flags to see all available colors and palettes:

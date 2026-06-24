@@ -2358,6 +2358,27 @@ class TestTopLevelAPI:
 # ============================================================================
 
 
+def test_draw_centroids_exported_at_top_level():
+    """draw_centroids should be exported at sleap_io.* like the other overlays."""
+    # Listed in the public namespace alongside the other draw_* helpers.
+    assert "draw_centroids" in dir(sio)
+    for helper in (
+        "draw_rois",
+        "draw_masks",
+        "draw_bboxes",
+        "draw_centroids",
+        "draw_label_image",
+        "draw_trails",
+    ):
+        assert helper in dir(sio)
+
+    # `from sleap_io import draw_centroids` resolves to the overlay function.
+    from sleap_io import draw_centroids as exported_draw_centroids
+    from sleap_io.rendering.overlays import draw_centroids as overlay_draw_centroids
+
+    assert exported_draw_centroids is overlay_draw_centroids
+
+
 def test_draw_rois_outline():
     """draw_rois should draw ROI outlines on an image."""
     from sleap_io.rendering.overlays import draw_rois
