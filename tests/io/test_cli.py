@@ -22,6 +22,7 @@ from click.testing import CliRunner
 
 from sleap_io import load_slp, save_slp, save_video
 from sleap_io.io.cli import (
+    REMOTE_OR_LOCAL_PATH,
     _ensure_utf8_streams,
     _get_ffmpeg_version,
     _infer_input_format,
@@ -29,6 +30,7 @@ from sleap_io.io.cli import (
     _load_images,
     _load_overlay,
     _parse_overlay_outline_color,
+    _RemoteInputPath,
     _run_subprocess_with_progress,
     cli,
 )
@@ -154,6 +156,223 @@ def test_show_file_not_found():
     assert result.exit_code != 0
     # Click validates file existence before our code runs
     assert "not exist" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Remote URL inputs for read commands (RemoteOrLocalPath param type)
+# ---------------------------------------------------------------------------
+
+
+def test_remote_or_local_path_does_not_mangle_url():
+    """The remote-or-local path type passes URLs through verbatim.
+
+    A plain ``click.Path``/``pathlib.Path`` would collapse ``https://`` to
+    ``https:/`` (losing the authority). The custom type must round-trip the URL
+    unchanged so it reaches the loaders intact.
+    """
+    url = "https://example.com/dir/file.slp"
+    value = REMOTE_OR_LOCAL_PATH.convert(url, None, None)
+    assert isinstance(value, _RemoteInputPath)
+    assert str(value) == url
+    assert "https://" in str(value)
+    # Cloud schemes round-trip too.
+    s3_url = "s3://bucket/key/data.nwb"
+    assert str(REMOTE_OR_LOCAL_PATH.convert(s3_url, None, None)) == s3_url
+
+
+def test_remote_input_path_pathlike_attrs():
+    """`_RemoteInputPath` derives Path-like read attrs from URL semantics."""
+    p = _RemoteInputPath("https://host/a/b/data.pkg.slp?token=secret")
+    assert p.name == "data.pkg.slp"
+    assert p.suffix == ".slp"
+    assert p.stem == "data.pkg"
+    assert str(p.parent) == "https://host/a/b?token=secret"
+    # Mirrors Path.with_suffix: only the final extension is replaced.
+    assert str(p.with_suffix(".nwb")) == "https://host/a/b/data.pkg.nwb?token=secret"
+    assert str(p / "child") == "https://host/a/b/data.pkg.slp/child?token=secret"
+    assert p.resolve() is p
+    # A URL is not a local filesystem entry.
+    assert p.exists() is False
+    assert p.is_dir() is False
+    assert p.is_file() is False
+
+
+def test_show_url_input_passes_arg_parsing():
+    """`sio show <url>` reaches the loader instead of failing at parse.
+
+    With ``click.Path(exists=True)`` this exited 2 with a BadParameter
+    "does not exist" before any loading. The URL now passes parsing and the
+    error is a load/remote failure, not a parameter-validation error.
+    """
+    runner = CliRunner()
+    # Unresolvable host: fails during the fetch, not during arg parsing.
+    result = runner.invoke(cli, ["show", "https://invalid.invalid.invalid/x.slp"])
+    assert result.exit_code != 0
+    # Not a click BadParameter "does not exist" parse error.
+    assert "does not exist" not in result.output
+    assert "Invalid value" not in result.output
+
+
+def test_convert_url_input_passes_arg_parsing(tmp_path):
+    """`sio convert <url> -o out` reaches the loader instead of failing at parse."""
+    runner = CliRunner()
+    out = tmp_path / "out.nwb"
+    result = runner.invoke(
+        cli,
+        ["convert", "https://invalid.invalid.invalid/x.slp", "-o", str(out)],
+    )
+    assert result.exit_code != 0
+    assert "does not exist" not in result.output
+    assert "Invalid value" not in result.output
+    # Our command-level load handler ran (proving parsing succeeded).
+    assert "Failed to load input file" in result.output
+
+
+def test_convert_url_via_input_option_passes_arg_parsing(tmp_path):
+    """The -i/--input option also accepts URLs without a parse error."""
+    runner = CliRunner()
+    out = tmp_path / "out.nwb"
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", "https://invalid.invalid.invalid/x.slp", "-o", str(out)],
+    )
+    assert result.exit_code != 0
+    assert "does not exist" not in result.output
+    assert "Invalid value" not in result.output
+
+
+def test_convert_nonexistent_local_path_still_errors():
+    """A nonexistent local input still fails at parse with a BadParameter error.
+
+    rich-click wraps the message in a box, so the literal "does not exist" may be
+    line-wrapped; the stable marker is the "Invalid value" BadParameter header.
+    """
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["convert", "/nonexistent/path/file.slp", "-o", "out.nwb"],
+    )
+    assert result.exit_code == 2
+    output = _strip_ansi(result.output)
+    assert "Invalid value" in output
+    # "exist" survives the box wrapping even if "does not" is on a prior line.
+    assert "exist" in output
+
+
+def test_render_url_input_requires_output():
+    """`sio render <url>` with no -o errors cleanly (no AttributeError traceback).
+
+    Deriving a default output from a URL would crash on URL path semantics
+    (``with_name``/``parent.mkdir``). The command must guard with a clean
+    ClickException before any default-output derivation.
+    """
+    runner = CliRunner()
+    result = runner.invoke(cli, ["render", "https://invalid.invalid.invalid/x.slp"])
+    assert result.exit_code != 0
+    # rich-click boxes/wraps the message; collapse whitespace before matching.
+    out = " ".join(_strip_ansi(result.output).split())
+    assert "An output path (-o/--output) is required when the input is a URL." in out
+    # Crucially: no raw traceback leaked to the user.
+    assert "AttributeError" not in out
+    assert "Traceback" not in out
+
+
+def test_render_url_input_single_image_requires_output():
+    """`sio render <url> --lf 0` with no -o also errors cleanly (image path)."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["render", "https://invalid.invalid.invalid/x.slp", "--lf", "0"]
+    )
+    assert result.exit_code != 0
+    out = " ".join(_strip_ansi(result.output).split())
+    assert "An output path (-o/--output) is required when the input is a URL." in out
+    assert "AttributeError" not in out
+    assert "Traceback" not in out
+
+
+def test_fix_url_input_requires_output():
+    """`sio fix <url>` (non-dry-run) with no -o errors cleanly, not at save.
+
+    Without the upfront guard the command would derive a remote default output
+    and fail late at save time. The guard must raise a clean ClickException.
+    """
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fix", "https://invalid.invalid.invalid/x.slp"])
+    assert result.exit_code != 0
+    out = " ".join(_strip_ansi(result.output).split())
+    assert "An output path (-o/--output) is required when the input is a URL." in out
+    assert "AttributeError" not in out
+    assert "Traceback" not in out
+    # It failed at the upfront guard, not late at the save step.
+    assert "Failed to save output file" not in out
+
+
+def test_fix_url_input_dry_run_redacts_credentials():
+    """`sio fix <url> --dry-run` works without -o and redacts URL credentials."""
+    runner = CliRunner()
+    url = "https://invalid.invalid.invalid/x.slp?token=supersecret"
+    result = runner.invoke(cli, ["fix", url, "--dry-run"])
+    out = _strip_ansi(result.output)
+    # The secret token value must never be echoed in the Loading: line.
+    assert "supersecret" not in out
+    assert "AttributeError" not in out
+    assert "Traceback" not in out
+
+
+def test_embed_url_input_passes_suffix_gate(tmp_path):
+    """`sio embed <url-with-query>` passes the .slp suffix gate and reaches load.
+
+    A credential-bearing URL ends with ``?token=...``, so the old
+    ``str(...).endswith('.slp')`` gate rejected it as "not a .slp file". Using
+    ``.suffix`` (which ignores the query) must let it through to the loader.
+    """
+    runner = CliRunner()
+    out = tmp_path / "out.pkg.slp"
+    url = "https://invalid.invalid.invalid/x.slp?token=t"
+    result = runner.invoke(cli, ["embed", url, "-o", str(out)])
+    assert result.exit_code != 0
+    err = _strip_ansi(result.output)
+    # It must NOT be rejected at the suffix gate; it reached the loader/fetch.
+    assert "must be a .slp file" not in err
+
+
+def test_unembed_url_input_passes_suffix_gate(tmp_path):
+    """`sio unembed <url-with-query>` passes the .slp suffix gate and reaches load."""
+    runner = CliRunner()
+    out = tmp_path / "out.slp"
+    url = "https://invalid.invalid.invalid/x.slp?token=t"
+    result = runner.invoke(cli, ["unembed", url, "-o", str(out)])
+    assert result.exit_code != 0
+    err = _strip_ansi(result.output)
+    assert "must be a .slp file" not in err
+
+
+def test_remote_input_path_degenerate_urls():
+    """`_RemoteInputPath` handles degenerate URLs without raising on read attrs."""
+    # Trailing slash (directory-like): name empty, suffix empty.
+    trailing = _RemoteInputPath("https://h/dir/")
+    assert str(trailing) == "https://h/dir/"
+    assert trailing.name == ""
+    assert trailing.suffix == ""
+
+    # Host-only URL: no path component.
+    host_only = _RemoteInputPath("https://h")
+    assert str(host_only) == "https://h"
+    assert host_only.name == ""
+    assert host_only.suffix == ""
+
+    # No file extension.
+    no_ext = _RemoteInputPath("https://h/file")
+    assert str(no_ext) == "https://h/file"
+    assert no_ext.name == "file"
+    assert no_ext.suffix == ""
+
+    # Percent-encoded segment round-trips verbatim.
+    encoded = _RemoteInputPath("https://h/a%20b/data%2Efile.slp")
+    assert str(encoded) == "https://h/a%20b/data%2Efile.slp"
+    # name/suffix must not raise (exact decoding is not asserted here).
+    _ = encoded.name
+    _ = encoded.suffix
 
 
 def test_show_skeleton_no_edges(tmp_path):
