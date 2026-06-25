@@ -236,29 +236,38 @@ class SkeletonDecoder:
                     symmetries.append(Symmetry([source_node, target_node]))
                     seen_symmetries.add(sym_key)
 
-        # Build nodes list from the nodes section
-        nodes = []
-        nodes_from_refs = []
+        # Build nodes list in the order declared by the nodes section. Map decoded
+        # Node objects by name so each nodes-array entry resolves back to the SAME
+        # object the edges reference — whether it is a ``py/id`` back-reference
+        # (link-connected node) or an inline ``py/object`` (an isolated/edge-less
+        # node, which was otherwise missed here and appended to the tail, dropping
+        # its declared position; see #438).
+        all_nodes = [obj for obj in self.decoded_objects if isinstance(obj, Node)]
+        node_by_name = {n.name: n for n in all_nodes}
 
-        # First collect nodes based on the nodes array
+        nodes_from_refs = []
         for node_ref in nodes_data:
-            if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
-                py_id = node_ref["id"]["py/id"]
-                # Get node from decoded objects (py/id is 1-indexed)
+            ref_id = node_ref.get("id")
+            if not isinstance(ref_id, dict):
+                continue
+            if "py/id" in ref_id:
+                py_id = ref_id["py/id"]
+                # py/id is 1-indexed into the decoded objects.
                 if py_id <= len(self.decoded_objects):
                     obj = self.decoded_objects[py_id - 1]
                     if isinstance(obj, Node):
                         nodes_from_refs.append(obj)
-
-        # If we're missing nodes (due to malformed JSON), collect all Node objects
-        all_nodes = [obj for obj in self.decoded_objects if isinstance(obj, Node)]
+            elif "py/object" in ref_id:
+                # Isolated node declared inline; resolve to its canonical object.
+                name = self._decode_node(ref_id).name
+                if name in node_by_name:
+                    nodes_from_refs.append(node_by_name[name])
 
         if len(nodes_from_refs) < len(all_nodes):
-            # The nodes array is incomplete or includes non-nodes
-            # Use all nodes in their natural order
+            # Incomplete/malformed nodes array: fall back to natural order.
             nodes = all_nodes
         else:
-            # Use the order from the nodes array
+            # Use the declared nodes-array order (isolated nodes kept in slot).
             nodes = nodes_from_refs
 
         # Get skeleton name
