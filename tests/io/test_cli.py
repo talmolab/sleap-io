@@ -2245,6 +2245,25 @@ def test_infer_input_format_non_dlc_config_file(tmp_path):
     assert _infer_input_format(cfg) is None
 
 
+def test_convert_from_dlc_on_project_guides_to_dlc_project(tmp_path):
+    """`--from dlc` on a DLC project errors clearly, pointing to dlc_project (L9)."""
+    project = _make_dlc_project(tmp_path / "proj")
+    output = tmp_path / "out.slp"
+    runner = CliRunner()
+
+    # Both the project directory and its config.yaml, given explicitly as
+    # `--from dlc`, must fail with a clear pointer to dlc_project rather than
+    # misrouting to the single-CSV reader.
+    for inp in (str(project), str(project / "config.yaml")):
+        result = runner.invoke(
+            cli, ["convert", inp, "-o", str(output), "--from", "dlc"]
+        )
+        assert result.exit_code != 0, result.output
+        out = " ".join(_strip_ansi(result.output).split())
+        assert "dlc_project" in out
+        assert "DeepLabCut project" in out
+
+
 def test_convert_dlc_project_directory(tmp_path):
     """`sio convert <dlcproject>` auto-detects dlc_project and writes frames."""
     project = _make_dlc_project(tmp_path / "proj")

@@ -2186,6 +2186,19 @@ def convert(
                     f"Please specify --from with one of: {', '.join(INPUT_FORMATS)}"
                 )
 
+    # An explicit `--from dlc` pointed at a DLC *project* (config.yaml or a
+    # project directory) would misroute to the single-CSV reader and fail with a
+    # confusing parse error; guide the user to dlc_project instead (L9).
+    if resolved_input_format == "dlc":
+        from sleap_io.io import dlc as _dlc
+
+        if _dlc._is_dlc_project_path(input_path):
+            raise click.ClickException(
+                f"'{input_path.name}' looks like a DeepLabCut project, not a single "
+                "DLC annotation CSV. Use --from dlc_project (or omit --from to "
+                "auto-detect)."
+            )
+
     # Resolve output format
     resolved_output_format = output_format
     if resolved_output_format is None:
