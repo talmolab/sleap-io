@@ -1635,13 +1635,17 @@ def read_identities(
     identity_objects = []
     for identity_data in identities:
         d = json.loads(identity_data)
-        identity_objects.append(
-            Identity(
-                name=d.get("name", ""),
-                color=d.get("color", None),
-                metadata={k: v for k, v in d.items() if k not in ("name", "color")},
-            )
+        # Legacy files written before format 2.5 lack a `uuid`; the Identity
+        # factory synthesizes a fresh one (they never had global-identity
+        # semantics, so there is nothing to match against).
+        kwargs = dict(
+            name=d.get("name", ""),
+            color=d.get("color", None),
+            metadata={k: v for k, v in d.items() if k not in ("name", "uuid", "color")},
         )
+        if "uuid" in d:
+            kwargs["uuid"] = d["uuid"]
+        identity_objects.append(Identity(**kwargs))
     return identity_objects
 
 
@@ -1657,7 +1661,7 @@ def write_identities(labels_path: str, identities: list[Identity]):
 
     identities_json = []
     for identity in identities:
-        d = {"name": identity.name}
+        d = {"name": identity.name, "uuid": identity.uuid}
         if identity.color is not None:
             d["color"] = identity.color
         d.update(identity.metadata)
