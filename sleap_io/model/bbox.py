@@ -18,14 +18,17 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
+from sleap_io.model.embedding import EmbeddingMixin
+
 if TYPE_CHECKING:
+    from sleap_io.model.embedding import Embedding
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.roi import ROI
 
 
 @attrs.define(eq=False)
-class BoundingBox:
+class BoundingBox(EmbeddingMixin):
     """A bounding box annotation.
 
     Supports axis-aligned and oriented (rotated) bounding boxes with optional
@@ -44,6 +47,8 @@ class BoundingBox:
         category: Class label (e.g., "mouse", "fly").
         name: Human-readable name.
         source: Annotation source identifier.
+        embeddings: Mapping from embedding-space name to an `Embedding` describing
+            this detection's appearance for re-identification. Empty by default.
 
     Notes:
         Bounding boxes use identity-based equality (two BoundingBox objects are
@@ -64,6 +69,7 @@ class BoundingBox:
     category: str = attrs.field(default="")
     name: str = attrs.field(default="")
     source: str = attrs.field(default="")
+    embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
 
     # Private: deferred instance index for lazy loading.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)

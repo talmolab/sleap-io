@@ -15,10 +15,13 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
+from sleap_io.model.embedding import EmbeddingMixin
+
 if TYPE_CHECKING:
     from shapely.geometry import Polygon
     from shapely.geometry.base import BaseGeometry
 
+    from sleap_io.model.embedding import Embedding
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.video import Video
@@ -43,7 +46,7 @@ class AnnotationType(IntEnum):
 
 
 @attrs.define(eq=False)
-class ROI:
+class ROI(EmbeddingMixin):
     """A region of interest defined by vector geometry.
 
     ROIs store Shapely geometry objects and optional metadata for associating
@@ -61,6 +64,8 @@ class ROI:
             if unassigned or manually assigned.
         instance: Optional `Instance` this ROI is associated with. Persisted in
             SLP format (v1.6+) via instance index.
+        embeddings: Mapping from embedding-space name to an `Embedding` describing
+            this detection's appearance for re-identification. Empty by default.
 
     Notes:
         ROIs use identity-based equality (two ROI objects are only equal if they
@@ -87,6 +92,7 @@ class ROI:
     track: "Track | None" = attrs.field(default=None)
     tracking_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
+    embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
 
     # Private: deferred instance index for lazy loading. When ROIs are read
     # from a file without materialized instances (e.g., lazy mode), this stores
