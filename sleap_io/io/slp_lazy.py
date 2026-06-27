@@ -15,6 +15,7 @@ import attrs
 import numpy as np
 
 if TYPE_CHECKING:
+    from sleap_io.model.identity import Identity
     from sleap_io.model.instance import Instance, PredictedInstance, Track
     from sleap_io.model.labeled_frame import LabeledFrame
     from sleap_io.model.skeleton import Skeleton
@@ -81,6 +82,14 @@ class LazyDataStore:
     _undistributed_bboxes: list = attrs.field(factory=list, repr=False)
     _undistributed_centroids: list = attrs.field(factory=list, repr=False)
     _undistributed_label_images: list = attrs.field(factory=list, repr=False)
+
+    # Global identity catalog and per-instance identity links (format 2.5+).
+    # ``identities`` are canonical objects shared with Labels.identities;
+    # ``_instance_identities`` maps global instance_id -> (identity_idx, score).
+    identities: list["Identity"] = attrs.field(factory=list, repr=False)
+    _instance_identities: dict = attrs.field(
+        factory=dict, repr=False, alias="instance_identities"
+    )
 
     def __attrs_post_init__(self) -> None:
         """Validate index bounds on construction."""
@@ -157,6 +166,8 @@ class LazyDataStore:
             videos=self.videos,  # Share references (canonical objects)
             skeletons=self.skeletons,  # Share references (canonical objects)
             tracks=self.tracks,  # Share references (canonical objects)
+            identities=self.identities,  # Share references (canonical objects)
+            instance_identities=dict(self._instance_identities),
             format_id=self.format_id,
             source_path=self._source_path,
             negative_frames=self._negative_frames.copy(),
@@ -289,6 +300,18 @@ class LazyDataStore:
         skeleton = self.skeletons[skeleton_id]
         track = self.tracks[track_id] if track_id >= 0 else None
 
+        # Resolve optional per-instance global identity (format 2.5+). Joined on
+        # the global instance_id; absent for older files (empty mapping -> None).
+        identity = None
+        identity_score = None
+        if self._instance_identities:
+            entry = self._instance_identities.get(instance_id)
+            if entry is not None:
+                identity_idx, id_score = entry
+                if 0 <= identity_idx < len(self.identities):
+                    identity = self.identities[identity_idx]
+                    identity_score = id_score
+
         if instance_type == InstanceType.USER:
             pts_data = self.points_data[point_id_start:point_id_end]
             points_array = self._make_points_array(pts_data, skeleton)
@@ -300,6 +323,8 @@ class LazyDataStore:
                 skeleton=skeleton,
                 track=track,
                 tracking_score=float(tracking_score),
+                identity=identity,
+                identity_score=identity_score,
             )
         else:  # PREDICTED
             pts_data = self.pred_points_data[point_id_start:point_id_end]
@@ -313,6 +338,8 @@ class LazyDataStore:
                 track=track,
                 score=float(instance_score),
                 tracking_score=float(tracking_score),
+                identity=identity,
+                identity_score=identity_score,
             )
 
     def _make_points_array(

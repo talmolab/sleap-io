@@ -34,6 +34,7 @@ from sleap_io.io.cli import (
     _run_subprocess_with_progress,
     cli,
 )
+from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -59,6 +60,33 @@ def _strip_ansi(text: str) -> str:
 def _data_path(rel: str) -> Path:
     root = Path(__file__).resolve().parents[2] / "tests" / "data"
     return root / rel
+
+
+def _make_identity_slp(path: Path, *, color: str | None = "#ff0000") -> Labels:
+    """Write a minimal 2-instance .slp carrying global identities.
+
+    Builds one labeled frame with two instances assigned to two `Identity`
+    objects (the first optionally colored).
+    """
+    skeleton = Skeleton(["head", "tail"])
+    id_a = Identity(name="mouse_A", color=color)
+    id_b = Identity(name="mouse_B")
+    video = Video(filename="dummy.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    inst_a = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton, identity=id_a
+    )
+    inst_b = Instance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skeleton, identity=id_b
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst_a, inst_b])
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        identities=[id_a, id_b],
+    )
+    save_slp(labels, str(path))
+    return labels
 
 
 def test_version_shows_plugin_info():
@@ -138,6 +166,18 @@ def test_show_summary_typical_slp():
     # Skeleton summary with Python code
     assert "nodes = " in out
     assert "Skeletons" in out
+
+
+def test_show_reports_identities(tmp_path):
+    """`sio show` reports the global identity count in the header stats."""
+    slp_path = tmp_path / "ids.slp"
+    _make_identity_slp(slp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "2 identities" in out
 
 
 def test_show_lf_zero_details():
@@ -4166,6 +4206,64 @@ def test_merge_all_options(tmp_path, slp_typical):
     assert "Merged 2 files:" in output
 
 
+@pytest.mark.parametrize("method", ["uuid", "name"])
+def test_merge_identity_option_accepted(method, tmp_path):
+    """`sio merge --identity {uuid,name}` is accepted and runs."""
+    a = tmp_path / "a.slp"
+    b = tmp_path / "b.slp"
+    _make_identity_slp(a)
+    _make_identity_slp(b)
+
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            str(a),
+            str(b),
+            "-o",
+            str(merged_path),
+            "--identity",
+            method,
+            "--frame",
+            "keep_both",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Merged 2 files:" in output
+    assert merged_path.exists()
+
+
+def test_merge_identity_invalid_choice(tmp_path, slp_typical):
+    """An unsupported --identity value is rejected by Click."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            slp_typical,
+            slp_typical,
+            "-o",
+            str(merged_path),
+            "--identity",
+            "bogus",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "identity" in _strip_ansi(result.output).lower()
+
+
+def test_merge_help_lists_identity():
+    """`sio merge --help` documents the --identity option."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["merge", "--help"])
+    assert result.exit_code == 0
+    assert "--identity" in _strip_ansi(result.output)
+
+
 def test_merge_frame_strategies(tmp_path, slp_typical):
     """Test different frame strategies."""
     runner = CliRunner()
@@ -4961,6 +5059,46 @@ def test_render_single_frame_masks_only_no_skeleton(specifier, tmp_path):
     assert result.exit_code == 0, result.output
     assert "Rendered:" in result.output
     assert output_path.exists()
+
+
+def test_render_color_by_identity(tmp_path):
+    """`sio render --color-by identity` is accepted and renders an image.
+
+    The first identity is colored (``#ff0000``), exercising the
+    ``Identity.color`` preference path; the second falls back to the palette.
+    """
+    slp_path = tmp_path / "ids.slp"
+    _make_identity_slp(slp_path, color="#ff0000")
+
+    output_path = tmp_path / "frame.png"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            str(slp_path),
+            "--lf",
+            "0",
+            "--background",
+            "black",
+            "--color-by",
+            "identity",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+    assert output_path.exists()
+
+
+def test_render_color_by_identity_help_choice():
+    """`sio render --help` lists identity as a --color-by choice."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["render", "--help"])
+    assert result.exit_code == 0
+    assert "identity" in _strip_ansi(result.output)
 
 
 def test_render_crop_pixel(centered_pair, tmp_path):

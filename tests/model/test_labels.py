@@ -12,7 +12,10 @@ from shapely.geometry import box
 
 import sleap_io
 from sleap_io import (
+    FrameGroup,
+    Identity,
     Instance,
+    InstanceGroup,
     LabeledFrame,
     PredictedInstance,
     RecordingSession,
@@ -168,7 +171,53 @@ def test_append_extend():
     assert labels.tracks == [new_track, new_track2]
 
 
-def test_update_dedupes_same_order_skeletons():
+def test_identities_auto_collected():
+    """Test that Labels auto-collects per-instance Identity objects."""
+    skel = Skeleton(["A", "B"])
+    video = Video.from_filename("fake.mp4")
+    id_a = Identity(name="mouse_A")
+    id_b = Identity(name="mouse_B")
+
+    # append() collects identities from instances.
+    labels = Labels()
+    labels.append(
+        LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel, identity=id_a),
+                Instance.from_numpy(np.array([[4, 5], [6, 7]]), skel, identity=id_b),
+                Instance.from_numpy(np.array([[8, 9], [0, 1]]), skel),  # no identity
+            ],
+        ),
+        update=True,
+    )
+    assert labels.identities == [id_a, id_b]
+
+    # extend() collects new identities and dedupes existing ones.
+    id_c = Identity(name="mouse_C")
+    labels.extend(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=1,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[0, 1], [2, 3]]), skel, identity=id_a
+                    ),
+                    Instance.from_numpy(
+                        np.array([[4, 5], [6, 7]]), skel, identity=id_c
+                    ),
+                ],
+            )
+        ],
+        update=True,
+    )
+    assert labels.identities == [id_a, id_b, id_c]
+
+    # update() rebuilds from scratch without duplicating.
+    labels.update()
+    assert labels.identities == [id_a, id_b, id_c]
     """Structurally-equal, same-order skeletons collapse to one on update."""
     skel1 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
     skel2 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
@@ -4281,6 +4330,136 @@ def test_labels_merge_predicted_instance_mapping():
     assert mapped_inst.track == track1
     assert mapped_inst.score == 0.95
     assert np.array_equal(mapped_inst.numpy(), inst.numpy())
+
+
+def test_labels_merge_dedupes_same_uuid_identity():
+    """Merge dedupes same-uuid identities and preserves identity_score.
+
+    The same animal (shared ``uuid``) referenced by two separately-built files
+    must collapse to a single canonical catalog `Identity` after merge, with both
+    instances pointing at it. Per-instance ``identity_score`` must survive the
+    rebuild in ``_map_instance``.
+    """
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])  # Same structure -> matched.
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")  # Different video -> new frame.
+
+    # Distinct Identity objects that share a stable uuid (same animal).
+    shared_uuid = "a" * 32
+    id1 = Identity(name="mouse_A", uuid=shared_uuid)
+    id2 = Identity(name="mouse_A", uuid=shared_uuid)
+
+    inst1 = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skel1, identity=id1
+    )
+    labels1 = Labels([LabeledFrame(video=video1, frame_idx=0, instances=[inst1])])
+
+    inst2 = Instance.from_numpy(
+        np.array([[30, 30], [40, 40]]),
+        skeleton=skel2,
+        identity=id2,
+        identity_score=0.87,
+    )
+    labels2 = Labels([LabeledFrame(video=video2, frame_idx=0, instances=[inst2])])
+
+    # Each file independently collected its own identity object.
+    assert labels1.identities == [id1]
+    assert labels2.identities == [id2]
+
+    video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    labels1.merge(labels2, video=video_matcher)
+
+    # Deduped to a single canonical catalog identity (no duplicate uuids).
+    assert len(labels1.identities) == 1
+    canonical = labels1.identities[0]
+    assert canonical is id1  # Existing self identity is canonical.
+
+    # Both merged instances point at the canonical catalog object.
+    merged_instances = [inst for lf in labels1 for inst in lf]
+    assert len(merged_instances) == 2
+    assert all(inst.identity is canonical for inst in merged_instances)
+
+    # identity_score survived the merge for the incoming instance.
+    incoming = [i for i in merged_instances if i.identity_score == 0.87]
+    assert len(incoming) == 1
+    inc = incoming[0]
+    assert inc is not inst2  # Rebuilt by _map_instance.
+
+
+def test_labels_merge_keeps_distinct_uuid_identities():
+    """Merge keeps both identities when their uuids differ."""
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+
+    id1 = Identity(name="mouse_A")  # Auto-generated, distinct uuid.
+    id2 = Identity(name="mouse_B")  # Different uuid.
+
+    inst1 = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skel1, identity=id1
+    )
+    labels1 = Labels([LabeledFrame(video=video1, frame_idx=0, instances=[inst1])])
+
+    inst2 = Instance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skel2, identity=id2
+    )
+    labels2 = Labels([LabeledFrame(video=video2, frame_idx=0, instances=[inst2])])
+
+    video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    labels1.merge(labels2, video=video_matcher)
+
+    # Both distinct identities appear in the catalog.
+    assert len(labels1.identities) == 2
+    assert {i.uuid for i in labels1.identities} == {id1.uuid, id2.uuid}
+    assert id1 in labels1.identities
+    assert id2 in labels1.identities
+
+
+def test_labels_merge_identity_by_name():
+    """merge(identity="name") dedupes the catalog by name despite distinct uuids."""
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+
+    # Same name, different (auto) uuids — the uuid default would keep both.
+    id1 = Identity(name="mouse_A")
+    id2 = Identity(name="mouse_A")
+    assert id1.uuid != id2.uuid
+
+    inst1 = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skel1, identity=id1
+    )
+    labels1 = Labels([LabeledFrame(video=video1, frame_idx=0, instances=[inst1])])
+    inst2 = Instance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skel2, identity=id2
+    )
+    labels2 = Labels([LabeledFrame(video=video2, frame_idx=0, instances=[inst2])])
+
+    video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    labels1.merge(labels2, video=video_matcher, identity="name")
+
+    # Name matching collapses the two into a single canonical catalog entry.
+    assert len(labels1.identities) == 1
+    assert labels1.identities[0] is id1
+
+
+def test_update_collects_instance_group_identity():
+    """update() collects multi-view identities bound only on `InstanceGroup`s."""
+    id_mv = Identity(name="multiview_mouse")
+    instance_group = InstanceGroup(identity=id_mv)
+    frame_group = FrameGroup(frame_idx=0, instance_groups=[instance_group])
+    session = RecordingSession(frame_group_by_frame_idx={0: frame_group})
+
+    # Constructor runs update(), which must collect the InstanceGroup identity.
+    labels = Labels(sessions=[session])
+    assert id_mv in labels.identities
+
+    # A repeated update() must not duplicate it (deduped by object identity).
+    labels.update()
+    assert labels.identities.count(id_mv) == 1
 
 
 def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):

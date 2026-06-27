@@ -12,6 +12,7 @@ from __future__ import annotations
 import attrs
 import numpy as np
 
+from sleap_io.model.identity import Identity
 from sleap_io.model.skeleton import Node, Skeleton
 
 
@@ -406,6 +407,14 @@ class Instance:
             typically the value from the score matrix used in an identity assignment.
             This is `None` if the instance is not associated with a track or if the
             track was assigned manually.
+        identity: An optional `Identity` representing the global, ground-truth animal
+            this instance belongs to (persistent across videos/sessions). Unlike
+            `track` (an ephemeral, video-local tracklet), `Identity` is the cross-file
+            re-identification key. `None` if no global identity is assigned.
+        identity_score: The score associated with the `identity` assignment (e.g. the
+            cosine similarity to a re-ID gallery prototype). This is `None` if the
+            instance has no identity or the identity was assigned manually. Kept
+            separate from `tracking_score` (short-term tracklet vs long-term identity).
         from_predicted: The `PredictedInstance` (if any) that this instance was
             initialized from. This is used with human-in-the-loop workflows.
     """
@@ -414,6 +423,8 @@ class Instance:
     skeleton: Skeleton
     track: Track | None = None
     tracking_score: float | None = None
+    identity: Identity | None = None
+    identity_score: float | None = None
     from_predicted: "PredictedInstance | None" = None
 
     @classmethod
@@ -422,6 +433,8 @@ class Instance:
         skeleton: Skeleton,
         track: Track | None = None,
         tracking_score: float | None = None,
+        identity: Identity | None = None,
+        identity_score: float | None = None,
         from_predicted: "PredictedInstance | None" = None,
     ) -> "Instance":
         """Create an empty instance with no points.
@@ -434,6 +447,8 @@ class Instance:
                 typically the value from the score matrix used in an identity
                 assignment. This is `None` if the instance is not associated with a
                 track or if the track was assigned manually.
+            identity: An optional global `Identity` for this instance.
+            identity_score: The score associated with the `identity` assignment.
             from_predicted: The `PredictedInstance` (if any) that this instance was
                 initialized from. This is used with human-in-the-loop workflows.
 
@@ -448,6 +463,8 @@ class Instance:
             skeleton=skeleton,
             track=track,
             tracking_score=tracking_score,
+            identity=identity,
+            identity_score=identity_score,
             from_predicted=from_predicted,
         )
 
@@ -475,6 +492,8 @@ class Instance:
         skeleton: Skeleton,
         track: Track | None = None,
         tracking_score: float | None = None,
+        identity: Identity | None = None,
+        identity_score: float | None = None,
         from_predicted: "PredictedInstance | None" = None,
     ) -> "Instance":
         """Create an instance object from a numpy array.
@@ -500,6 +519,8 @@ class Instance:
                 typically the value from the score matrix used in an identity
                 assignment. This is `None` if the instance is not associated with a
                 track or if the track was assigned manually.
+            identity: An optional global `Identity` for this instance.
+            identity_score: The score associated with the `identity` assignment.
             from_predicted: The `PredictedInstance` (if any) that this instance was
                 initialized from. This is used with human-in-the-loop workflows.
 
@@ -511,6 +532,8 @@ class Instance:
             skeleton=skeleton,
             track=track,
             tracking_score=tracking_score,
+            identity=identity,
+            identity_score=identity_score,
             from_predicted=from_predicted,
         )
 
@@ -753,18 +776,23 @@ class Instance:
             return np.all(distances <= tolerance)
 
     def same_identity_as(self, other: "Instance") -> bool:
-        """Check if this instance has the same identity (track) as another instance.
+        """Check if this instance has the same identity as another instance.
 
         Args:
             other: Another instance to compare with.
 
         Returns:
-            True if both instances have the same track identity, False otherwise.
+            True if both instances share the same identity, False otherwise.
 
         Notes:
-            Instances have the same identity if they share the same Track object
-            (by identity, not just by name).
+            Global `Identity` takes precedence: if both instances carry an
+            `Identity`, they match when their `uuid`s match (which survives
+            serialization and cross-file merges). Otherwise this falls back to
+            the ephemeral `Track`, where instances match only when they share the
+            same `Track` object (by object identity, not just by name).
         """
+        if self.identity is not None and other.identity is not None:
+            return self.identity.matches(other.identity, method="uuid")
         if self.track is None or other.track is None:
             return False
         return self.track is other.track
@@ -864,6 +892,9 @@ class PredictedInstance(Instance):
             predicted. This may not always be applicable depending on the model type.
         tracking_score: The score associated with the `Track` assignment. This is
             typically the value from the score matrix used in an identity assignment.
+        identity: An optional global `Identity` (see `Instance.identity`).
+        identity_score: The score associated with the `identity` assignment (see
+            `Instance.identity_score`).
     """
 
     points: PredictedPointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
@@ -871,6 +902,8 @@ class PredictedInstance(Instance):
     score: float = 0.0
     track: Track | None = None
     tracking_score: float | None = 0
+    identity: Identity | None = None
+    identity_score: float | None = None
     from_predicted: "PredictedInstance | None" = None
 
     def __repr__(self) -> str:
@@ -896,6 +929,8 @@ class PredictedInstance(Instance):
         score: float = 0.0,
         track: Track | None = None,
         tracking_score: float | None = None,
+        identity: Identity | None = None,
+        identity_score: float | None = None,
         from_predicted: "PredictedInstance | None" = None,
     ) -> "PredictedInstance":
         """Create an empty instance with no points."""
@@ -908,6 +943,8 @@ class PredictedInstance(Instance):
             score=score,
             track=track,
             tracking_score=tracking_score,
+            identity=identity,
+            identity_score=identity_score,
             from_predicted=from_predicted,
         )
 
@@ -937,6 +974,8 @@ class PredictedInstance(Instance):
         score: float = 0.0,
         track: Track | None = None,
         tracking_score: float | None = None,
+        identity: Identity | None = None,
+        identity_score: float | None = None,
         from_predicted: "PredictedInstance | None" = None,
     ) -> "PredictedInstance":
         """Create a predicted instance object from a numpy array."""
@@ -950,6 +989,8 @@ class PredictedInstance(Instance):
             score=score,
             track=track,
             tracking_score=tracking_score,
+            identity=identity,
+            identity_score=identity_score,
             from_predicted=from_predicted,
         )
 

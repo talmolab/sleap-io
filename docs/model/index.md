@@ -76,6 +76,8 @@ classDiagram
         +PointsArray points
         +Skeleton skeleton
         +Track track
+        +Identity identity
+        +float identity_score
     }
     class PredictedInstance:::poses {
         +float score

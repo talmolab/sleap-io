@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.matching import (
+        IdentityMatcher,
         InstanceMatcher,
         MatchResult,
         MergeResult,
@@ -495,8 +496,8 @@ class Labels:
     def update(self):
         """Update data structures based on contents.
 
-        This function will update the list of skeletons, videos and tracks from the
-        labeled frames, instances, annotations, and suggestions.
+        This function will update the list of skeletons, videos, tracks and
+        identities from the labeled frames, instances, annotations, and suggestions.
         """
         for lf in self.labeled_frames:
             if lf.video not in self.videos:
@@ -508,8 +509,14 @@ class Labels:
                 if inst.track is not None and inst.track not in self.tracks:
                     self.tracks.append(inst.track)
 
+                if inst.identity is not None and inst.identity not in self.identities:
+                    self.identities.append(inst.identity)
+
             # Collect tracks from nested annotations
             self._collect_annotation_tracks(lf)
+
+        # Collect multi-view identities bound only on InstanceGroups (sessions).
+        self._collect_session_identities()
 
         for sf in self.suggestions:
             if sf.video not in self.videos:
@@ -832,11 +839,16 @@ class Labels:
             new_videos = [deepcopy(v) for v in self.videos]
             new_skeletons = [deepcopy(s) for s in self.skeletons]
             new_tracks = [deepcopy(t) for t in self.tracks]
+            # Identities are index-referenced by the store's per-instance maps, so
+            # deep-copying preserves index alignment while keeping the catalog
+            # independent.
+            new_identities = [deepcopy(i) for i in self.identities]
 
             # Update store references
             new_store.videos = new_videos
             new_store.skeletons = new_skeletons
             new_store.tracks = new_tracks
+            new_store.identities = new_identities
 
             # Annotations are stored on the lazy store's per-frame dicts
             # and will be attached to frames when they are materialized.
@@ -854,6 +866,7 @@ class Labels:
                 videos=new_videos,
                 skeletons=new_skeletons,
                 tracks=new_tracks,
+                identities=new_identities,
                 suggestions=[deepcopy(s) for s in self.suggestions],
                 sessions=[deepcopy(s) for s in self.sessions],
                 provenance=dict(self.provenance),
@@ -890,6 +903,24 @@ class Labels:
                 if info.track is not None and info.track not in self.tracks:
                     self.tracks.append(info.track)
 
+    def _collect_session_identities(self):
+        """Collect multi-view identities bound only on `InstanceGroup`s.
+
+        A multi-view animal identity may be attached to an `InstanceGroup`
+        (``session.frame_groups[*].instance_groups[*].identity``) without ever
+        appearing on a per-instance ``Instance.identity``. Those identities would
+        otherwise be dropped on save, so collect them into ``self.identities``.
+
+        Deduped by object identity (``not in``), mirroring instance-identity
+        collection. Cheap no-op for labels without sessions.
+        """
+        for session in self.sessions:
+            for frame_group in session.frame_groups.values():
+                for instance_group in frame_group.instance_groups:
+                    identity = instance_group.identity
+                    if identity is not None and identity not in self.identities:
+                        self.identities.append(identity)
+
     def append(self, lf: LabeledFrame, update: bool = True):
         """Append a labeled frame to the labels.
 
@@ -915,7 +946,11 @@ class Labels:
                 if inst.track is not None and inst.track not in self.tracks:
                     self.tracks.append(inst.track)
 
+                if inst.identity is not None and inst.identity not in self.identities:
+                    self.identities.append(inst.identity)
+
             self._collect_annotation_tracks(lf)
+            self._collect_session_identities()
 
     def extend(self, lfs: list[LabeledFrame], update: bool = True):
         """Append labeled frames to the labels.
@@ -943,7 +978,15 @@ class Labels:
                     if inst.track is not None and inst.track not in self.tracks:
                         self.tracks.append(inst.track)
 
+                    if (
+                        inst.identity is not None
+                        and inst.identity not in self.identities
+                    ):
+                        self.identities.append(inst.identity)
+
                 self._collect_annotation_tracks(lf)
+
+            self._collect_session_identities()
 
     def numpy(
         self,
@@ -3336,6 +3379,7 @@ class Labels:
         skeleton: "str | SkeletonMatcher | None" = None,
         video: "str | VideoMatcher | None" = None,
         track: "str | TrackMatcher | None" = None,
+        identity: "str | IdentityMatcher | None" = None,
         frame: str = "auto",
         instance: "str | InstanceMatcher | None" = None,
         validate: bool = True,
@@ -3362,6 +3406,12 @@ class Labels:
                 attribute instead, for cases where track names are semantically
                 meaningful (e.g. user-assigned identities or identity-classification
                 model outputs).
+            identity: Global `Identity` catalog matching method. Can be a string
+                ("uuid", "name") or an IdentityMatcher object. Default is "uuid",
+                which dedupes the identity catalog by the stable cross-file `uuid`
+                key so the same animal across files collapses to one canonical
+                `Identity`. Pass "name" to dedupe by name instead. Per-instance
+                identity links always join by `uuid`.
             frame: Frame merge strategy. One of "auto", "keep_original",
                 "keep_new", "keep_both", "update_tracks", "replace_predictions".
                 Default is "auto".
@@ -3409,8 +3459,10 @@ class Labels:
 
         import sleap_io
         from sleap_io.model.matching import (
+            UUID_IDENTITY_MATCHER,
             ConflictResolution,
             ErrorMode,
+            IdentityMatcher,
             InstanceMatcher,
             InstanceMatchMethod,
             MergeError,
@@ -3658,6 +3710,34 @@ class Labels:
                 other, video_map, track_map, track_matcher, instance_matcher
             )
 
+            # Step 3b: Match and merge identities (dedupe by stable uuid).
+            # Mirrors track matching above, but keyed by ``Identity.uuid`` so the
+            # same animal across files maps to a single canonical catalog object.
+            # ``identity_map`` is threaded into ``_map_instance`` so per-instance
+            # identities point at the deduped catalog entry instead of a copy.
+            # The matcher controls how catalog entries are deduped; the map is
+            # always keyed by ``Identity.uuid`` (the per-instance join key).
+            if isinstance(identity, IdentityMatcher):
+                identity_matcher = identity
+            elif isinstance(identity, str):
+                identity_matcher = IdentityMatcher(method=identity)
+            else:
+                identity_matcher = UUID_IDENTITY_MATCHER
+            identity_map: dict[str, Identity] = {}
+            for other_identity in other.identities:
+                matched_identity = None
+                for self_identity in self.identities:
+                    if identity_matcher.match(self_identity, other_identity):
+                        matched_identity = self_identity
+                        break
+
+                if matched_identity is None:
+                    # Add new identity if no uuid match.
+                    self.identities.append(other_identity)
+                    matched_identity = other_identity
+
+                identity_map[other_identity.uuid] = matched_identity
+
             # Step 4: Merge frames
             total_frames = len(other.labeled_frames)
 
@@ -3696,7 +3776,11 @@ class Labels:
                     instance_memo: dict[int, Instance | PredictedInstance] = {}
                     for inst in other_frame.instances:
                         new_inst = self._map_instance(
-                            inst, skeleton_map, track_map, memo=instance_memo
+                            inst,
+                            skeleton_map,
+                            track_map,
+                            identity_map=identity_map,
+                            memo=instance_memo,
                         )
                         new_frame.instances.append(new_inst)
                         result.instances_added += 1
@@ -3732,7 +3816,11 @@ class Labels:
                         if inst.skeleton in skeleton_map:
                             # Instance needs remapping
                             remapped_inst = self._map_instance(
-                                inst, skeleton_map, track_map, memo=instance_memo
+                                inst,
+                                skeleton_map,
+                                track_map,
+                                identity_map=identity_map,
+                                memo=instance_memo,
                             )
                             remapped_instances.append(remapped_inst)
                         else:
@@ -3975,14 +4063,20 @@ class Labels:
         instance: Instance | PredictedInstance,
         skeleton_map: dict[Skeleton, Skeleton],
         track_map: dict[Track, Track],
+        identity_map: dict[str, Identity] | None = None,
         memo: dict[int, Instance | PredictedInstance] | None = None,
     ) -> Instance | PredictedInstance:
-        """Map an instance to use mapped skeleton and track.
+        """Map an instance to use mapped skeleton, track, and identity.
 
         Args:
             instance: Instance to map.
             skeleton_map: Dictionary mapping old skeletons to new ones.
             track_map: Dictionary mapping old tracks to new ones.
+            identity_map: Optional mapping from ``Identity.uuid`` to the canonical
+                (deduped) `Identity` in the merged catalog. When provided, the
+                instance's identity is resolved through this map so that the same
+                animal across files points at a single catalog object. The
+                instance's ``identity_score`` is always copied.
             memo: Optional mapping from the id of the source instance to the new
                 instance, mutated in place. Used to repair ``from_predicted``
                 links so a remapped user instance references the remapped source
@@ -4003,6 +4097,14 @@ class Labels:
         mapped_skeleton = skeleton_map.get(instance.skeleton, instance.skeleton)
         mapped_track = (
             track_map.get(instance.track, instance.track) if instance.track else None
+        )
+        # Resolve the identity through the catalog dedup map (keyed by uuid) so the
+        # same animal across merged files maps to one canonical Identity. Falls back
+        # to the instance's own identity when no map/identity is present.
+        mapped_identity = (
+            identity_map.get(instance.identity.uuid, instance.identity)
+            if (instance.identity is not None and identity_map)
+            else instance.identity
         )
 
         # Reorder points by node name when the source order differs from the mapped
@@ -4028,6 +4130,8 @@ class Labels:
                 track=mapped_track,
                 tracking_score=instance.tracking_score,
                 from_predicted=instance.from_predicted,
+                identity=mapped_identity,
+                identity_score=instance.identity_score,
             )
         else:
             new_instance = Instance(
@@ -4036,6 +4140,8 @@ class Labels:
                 track=mapped_track,
                 tracking_score=instance.tracking_score,
                 from_predicted=instance.from_predicted,
+                identity=mapped_identity,
+                identity_score=instance.identity_score,
             )
         if memo is not None:
             memo[id(instance)] = new_instance

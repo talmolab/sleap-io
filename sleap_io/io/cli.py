@@ -914,6 +914,13 @@ def _print_header(path: Path, labels: Labels) -> None:
             f"track{'s' if len(labels.tracks) != 1 else ''}"
         )
 
+    # Global identities - only shown when present (pose-only files have none).
+    n_identities = len(labels.identities)
+    if n_identities > 0:
+        stats_parts.append(
+            f"[bold]{n_identities}[/] identit{'ies' if n_identities != 1 else 'y'}"
+        )
+
     # Segmentation masks and ROIs - only shown when present to avoid cluttering
     # pose-only files.
     n_masks = len(labels.masks)
@@ -2972,6 +2979,13 @@ def unsplit(
     help="Track matching method.",
 )
 @click.option(
+    "--identity",
+    type=click.Choice(["uuid", "name"]),
+    default="uuid",
+    show_default=True,
+    help="Identity matching method for deduping the identity catalog.",
+)
+@click.option(
     "--frame",
     type=click.Choice(
         [
@@ -3011,6 +3025,7 @@ def merge(
     skeleton: str,
     video: str,
     track: str,
+    identity: str,
     frame: str,
     instance: str,
     embed: str | None,
@@ -3059,6 +3074,10 @@ def merge(
       • identity: Match by track identity
       • iou: Match by bounding box overlap
 
+    [dim]Identity:[/] How to dedupe the global identity catalog
+      • uuid: Match identities by stable UUID key [default]
+      • name: Match identities by name
+
     [dim]Examples:[/]
 
         $ sio merge project.slp predictions.slp -o merged.slp
@@ -3104,6 +3123,10 @@ def merge(
 
     click.echo(f"  {initial_frames} frames, {initial_videos} videos")
 
+    # Select how the global identity catalog is deduped during merge ("uuid" or
+    # "name"), forwarded to Labels.merge() as the identity matcher method.
+    merge_identity_kwargs: dict = {"identity": identity}
+
     # Merge remaining files
     for input_file in expanded_files[1:]:
         click.echo(f"Merging: {input_file.name}")
@@ -3128,6 +3151,7 @@ def merge(
             track=track,
             frame=frame,
             instance=instance,
+            **merge_identity_kwargs,
         )
 
         frames_added = len(labels) - frames_before
@@ -3523,10 +3547,10 @@ def filenames(
 # Appearance options
 @click.option(
     "--color-by",
-    type=click.Choice(["auto", "track", "instance", "node"]),
+    type=click.Choice(["auto", "track", "instance", "node", "identity"]),
     default="auto",
     show_default=True,
-    help="Color scheme: auto (smart default), track, instance, or node.",
+    help="Color scheme: auto (smart default), track, instance, node, or identity.",
 )
 @click.option(
     "--palette",
