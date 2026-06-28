@@ -46,8 +46,10 @@ from sleap_io.io.slp import (
     LabelImageWriter,
     _encode_metadata_attr,
     _points_from_hdf5_data,
+    _read_source_video_json,
     _write_metadata_standalone,
     _write_provenance_dataset,
+    _write_source_video_json,
     camera_group_to_dict,
     camera_to_dict,
     can_use_fast_path,
@@ -5892,6 +5894,51 @@ def test_write_metadata_standalone_provenance_dataset(tmp_path):
         assert "provenance_json" in f
     md = read_metadata(path)
     assert read_provenance(path, md)["source"] == "x.slp"
+
+
+def test_source_video_json_small_uses_attr(tmp_path):
+    """Small source video metadata stays in the group's json attribute."""
+    path = str(tmp_path / "sv.slp")
+    payload = {"filename": "v.mp4", "backend": {"type": "MediaVideo"}}
+    with h5py.File(path, "a") as f:
+        grp = f.require_group("video0/source_video")
+        _write_source_video_json(grp, payload)
+        assert "json" not in grp  # no dataset
+        assert "json" in grp.attrs  # stored as attribute
+
+    with h5py.File(path, "r") as f:
+        assert _read_source_video_json(f["video0/source_video"]) == payload
+
+
+def test_source_video_json_large_spills_to_dataset(tmp_path):
+    """Oversized source video metadata spills to a dataset with a warning."""
+    path = str(tmp_path / "sv_big.slp")
+    payload = {"filename": "v.mp4", "backend_metadata": {"blob": "x" * 70000}}
+    with h5py.File(path, "a") as f:
+        grp = f.require_group("video0/source_video")
+        with pytest.warns(UserWarning, match="exceeds the .* HDF5 attribute limit"):
+            _write_source_video_json(grp, payload)
+        assert "json" in grp  # stored as dataset
+        assert "json" not in grp.attrs  # not in the attribute
+
+    with h5py.File(path, "r") as f:
+        assert _read_source_video_json(f["video0/source_video"]) == payload
+
+
+def test_source_video_json_spill_overwrites_dataset(tmp_path):
+    """Re-spilling overwrites an existing source_video json dataset."""
+    path = str(tmp_path / "sv_re.slp")
+    big1 = {"backend_metadata": {"blob": "x" * 70000}}
+    big2 = {"backend_metadata": {"blob": "y" * 70000}}
+    with h5py.File(path, "a") as f:
+        grp = f.require_group("video0/source_video")
+        with pytest.warns(UserWarning):
+            _write_source_video_json(grp, big1)
+        with pytest.warns(UserWarning):
+            _write_source_video_json(grp, big2)  # exercises delete-then-create
+
+    with h5py.File(path, "r") as f:
+        assert _read_source_video_json(f["video0/source_video"]) == big2
 
 
 def test_read_h5wasm_instances_float64_indices(tmp_path):

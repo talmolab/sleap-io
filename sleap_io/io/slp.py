@@ -188,6 +188,57 @@ def _is_embedded_video_metadata(video: Video) -> bool:
     return False
 
 
+def _write_source_video_json(source_grp: h5py.Group, source_video_dict: dict) -> None:
+    """Write a source video's metadata JSON into its ``source_video`` group.
+
+    Normally stored in the group's ``json`` *attribute*. If the serialized
+    metadata would exceed HDF5's 64 KB attribute limit (e.g. a very large
+    ``backend_metadata``), it is written to a ``json`` *dataset* in the same group
+    instead — datasets have no such limit — and a ``UserWarning`` is emitted.
+    `_read_source_video_json` reads the dataset first, falling back to the
+    attribute, so the two stay interchangeable.
+
+    Args:
+        source_grp: The ``{group}/source_video`` HDF5 group to write into.
+        source_video_dict: The source video metadata dict (from `video_to_dict`).
+    """
+    blob = json.dumps(source_video_dict, separators=(",", ":"))
+    if len(blob.encode()) <= METADATA_ATTR_SIZE_LIMIT:
+        source_grp.attrs["json"] = blob
+        return
+
+    warnings.warn(
+        f"Source video metadata ({len(blob.encode())} bytes) exceeds the "
+        f"{METADATA_ATTR_SIZE_LIMIT}-byte HDF5 attribute limit; storing it in a "
+        f"'{source_grp.name}/json' dataset instead of the attribute. Readers older "
+        "than this version will not find the source video metadata.",
+        stacklevel=2,
+    )
+    if "json" in source_grp:
+        del source_grp["json"]
+    source_grp.create_dataset("json", data=np.bytes_(blob))
+
+
+def _read_source_video_json(source_grp: h5py.Group) -> dict:
+    """Read a source video's metadata JSON from its ``source_video`` group.
+
+    Reads the ``json`` *dataset* (written by `_write_source_video_json` for
+    oversized metadata) when present, otherwise the ``json`` *attribute* (the
+    normal case and all legacy files).
+
+    Args:
+        source_grp: The ``{group}/source_video`` HDF5 group to read from.
+
+    Returns:
+        The parsed source video metadata dict.
+    """
+    # json.loads accepts the dataset's np.bytes_ scalar and the attribute's str
+    # directly, so no explicit decoding is needed.
+    if "json" in source_grp:
+        return json.loads(source_grp["json"][()])
+    return json.loads(source_grp.attrs["json"])
+
+
 def make_video(
     labels_path: str,
     video_json: dict,
@@ -260,8 +311,8 @@ def make_video(
 
             # Load source_video metadata
             if dataset in f and "source_video" in f[dataset]:
-                source_video_json = json.loads(
-                    f[f"{dataset}/source_video"].attrs["json"]
+                source_video_json = _read_source_video_json(
+                    f[f"{dataset}/source_video"]
                 )
                 source_video = make_video(
                     labels_path,
@@ -1066,9 +1117,7 @@ def process_and_embed_frames(
 
             # Store source video metadata
             grp = f.require_group(f"{group}/source_video")
-            grp.attrs["json"] = json.dumps(
-                video_to_dict(source_video, labels_path), separators=(",", ":")
-            )
+            _write_source_video_json(grp, video_to_dict(source_video, labels_path))
 
             # Store the embedded video for return
             replaced_videos[video] = embedded_video
@@ -1125,9 +1174,7 @@ def _create_empty_embedded_video(
 
         # Store source video metadata for restoration
         source_grp = f.require_group(f"{group}/source_video")
-        source_grp.attrs["json"] = json.dumps(
-            video_to_dict(source_video, labels_path), separators=(",", ":")
-        )
+        _write_source_video_json(source_grp, video_to_dict(source_video, labels_path))
 
     # Create the embedded video object using VideoBackend.from_filename
     # This ensures the HDF5Video is properly initialized with the dataset metadata
@@ -1518,9 +1565,7 @@ def write_videos(
                     source_json = video_to_dict(
                         source_to_save, labels_path, prefer_metadata=prefer_metadata
                     )
-                    source_grp.attrs["json"] = json.dumps(
-                        source_json, separators=(",", ":")
-                    )
+                    _write_source_video_json(source_grp, source_json)
 
 
 def read_tracks(
