@@ -440,6 +440,7 @@ classDiagram
         +PointsArray points
         +Identity identity
         +float identity_score
+        +dict~str,Embedding~ embeddings
     }
 
     class Video {

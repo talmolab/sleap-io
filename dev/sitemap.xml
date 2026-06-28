@@ -109,6 +109,10 @@
          <lastmod>2026-06-28</lastmod>
     </url>
     <url>
+         <loc>https://io.sleap.ai/dev/model/embedding/</loc>
+         <lastmod>2026-06-28</lastmod>
+    </url>
+    <url>
          <loc>https://io.sleap.ai/dev/model/labels/</loc>
          <lastmod>2026-06-28</lastmod>
     </url>
@@ -282,6 +286,10 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/centroid/</loc>
+         <lastmod>2026-06-28</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/model/embedding/</loc>
          <lastmod>2026-06-28</lastmod>
     </url>
     <url>
