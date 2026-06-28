@@ -1808,6 +1808,46 @@ def read_metadata(labels_path: str, *, _hdf5_file: h5py.File | None = None) -> d
     return json.loads(md)
 
 
+def read_provenance(
+    labels_path: str,
+    metadata: dict,
+    *,
+    _hdf5_file: h5py.File | None = None,
+) -> dict:
+    """Read the provenance dict for a SLEAP labels file.
+
+    Provenance is stored in a dedicated top-level ``/provenance_json`` dataset so
+    it is not subject to HDF5's 64 KB per-attribute size limit. The legacy layout
+    stored provenance inside the ``metadata/json`` attribute, which an unbounded
+    ``merge_history`` (or other large provenance) could exceed, breaking saving
+    entirely. For backward compatibility with files written before this change,
+    this falls back to the ``provenance`` key inside the already-read ``metadata``
+    blob when the dataset is absent.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        metadata: The parsed ``metadata`` dict (from `read_metadata`), used as the
+            fallback source of provenance for files written in the legacy layout.
+        _hdf5_file: An already-open ``h5py.File`` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise ``labels_path`` is opened and closed internally. Private,
+            mirrors the other ``read_*`` helpers.
+
+    Returns:
+        The provenance dict. Empty if neither the dataset nor the metadata blob
+        carry provenance.
+    """
+    try:
+        raw = read_hdf5_dataset(labels_path, "provenance_json", _hdf5_file=_hdf5_file)
+    except KeyError:
+        return metadata.get("provenance", dict())
+    # The dataset is a single JSON blob, read back as np.bytes_ (or a length-1
+    # array from some writers). json.loads accepts bytes/np.bytes_/str directly.
+    if isinstance(raw, np.ndarray):
+        raw = raw.item()
+    return json.loads(raw)
+
+
 def read_skeletons(
     labels_path: str, *, _hdf5_file: h5py.File | None = None
 ) -> list[Skeleton]:
@@ -1862,10 +1902,121 @@ def serialize_skeletons(skeletons: list[Skeleton]) -> tuple[list[dict], list[dic
     return encoder.encode_skeletons(skeletons)
 
 
+# HDF5 caps any single attribute at 64 KiB (65,536 bytes). Keep the metadata JSON
+# blob comfortably under that, leaving headroom for the HDF5 object header and the
+# sibling ``format_id`` attribute. Metadata that would exceed this has its large,
+# safely-relocatable top-level keys dropped from the attribute (see
+# ``_encode_metadata_attr``); the data itself is preserved in dedicated datasets.
+METADATA_ATTR_SIZE_LIMIT = 64_000
+
+# Top-level metadata keys that must never be dropped from the ``metadata/json``
+# attribute because the reader has no other source for them. (``provenance`` is
+# stored in the ``provenance_json`` dataset, and the remaining keys are empty
+# placeholders whose real data lives in their own datasets, so all are droppable.)
+_METADATA_PROTECTED_KEYS = ("version", "skeletons", "nodes")
+
+
+def _encode_metadata_attr(md: dict) -> np.bytes_:
+    """Serialize metadata to a JSON blob that fits HDF5's 64 KB attribute limit.
+
+    Writing a single HDF5 attribute larger than 64 KB fails with a cryptic
+    ``object header message is too large`` error (and on some HDF5 builds silently
+    writes a corrupt file). To keep saving robust, if the serialized metadata
+    exceeds `METADATA_ATTR_SIZE_LIMIT` this drops droppable top-level keys
+    (everything except `_METADATA_PROTECTED_KEYS`) largest-first until it fits,
+    emitting a ``UserWarning`` naming the dropped keys.
+
+    Dropping is lossless for the file as a whole: ``provenance`` is independently
+    stored in the ``provenance_json`` dataset, and ``videos``/``tracks``/
+    ``suggestions``/``negative_anchors`` are empty placeholders in the blob whose
+    real data lives in their own datasets.
+
+    Args:
+        md: The metadata dict to serialize. Mutated in place (offending keys are
+            removed) when the blob exceeds the limit.
+
+    Returns:
+        The serialized JSON blob as ``np.bytes_``, ready to assign to an HDF5
+        attribute.
+
+    Raises:
+        ValueError: If the protected keys (``skeletons``/``nodes``) alone exceed
+            the limit and so cannot be made to fit by dropping other keys.
+    """
+
+    def _blob(d: dict) -> bytes:
+        return json.dumps(d, separators=(",", ":")).encode()
+
+    blob = _blob(md)
+    if len(blob) <= METADATA_ATTR_SIZE_LIMIT:
+        return np.bytes_(blob)
+
+    original_size = len(blob)
+    droppable = sorted(
+        (k for k in md if k not in _METADATA_PROTECTED_KEYS),
+        key=lambda k: len(_blob({k: md[k]})),
+        reverse=True,
+    )
+    dropped = []
+    for k in droppable:
+        del md[k]
+        dropped.append(k)
+        blob = _blob(md)
+        if len(blob) <= METADATA_ATTR_SIZE_LIMIT:
+            break
+
+    if len(blob) > METADATA_ATTR_SIZE_LIMIT:
+        raise ValueError(
+            "Unable to fit Labels metadata within HDF5's "
+            f"{METADATA_ATTR_SIZE_LIMIT}-byte attribute limit: the required "
+            f"skeletons/nodes metadata alone serializes to {len(blob)} bytes. "
+            "Reduce the number or size of the skeletons/nodes."
+        )
+
+    warnings.warn(
+        f"Labels metadata JSON ({original_size} bytes) exceeded the "
+        f"{METADATA_ATTR_SIZE_LIMIT}-byte HDF5 attribute limit; dropped top-level "
+        f"key(s) {dropped} from the 'metadata/json' attribute so the file could be "
+        "saved. No data was lost: provenance is stored in the 'provenance_json' "
+        "dataset and the other dropped keys are empty placeholders whose data is "
+        "stored in separate datasets.",
+        stacklevel=2,
+    )
+    return np.bytes_(blob)
+
+
+def _write_provenance_dataset(f: h5py.File, provenance: dict) -> None:
+    """Write provenance to the top-level ``provenance_json`` dataset.
+
+    Provenance is stored as a dataset rather than inside the ``metadata/json``
+    attribute so it is exempt from HDF5's 64 KB per-attribute limit (an unbounded
+    ``merge_history`` would otherwise break saving). This is a no-op for empty
+    provenance, and overwrites any existing dataset so repeated writes to the same
+    open file stay idempotent.
+
+    Args:
+        f: An open ``h5py.File`` handle (opened in a writable mode).
+        provenance: The JSON-serializable provenance dict to store.
+    """
+    if not provenance:
+        return
+    if "provenance_json" in f:
+        del f["provenance_json"]
+    f.create_dataset(
+        "provenance_json",
+        data=np.bytes_(json.dumps(provenance, separators=(",", ":"))),
+    )
+
+
 def write_metadata(labels_path: str, labels: Labels):
     """Write metadata to a SLEAP labels file.
 
     This function will write the skeletons and provenance for the labels.
+
+    Provenance is written to a dedicated top-level ``provenance_json`` dataset (not
+    subject to HDF5's 64 KB attribute limit) and, when small enough, also mirrored
+    into the ``metadata/json`` attribute for backward compatibility with older
+    readers (see `read_provenance` and `_encode_metadata_attr`).
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -1875,6 +2026,13 @@ def write_metadata(labels_path: str, labels: Labels):
     """
     skeletons_dicts, nodes_dicts = serialize_skeletons(labels.skeletons)
 
+    # Encode provenance into a JSON-safe dict (Path -> str). Build a copy so we
+    # never mutate the caller's ``labels.provenance``.
+    provenance = {
+        k: (v.as_posix() if isinstance(v, Path) else v)
+        for k, v in labels.provenance.items()
+    }
+
     md = {
         "version": "2.0.0",
         "skeletons": skeletons_dicts,
@@ -1883,14 +2041,8 @@ def write_metadata(labels_path: str, labels: Labels):
         "tracks": [],
         "suggestions": [],  # TODO: Handle suggestions metadata.
         "negative_anchors": {},
-        "provenance": labels.provenance,
+        "provenance": provenance,
     }
-
-    # Custom encoding.
-    for k in md["provenance"]:
-        if isinstance(md["provenance"][k], Path):
-            # Path -> str
-            md["provenance"][k] = md["provenance"][k].as_posix()
 
     # Bump format_id based on features used
     has_instance_rois = any(
@@ -1952,7 +2104,12 @@ def write_metadata(labels_path: str, labels: Labels):
 
         grp = f.require_group("metadata")
         grp.attrs["format_id"] = format_id
-        grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
+        # Store provenance in a dedicated dataset (no 64 KB attribute limit) so an
+        # unbounded merge_history can't break saving. A copy is also kept in the
+        # metadata/json attribute (when it fits) by `_encode_metadata_attr` for
+        # older readers.
+        _write_provenance_dataset(f, provenance)
+        grp.attrs["json"] = _encode_metadata_attr(md)
 
 
 def read_points(labels_path: str, *, _hdf5_file: h5py.File | None = None) -> np.ndarray:
@@ -3061,7 +3218,7 @@ def _read_labels_lazy_from_open_file(
     tracks = read_tracks(labels_path, _hdf5_file=f)
     suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
     metadata = read_metadata(labels_path, _hdf5_file=f)
-    provenance = metadata.get("provenance", dict())
+    provenance = read_provenance(labels_path, metadata, _hdf5_file=f)
     negative_frames = read_negative_frames(labels_path, _hdf5_file=f)
 
     # Read sessions (small, no need for lazy loading)
@@ -4907,7 +5064,10 @@ def _write_metadata_standalone(
 
         grp = f.require_group("metadata")
         grp.attrs["format_id"] = format_id
-        grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
+        # Mirror write_metadata: provenance goes to a dedicated dataset (no 64 KB
+        # attribute limit), kept in the metadata/json attribute too when it fits.
+        _write_provenance_dataset(f, provenance)
+        grp.attrs["json"] = _encode_metadata_attr(md)
 
         # Write empty placeholder datasets so read_labels can parse the file
         if "points" not in f:
@@ -5797,7 +5957,7 @@ def _read_labels_from_open_file(
     )
     suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
     metadata = read_metadata(labels_path, _hdf5_file=f)
-    provenance = metadata.get("provenance", dict())
+    provenance = read_provenance(labels_path, metadata, _hdf5_file=f)
 
     frames = read_hdf5_dataset(labels_path, "frames", _hdf5_file=f)
     negative_markers = read_negative_frames(labels_path, _hdf5_file=f)
