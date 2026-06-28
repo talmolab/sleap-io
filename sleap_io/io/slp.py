@@ -19,9 +19,14 @@ Format version history:
     - 2.3: Virtual on-read video crops (/video_crops dataset)
     - 2.4: Persisted mask from_predicted provenance (from_predicted column in
             mask_dtype storing the source prediction's index in the mask list)
-    - 2.5: Added per-instance global identity links (/instance_identities dataset:
-            instance_id, identity_idx, identity_score) joining instances to the
-            identity catalog; additive, read with try/except on dataset presence
+    - 2.5: Added per-detection global identity links (/identity_links dataset:
+            owner_type, owner_id, identity_idx, identity_score) joining a detection
+            to the identity catalog. The owner_type column reuses the shared OWNER_*
+            codes (same scheme as the /embeddings join), so additional detection
+            modalities can be linked without a new dataset or format bump; only
+            instance owners are written today. Additive, read with try/except on
+            dataset presence. (Pre-rename dev files using the instance-only
+            /instance_identities dataset are still read back as instance owners.)
     - 2.6: Added appearance / re-ID embeddings (/embeddings group, one subgroup
             per named space: vectors (n, D) float + owner_type/owner_id join
             columns + per-row meta_json); additive, read on group presence
@@ -1705,16 +1710,23 @@ def write_identities(labels_path: str, identities: list[Identity]):
         f.create_dataset("identities_json", data=identities_json, maxshape=(None,))
 
 
-def read_instance_identities(
+def read_identity_links(
     labels_path: str, *, _hdf5_file: h5py.File | None = None
-) -> dict[int, tuple[int, float | None]]:
-    """Read per-instance identity links from a SLEAP labels file.
+) -> dict[int, dict[int, tuple[int, float | None]]]:
+    """Read per-detection identity links from a SLEAP labels file.
 
-    Links are stored in the optional ``instance_identities`` dataset (SLP format
-    2.5+), a structured array of ``(instance_id, identity_idx, identity_score)``
-    rows joining the global instance id to an index into the file's identity
-    catalog. The dataset is absent in older files, in which case an empty mapping
-    is returned (purely additive; reads are gated on dataset presence).
+    Links are stored in the optional ``identity_links`` dataset (SLP format 2.5+),
+    a structured array of ``(owner_type, owner_id, identity_idx, identity_score)``
+    rows joining a detection -- identified by ``owner_type`` (one of the ``OWNER_*``
+    codes) and ``owner_id`` -- to an index into the file's identity catalog.
+    ``owner_id`` is the per-owner-type positional id (e.g. the global
+    ``instance_id`` assigned by `write_lfs` for instance owners), mirroring the
+    ``/embeddings`` join. The dataset is absent in older files, in which case an
+    empty mapping is returned (purely additive; reads are gated on dataset
+    presence).
+
+    Pre-rename dev files that wrote the instance-only ``instance_identities``
+    dataset (3 columns, no ``owner_type``) are read back as instance owners.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -1723,67 +1735,82 @@ def read_instance_identities(
             otherwise `labels_path` is opened and closed internally.
 
     Returns:
-        A dict mapping the global ``instance_id`` to a
-        ``(identity_idx, identity_score)`` tuple. ``identity_score`` is ``None``
-        when it was not recorded (stored as NaN).
+        A dict mapping each ``owner_type`` to a ``{owner_id: (identity_idx,
+        identity_score)}`` mapping. ``identity_score`` is ``None`` when it was not
+        recorded (stored as NaN). Empty for older files.
     """
-    try:
-        data = read_hdf5_dataset(
-            labels_path, "instance_identities", _hdf5_file=_hdf5_file
-        )
-    except KeyError:
+    data = None
+    for dataset_name in ("identity_links", "instance_identities"):
+        try:
+            data = read_hdf5_dataset(labels_path, dataset_name, _hdf5_file=_hdf5_file)
+            break
+        except KeyError:
+            continue
+    if data is None:
         return {}
-    result: dict[int, tuple[int, float | None]] = {}
+    fields = data.dtype.names
+    has_owner_type = "owner_type" in fields
+    id_field = "owner_id" if "owner_id" in fields else "instance_id"
+    result: dict[int, dict[int, tuple[int, float | None]]] = {}
     for row in data:
+        owner_type = int(row["owner_type"]) if has_owner_type else OWNER_INSTANCE
         score = float(row["identity_score"])
-        result[int(row["instance_id"])] = (
+        result.setdefault(owner_type, {})[int(row[id_field])] = (
             int(row["identity_idx"]),
             None if np.isnan(score) else score,
         )
     return result
 
 
-def _write_instance_identity_rows(
-    labels_path: str, rows: list[tuple[int, int, float]]
+def _write_identity_link_rows(
+    labels_path: str, rows: list[tuple[int, int, int, float]]
 ) -> None:
-    """Write ``(instance_id, identity_idx, identity_score)`` rows to a SLP file.
+    """Write ``(owner_type, owner_id, identity_idx, identity_score)`` rows.
 
-    Shared dataset-writing core for the per-instance identity link. The rows can
+    Shared dataset-writing core for the per-detection identity link. The rows can
     be built either by iterating a `Labels` (the eager path, see
-    `write_instance_identities`) or from a lazy store dict (the lazy save path),
-    keeping the on-disk ``instance_identities`` layout identical for both.
+    `write_identity_links`) or from a lazy store dict (the lazy save path), keeping
+    the on-disk ``identity_links`` layout identical for both.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
-        rows: A list of ``(instance_id, identity_idx, identity_score)`` tuples.
-            ``identity_score`` is a float (NaN encodes an unrecorded score). An
-            empty list is a no-op (no dataset is created).
+        rows: A list of ``(owner_type, owner_id, identity_idx, identity_score)``
+            tuples. ``owner_type`` is one of the ``OWNER_*`` codes; ``owner_id`` is
+            the per-owner-type positional id. ``identity_score`` is a float (NaN
+            encodes an unrecorded score). An empty list is a no-op (no dataset is
+            created).
     """
     if not rows:
         return
 
-    instance_identity_dtype = np.dtype(
+    identity_link_dtype = np.dtype(
         [
-            ("instance_id", "i8"),
+            ("owner_type", "u1"),
+            ("owner_id", "i8"),
             ("identity_idx", "i4"),
             ("identity_score", "f4"),
         ]
     )
-    arr = np.array(rows, dtype=instance_identity_dtype)
+    arr = np.array(rows, dtype=identity_link_dtype)
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("instance_identities", data=arr, maxshape=(None,))
+        f.create_dataset("identity_links", data=arr, maxshape=(None,))
 
 
-def write_instance_identities(labels_path: str, labels: Labels) -> None:
-    """Write per-instance identity links to a SLEAP labels file.
+def write_identity_links(labels_path: str, labels: Labels) -> None:
+    """Write per-detection identity links to a SLEAP labels file.
 
-    Creates the ``instance_identities`` dataset (SLP format 2.5+) as a structured
-    array of ``(instance_id, identity_idx, identity_score)`` rows for every
-    instance carrying an `Identity` that is registered in ``labels.identities``.
-    The ``instance_id`` matches the global id assigned by `write_lfs` (enumeration
-    order over frames then instances), so the link is resolved by joining on that
-    id at read time. This keeps identity out of the fixed-layout ``instances``
-    dataset, making it purely additive: old readers simply ignore the dataset.
+    Creates the ``identity_links`` dataset (SLP format 2.5+) as a structured array
+    of ``(owner_type, owner_id, identity_idx, identity_score)`` rows for every
+    detection carrying an `Identity` that is registered in ``labels.identities``.
+    Today only instance owners (``OWNER_INSTANCE``) are written; the ``owner_type``
+    column is owner-type-aware (same scheme as the ``/embeddings`` join) so other
+    detection modalities can be linked later without a new dataset or format bump.
+
+    The instance ``owner_id`` matches the global id assigned by `write_lfs`
+    (enumeration order over frames then instances), so the link is resolved by
+    joining on that id at read time. This keeps identity out of the fixed-layout
+    ``instances`` dataset, making it purely additive: old readers simply ignore
+    the dataset.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -1802,6 +1829,7 @@ def write_instance_identities(labels_path: str, labels: Labels) -> None:
                 score = inst.identity_score
                 rows.append(
                     (
+                        OWNER_INSTANCE,
                         instance_id,
                         identity_idx,
                         float("nan") if score is None else float(score),
@@ -1809,31 +1837,33 @@ def write_instance_identities(labels_path: str, labels: Labels) -> None:
                 )
             instance_id += 1
 
-    _write_instance_identity_rows(labels_path, rows)
+    _write_identity_link_rows(labels_path, rows)
 
 
-def _instance_identity_rows_from_store(
+def _identity_link_rows_from_store(
     store: "LazyDataStore",
-) -> list[tuple[int, int, float]]:
-    """Build ``instance_identities`` rows from a lazy store without materializing.
+) -> list[tuple[int, int, int, float]]:
+    """Build ``identity_links`` rows from a lazy store without materializing.
 
     The lazy store already holds the per-instance identity links keyed by the
     global ``instance_id`` (the same id space written by the fast path), so the
-    rows can be emitted directly without rebuilding `Instance` objects. Rows are
-    sorted by ``instance_id`` for deterministic output.
+    rows can be emitted directly as ``OWNER_INSTANCE`` owners without rebuilding
+    `Instance` objects. Rows are sorted by ``instance_id`` for deterministic
+    output.
 
     Args:
         store: The `LazyDataStore` backing a lazy `Labels`.
 
     Returns:
-        A list of ``(instance_id, identity_idx, identity_score)`` tuples matching
-        the format expected by `_write_instance_identity_rows`.
+        A list of ``(owner_type, owner_id, identity_idx, identity_score)`` tuples
+        matching the format expected by `_write_identity_link_rows`.
     """
     rows = []
     for instance_id in sorted(store._instance_identities):
         identity_idx, score = store._instance_identities[instance_id]
         rows.append(
             (
+                OWNER_INSTANCE,
                 int(instance_id),
                 int(identity_idx),
                 float("nan") if score is None else float(score),
@@ -1962,29 +1992,33 @@ def _instance_category_rows_from_store(
     return rows
 
 
-# Owner-type codes for the /embeddings owner_type join column.
+# Owner-type codes for the owner_type join column shared by the /embeddings group
+# and the /identity_links dataset.
 #
-# Only instance and identity owners are written today. Codes 2-7 are reserved
-# (not yet implemented) so per-modality embedding persistence can be completed
-# later without renumbering or breaking existing files:
+# Both subsystems join a detection (or, for embeddings, an identity prototype) to a
+# per-row payload via an (owner_type, owner_id) pair, so they share one code set:
+# this guarantees the two join schemes can never drift (e.g. mask=3 in one table
+# and mask=4 in the other). Only instance and identity owners are written today.
+# Codes 2-7 are reserved (not yet written or read) so per-modality persistence can
+# be completed later without renumbering or breaking existing files:
 #   2 = centroid
 #   3 = mask
 #   4 = bbox
 #   5 = roi
 #   6 = frame
 #   7 = track
-# When adding a new owner type, define its named constant here and extend both
-# the builders feeding `_write_embedding_groups` and the `read_embeddings`
-# dispatch on `owner_type`.
-EMBEDDING_OWNER_INSTANCE = 0
-EMBEDDING_OWNER_IDENTITY = 1
+# When adding a new owner type, define its named constant here and extend the
+# relevant builders (feeding `_write_embedding_groups` / `_write_identity_link_rows`)
+# and the `read_embeddings` / `read_identity_links` dispatch on `owner_type`.
+OWNER_INSTANCE = 0
+OWNER_IDENTITY = 1
 # Reserved for future use (see note above); not yet written or read.
-EMBEDDING_OWNER_CENTROID = 2
-EMBEDDING_OWNER_MASK = 3
-EMBEDDING_OWNER_BBOX = 4
-EMBEDDING_OWNER_ROI = 5
-EMBEDDING_OWNER_FRAME = 6
-EMBEDDING_OWNER_TRACK = 7
+OWNER_CENTROID = 2
+OWNER_MASK = 3
+OWNER_BBOX = 4
+OWNER_ROI = 5
+OWNER_FRAME = 6
+OWNER_TRACK = 7
 
 
 def read_embeddings(
@@ -2022,6 +2056,7 @@ def read_embeddings(
             return instance_embeddings, identity_embeddings
 
         group = f["embeddings"]
+        unknown_owner_types: set[int] = set()
         for space in group:
             sub = group[space]
             vectors = sub["vectors"][:]
@@ -2029,8 +2064,23 @@ def read_embeddings(
             owner_id = sub["owner_id"][:]
             meta_json = sub["meta_json"][:]
             for i in range(len(vectors)):
+                otype = int(owner_type[i])
+                oid = int(owner_id[i])
+                # Build the Embedding lazily-ish: only after the owner type is one
+                # we attach, to avoid materializing vectors we are about to skip.
+                if otype == OWNER_IDENTITY:
+                    target = identity_embeddings
+                elif otype == OWNER_INSTANCE:
+                    target = instance_embeddings
+                else:
+                    # Reserved owner types (centroid/mask/bbox/roi/frame/track) are
+                    # not attached on read yet. Skip rather than fall through to
+                    # instances, which would silently bind the vector to a different
+                    # object (wrong-object corruption). Collected for one warning.
+                    unknown_owner_types.add(otype)
+                    continue
                 meta = json.loads(meta_json[i])
-                emb = Embedding(
+                target.setdefault(oid, {})[space] = Embedding(
                     vector=vectors[i],
                     name=space,
                     normalized=meta.get("normalized", True),
@@ -2038,11 +2088,14 @@ def read_embeddings(
                     centroid_xy=meta.get("centroid_xy"),
                     metadata=meta.get("metadata", {}),
                 )
-                oid = int(owner_id[i])
-                if int(owner_type[i]) == EMBEDDING_OWNER_IDENTITY:
-                    identity_embeddings.setdefault(oid, {})[space] = emb
-                else:
-                    instance_embeddings.setdefault(oid, {})[space] = emb
+        if unknown_owner_types:
+            warnings.warn(
+                "Skipped /embeddings rows with unsupported owner_type(s) "
+                f"{sorted(unknown_owner_types)}: only instance and identity "
+                "embeddings are attached on read. These vectors were written by a "
+                "newer sleap-io and are ignored here.",
+                stacklevel=2,
+            )
 
     return instance_embeddings, identity_embeddings
 
@@ -2110,14 +2163,12 @@ def _embedding_groups_from_labels(labels: Labels) -> dict[str, list]:
     for lf in labels:
         for inst in lf:
             for name, emb in getattr(inst, "embeddings", {}).items():
-                by_space.setdefault(name, []).append(
-                    (EMBEDDING_OWNER_INSTANCE, instance_id, emb)
-                )
+                by_space.setdefault(name, []).append((OWNER_INSTANCE, instance_id, emb))
             instance_id += 1
 
     for idx, identity in enumerate(labels.identities):
         for name, emb in identity.embeddings.items():
-            by_space.setdefault(name, []).append((EMBEDDING_OWNER_IDENTITY, idx, emb))
+            by_space.setdefault(name, []).append((OWNER_IDENTITY, idx, emb))
 
     return by_space
 
@@ -2147,12 +2198,12 @@ def _embedding_groups_from_store(
     for instance_id in sorted(store._instance_embeddings):
         for name, emb in store._instance_embeddings[instance_id].items():
             by_space.setdefault(name, []).append(
-                (EMBEDDING_OWNER_INSTANCE, int(instance_id), emb)
+                (OWNER_INSTANCE, int(instance_id), emb)
             )
 
     for idx, identity in enumerate(identities):
         for name, emb in identity.embeddings.items():
-            by_space.setdefault(name, []).append((EMBEDDING_OWNER_IDENTITY, idx, emb))
+            by_space.setdefault(name, []).append((OWNER_IDENTITY, idx, emb))
 
     return by_space
 
@@ -3870,7 +3921,12 @@ def _read_labels_lazy_from_open_file(
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
     tracks = read_tracks(labels_path, _hdf5_file=f)
     identities = read_identities(labels_path, _hdf5_file=f)
-    instance_identities = read_instance_identities(labels_path, _hdf5_file=f)
+    # Identity links: only instance owners ride on the lazy store (keyed by global
+    # instance_id) and attach at materialization time. Other owner types, when
+    # present, are handled by their own eager readers.
+    instance_identities = read_identity_links(labels_path, _hdf5_file=f).get(
+        OWNER_INSTANCE, {}
+    )
     # Embeddings: identity prototypes attach to the eager catalog now; per-instance
     # embeddings ride on the lazy store and attach at materialization time.
     instance_embeddings, identity_embeddings = read_embeddings(
@@ -6699,7 +6755,11 @@ def _read_labels_from_open_file(
     # Attach per-instance identity links (SLP format 2.5+). Additive: when the
     # dataset is absent (older files) this is an empty mapping and a no-op. The
     # global instances list is ordered by instance_id, so it indexes directly.
-    instance_identity_map = read_instance_identities(labels_path, _hdf5_file=f)
+    # Only instance owners are consumed here; other owner types have their own
+    # eager readers.
+    instance_identity_map = read_identity_links(labels_path, _hdf5_file=f).get(
+        OWNER_INSTANCE, {}
+    )
     for inst_id, (identity_idx, identity_score) in instance_identity_map.items():
         if 0 <= inst_id < len(instances) and 0 <= identity_idx < len(identities):
             instances[inst_id].identity = identities[identity_idx]
@@ -6904,6 +6964,10 @@ _KNOWN_TOPLEVEL_HDF5_NAMES = frozenset(
         "suggestions_json",
         "sessions_json",
         "identities_json",
+        "identity_links",
+        # Legacy name for the pre-rename instance-only identity-link dataset; kept
+        # known so in-flight dev files written before the rename are not treated as
+        # unknown and stashed (they are read back via read_identity_links).
         "instance_identities",
         "embeddings",
         "instance_categories",
@@ -7087,16 +7151,14 @@ def _write_labels_lazy(
 
     # Write other metadata
     write_tracks(labels_path, labels.tracks)
-    # Persist identities + per-instance identity links + embeddings directly from
+    # Persist identities + per-detection identity links + embeddings directly from
     # the lazy store, mirroring the eager writer (write_identities /
-    # write_instance_identities / write_embeddings) but driven by the store dicts
-    # so no LabeledFrame/Instance is materialized. The store keys ARE the global
+    # write_identity_links / write_embeddings) but driven by the store dicts so no
+    # LabeledFrame/Instance is materialized. The store keys ARE the global
     # instance_ids written above, so the join stays consistent with the raw
     # instances emitted by the fast path.
     write_identities(labels_path, lazy_store.identities)
-    _write_instance_identity_rows(
-        labels_path, _instance_identity_rows_from_store(lazy_store)
-    )
+    _write_identity_link_rows(labels_path, _identity_link_rows_from_store(lazy_store))
     _write_embedding_groups(
         labels_path,
         _embedding_groups_from_store(lazy_store, lazy_store.identities),
@@ -7367,7 +7429,7 @@ def write_labels(
     write_video_crops(labels_path, labels)
     write_tracks(labels_path, labels.tracks)
     write_identities(labels_path, labels.identities)
-    write_instance_identities(labels_path, labels)
+    write_identity_links(labels_path, labels)
     write_embeddings(labels_path, labels)
     write_instance_categories(labels_path, labels)
     write_suggestions(labels_path, labels.suggestions, labels.videos)

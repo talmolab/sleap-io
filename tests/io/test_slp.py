@@ -42,6 +42,8 @@ from sleap_io.io.slp import (
     LI_DTYPE,
     METADATA_ATTR_SIZE_LIMIT,
     OBJ_DTYPE,
+    OWNER_INSTANCE,
+    OWNER_MASK,
     ExportCancelled,
     LabelImageWriter,
     _encode_metadata_attr,
@@ -70,7 +72,9 @@ from sleap_io.io.slp import (
     process_and_embed_frames,
     read_bboxes,
     read_centroids,
+    read_embeddings,
     read_identities,
+    read_identity_links,
     read_instance_categories,
     read_instances,
     read_label_images,
@@ -1148,7 +1152,11 @@ def test_per_instance_identity_round_trip(tmp_path):
     # Format bumped to 2.5 and the additive dataset is present.
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.5
-        assert "instance_identities" in f
+        assert "identity_links" in f
+        # Owner-type-aware: instance owners are written as OWNER_INSTANCE (0).
+        links = f["identity_links"][:]
+        assert "owner_type" in links.dtype.names
+        assert set(links["owner_type"].tolist()) == {0}
 
     loaded = load_slp(path)
     li = list(loaded[0].instances)
@@ -1184,10 +1192,100 @@ def test_no_identity_keeps_low_format_and_no_dataset(tmp_path):
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] < 2.5
+        assert "identity_links" not in f
         assert "instance_identities" not in f
 
     loaded = load_slp(path)
     assert list(loaded[0].instances)[0].identity is None
+
+
+def test_read_identity_links_owner_type_keyed(tmp_path):
+    """read_identity_links buckets rows by owner_type (instance owners under 0)."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    id_a = Identity(name="mouse_A")
+    insts = [
+        Instance.from_numpy(
+            np.array([[0, 1], [2, 3]]), skel, identity=id_a, identity_score=0.5
+        ),
+        Instance.from_numpy(np.array([[4, 5], [6, 7]]), skel),  # no identity
+    ]
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=insts)])
+    labels.update()
+    path = str(tmp_path / "links.slp")
+    save_slp(labels, path)
+
+    links = read_identity_links(path)
+    # Only the instance-owner bucket is present; keyed by global instance_id.
+    assert set(links) == {OWNER_INSTANCE}
+    assert links[OWNER_INSTANCE] == {0: (0, pytest.approx(0.5))}
+
+
+def test_read_identity_links_legacy_instance_identities(tmp_path):
+    """Pre-rename instance_identities (3-col, no owner_type) reads as instances."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    id_a = Identity(name="mouse_A")
+    insts = [
+        Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel, identity=id_a),
+        Instance.from_numpy(np.array([[4, 5], [6, 7]]), skel),
+    ]
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=insts)])
+    labels.update()
+    path = str(tmp_path / "legacy.slp")
+    save_slp(labels, path)
+
+    # Rewrite the new dataset as the legacy instance-only layout (no owner_type).
+    legacy_dtype = np.dtype(
+        [("instance_id", "i8"), ("identity_idx", "i4"), ("identity_score", "f4")]
+    )
+    with h5py.File(path, "a") as f:
+        del f["identity_links"]
+        f.create_dataset(
+            "instance_identities",
+            data=np.array([(0, 0, np.float32("nan"))], dtype=legacy_dtype),
+            maxshape=(None,),
+        )
+
+    # The fallback reads the legacy dataset back as instance owners.
+    links = read_identity_links(path)
+    assert links == {OWNER_INSTANCE: {0: (0, None)}}
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)
+    assert li[0].identity is not None and li[0].identity.name == "mouse_A"
+    assert li[1].identity is None
+
+
+def test_read_embeddings_skips_unknown_owner_type(tmp_path):
+    """Unknown owner_type embeddings are skipped (not mis-routed) with a warning."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
+    inst.set_embedding(np.ones(4, dtype=np.float32))
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+    path = str(tmp_path / "emb.slp")
+    save_slp(labels, path)
+
+    # Inject a mask-owner (owner_type=3) row that no current reader attaches.
+    with h5py.File(path, "a") as f:
+        sub = f["embeddings/reid"]
+        for name in ("vectors", "owner_type", "owner_id", "meta_json"):
+            ds = sub[name]
+            ds.resize(ds.shape[0] + 1, axis=0)
+        sub["vectors"][-1] = np.full(4, 2.0, dtype=np.float32)
+        sub["owner_type"][-1] = OWNER_MASK
+        sub["owner_id"][-1] = 0
+        sub["meta_json"][-1] = np.bytes_("{}")
+
+    with pytest.warns(UserWarning, match="unsupported owner_type"):
+        instance_embeddings, identity_embeddings = read_embeddings(path)
+
+    # The instance embedding still loads; the mask row is dropped, not mis-bound.
+    assert set(instance_embeddings) == {0}
+    assert "reid" in instance_embeddings[0]
+    assert identity_embeddings == {}
 
 
 def test_embeddings_round_trip(tmp_path):
