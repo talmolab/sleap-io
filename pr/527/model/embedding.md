@@ -28,7 +28,7 @@ name, plus a convenience `embedding` accessor and a `set_embedding()` helper:
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "tail"])
 >>> inst = sio.Instance.from_numpy(np.array([[0, 1], [2, 3]]), skeleton=skeleton)
->>> _ = inst.set_embedding(np.ones(128, dtype="float32"), name="reid", source="reid_v1")
+>>> inst.set_embedding(np.ones(128, dtype="float32"), name="reid", source="reid_v1")
 >>> print(inst.embedding.dim)
 
 ```
@@ -41,8 +41,8 @@ is exactly one, otherwise `None`. A second named space coexists without conflict
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "tail"])
 >>> inst = sio.Instance.from_numpy(np.array([[0, 1], [2, 3]]), skeleton=skeleton)
->>> _ = inst.set_embedding(np.ones(128, dtype="float32"))           # -> "reid"
->>> _ = inst.set_embedding(np.ones(64, dtype="float64"), name="jabs")
+>>> inst.set_embedding(np.ones(128, dtype="float32"))           # -> "reid"
+>>> inst.set_embedding(np.ones(64, dtype="float64"), name="jabs")
 >>> print(sorted(inst.embeddings))
 
 ```
@@ -64,10 +64,10 @@ round-trip unchanged. Per-instance embeddings are loaded lazily alongside the re
 store.
 
 !!! note "Persistence scope"
-    `Instance`, `SegmentationMask`, `Centroid`, and `Identity` embeddings are written today (mask
-    and centroid owners join on their global per-modality list index, `owner_type=3`/`2`). Embeddings
-    attached to bounding-box / ROI detections are not yet persisted; saving emits a warning so they
-    are not silently dropped.
+    Embeddings persist for every detection modality -- `Instance`, `Centroid`, `SegmentationMask`,
+    `BoundingBox`, `ROI` -- plus `Identity` (prototype/gallery). Detection owners join on their
+    global per-modality list index (`owner_type` `2`/`3`/`4`/`5`); instance owners join on the
+    global `instance_id` and identity prototypes on the catalog index.
 
 !!! tip "Skipping appearance vectors on disk"
     Appearance vectors are large. Pass `labels.save(path, save_embedding_vectors=False)` to skip the
