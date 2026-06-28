@@ -1455,7 +1455,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 
 - New optional `/embeddings` group, one subgroup per named space holding stacked `vectors` `(n, D)` plus `owner_type`/`owner_id` join columns and a per-row `meta_json` (see [Embeddings](../model/embedding.md))
 - Persists per-instance, per-`SegmentationMask`, and per-`Identity` (prototype/gallery) embeddings; large float vectors live in gzipped numeric datasets, never in JSON
-- Triggered automatically when any instance, mask, or identity carries an embedding; embedding-free files stay at `format_id <= 2.5`. Pass `labels.save(..., save_id_embeddings=False)` to persist identity *links* but skip the (large) appearance vectors
+- Triggered automatically when any instance, mask, or identity carries an embedding; embedding-free files stay at `format_id <= 2.5`. Pass `labels.save(..., save_embedding_vectors=False)` to persist identity *links* but skip the (large) appearance vectors
 - Backward compatible: reads are gated on group presence
 
 ### Format 2.7 (Current)

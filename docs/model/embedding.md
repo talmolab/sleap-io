@@ -70,7 +70,7 @@ store.
     silently dropped.
 
 !!! tip "Skipping appearance vectors on disk"
-    Appearance vectors are large. Pass `labels.save(path, save_id_embeddings=False)` to skip the
+    Appearance vectors are large. Pass `labels.save(path, save_embedding_vectors=False)` to skip the
     `/embeddings` group entirely while still persisting identity *links* (`/identity_links`); the
     vectors stay in memory (e.g. to build identity prototypes). This is distinct from `embed`,
     which embeds *video frames*.

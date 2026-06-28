@@ -1441,11 +1441,11 @@ def _labels_with_identity_and_embedding():
     return labels
 
 
-def test_save_id_embeddings_false_skips_embeddings_keeps_links(tmp_path):
-    """save_id_embeddings=False drops /embeddings but keeps /identity_links."""
+def test_save_embedding_vectors_false_skips_embeddings_keeps_links(tmp_path):
+    """save_embedding_vectors=False drops /embeddings but keeps /identity_links."""
     labels = _labels_with_identity_and_embedding()
     path = str(tmp_path / "no_emb.slp")
-    save_slp(labels, path, save_id_embeddings=False)
+    save_slp(labels, path, save_embedding_vectors=False)
 
     with h5py.File(path, "r") as f:
         assert "embeddings" not in f  # vectors skipped
@@ -1460,8 +1460,8 @@ def test_save_id_embeddings_false_skips_embeddings_keeps_links(tmp_path):
     assert li.embedding is None  # not persisted
 
 
-def test_save_id_embeddings_default_writes_embeddings(tmp_path):
-    """Default save_id_embeddings=True writes the /embeddings group."""
+def test_save_embedding_vectors_default_writes_embeddings(tmp_path):
+    """Default save_embedding_vectors=True writes the /embeddings group."""
     labels = _labels_with_identity_and_embedding()
     path = str(tmp_path / "with_emb.slp")
     save_slp(labels, path)
@@ -1470,21 +1470,21 @@ def test_save_id_embeddings_default_writes_embeddings(tmp_path):
 
     # Also reachable through Labels.save(...) via **kwargs.
     path2 = str(tmp_path / "via_save.slp")
-    labels.save(path2, save_id_embeddings=False)
+    labels.save(path2, save_embedding_vectors=False)
     with h5py.File(path2, "r") as f:
         assert "embeddings" not in f
         assert "identity_links" in f
 
 
-def test_save_id_embeddings_false_lazy(tmp_path):
-    """save_id_embeddings=False is honored on the lazy fast-path writer."""
+def test_save_embedding_vectors_false_lazy(tmp_path):
+    """save_embedding_vectors=False is honored on the lazy fast-path writer."""
     labels = _labels_with_identity_and_embedding()
     a = str(tmp_path / "a.slp")
     save_slp(labels, a)
     lazy = load_slp(a, lazy=True)
     assert lazy.is_lazy
     b = str(tmp_path / "b.slp")
-    save_slp(lazy, b, save_id_embeddings=False)
+    save_slp(lazy, b, save_embedding_vectors=False)
     with h5py.File(b, "r") as f:
         assert "embeddings" not in f
         assert "identity_links" in f

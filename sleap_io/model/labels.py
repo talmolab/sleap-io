@@ -1664,7 +1664,7 @@ class Labels:
                 frames.
             **kwargs: Additional format-specific arguments passed to the save function.
                 See `save_file` for format-specific options. For SLP this includes
-                `save_id_embeddings` (default `True`): set `False` to persist
+                `save_embedding_vectors` (default `True`): set `False` to persist
                 identity *links* but skip the large re-ID appearance `/embeddings`
                 vectors (kept in memory). Note this is distinct from `embed`, which
                 embeds *video frames*.

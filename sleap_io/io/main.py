@@ -168,7 +168,7 @@ def save_slp(
     progress_callback: Callable[[int, int], bool] | None = None,
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
-    save_id_embeddings: bool = True,
+    save_embedding_vectors: bool = True,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -216,7 +216,7 @@ def save_slp(
             file. This preserves additions from a newer sleap-io version across a
             load/save cycle. Default `False`. Best-effort (requires the source file
             to still exist and be readable HDF5). See `write_labels`.
-        save_id_embeddings: If `True` (the default), write attached re-ID
+        save_embedding_vectors: If `True` (the default), write attached re-ID
             appearance embeddings (the `/embeddings` group) to disk. If `False`,
             skip the `/embeddings` group entirely -- appearance vectors are large
             on disk, and a producer may want only the identity *links* persisted
@@ -236,7 +236,7 @@ def save_slp(
         progress_callback=progress_callback,
         prefer_metadata=prefer_metadata,
         preserve_unknown=preserve_unknown,
-        save_id_embeddings=save_id_embeddings,
+        save_embedding_vectors=save_embedding_vectors,
     )
 
 
