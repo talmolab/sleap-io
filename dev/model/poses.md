@@ -14,9 +14,10 @@ The pose data model is built around four key types:
 - **[`Skeleton`][sleap_io.Skeleton]** is the **template**: defines what landmarks exist, how they connect, and which are symmetric.
 - **[`Instance`][sleap_io.Instance]** is the **data**: stores actual (x, y) coordinates for one animal in one frame.
 - **[`PredictedInstance`][sleap_io.PredictedInstance]** is like `Instance` but includes per-point and instance-level confidence scores from a model.
-- **[`Track`][sleap_io.Track]** is the **identity**: links the same animal across frames.
+- **[`Track`][sleap_io.Track]** is the **video-local identity**: links the same animal across frames of one recording.
+- **[`Identity`](3d.md#identity)** is the **global identity**: a persistent, cross-session animal label assigned via `Instance.identity` (with `identity_score`), distinct from the ephemeral `Track`.
 
-A `Skeleton` is shared across all instances in a dataset. Each `Instance` references a `Skeleton` to know which landmarks it contains, and optionally a `Track` to indicate which animal it belongs to.
+A `Skeleton` is shared across all instances in a dataset. Each `Instance` references a `Skeleton` to know which landmarks it contains, and optionally a `Track` (and a global `Identity`) to indicate which animal it belongs to.
 
 ---
 
@@ -331,6 +332,8 @@ classDiagram
         +PointsArray points
         +Skeleton skeleton
         +Track track
+        +Identity identity
+        +float identity_score
         +numpy() ndarray
         +n_visible: int
         +is_empty: bool

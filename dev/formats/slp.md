@@ -41,6 +41,8 @@ file.slp
 ├── /points                      # Dataset: User-labeled points (structured array)
 ├── /pred_points                 # Dataset: Predicted points (structured array)
 ├── /negative_frames             # Dataset: Negative frame markers (optional)
+├── /instance_identities         # Dataset: Per-instance global identity links (Format 2.5+)
+│                                 #   structured: instance_id, identity_idx, identity_score
 │
 ├── /bboxes/                     # Group: Columnar bounding box storage (Format 2.0+)
 │   ├── x1                       # Dataset: float64 top-left x
@@ -144,7 +146,8 @@ file.slp
 | `tracks_json` | `bytes[]` | JSON array of track definitions |
 | `suggestions_json` | `bytes[]` | JSON array of suggested frames (optional) |
 | `sessions_json` | `bytes[]` | JSON array of recording sessions (optional) |
-| `identities_json` | `bytes[]` | JSON array of identity definitions (optional) |
+| `identities_json` | `bytes[]` | JSON array of identity definitions, incl. stable `uuid` (optional) |
+| `instance_identities` | structured | Per-instance global identity links: `instance_id`, `identity_idx`, `identity_score` (Format 2.5+, optional) |
 | `provenance_json` | `bytes` | JSON object of provenance metadata (optional) |
 
 ### Provenance storage and the 64 KB metadata limit
@@ -544,15 +547,29 @@ Each identity is stored as a JSON object:
 ```json
 {
     "name": "mouse_A",
+    "uuid": "3f2a9c1e4b7d4e8a9c0d1e2f3a4b5c6d",
     "color": "#e6194b"
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | `string` | Human-readable identity name |
+| `name` | `string` | Human-readable identity name (not required to be unique) |
+| `uuid` | `string` | Stable 32-char hex key — the canonical cross-file/merge matching key. Legacy files written before format 2.5 omit it; a fresh one is synthesized on load |
 | `color` | `string` | Optional hex color for visualization (omitted if null) |
 | *custom* | `any` | Additional metadata fields |
+
+### Per-Instance Linking
+
+Per-instance global identity assignments are stored in the optional `/instance_identities` structured dataset (Format 2.5+), joined to instances by the global `instance_id`:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `instance_id` | `int64` | Global instance id (enumeration order over frames then instances) |
+| `identity_idx` | `int32` | Index into `/identities_json` |
+| `identity_score` | `float32` | Identity-assignment score (NaN if unrecorded) |
+
+This is additive: old readers ignore the dataset, and instances without a global identity simply have no row.
 
 ### Instance Group Linking
 
