@@ -1653,7 +1653,9 @@ def read_identities(
     identity_objects = []
     for identity_data in identities:
         d = json.loads(identity_data)
-        # Legacy files written before format 2.5 lack a `uuid`; the Identity
+        # The `uuid` ships unbumped inside the format-1.9 `identities_json`
+        # catalog, so its presence is detected per-record below (independent of
+        # `format_id`). Records written before uuid existed lack it; the Identity
         # factory synthesizes a fresh one (they never had global-identity
         # semantics, so there is nothing to match against).
         # Guard against a malformed/non-dict "categories" value so a bad file

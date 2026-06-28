@@ -32,12 +32,17 @@ def test_identity_eq_false():
 
 
 def test_identity_repr():
-    """Test Identity string representation."""
-    id1 = Identity(name="mouse_A")
-    assert repr(id1) == 'Identity(name="mouse_A")'
+    """Test Identity string representation surfaces name, truncated uuid, color."""
+    id1 = Identity(name="mouse_A", uuid="0123456789abcdef0123456789abcdef")
+    assert repr(id1) == 'Identity(name="mouse_A", uuid="01234567…")'
 
-    id2 = Identity(name="mouse_A", color="#ff0000")
-    assert repr(id2) == 'Identity(name="mouse_A", color="#ff0000")'
+    id2 = Identity(
+        name="mouse_A", uuid="0123456789abcdef0123456789abcdef", color="#ff0000"
+    )
+    assert repr(id2) == 'Identity(name="mouse_A", uuid="01234567…", color="#ff0000")'
+
+    # Two identities differing only by uuid no longer repr identically.
+    assert repr(Identity(name="x")) != repr(Identity(name="x"))
 
 
 def test_identity_hashable():
