@@ -234,6 +234,8 @@ Every segmentation mask can carry optional metadata:
 | ---------------- | ------------------ | -------------------------------------------- |
 | `track`          | [`Track`](poses.md) `\| None`    | Tracking identity across frames              |
 | `tracking_score` | `float \| None`    | Confidence of track identity assignment      |
+| `identity`       | [`Identity`](embedding.md) `\| None` | Global cross-video re-ID identity (mirrors `Instance.identity`); persists via `/identity_links` (`owner_type=3`) |
+| `identity_score` | `float \| None`    | Confidence of the `identity` assignment       |
 | `instance`       | [`Instance`](poses.md) `\| None` | Linked pose instance                         |
 | `scale`          | `tuple[float, float]` | `(sx, sy)` spatial scale (default `(1, 1)`) |
 | `offset`         | `tuple[float, float]` | `(x, y)` pixel offset (default `(0, 0)`)    |

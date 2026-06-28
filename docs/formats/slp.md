@@ -113,8 +113,8 @@ file.slp
 ├── /embeddings/                 # Group: re-ID embeddings, one subgroup per space (Format 2.6+)
 │   └── <space>/                 # e.g. "reid", "jabs"
 │       ├── vectors              # Dataset: float (n, D), gzip-compressed (dtype preserved)
-│       ├── owner_type           # Dataset: uint8 (0=instance, 1=identity)
-│       ├── owner_id             # Dataset: int64 owner index (global instance_id / identity index)
+│       ├── owner_type           # Dataset: uint8 (0=instance, 1=identity, 3=mask)
+│       ├── owner_id             # Dataset: int64 owner index (instance_id / identity index / mask index)
 │       └── meta_json            # Dataset: per-row JSON (normalized, source, centroid_xy, metadata)
 │
 └── /video{N}/                   # Group: Per-video embedded data (one per video)
@@ -578,12 +578,12 @@ Per-detection global identity assignments are stored in the optional `/identity_
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `owner_type` | `uint8` | Detection modality code (shared `OWNER_*` codes: `0`=instance, `1`=identity, `2`=centroid, `3`=mask, `4`=bbox, `5`=roi, `6`=frame, `7`=track). Only instance owners (`0`) are written today |
-| `owner_id` | `int64` | Per-owner-type positional id. For instance owners this is the global instance id (enumeration order over frames then instances) |
+| `owner_type` | `uint8` | Detection modality code (shared `OWNER_*` codes: `0`=instance, `1`=identity, `2`=centroid, `3`=mask, `4`=bbox, `5`=roi, `6`=frame, `7`=track). Instance (`0`) and mask (`3`) owners are written today |
+| `owner_id` | `int64` | Per-owner-type positional id: the global instance id for instance owners, or the global mask-list index for mask owners (each enumeration order over frames then the modality, matching `write_lfs` / `write_masks`) |
 | `identity_idx` | `int32` | Index into `/identities_json` |
 | `identity_score` | `float32` | Identity-assignment score (NaN if unrecorded) |
 
-This is additive: old readers ignore the dataset, and detections without a global identity simply have no row. The owner-type-aware layout lets additional detection modalities be linked later without a new dataset or format bump. (Pre-rename dev files that wrote the instance-only `/instance_identities` dataset, which lacked the `owner_type` column, are still read back as instance owners.) Per-identity prototype embeddings and per-instance re-ID embeddings live in the `/embeddings` group — see [Embeddings](../model/embedding.md).
+Identity is resolved to a catalog index by the stable `uuid`, so a producer that attaches a distinct `Identity` object sharing a uuid with a catalog entry still links correctly. This is additive: old readers ignore the dataset, and detections without a global identity simply have no row. The owner-type-aware layout lets additional detection modalities be linked without a new dataset or format bump. (Pre-rename dev files that wrote the instance-only `/instance_identities` dataset, which lacked the `owner_type` column, are still read back as instance owners.) Per-identity prototype embeddings and per-detection re-ID embeddings live in the `/embeddings` group — see [Embeddings](../model/embedding.md).
 
 ### Per-Instance Categories
 
@@ -1445,8 +1445,8 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 
 **Per-detection global identity links.**
 
-- New optional `/identity_links` structured dataset (`owner_type`, `owner_id`, `identity_idx`, `identity_score`) joining detections to the `/identities_json` catalog (see [Per-Detection Linking](#per-detection-linking)). The `owner_type` column reuses the shared `OWNER_*` codes (same scheme as the `/embeddings` join); only instance owners are written today
-- Triggered automatically when any instance carries an [`Identity`][sleap_io.Identity]; identity-free files stay at `format_id <= 2.4`
+- New optional `/identity_links` structured dataset (`owner_type`, `owner_id`, `identity_idx`, `identity_score`) joining detections to the `/identities_json` catalog (see [Per-Detection Linking](#per-detection-linking)). The `owner_type` column reuses the shared `OWNER_*` codes (same scheme as the `/embeddings` join); instance (`0`) and mask (`3`) owners are written
+- Triggered automatically when any instance or mask carries an [`Identity`][sleap_io.Identity]; identity-free files stay at `format_id <= 2.4`
 - Backward compatible: reads are gated on dataset presence, so older readers ignore it
 
 ### Format 2.6
@@ -1454,8 +1454,8 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 **Appearance / re-ID embeddings.**
 
 - New optional `/embeddings` group, one subgroup per named space holding stacked `vectors` `(n, D)` plus `owner_type`/`owner_id` join columns and a per-row `meta_json` (see [Embeddings](../model/embedding.md))
-- Persists per-instance and per-`Identity` (prototype/gallery) embeddings; large float vectors live in gzipped numeric datasets, never in JSON
-- Triggered automatically when any instance or identity carries an embedding; embedding-free files stay at `format_id <= 2.5`
+- Persists per-instance, per-`SegmentationMask`, and per-`Identity` (prototype/gallery) embeddings; large float vectors live in gzipped numeric datasets, never in JSON
+- Triggered automatically when any instance, mask, or identity carries an embedding; embedding-free files stay at `format_id <= 2.5`. Pass `labels.save(..., save_id_embeddings=False)` to persist identity *links* but skip the (large) appearance vectors
 - Backward compatible: reads are gated on group presence
 
 ### Format 2.7 (Current)
