@@ -94,6 +94,10 @@ class LazyDataStore:
     _instance_embeddings: dict = attrs.field(
         factory=dict, repr=False, alias="instance_embeddings"
     )
+    # Per-instance categories (format 2.7+): instance_id -> {dim: value}.
+    _instance_categories: dict = attrs.field(
+        factory=dict, repr=False, alias="instance_categories"
+    )
 
     def __attrs_post_init__(self) -> None:
         """Validate index bounds on construction."""
@@ -174,6 +178,9 @@ class LazyDataStore:
             instance_identities=dict(self._instance_identities),
             instance_embeddings={
                 k: dict(v) for k, v in self._instance_embeddings.items()
+            },
+            instance_categories={
+                k: dict(v) for k, v in self._instance_categories.items()
             },
             format_id=self.format_id,
             source_path=self._source_path,
@@ -327,6 +334,14 @@ class LazyDataStore:
             else {}
         )
 
+        # Resolve optional per-instance categories (format 2.7+). A fresh dict per
+        # instance so mutations don't leak back into the shared lazy store.
+        categories = (
+            dict(self._instance_categories.get(instance_id, {}))
+            if self._instance_categories
+            else {}
+        )
+
         if instance_type == InstanceType.USER:
             pts_data = self.points_data[point_id_start:point_id_end]
             points_array = self._make_points_array(pts_data, skeleton)
@@ -341,6 +356,7 @@ class LazyDataStore:
                 identity=identity,
                 identity_score=identity_score,
                 embeddings=embeddings,
+                categories=categories,
             )
         else:  # PREDICTED
             pts_data = self.pred_points_data[point_id_start:point_id_end]
@@ -357,6 +373,7 @@ class LazyDataStore:
                 identity=identity,
                 identity_score=identity_score,
                 embeddings=embeddings,
+                categories=categories,
             )
 
     def _make_points_array(

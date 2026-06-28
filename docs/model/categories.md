@@ -63,6 +63,51 @@ In this iteration, categories are attached to **instances and `Identity`** only.
 primitives keep their singular scalar `category` and do not yet carry the plural mapping; this can
 be extended later, exactly like the [embeddings](embedding.md) rollout.
 
+## SLP persistence
+
+Categories persist to SLP in **format 2.7+**. Per-instance categories live in the additive
+`/instance_categories` dataset — a 1-D array of `{"instance_id", "categories"}` JSON rows, one per
+instance carrying any categories, joined back to instances by the global `instance_id` (the same
+id space as the identity/embedding side-tables). Because the mapping is variable-width, each row
+is encoded as JSON rather than a fixed structured array. Entity-level `Identity` categories ride
+under a reserved `categories` key in `/identities_json`. Both are purely additive: older readers
+ignore them, and category-free files round-trip unchanged at `format_id <= 2.6`. Per-instance
+categories load lazily alongside the rest of the lazy store. See [Formats → SLP](../formats/slp.md#per-instance-categories).
+
+## Sampling via DataFrames
+
+[`Labels.to_dataframe(format="instances")`](labels.md) emits one exploded `cat.<dim>` column per
+category dimension (vector-valued dims explode to `cat.<dim>.<i>`), alongside an `identity` column
+(and `identity_score`), so categories drive ordinary pandas/polars filtering and balanced
+sampling. Columns are uniform across all rows — a dimension is `NaN`/`null` on instances that lack
+it — so sparse categories sample cleanly:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skeleton = sio.Skeleton(["head", "tail"])
+>>> video = sio.Video(filename="fake.mp4")
+>>> frames = []
+>>> for i in range(4):
+...     inst = sio.Instance.from_numpy(np.zeros((2, 2)), skeleton=skeleton)
+...     inst.set_category("sex", "M" if i % 2 else "F")
+...     frames.append(sio.LabeledFrame(video=video, frame_idx=i, instances=[inst]))
+>>> labels = sio.Labels(frames)
+>>> df = labels.to_dataframe(format="instances")
+>>> males = df[df["cat.sex"] == "M"]
+>>> int((df["cat.sex"] == "M").sum())
+2
+```
+
+The DataFrame rows are flat (no live `Instance` handle survives the row), so to map sampled rows
+back to objects, key off the `video`/`frame_idx` locator columns.
+
+!!! note "Dimension naming"
+    Because export flattens each dimension to a `cat.<dim>` column (and vectors to
+    `cat.<dim>.<i>`), keep dimension names simple. A name containing `.` or one that collides with a
+    skeleton node name can produce overlapping columns. The SLP side-table itself preserves any
+    keys faithfully — this only affects the flattened DataFrame view.
+
 ---
 
 ## API reference

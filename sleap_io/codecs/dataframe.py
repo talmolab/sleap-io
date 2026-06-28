@@ -73,7 +73,12 @@ def _create_dataframe_from_rows(
         return pd.DataFrame()
 
     if backend == "polars":
-        return pl.from_dicts(rows)
+        # infer_schema_length=None scans all rows when inferring the schema, so
+        # sparse columns (e.g. cat.<dim>, present on only some instances) are not
+        # dropped or mis-typed as Null when absent from the first rows. Without
+        # this, polars' bounded inference silently drops or fails on a category
+        # value that first appears beyond the default window.
+        return pl.from_dicts(rows, infer_schema_length=None)
     return pd.DataFrame(rows)
 
 
@@ -196,7 +201,9 @@ def to_dataframe(
 
         Column naming conventions:
         - Points: frame_idx, node, x, y, track, track_score, instance_score
-        - Instances: frame_idx, track, track_score, score, {node}.x/y/score
+        - Instances: frame_idx, track, track_score, score, identity,
+          identity_score, cat.<dim> (one exploded column per category dimension;
+          vector-valued dims explode to cat.<dim>.<i>), {node}.x/y/score
         - Frames: frame_idx, {inst}.track, {inst}.track_score, {inst}.score,
           {inst}.{node}.x, {inst}.{node}.y, {inst}.{node}.score
         - Multi-index: Hierarchical columns (inst, node, coord) with frame idx
@@ -662,6 +669,76 @@ def _iter_points_rows(
                 yield row
 
 
+def _category_items(categories: dict):
+    """Yield ``(column_name, value)`` pairs for a categories mapping.
+
+    Scalar values map to a single ``cat.<dim>`` column; list/tuple/array values
+    (e.g. a one-hot or class-probability distribution) are exploded to
+    ``cat.<dim>.<i>`` columns, consistent with the ``{node}.x`` flat-key style.
+
+    Args:
+        categories: A mapping of category dimension name to value.
+
+    Yields:
+        ``(column_name, value)`` tuples.
+    """
+    for dim, value in categories.items():
+        if isinstance(value, (list, tuple, np.ndarray)):
+            for i, component in enumerate(value):
+                yield f"cat.{dim}.{i}", component
+        else:
+            yield f"cat.{dim}", value
+
+
+def _prescan_category_columns(categories_iter) -> list[str]:
+    """Collect the ordered, de-duplicated set of ``cat.<dim>`` column names.
+
+    A prescan so every instance row can emit the same category columns (``None``
+    where a dimension is absent), giving a uniform schema across pandas, polars
+    (whose bounded schema inference would otherwise drop late-appearing sparse
+    columns), and streaming chunks.
+
+    Args:
+        categories_iter: An iterable of per-instance ``categories`` mappings.
+
+    Returns:
+        Ordered list of exploded category column names.
+    """
+    columns: dict[str, None] = {}
+    for categories in categories_iter:
+        for col, _ in _category_items(categories):
+            columns.setdefault(col, None)
+    return list(columns)
+
+
+def _add_instance_attr_columns(
+    row: dict,
+    *,
+    identity_name: str | None,
+    identity_score: float | None,
+    categories: dict,
+    category_columns: list[str],
+) -> None:
+    """Add the ``identity`` + uniform ``cat.<dim>`` columns to an instance row.
+
+    Args:
+        row: The row dict to populate (mutated in place).
+        identity_name: The instance's `Identity` name, or ``None``.
+        identity_score: The identity-assignment score, or ``None``.
+        categories: The instance's ``categories`` mapping (may be empty).
+        category_columns: The prescanned full set of category columns; each is
+            pre-seeded to ``None`` so every row shares the same schema.
+    """
+    row["identity"] = identity_name
+    row["identity_score"] = (
+        float(identity_score) if identity_score is not None else None
+    )
+    for col in category_columns:
+        row[col] = None
+    for col, value in _category_items(categories):
+        row[col] = value
+
+
 def _iter_instances_rows(
     labels: Labels,
     labeled_frames: list,
@@ -674,15 +751,26 @@ def _iter_instances_rows(
     video_id: str = "path",
 ) -> Generator[dict, None, None]:
     """Yield row dicts for instances format (one row per instance)."""
-    for lf in labeled_frames:
-        instances_to_process = []
 
+    def _included(lf):
+        out = []
         if include_user_instances:
-            instances_to_process.extend(lf.user_instances)
+            out.extend(lf.user_instances)
         if include_predicted_instances:
-            instances_to_process.extend(lf.predicted_instances)
+            out.extend(lf.predicted_instances)
+        return out
 
-        for instance in instances_to_process:
+    # Prescan for a uniform set of category columns across all emitted rows.
+    category_columns = (
+        _prescan_category_columns(
+            inst.categories for lf in labeled_frames for inst in _included(lf)
+        )
+        if include_metadata
+        else []
+    )
+
+    for lf in labeled_frames:
+        for instance in _included(lf):
             is_predicted = isinstance(instance, PredictedInstance)
 
             row = {"frame_idx": int(lf.frame_idx)}
@@ -711,6 +799,16 @@ def _iter_instances_rows(
                 else:
                     row["track_score"] = None
                     row["score"] = None
+
+                _add_instance_attr_columns(
+                    row,
+                    identity_name=(
+                        instance.identity.name if instance.identity else None
+                    ),
+                    identity_score=instance.identity_score,
+                    categories=instance.categories,
+                    category_columns=category_columns,
+                )
 
             # Add node coordinates
             for node_idx, node in enumerate(instance.skeleton.nodes):
@@ -1061,12 +1159,26 @@ def _to_instances_df(  # noqa: D417
     Other parameters mirror to_dataframe().
 
     Column structure:
-        frame_idx | video | track | track_score | score | {node}.x/y/score
+        frame_idx | video | track | track_score | score | identity |
+        identity_score | cat.<dim> | {node}.x/y/score
     """
     rows = []
 
     # Track which (video, frame_idx) pairs we've seen
     seen_frames = set()
+
+    # Prescan for a uniform set of category columns across all emitted rows.
+    category_columns: list[str] = []
+    if include_metadata:
+        cat_instances = []
+        for lf in labeled_frames:
+            if include_user_instances:
+                cat_instances.extend(lf.user_instances)
+            if include_predicted_instances:
+                cat_instances.extend(lf.predicted_instances)
+        category_columns = _prescan_category_columns(
+            inst.categories for inst in cat_instances
+        )
 
     for lf in labeled_frames:
         # Skip frames outside the specified range
@@ -1117,6 +1229,16 @@ def _to_instances_df(  # noqa: D417
                 else:
                     row["track_score"] = None
                     row["score"] = None
+
+                _add_instance_attr_columns(
+                    row,
+                    identity_name=(
+                        instance.identity.name if instance.identity else None
+                    ),
+                    identity_score=instance.identity_score,
+                    categories=instance.categories,
+                    category_columns=category_columns,
+                )
 
             # Add columns for each node using dot separator
             for node_idx, node in enumerate(instance.skeleton.nodes):
@@ -1181,6 +1303,13 @@ def _to_instances_df(  # noqa: D417
                         row["track"] = None
                         row["track_score"] = None
                         row["score"] = None
+                        _add_instance_attr_columns(
+                            row,
+                            identity_name=None,
+                            identity_score=None,
+                            categories={},
+                            category_columns=category_columns,
+                        )
 
                     # Add NaN columns for each node
                     if skeleton:
@@ -1369,6 +1498,29 @@ def _to_instances_df_lazy(
     # Determine coordinate adjustment for legacy format
     coord_offset = 0.5 if store.format_id < 1.1 else 0.0
 
+    # Prescan for a uniform set of category columns across all emitted rows.
+    # Only the instances that pass the SAME type/video filters as the main loop
+    # are scanned, so the lazy schema matches the eager paths exactly (scanning
+    # the whole store would add all-None columns for filtered-out instances).
+    category_columns: list[str] = []
+    if include_metadata and store._instance_categories:
+        emitted_categories = []
+        for inst_row in store.instances_data:
+            it = int(inst_row["instance_type"])
+            if it == InstanceType.USER and not include_user_instances:
+                continue
+            if it == InstanceType.PREDICTED and not include_predicted_instances:
+                continue
+            frame_id = int(inst_row["frame_id"])
+            if frame_id not in frame_lookup:
+                continue
+            if video_filter is not None and frame_lookup[frame_id][0] != video_filter:
+                continue
+            cats = store._instance_categories.get(int(inst_row["instance_id"]))
+            if cats:
+                emitted_categories.append(cats)
+        category_columns = _prescan_category_columns(emitted_categories)
+
     # Iterate over instances
     for inst_idx, inst_row in enumerate(store.instances_data):
         instance_type = int(inst_row["instance_type"])
@@ -1400,6 +1552,20 @@ def _to_instances_df_lazy(
         # Get tracking score
         tracking_score = float(inst_row["tracking_score"]) if is_predicted else None
 
+        # Resolve identity + categories from the store, joined on the global
+        # instance_id (the same key used by materialization), so the lazy fast
+        # path matches the eager output.
+        instance_id = int(inst_row["instance_id"])
+        identity_name = None
+        identity_score = None
+        entry = store._instance_identities.get(instance_id)
+        if entry is not None:
+            identity_idx, id_score = entry
+            if 0 <= identity_idx < len(store.identities):
+                identity_name = store.identities[identity_idx].name
+                identity_score = id_score
+        instance_categories = store._instance_categories.get(instance_id, {})
+
         # Build row
         row: dict = {"frame_idx": frame_idx}
 
@@ -1422,6 +1588,14 @@ def _to_instances_df_lazy(
             else:
                 row["track_score"] = None
                 row["score"] = None
+
+            _add_instance_attr_columns(
+                row,
+                identity_name=identity_name,
+                identity_score=identity_score,
+                categories=instance_categories,
+                category_columns=category_columns,
+            )
 
         # Get points and add node columns
         point_start = int(inst_row["point_id_start"])
@@ -2389,6 +2563,12 @@ def _from_instances_df(
     node_cols = {}  # node_name -> {"x": col, "y": col, "score": col}
 
     for col in df.columns:
+        # Skip the exported category columns (cat.<dim>[.<i>]); they share the
+        # dotted flat-key style but are not node coordinates and must not be
+        # mistaken for a node named "cat" on a to_dataframe -> from_dataframe
+        # round-trip. (identity/identity_score have no dot and are ignored below.)
+        if col.startswith("cat."):
+            continue
         if "." in col:
             parts = col.rsplit(".", 1)
             if len(parts) == 2 and parts[1] in ("x", "y", "score"):

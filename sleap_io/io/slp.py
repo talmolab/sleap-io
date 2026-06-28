@@ -25,6 +25,12 @@ Format version history:
     - 2.6: Added appearance / re-ID embeddings (/embeddings group, one subgroup
             per named space: vectors (n, D) float + owner_type/owner_id join
             columns + per-row meta_json); additive, read on group presence
+    - 2.7: Added per-instance and entity-level categories (categorical labels).
+            Per-instance categories live in the /instance_categories dataset (a
+            1-D array of {instance_id, categories} JSON rows joining instances to
+            their category mapping); Identity-level categories ride under a
+            reserved "categories" key in identities_json. Both additive, read on
+            presence
 """
 
 from __future__ import annotations
@@ -1645,10 +1651,20 @@ def read_identities(
         # Legacy files written before format 2.5 lack a `uuid`; the Identity
         # factory synthesizes a fresh one (they never had global-identity
         # semantics, so there is nothing to match against).
+        # Guard against a malformed/non-dict "categories" value so a bad file
+        # cannot smuggle a non-mapping into Identity.categories.
+        categories = d.get("categories", {})
+        if not isinstance(categories, dict):
+            categories = {}
         kwargs = dict(
             name=d.get("name", ""),
             color=d.get("color", None),
-            metadata={k: v for k, v in d.items() if k not in ("name", "uuid", "color")},
+            categories=categories,
+            metadata={
+                k: v
+                for k, v in d.items()
+                if k not in ("name", "uuid", "color", "categories")
+            },
         )
         if "uuid" in d:
             kwargs["uuid"] = d["uuid"]
@@ -1668,10 +1684,21 @@ def write_identities(labels_path: str, identities: list[Identity]):
 
     identities_json = []
     for identity in identities:
-        d = {"name": identity.name, "uuid": identity.uuid}
+        # Start from metadata, then let the structured fields win: name/uuid/
+        # color and the entity-level "categories" (SLP 2.7+) are reserved keys
+        # that read_identities strips back out of the metadata catch-all, so a
+        # stray metadata key of the same name must not clobber the real field.
+        d = {
+            k: v
+            for k, v in identity.metadata.items()
+            if k not in ("name", "uuid", "color", "categories")
+        }
+        d["name"] = identity.name
+        d["uuid"] = identity.uuid
         if identity.color is not None:
             d["color"] = identity.color
-        d.update(identity.metadata)
+        if identity.categories:
+            d["categories"] = identity.categories
         identities_json.append(np.bytes_(json.dumps(d, separators=(",", ":"))))
 
     with h5py.File(labels_path, "a") as f:
@@ -1812,6 +1839,126 @@ def _instance_identity_rows_from_store(
                 float("nan") if score is None else float(score),
             )
         )
+    return rows
+
+
+def read_instance_categories(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> dict[int, dict]:
+    """Read per-instance categories from a SLEAP labels file.
+
+    Categories are stored in the optional ``instance_categories`` dataset (SLP
+    format 2.7+), a 1-D array of JSON byte-strings, one per instance that carries
+    any categories. Each row encodes ``{"instance_id": <int>, "categories":
+    {<dim>: <value>}}``, joining the global instance id to its category mapping.
+    The dataset is absent in older files, in which case an empty mapping is
+    returned (purely additive; reads are gated on dataset presence).
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally.
+
+    Returns:
+        A dict mapping the global ``instance_id`` to its ``categories`` dict.
+    """
+    try:
+        data = read_hdf5_dataset(
+            labels_path, "instance_categories", _hdf5_file=_hdf5_file
+        )
+    except KeyError:
+        return {}
+    result: dict[int, dict] = {}
+    for row in data:
+        d = json.loads(row)
+        result[int(d["instance_id"])] = d.get("categories", {})
+    return result
+
+
+def _write_instance_category_rows(
+    labels_path: str, rows: list[tuple[int, dict]]
+) -> None:
+    """Write ``(instance_id, categories)`` rows to a SLP file.
+
+    Shared dataset-writing core for the per-instance categories side-table. The
+    rows can be built either by iterating a `Labels` (the eager path, see
+    `write_instance_categories`) or from a lazy store dict (the lazy save path),
+    keeping the on-disk ``instance_categories`` layout identical for both. Each
+    row is serialized as a ``{"instance_id", "categories"}`` JSON byte-string
+    (the categories mapping is variable-width, so a fixed structured array does
+    not fit; this mirrors the ``identities_json`` encoding).
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        rows: A list of ``(instance_id, categories)`` tuples; ``categories`` is a
+            (non-empty) JSON-serializable mapping. An empty list is a no-op (no
+            dataset is created).
+    """
+    if not rows:
+        return
+
+    data = [
+        np.bytes_(
+            json.dumps(
+                {"instance_id": int(instance_id), "categories": categories},
+                separators=(",", ":"),
+            )
+        )
+        for instance_id, categories in rows
+    ]
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset("instance_categories", data=data, maxshape=(None,))
+
+
+def write_instance_categories(labels_path: str, labels: Labels) -> None:
+    """Write per-instance categories to a SLEAP labels file.
+
+    Creates the ``instance_categories`` dataset (SLP format 2.7+) for every
+    instance carrying a non-empty ``categories`` mapping. The ``instance_id``
+    matches the global id assigned by `write_lfs` (enumeration order over frames
+    then instances), so the link is resolved by joining on that id at read time.
+    This keeps categories out of the fixed-layout ``instances`` dataset, making
+    it purely additive: old readers simply ignore the dataset.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object to store the per-instance categories for.
+    """
+    rows = []
+    instance_id = 0
+    for lf in labels:
+        for inst in lf:
+            categories = getattr(inst, "categories", None)
+            if categories:
+                rows.append((instance_id, categories))
+            instance_id += 1
+
+    _write_instance_category_rows(labels_path, rows)
+
+
+def _instance_category_rows_from_store(
+    store: "LazyDataStore",
+) -> list[tuple[int, dict]]:
+    """Build ``instance_categories`` rows from a lazy store without materializing.
+
+    The lazy store already holds the per-instance categories keyed by the global
+    ``instance_id`` (the same id space written by the fast path), so the rows can
+    be emitted directly without rebuilding `Instance` objects. Rows are sorted by
+    ``instance_id`` for deterministic output and skip empty mappings.
+
+    Args:
+        store: The `LazyDataStore` backing a lazy `Labels`.
+
+    Returns:
+        A list of ``(instance_id, categories)`` tuples matching the format
+        expected by `_write_instance_category_rows`.
+    """
+    rows = []
+    for instance_id in sorted(store._instance_categories):
+        categories = store._instance_categories[instance_id]
+        if categories:
+            rows.append((int(instance_id), categories))
     return rows
 
 
@@ -2579,6 +2726,9 @@ def write_metadata(labels_path: str, labels: Labels):
         has_embeddings = bool(store._instance_embeddings) or any(
             identity.embeddings for identity in labels.identities
         )
+        has_categories = any(store._instance_categories.values()) or any(
+            identity.categories for identity in labels.identities
+        )
     else:
         has_instance_identities = any(
             getattr(inst, "identity", None) is not None for lf in labels for inst in lf
@@ -2586,10 +2736,19 @@ def write_metadata(labels_path: str, labels: Labels):
         has_embeddings = any(
             getattr(inst, "embeddings", None) for lf in labels for inst in lf
         ) or any(identity.embeddings for identity in labels.identities)
+        has_categories = any(
+            getattr(inst, "categories", None) for lf in labels for inst in lf
+        ) or any(identity.categories for identity in labels.identities)
     if has_instance_identities:
         format_id = max(format_id, 2.5)
     if has_embeddings:
         format_id = max(format_id, 2.6)
+    # Bump for per-instance + entity-level categories (new in 2.7). Additive:
+    # the /instance_categories side-table and the "categories" key in
+    # identities_json are read on presence, so files without categories stay
+    # <= 2.6.
+    if has_categories:
+        format_id = max(format_id, 2.7)
 
     with h5py.File(labels_path, "a") as f:
         # Bump for chunked label image format (new in 2.2)
@@ -3720,6 +3879,10 @@ def _read_labels_lazy_from_open_file(
     for identity_idx, emb_map in identity_embeddings.items():
         if 0 <= identity_idx < len(identities):
             identities[identity_idx].embeddings.update(emb_map)
+    # Categories: identity-level categories are already on the eager catalog (read
+    # in read_identities); per-instance categories ride on the lazy store and
+    # attach at materialization time.
+    instance_categories = read_instance_categories(labels_path, _hdf5_file=f)
     suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
     metadata = read_metadata(labels_path, _hdf5_file=f)
     provenance = read_provenance(labels_path, metadata, _hdf5_file=f)
@@ -3747,6 +3910,7 @@ def _read_labels_lazy_from_open_file(
         identities=identities,
         instance_identities=instance_identities,
         instance_embeddings=instance_embeddings,
+        instance_categories=instance_categories,
     )
 
     # Create LazyFrameList
@@ -6551,6 +6715,15 @@ def _read_labels_from_open_file(
         if 0 <= identity_idx < len(identities):
             identities[identity_idx].embeddings.update(emb_map)
 
+    # Attach per-instance categories (SLP format 2.7+). Additive: absent
+    # /instance_categories dataset -> empty mapping and a no-op. Identity-level
+    # categories are reconstructed inside read_identities. Indexed directly by
+    # the global instance_id ordering.
+    instance_category_map = read_instance_categories(labels_path, _hdf5_file=f)
+    for inst_id, categories in instance_category_map.items():
+        if 0 <= inst_id < len(instances):
+            instances[inst_id].categories.update(categories)
+
     sessions = read_sessions(
         labels_path, videos, labeled_frames, identities=identities, _hdf5_file=f
     )
@@ -6733,6 +6906,7 @@ _KNOWN_TOPLEVEL_HDF5_NAMES = frozenset(
         "identities_json",
         "instance_identities",
         "embeddings",
+        "instance_categories",
         "provenance_json",
         "frames",
         "instances",
@@ -6926,6 +7100,9 @@ def _write_labels_lazy(
     _write_embedding_groups(
         labels_path,
         _embedding_groups_from_store(lazy_store, lazy_store.identities),
+    )
+    _write_instance_category_rows(
+        labels_path, _instance_category_rows_from_store(lazy_store)
     )
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     # For sessions, pass empty list since we don't have materialized frames
@@ -7192,6 +7369,7 @@ def write_labels(
     write_identities(labels_path, labels.identities)
     write_instance_identities(labels_path, labels)
     write_embeddings(labels_path, labels)
+    write_instance_categories(labels_path, labels)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     write_sessions(
         labels_path,

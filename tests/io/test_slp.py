@@ -71,6 +71,7 @@ from sleap_io.io.slp import (
     read_bboxes,
     read_centroids,
     read_identities,
+    read_instance_categories,
     read_instances,
     read_label_images,
     read_labels,
@@ -1278,6 +1279,139 @@ def test_modality_embeddings_warn_on_save(tmp_path):
 
     with pytest.warns(UserWarning, match="not yet persisted"):
         save_slp(labels, str(tmp_path / "modality.slp"))
+
+
+def test_per_instance_categories_round_trip(tmp_path):
+    """Test per-instance categories round-trip through SLP (format 2.7)."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    i0 = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
+    i0.set_categories({"sex": "M", "behavior": "grooming"})
+    i1 = PredictedInstance.from_numpy(np.array([[4, 5], [6, 7]]), skel, score=0.8)
+    i1.set_category("sex_probs", [0.2, 0.8])  # non-string value
+    i2 = Instance.from_numpy(np.array([[8, 9], [10, 11]]), skel)  # no categories
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[i0, i1, i2])])
+
+    path = str(tmp_path / "categories.slp")
+    save_slp(labels, path)
+
+    # Format bumped to 2.7 and the additive dataset is present.
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] >= 2.7
+        assert "instance_categories" in f
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)
+    assert li[0].categories == {"sex": "M", "behavior": "grooming"}
+    assert li[1].categories == {"sex_probs": [0.2, 0.8]}  # list value preserved
+    assert li[2].categories == {}  # sparse: no categories stays empty
+
+
+def test_identity_categories_round_trip(tmp_path):
+    """Test entity-level Identity categories round-trip in identities_json."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    identity = Identity(name="mouse_A", metadata={"note": "keep"})
+    identity.set_categories({"species": "mouse", "sex": "M"})
+    inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel, identity=identity)
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+
+    path = str(tmp_path / "identity_categories.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] >= 2.7
+
+    loaded = load_slp(path)
+    assert loaded.identities[0].categories == {"species": "mouse", "sex": "M"}
+    # The reserved "categories" key does not leak into the metadata catch-all.
+    assert loaded.identities[0].metadata == {"note": "keep"}
+
+
+def test_identity_reserved_keys_win_over_metadata(tmp_path):
+    """Test structured Identity fields are not clobbered by colliding metadata.
+
+    Regression: identities_json packed structured fields then `update(metadata)`,
+    so a metadata key named "name"/"uuid"/"color"/"categories" overwrote the real
+    field on write (silently losing real per-identity categories).
+    """
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    # Real categories AND a colliding metadata "categories" key + a "name" key.
+    identity = Identity(
+        name="real_name",
+        categories={"sex": "M"},
+        metadata={"categories": "clobber", "name": "evil", "keep": 1},
+    )
+    inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel, identity=identity)
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+
+    path = str(tmp_path / "reserved.slp")
+    save_slp(labels, path)
+
+    reloaded = load_slp(path).identities[0]
+    assert reloaded.name == "real_name"  # not "evil"
+    assert reloaded.categories == {"sex": "M"}  # not "clobber"
+    # Reserved keys are stripped from metadata; only non-reserved keys remain.
+    assert reloaded.metadata == {"keep": 1}
+
+
+def test_read_identities_guards_non_dict_categories(tmp_path):
+    """Test a malformed non-dict "categories" value is coerced to an empty dict."""
+    path = str(tmp_path / "malformed.slp")
+    # Hand-write an identities_json with a bogus non-dict categories value.
+    with h5py.File(path, "w") as f:
+        f.create_dataset(
+            "identities_json",
+            data=[np.bytes_(json.dumps({"name": "m", "categories": "oops"}))],
+            maxshape=(None,),
+        )
+    identity = read_identities(path)[0]
+    assert identity.categories == {}  # coerced, not the bare string
+
+
+def test_no_categories_keeps_low_format_and_no_dataset(tmp_path):
+    """Test category-free labels stay additive (no dataset, no 2.7 bump)."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)],
+            )
+        ]
+    )
+    path = str(tmp_path / "no_categories.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 2.7
+        assert "instance_categories" not in f
+
+    loaded = load_slp(path)
+    assert list(loaded[0].instances)[0].categories == {}
+
+
+def test_read_instance_categories_absent_returns_empty(tmp_path):
+    """Test read_instance_categories returns {} when the dataset is absent."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)],
+            )
+        ]
+    )
+    path = str(tmp_path / "absent.slp")
+    save_slp(labels, path)
+    assert read_instance_categories(path) == {}
 
 
 def test_make_frame_group_and_frame_group_to_dict(
