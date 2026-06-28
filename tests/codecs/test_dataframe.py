@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from sleap_io import (
+    Identity,
     Instance,
     LabeledFrame,
     Labels,
@@ -13,6 +14,7 @@ from sleap_io import (
     Track,
     Video,
     load_slp,
+    save_slp,
 )
 from sleap_io.codecs.dataframe import (
     DataFrameFormat,
@@ -152,6 +154,133 @@ def test_to_dataframe_instances_with_scores():
     # Instance-level score
     assert "score" in df.columns
     assert df.iloc[0]["score"] == 0.95
+
+
+def _categories_labels():
+    """Build labels with sparse identities + categories for codec tests."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+    identity = Identity(name="mouse_A")
+
+    i0 = Instance.from_numpy(np.array([[0.0, 1.0], [2.0, 3.0]]), skeleton)
+    i0.identity = identity
+    i0.identity_score = 0.9
+    i0.set_categories({"sex": "M", "probs": [0.2, 0.8]})  # scalar + vector dim
+    i1 = Instance.from_numpy(np.array([[4.0, 5.0], [6.0, 7.0]]), skeleton)
+    i1.set_category("strain", "C57BL/6")  # different dim than i0
+    i2 = Instance.from_numpy(np.array([[8.0, 9.0], [0.0, 1.0]]), skeleton)  # neither
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[i0, i1, i2])
+    labels = Labels([lf])
+    labels.identities = [identity]
+    return labels
+
+
+def test_to_dataframe_instances_identity_columns():
+    """Test identity / identity_score columns mirror track on the instances df."""
+    labels = _categories_labels()
+    df = to_dataframe(labels, format="instances")
+
+    assert "identity" in df.columns
+    assert "identity_score" in df.columns
+    assert df.iloc[0]["identity"] == "mouse_A"
+    assert df.iloc[0]["identity_score"] == 0.9
+    # Instances without a global identity are None/NaN.
+    assert pd.isna(df.iloc[1]["identity"])
+    assert pd.isna(df.iloc[1]["identity_score"])
+
+
+def test_to_dataframe_instances_category_columns_exploded():
+    """Test categories explode to cat.<dim> (and cat.<dim>.<i> for vectors)."""
+    labels = _categories_labels()
+    df = to_dataframe(labels, format="instances")
+
+    # Scalar dims -> one column; vector dim -> exploded per component.
+    assert df.iloc[0]["cat.sex"] == "M"
+    assert df.iloc[0]["cat.probs.0"] == 0.2
+    assert df.iloc[0]["cat.probs.1"] == 0.8
+    assert df.iloc[1]["cat.strain"] == "C57BL/6"
+
+
+def test_to_dataframe_instances_categories_uniform_columns():
+    """Test sparse categories yield a uniform schema (NaN where absent)."""
+    labels = _categories_labels()
+    df = to_dataframe(labels, format="instances")
+
+    # Every cat column exists on every row, NaN where the dim is absent.
+    for col in ("cat.sex", "cat.strain", "cat.probs.0", "cat.probs.1"):
+        assert col in df.columns
+    assert pd.isna(df.iloc[1]["cat.sex"])  # i1 has no "sex"
+    assert pd.isna(df.iloc[0]["cat.strain"])  # i0 has no "strain"
+    # i2 has no categories at all.
+    assert pd.isna(df.iloc[2]["cat.sex"])
+    assert pd.isna(df.iloc[2]["cat.strain"])
+
+
+def test_to_dataframe_instances_no_metadata_omits_identity_categories():
+    """Test identity / category columns are gated by include_metadata."""
+    labels = _categories_labels()
+    df = to_dataframe(labels, format="instances", include_metadata=False)
+    assert "identity" not in df.columns
+    assert not any(c.startswith("cat.") for c in df.columns)
+
+
+def test_to_dataframe_instances_categories_polars_late_column():
+    """Test polars does not drop a category dim first appearing past row 100.
+
+    Regression: polars' bounded schema inference would silently drop (or fail
+    on) a sparse column whose first non-null value is beyond the inference
+    window; the codec forces a full schema scan.
+    """
+    pytest.importorskip("polars")
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+    frames = []
+    for fi in range(130):
+        inst = Instance.from_numpy(np.array([[fi, 1.0], [2.0, 3.0]]), skeleton)
+        if fi == 125:  # first (and only) appearance, well past row 100
+            inst.set_category("late", "Z")
+        frames.append(LabeledFrame(video=video, frame_idx=fi, instances=[inst]))
+    labels = Labels(frames)
+
+    df = to_dataframe(labels, format="instances", backend="polars")
+    assert "cat.late" in df.columns
+    assert df["cat.late"][125] == "Z"
+
+
+def test_to_dataframe_iter_instances_categories_uniform():
+    """Test streaming chunks share a uniform category schema."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+    frames = []
+    for fi in range(6):
+        inst = Instance.from_numpy(np.array([[fi, 1.0], [2.0, 3.0]]), skeleton)
+        if fi == 5:  # category only on the last (second-chunk) instance
+            inst.set_category("sex", "M")
+        frames.append(LabeledFrame(video=video, frame_idx=fi, instances=[inst]))
+    labels = Labels(frames)
+
+    chunks = list(to_dataframe_iter(labels, format="instances", chunk_size=3))
+    assert len(chunks) == 2
+    # Both chunks carry cat.sex (prescan makes the schema uniform).
+    assert all("cat.sex" in c.columns for c in chunks)
+
+
+def test_to_dataframe_instances_categories_lazy_matches_eager(tmp_path):
+    """Test the lazy fast path emits identity / category columns like eager."""
+    labels = _categories_labels()
+    path = str(tmp_path / "cats.slp")
+    save_slp(labels, path)
+
+    eager = to_dataframe(load_slp(path), format="instances")
+    lazy = to_dataframe(load_slp(path, lazy=True), format="instances")
+
+    assert list(eager["identity"]) == list(lazy["identity"])
+    for col in ("cat.sex", "cat.strain", "cat.probs.0", "cat.probs.1"):
+        assert col in lazy.columns
+    assert lazy.iloc[0]["cat.sex"] == "M"
+    assert lazy.iloc[0]["cat.probs.1"] == 0.8
+    assert lazy.iloc[1]["cat.strain"] == "C57BL/6"
 
 
 def test_to_dataframe_frames_format():
