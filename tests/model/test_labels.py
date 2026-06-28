@@ -4333,6 +4333,35 @@ def test_labels_merge_predicted_instance_mapping():
     assert np.array_equal(mapped_inst.numpy(), inst.numpy())
 
 
+def test_labels_merge_map_instance_preserves_categories():
+    """Test _map_instance copies per-instance categories (independent dict).
+
+    Regression: the merge rebuild copied identity/embeddings but dropped
+    `Instance.categories`, silently losing category labels on a merge.
+    """
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    labels = Labels()
+    labels.skeletons.append(skel1)
+    skeleton_map = {skel2: skel1}
+
+    inst = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel2)
+    inst.set_categories({"sex": "M", "probs": [0.2, 0.8]})
+    mapped = labels._map_instance(inst, skeleton_map, {})
+    assert mapped.categories == {"sex": "M", "probs": [0.2, 0.8]}
+    # The mapped dict is independent of the source (shallow-copied).
+    mapped.categories["sex"] = "F"
+    assert inst.categories["sex"] == "M"
+
+    pred = PredictedInstance.from_numpy(
+        np.array([[1, 1], [2, 2]]), skeleton=skel2, score=0.9
+    )
+    pred.set_category("view", "top")
+    mapped_pred = labels._map_instance(pred, skeleton_map, {})
+    assert isinstance(mapped_pred, PredictedInstance)
+    assert mapped_pred.categories == {"view": "top"}
+
+
 def test_labels_merge_dedupes_same_uuid_identity():
     """Merge dedupes same-uuid identities and preserves score/embeddings.
 

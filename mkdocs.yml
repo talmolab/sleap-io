@@ -174,6 +174,7 @@ nav:
       - ROIs: model/rois.md
       - Segmentation: model/segmentation.md
       - Embeddings: model/embedding.md
+      - Categories: model/categories.md
     - Formats:
       - formats/index.md
       - SLP Format: formats/slp.md

@@ -4076,7 +4076,8 @@ class Labels:
                 (deduped) `Identity` in the merged catalog. When provided, the
                 instance's identity is resolved through this map so that the same
                 animal across files points at a single catalog object. The
-                instance's ``identity_score`` and ``embeddings`` are always copied.
+                instance's ``identity_score``, ``embeddings``, and ``categories``
+                are always copied.
             memo: Optional mapping from the id of the source instance to the new
                 instance, mutated in place. Used to repair ``from_predicted``
                 links so a remapped user instance references the remapped source
@@ -4133,6 +4134,7 @@ class Labels:
                 identity=mapped_identity,
                 identity_score=instance.identity_score,
                 embeddings=dict(instance.embeddings),
+                categories=dict(instance.categories),
             )
         else:
             new_instance = Instance(
@@ -4144,6 +4146,7 @@ class Labels:
                 identity=mapped_identity,
                 identity_score=instance.identity_score,
                 embeddings=dict(instance.embeddings),
+                categories=dict(instance.categories),
             )
         if memo is not None:
             memo[id(instance)] = new_instance

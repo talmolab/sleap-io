@@ -12,6 +12,7 @@ from __future__ import annotations
 import attrs
 import numpy as np
 
+from sleap_io.model.categories import CategoriesMixin
 from sleap_io.model.embedding import Embedding, EmbeddingMixin
 from sleap_io.model.identity import Identity
 from sleap_io.model.skeleton import Node, Skeleton
@@ -386,7 +387,7 @@ class Track:
 
 
 @attrs.define(auto_attribs=True, slots=True, eq=False)
-class Instance(EmbeddingMixin):
+class Instance(EmbeddingMixin, CategoriesMixin):
     """This class represents a ground truth instance such as an animal.
 
     An `Instance` has a set of landmarks (points) that correspond to a `Skeleton`. Each
@@ -422,6 +423,10 @@ class Instance(EmbeddingMixin):
             `Embedding` describing this instance's appearance for re-identification.
             Empty by default. Use the `embedding` accessor / `set_embedding` helper
             for the common single-vector case.
+        categories: A mapping from category dimension name (e.g. ``"sex"``) to a
+            categorical label (typically a string). Empty by default. Use the
+            `cat` alias / `set_category` helper for read/write access. Distinct
+            from the singular scalar ``category`` on geometry primitives.
     """
 
     points: PointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
@@ -432,6 +437,7 @@ class Instance(EmbeddingMixin):
     identity_score: float | None = None
     from_predicted: "PredictedInstance | None" = None
     embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
+    categories: dict = attrs.field(factory=dict, repr=False)
 
     @classmethod
     def empty(
@@ -903,6 +909,8 @@ class PredictedInstance(Instance):
             `Instance.identity_score`).
         embeddings: A mapping from embedding-space name to an `Embedding` (see
             `Instance.embeddings`).
+        categories: A mapping from category dimension name to a categorical label
+            (see `Instance.categories`).
     """
 
     points: PredictedPointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
@@ -914,6 +922,7 @@ class PredictedInstance(Instance):
     identity_score: float | None = None
     from_predicted: "PredictedInstance | None" = None
     embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
+    categories: dict = attrs.field(factory=dict, repr=False)
 
     def __repr__(self) -> str:
         """Return a readable representation of the instance."""
