@@ -43,13 +43,14 @@ from sleap_io.io.slp import (
     METADATA_ATTR_SIZE_LIMIT,
     OBJ_DTYPE,
     OWNER_BBOX,
+    OWNER_CENTROID,
     OWNER_IDENTITY,
     OWNER_INSTANCE,
     OWNER_MASK,
     ExportCancelled,
     LabelImageWriter,
     _encode_metadata_attr,
-    _identity_link_rows_from_masks,
+    _identity_link_rows_for_owner,
     _is_known_toplevel_name,
     _points_from_hdf5_data,
     _read_source_video_json,
@@ -1363,6 +1364,59 @@ def test_mask_identity_round_trip_lazy_save(tmp_path):
     np.testing.assert_array_equal(rm.embedding.vector, np.ones(5))
 
 
+def test_centroid_identity_and_embedding_round_trip(tmp_path):
+    """Per-centroid identity links + embeddings round-trip via SLP (owner_type=2)."""
+    video = Video(filename="test.mp4")
+    id_a = Identity(name="cell_A")
+    c1 = UserCentroid(x=5.0, y=6.0, identity=id_a, identity_score=0.8)
+    c1.set_embedding(np.arange(4, dtype=np.float32))
+    c2 = PredictedCentroid(x=1.0, y=2.0, score=0.9)  # no identity / embedding
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, centroids=[c1, c2])])
+    labels.update()
+
+    path = str(tmp_path / "centroid_ids.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] >= 2.6
+        links = f["identity_links"][:]
+        assert set(links["owner_type"].tolist()) == {OWNER_CENTROID}
+        assert links["owner_id"].tolist() == [0]
+        assert set(f["embeddings/reid/owner_type"][:].tolist()) == {OWNER_CENTROID}
+
+    loaded = load_slp(path)
+    lc = list(loaded[0].centroids)
+    assert lc[0].identity is not None and lc[0].identity.uuid == id_a.uuid
+    assert lc[0].identity_score == pytest.approx(0.8)
+    np.testing.assert_array_equal(lc[0].embedding.vector, np.arange(4))
+    assert lc[1].identity is None
+    assert lc[1].embedding is None
+
+
+def test_centroid_identity_round_trip_lazy_save(tmp_path):
+    """Centroid identity/embedding survive the lazy fast-path writer."""
+    video = Video(filename="test.mp4")
+    ident = Identity(name="cell_A")
+    c = UserCentroid(x=3.0, y=4.0, identity=ident, identity_score=0.5)
+    c.set_embedding(np.ones(6, dtype=np.float32))
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, centroids=[c])])
+    labels.update()
+
+    a = str(tmp_path / "a.slp")
+    save_slp(labels, a)
+    lazy = load_slp(a, lazy=True)
+    assert lazy.is_lazy
+    b = str(tmp_path / "b.slp")
+    save_slp(lazy, b)
+    assert lazy.is_lazy
+
+    reloaded = load_slp(b)
+    rc = list(reloaded[0].centroids)[0]
+    assert rc.identity is not None and rc.identity.uuid == ident.uuid
+    assert rc.identity_score == pytest.approx(0.5)
+    np.testing.assert_array_equal(rc.embedding.vector, np.ones(6))
+
+
 def test_save_time_autocollect_unregistered_identity(tmp_path):
     """Post-hoc inst.identity not in the catalog is auto-collected + persisted."""
     skel = Skeleton(["A", "B"])
@@ -1413,8 +1467,8 @@ def test_save_time_autocollect_dedupes_by_uuid(tmp_path):
     assert li[1].identity is not None and li[1].identity.uuid == uuid
 
 
-def test_identity_link_rows_from_masks_skips_unregistered():
-    """A mask whose identity uuid is not in the catalog is skipped (defensive)."""
+def test_identity_link_rows_for_owner_skips_unregistered():
+    """An annotation whose identity uuid is not in the catalog is skipped."""
     d = np.zeros((4, 4), dtype=bool)
     d[1:3, 1:3] = True
     registered = Identity(name="A")
@@ -1423,8 +1477,10 @@ def test_identity_link_rows_from_masks_skips_unregistered():
     m_none = UserSegmentationMask.from_numpy(d)
     uuid_to_idx = {registered.uuid: 0}
 
-    rows = _identity_link_rows_from_masks([m_ok, m_unregistered, m_none], uuid_to_idx)
-    # Only the registered mask (at index 0) yields a row.
+    rows = _identity_link_rows_for_owner(
+        [m_ok, m_unregistered, m_none], uuid_to_idx, OWNER_MASK
+    )
+    # Only the registered mask (at index 0) yields a row, under the given owner type.
     assert rows == [(OWNER_MASK, 0, 0, pytest.approx(0.5))]
 
 
@@ -1568,13 +1624,13 @@ def test_embeddings_inconsistent_dim_raises(tmp_path):
 
 
 def test_modality_embeddings_warn_on_save(tmp_path):
-    """Test a warning fires for not-yet-persisted modality embeddings."""
+    """Test a warning fires for not-yet-persisted modality embeddings (bbox/ROI)."""
     skel = Skeleton(["A", "B"])
     video = Video(filename="test.mp4")
     inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
-    centroid = UserCentroid(x=1.0, y=2.0)
-    centroid.set_embedding(np.ones(8))  # not yet persisted
-    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst], centroids=[centroid])
+    bbox = UserBoundingBox(x1=0.0, y1=0.0, x2=10.0, y2=10.0)
+    bbox.set_embedding(np.ones(8))  # bbox embeddings not yet persisted
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst], bboxes=[bbox])
     labels = Labels([lf])
 
     with pytest.warns(UserWarning, match="not yet persisted"):

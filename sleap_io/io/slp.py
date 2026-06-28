@@ -1804,14 +1804,16 @@ def write_identity_links(labels_path: str, labels: Labels) -> None:
     Creates the ``identity_links`` dataset (SLP format 2.5+) as a structured array
     of ``(owner_type, owner_id, identity_idx, identity_score)`` rows for every
     detection carrying an `Identity` registered in ``labels.identities``. Instance
-    (``OWNER_INSTANCE``) and mask (``OWNER_MASK``) owners are written; the
-    ``owner_type`` column is owner-type-aware (same scheme as the ``/embeddings``
-    join) so other detection modalities can be added without a new dataset.
+    (``OWNER_INSTANCE``), mask (``OWNER_MASK``), and centroid (``OWNER_CENTROID``)
+    owners are written; the ``owner_type`` column is owner-type-aware (same scheme
+    as the ``/embeddings`` join) so other modalities can be added without a new
+    dataset.
 
-    The instance ``owner_id`` matches the global id assigned by `write_lfs` and the
-    mask ``owner_id`` matches the global mask-list index assigned by `write_masks`
-    (both enumeration order over frames then the modality), so the link is resolved
-    by joining on that id at read time. Identity is resolved to a catalog index by
+    The instance ``owner_id`` matches the global id assigned by `write_lfs`, and the
+    mask / centroid ``owner_id`` matches the global per-modality list index assigned
+    by `write_masks` / `write_centroids` (each enumeration order over frames then
+    the modality), so the link is resolved by joining on that id at read time.
+    Identity is resolved to a catalog index by
     the stable ``uuid`` (not Python object identity), so a producer attaching a
     distinct `Identity` object that shares a uuid with a catalog entry still links
     correctly. This keeps identity out of the fixed-layout ``instances`` dataset,
@@ -1828,6 +1830,7 @@ def write_identity_links(labels_path: str, labels: Labels) -> None:
     rows = []
     instance_id = 0
     masks: list = []
+    centroids: list = []
     for lf in labels:
         for inst in lf:
             identity = getattr(inst, "identity", None)
@@ -1845,40 +1848,44 @@ def write_identity_links(labels_path: str, labels: Labels) -> None:
                     )
             instance_id += 1
         masks.extend(lf.masks)
+        centroids.extend(lf.centroids)
 
-    rows.extend(_identity_link_rows_from_masks(masks, uuid_to_idx))
+    rows.extend(_identity_link_rows_for_owner(masks, uuid_to_idx, OWNER_MASK))
+    rows.extend(_identity_link_rows_for_owner(centroids, uuid_to_idx, OWNER_CENTROID))
     _write_identity_link_rows(labels_path, rows)
 
 
-def _identity_link_rows_from_masks(
-    masks: list, uuid_to_idx: dict[str, int]
+def _identity_link_rows_for_owner(
+    anns: list, uuid_to_idx: dict[str, int], owner_type: int
 ) -> list[tuple[int, int, int, float]]:
-    """Build ``OWNER_MASK`` identity-link rows from an ordered mask list.
+    """Build identity-link rows for an ordered annotation list under one owner type.
 
-    Masks join on their global mask-list index (the same enumeration as
-    `write_masks`), so ``masks`` must be supplied in that exact order. Identity is
-    resolved to a catalog index by ``uuid``.
+    Annotations join on their global per-modality list index (the same enumeration
+    as the modality's writer, e.g. `write_masks` / `write_centroids`), so ``anns``
+    must be supplied in that exact order. Identity is resolved to a catalog index
+    by ``uuid``.
 
     Args:
-        masks: The ordered global mask list.
+        anns: The ordered global annotation list for one modality.
         uuid_to_idx: Mapping from `Identity.uuid` to its catalog index.
+        owner_type: The ``OWNER_*`` code for this modality (e.g. ``OWNER_MASK``).
 
     Returns:
         A list of ``(owner_type, owner_id, identity_idx, identity_score)`` tuples.
     """
     rows = []
-    for mask_id, mask in enumerate(masks):
-        identity = getattr(mask, "identity", None)
+    for owner_id, ann in enumerate(anns):
+        identity = getattr(ann, "identity", None)
         if identity is None:
             continue
         idx = uuid_to_idx.get(identity.uuid)
         if idx is None:
             continue
-        score = mask.identity_score
+        score = ann.identity_score
         rows.append(
             (
-                OWNER_MASK,
-                mask_id,
+                owner_type,
+                owner_id,
                 idx,
                 float("nan") if score is None else float(score),
             )
@@ -2092,7 +2099,7 @@ def read_embeddings(
     """
     from sleap_io.model.embedding import Embedding
 
-    supported = (OWNER_INSTANCE, OWNER_IDENTITY, OWNER_MASK)
+    supported = (OWNER_INSTANCE, OWNER_IDENTITY, OWNER_MASK, OWNER_CENTROID)
     by_owner: dict[int, dict[int, dict]] = {}
 
     cm = (
@@ -2134,44 +2141,46 @@ def read_embeddings(
         if unknown_owner_types:
             warnings.warn(
                 "Skipped /embeddings rows with unsupported owner_type(s) "
-                f"{sorted(unknown_owner_types)}: only instance, identity, and mask "
-                "embeddings are attached on read. These vectors were written by a "
-                "newer sleap-io and are ignored here.",
+                f"{sorted(unknown_owner_types)}: only instance, identity, mask, and "
+                "centroid embeddings are attached on read. These vectors were "
+                "written by a newer sleap-io and are ignored here.",
                 stacklevel=2,
             )
 
     return by_owner
 
 
-def _attach_mask_identity_and_embeddings(
-    masks: list,
+def _attach_identity_and_embeddings(
+    anns: list,
     identities: list[Identity],
-    mask_identity_map: dict[int, tuple[int, float | None]],
-    mask_embedding_map: dict[int, dict],
+    identity_map: dict[int, tuple[int, float | None]],
+    embedding_map: dict[int, dict],
 ) -> None:
-    """Attach per-mask identity links + embeddings by global mask-list index.
+    """Attach per-annotation identity links + embeddings by global-list index.
 
-    Shared by the eager and lazy read paths. ``masks`` must be in the global
-    mask-list index order (as returned by `read_masks`), which is the id space the
-    ``OWNER_MASK`` rows were written against.
+    Shared by the eager and lazy read paths for any detection modality (e.g.
+    masks, centroids). ``anns`` must be in the global per-modality list index order
+    (as returned by `read_masks` / `read_centroids`), which is the id space the
+    owner rows were written against.
 
     Args:
-        masks: The ordered global mask list.
+        anns: The ordered global annotation list for one modality.
         identities: The identity catalog (links resolve by catalog index).
-        mask_identity_map: ``{mask_id: (identity_idx, identity_score)}`` from
-            `read_identity_links`.
-        mask_embedding_map: ``{mask_id: {space: Embedding}}`` from `read_embeddings`.
+        identity_map: ``{owner_id: (identity_idx, identity_score)}`` from
+            `read_identity_links` for this modality's owner type.
+        embedding_map: ``{owner_id: {space: Embedding}}`` from `read_embeddings`
+            for this modality's owner type.
     """
-    for mask_id, mask in enumerate(masks):
-        link = mask_identity_map.get(mask_id)
+    for owner_id, ann in enumerate(anns):
+        link = identity_map.get(owner_id)
         if link is not None:
             identity_idx, identity_score = link
             if 0 <= identity_idx < len(identities):
-                mask.identity = identities[identity_idx]
-                mask.identity_score = identity_score
-        emb_map = mask_embedding_map.get(mask_id)
+                ann.identity = identities[identity_idx]
+                ann.identity_score = identity_score
+        emb_map = embedding_map.get(owner_id)
         if emb_map:
-            mask.embeddings.update(emb_map)
+            ann.embeddings.update(emb_map)
 
 
 def write_embeddings(labels_path: str, labels: Labels) -> None:
@@ -2180,14 +2189,15 @@ def write_embeddings(labels_path: str, labels: Labels) -> None:
     Creates the ``/embeddings`` group (SLP format 2.6+) with one subgroup per
     named embedding space. Per-instance embeddings join on the global
     ``instance_id`` (enumeration order over frames then instances, matching
-    `write_lfs`); per-mask embeddings join on the global mask-list index (same
-    enumeration as `write_masks`); per-identity prototype embeddings join on the
-    identity catalog index. Large float vectors live in their own gzipped numeric
-    datasets, keeping them out of any JSON blob and out of the fixed instance row
-    layout (purely additive: old readers ignore the group).
+    `write_lfs`); per-mask and per-centroid embeddings join on the global
+    per-modality list index (same enumeration as `write_masks` / `write_centroids`);
+    per-identity prototype embeddings join on the identity catalog index. Large
+    float vectors live in their own gzipped numeric datasets, keeping them out of
+    any JSON blob and out of the fixed instance row layout (purely additive: old
+    readers ignore the group).
 
-    Embeddings attached to the centroid/bbox/ROI modalities are not yet persisted;
-    a warning is emitted if any are present so they are not silently dropped.
+    Embeddings attached to the bbox/ROI modalities are not yet persisted; a warning
+    is emitted if any are present so they are not silently dropped.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -2201,18 +2211,19 @@ def write_embeddings(labels_path: str, labels: Labels) -> None:
     by_space = _embedding_groups_from_labels(labels)
 
     # Warn about embeddings on modalities whose persistence is not yet supported
-    # (instance, identity, and mask embeddings are persisted; the rest are not).
+    # (instance, identity, mask, and centroid embeddings are persisted; bbox/ROI
+    # are not).
     unpersisted = sum(
         1
-        for attr in ("centroids", "bboxes", "rois")
+        for attr in ("bboxes", "rois")
         for ann in getattr(labels, attr, [])
         if getattr(ann, "embeddings", None)
     )
     if unpersisted:
         warnings.warn(
-            f"{unpersisted} embedding(s) on centroid/bbox/ROI detections are not "
-            "yet persisted to SLP and will be dropped on save. Only Instance, "
-            "Identity, and SegmentationMask embeddings are currently written.",
+            f"{unpersisted} embedding(s) on bbox/ROI detections are not yet "
+            "persisted to SLP and will be dropped on save. Only Instance, Identity, "
+            "SegmentationMask, and Centroid embeddings are currently written.",
             stacklevel=2,
         )
 
@@ -2229,43 +2240,51 @@ def _embedding_groups_from_labels(labels: Labels) -> dict[str, list]:
     Returns:
         A mapping ``{space_name: [(owner_type, owner_id, Embedding), ...]}`` where
         per-instance embeddings join on the global ``instance_id`` (enumeration
-        order over frames then instances, matching `write_lfs`), per-mask
-        embeddings join on the global mask-list index (matching `write_masks`),
-        and per-identity prototype embeddings join on the identity catalog index.
+        order over frames then instances, matching `write_lfs`), per-mask and
+        per-centroid embeddings join on the global per-modality list index (matching
+        `write_masks` / `write_centroids`), and per-identity prototype embeddings
+        join on the identity catalog index.
     """
     by_space: dict[str, list] = {}
 
     instance_id = 0
     masks: list = []
+    centroids: list = []
     for lf in labels:
         for inst in lf:
             for name, emb in getattr(inst, "embeddings", {}).items():
                 by_space.setdefault(name, []).append((OWNER_INSTANCE, instance_id, emb))
             instance_id += 1
         masks.extend(lf.masks)
+        centroids.extend(lf.centroids)
 
     for idx, identity in enumerate(labels.identities):
         for name, emb in identity.embeddings.items():
             by_space.setdefault(name, []).append((OWNER_IDENTITY, idx, emb))
 
-    _add_mask_embedding_groups(by_space, masks)
+    _add_owner_embedding_groups(by_space, masks, OWNER_MASK)
+    _add_owner_embedding_groups(by_space, centroids, OWNER_CENTROID)
     return by_space
 
 
-def _add_mask_embedding_groups(by_space: dict[str, list], masks: list) -> None:
-    """Append per-mask embedding entries to ``by_space`` (shared eager/lazy).
+def _add_owner_embedding_groups(
+    by_space: dict[str, list], anns: list, owner_type: int
+) -> None:
+    """Append per-annotation embedding entries to ``by_space`` (shared eager/lazy).
 
-    Masks join on their global mask-list index (the same enumeration as
-    `write_masks`), so ``masks`` must be supplied in that exact order.
+    Annotations join on their global per-modality list index (the same enumeration
+    as the modality's writer, e.g. `write_masks` / `write_centroids`), so ``anns``
+    must be supplied in that exact order.
 
     Args:
         by_space: The ``{space_name: [(owner_type, owner_id, Embedding), ...]}``
             accumulator to extend in place.
-        masks: The ordered global mask list.
+        anns: The ordered global annotation list for one modality.
+        owner_type: The ``OWNER_*`` code for this modality (e.g. ``OWNER_MASK``).
     """
-    for mask_id, mask in enumerate(masks):
-        for name, emb in getattr(mask, "embeddings", {}).items():
-            by_space.setdefault(name, []).append((OWNER_MASK, mask_id, emb))
+    for owner_id, ann in enumerate(anns):
+        for name, emb in getattr(ann, "embeddings", {}).items():
+            by_space.setdefault(name, []).append((owner_type, owner_id, emb))
 
 
 def _embedding_groups_from_store(
@@ -2868,30 +2887,32 @@ def write_metadata(labels_path: str, labels: Labels):
     # what the fast-path writer persists without materializing any frames.
     if labels.is_lazy:
         store = labels._lazy_store
-        lazy_masks = [m for lst in store._mask_by_frame.values() for m in lst] + list(
-            store._undistributed_masks
+        lazy_dets = (
+            [m for lst in store._mask_by_frame.values() for m in lst]
+            + list(store._undistributed_masks)
+            + [c for lst in store._centroid_by_frame.values() for c in lst]
+            + list(store._undistributed_centroids)
         )
         has_instance_identities = bool(store._instance_identities) or any(
-            getattr(m, "identity", None) is not None for m in lazy_masks
+            getattr(d, "identity", None) is not None for d in lazy_dets
         )
         has_embeddings = (
             bool(store._instance_embeddings)
             or any(identity.embeddings for identity in labels.identities)
-            or any(getattr(m, "embeddings", None) for m in lazy_masks)
+            or any(getattr(d, "embeddings", None) for d in lazy_dets)
         )
         has_categories = any(store._instance_categories.values()) or any(
             identity.categories for identity in labels.identities
         )
     else:
+        dets = [d for lf in labels for d in (*lf.masks, *lf.centroids)]
         has_instance_identities = any(
             getattr(inst, "identity", None) is not None for lf in labels for inst in lf
-        ) or any(
-            getattr(m, "identity", None) is not None for lf in labels for m in lf.masks
-        )
+        ) or any(getattr(d, "identity", None) is not None for d in dets)
         has_embeddings = (
             any(getattr(inst, "embeddings", None) for lf in labels for inst in lf)
             or any(identity.embeddings for identity in labels.identities)
-            or any(getattr(m, "embeddings", None) for lf in labels for m in lf.masks)
+            or any(getattr(d, "embeddings", None) for d in dets)
         )
         has_categories = any(
             getattr(inst, "categories", None) for lf in labels for inst in lf
@@ -4033,11 +4054,14 @@ def _read_labels_lazy_from_open_file(
     identity_links = read_identity_links(labels_path, _hdf5_file=f)
     instance_identities = identity_links.get(OWNER_INSTANCE, {})
     mask_identity_map = identity_links.get(OWNER_MASK, {})
+    centroid_identity_map = identity_links.get(OWNER_CENTROID, {})
     # Embeddings: identity prototypes attach to the eager catalog now; per-instance
-    # embeddings ride on the lazy store; mask embeddings attach to the masks below.
+    # embeddings ride on the lazy store; mask/centroid embeddings attach to those
+    # (eagerly-read) annotations below.
     embeddings_by_owner = read_embeddings(labels_path, _hdf5_file=f)
     instance_embeddings = embeddings_by_owner.get(OWNER_INSTANCE, {})
     mask_embedding_map = embeddings_by_owner.get(OWNER_MASK, {})
+    centroid_embedding_map = embeddings_by_owner.get(OWNER_CENTROID, {})
     for identity_idx, emb_map in embeddings_by_owner.get(OWNER_IDENTITY, {}).items():
         if 0 <= identity_idx < len(identities):
             identities[identity_idx].embeddings.update(emb_map)
@@ -4082,8 +4106,8 @@ def _read_labels_lazy_from_open_file(
     roi_tuples = read_rois(labels_path, videos, tracks, _hdf5_file=f)
     mask_tuples = read_masks(labels_path, videos, tracks, _hdf5_file=f)
     # Attach per-mask identity links + embeddings by global mask-list index (same
-    # id space written by write_masks). Masks are eager even in lazy mode.
-    _attach_mask_identity_and_embeddings(
+    # id space written by write_masks). Masks/centroids are eager even in lazy mode.
+    _attach_identity_and_embeddings(
         [m for m, _v, _f in mask_tuples],
         identities,
         mask_identity_map,
@@ -4091,6 +4115,12 @@ def _read_labels_lazy_from_open_file(
     )
     bbox_tuples = read_bboxes(labels_path, videos, tracks, _hdf5_file=f)
     centroid_tuples = read_centroids(labels_path, videos, tracks, _hdf5_file=f)
+    _attach_identity_and_embeddings(
+        [c for c, _v, _f in centroid_tuples],
+        identities,
+        centroid_identity_map,
+        centroid_embedding_map,
+    )
     li_tuples, li_file = read_label_images(
         labels_path,
         videos,
@@ -6873,14 +6903,15 @@ def _read_labels_from_open_file(
     identity_links = read_identity_links(labels_path, _hdf5_file=f)
     instance_identity_map = identity_links.get(OWNER_INSTANCE, {})
     mask_identity_map = identity_links.get(OWNER_MASK, {})
+    centroid_identity_map = identity_links.get(OWNER_CENTROID, {})
     for inst_id, (identity_idx, identity_score) in instance_identity_map.items():
         if 0 <= inst_id < len(instances) and 0 <= identity_idx < len(identities):
             instances[inst_id].identity = identities[identity_idx]
             instances[inst_id].identity_score = identity_score
 
     # Attach appearance / re-ID embeddings (SLP format 2.6+). Additive: absent
-    # /embeddings group -> empty mappings and a no-op. Mask embeddings are attached
-    # after read_masks.
+    # /embeddings group -> empty mappings and a no-op. Mask/centroid embeddings are
+    # attached after read_masks / read_centroids.
     embeddings_by_owner = read_embeddings(labels_path, _hdf5_file=f)
     for inst_id, emb_map in embeddings_by_owner.get(OWNER_INSTANCE, {}).items():
         if 0 <= inst_id < len(instances):
@@ -6889,6 +6920,7 @@ def _read_labels_from_open_file(
         if 0 <= identity_idx < len(identities):
             identities[identity_idx].embeddings.update(emb_map)
     mask_embedding_map = embeddings_by_owner.get(OWNER_MASK, {})
+    centroid_embedding_map = embeddings_by_owner.get(OWNER_CENTROID, {})
 
     # Attach per-instance categories (SLP format 2.7+). Additive: absent
     # /instance_categories dataset -> empty mapping and a no-op. Identity-level
@@ -6907,7 +6939,7 @@ def _read_labels_from_open_file(
     # Attach per-mask identity links + embeddings (SLP format 2.5+/2.6+). Masks
     # are returned in global mask-list index order, the same id space written by
     # write_masks / write_identity_links / write_embeddings.
-    _attach_mask_identity_and_embeddings(
+    _attach_identity_and_embeddings(
         [m for m, _v, _f in mask_tuples],
         identities,
         mask_identity_map,
@@ -6916,6 +6948,13 @@ def _read_labels_from_open_file(
     bbox_tuples = read_bboxes(labels_path, videos, tracks, instances, _hdf5_file=f)
     centroid_tuples = read_centroids(
         labels_path, videos, tracks, instances, _hdf5_file=f
+    )
+    # Attach per-centroid identity links + embeddings (global centroid-list index).
+    _attach_identity_and_embeddings(
+        [c for c, _v, _f in centroid_tuples],
+        identities,
+        centroid_identity_map,
+        centroid_embedding_map,
     )
     li_tuples, _li_file = read_label_images(
         labels_path,
@@ -7289,16 +7328,25 @@ def _write_labels_lazy(
     lazy_masks = [
         m for ann_list in lazy_store._mask_by_frame.values() for m in ann_list
     ] + list(lazy_store._undistributed_masks)
+    lazy_centroids = [
+        c for ann_list in lazy_store._centroid_by_frame.values() for c in ann_list
+    ] + list(lazy_store._undistributed_centroids)
     write_identities(labels_path, lazy_store.identities)
     uuid_to_idx = {ident.uuid: i for i, ident in enumerate(lazy_store.identities)}
     identity_rows = _identity_link_rows_from_store(lazy_store)
-    identity_rows.extend(_identity_link_rows_from_masks(lazy_masks, uuid_to_idx))
+    identity_rows.extend(
+        _identity_link_rows_for_owner(lazy_masks, uuid_to_idx, OWNER_MASK)
+    )
+    identity_rows.extend(
+        _identity_link_rows_for_owner(lazy_centroids, uuid_to_idx, OWNER_CENTROID)
+    )
     _write_identity_link_rows(labels_path, identity_rows)
     # Identity links always persist; the appearance vectors are gated by
     # save_embedding_vectors (mirrors the eager path).
     if save_embedding_vectors:
         by_space = _embedding_groups_from_store(lazy_store, lazy_store.identities)
-        _add_mask_embedding_groups(by_space, lazy_masks)
+        _add_owner_embedding_groups(by_space, lazy_masks, OWNER_MASK)
+        _add_owner_embedding_groups(by_space, lazy_centroids, OWNER_CENTROID)
         _write_embedding_groups(labels_path, by_space)
     _write_instance_category_rows(
         labels_path, _instance_category_rows_from_store(lazy_store)

@@ -908,26 +908,26 @@ class Labels:
         """Collect identities from non-instance annotations on a frame.
 
         Mirrors `_collect_annotation_tracks` for the global `Identity` catalog.
-        Currently only `SegmentationMask` carries an `identity`; deduped by object
+        `SegmentationMask` and `Centroid` carry an `identity`; deduped by object
         identity (``not in``), matching the instance-identity collection in
         update/append/extend.
         """
-        for m in lf.masks:
-            if m.identity is not None and m.identity not in self.identities:
-                self.identities.append(m.identity)
+        for ann in (*lf.masks, *lf.centroids):
+            if ann.identity is not None and ann.identity not in self.identities:
+                self.identities.append(ann.identity)
 
     def _collect_identities(self):
         """Register every detection's `Identity` in the catalog, deduped by uuid.
 
         Called at save time so a producer that sets ``inst.identity`` /
-        ``mask.identity`` without also registering it in ``self.identities`` does
-        not silently drop the link on write. Unlike the build-path collectors
-        (object-identity dedup), this dedupes by the stable cross-file ``uuid``:
-        any pre-existing uuid-duplicate catalog entries are first collapsed (the
-        first per uuid is kept), then every detection identity is registered via
-        `add_identity` (uuid match). The on-disk link resolves by uuid, so all
-        detections sharing a uuid point at the one canonical entry. Mutates
-        ``self.identities`` (eager labels only).
+        ``mask.identity`` / ``centroid.identity`` without also registering it in
+        ``self.identities`` does not silently drop the link on write. Unlike the
+        build-path collectors (object-identity dedup), this dedupes by the stable
+        cross-file ``uuid``: any pre-existing uuid-duplicate catalog entries are
+        first collapsed (the first per uuid is kept), then every detection identity
+        is registered via `add_identity` (uuid match). The on-disk link resolves by
+        uuid, so all detections sharing a uuid point at the one canonical entry.
+        Mutates ``self.identities`` (eager labels only).
         """
         # Collapse any uuid-duplicate catalog entries (keep first seen per uuid).
         seen: set[str] = set()
@@ -942,9 +942,9 @@ class Labels:
             for inst in lf:
                 if inst.identity is not None:
                     self.add_identity(inst.identity)
-            for m in lf.masks:
-                if m.identity is not None:
-                    self.add_identity(m.identity)
+            for ann in (*lf.masks, *lf.centroids):
+                if ann.identity is not None:
+                    self.add_identity(ann.identity)
         self._collect_session_identities()
 
     def _collect_session_identities(self):

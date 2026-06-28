@@ -24,6 +24,7 @@ from sleap_io.model.embedding import EmbeddingMixin
 
 if TYPE_CHECKING:
     from sleap_io.model.embedding import Embedding
+    from sleap_io.model.identity import Identity
     from sleap_io.model.instance import Instance, PredictedInstance, Track
     from sleap_io.model.skeleton import Skeleton
 
@@ -76,6 +77,13 @@ class Centroid(EmbeddingMixin):
         track: Optional tracking identity.
         tracking_score: Confidence of the track identity assignment. ``None``
             if unassigned or manually assigned.
+        identity: Optional global, ground-truth `Identity` for this centroid -- the
+            persistent cross-video animal identity / re-identification key. ``None``
+            if no global identity is assigned. Mirrors `Instance.identity`.
+        identity_score: Score associated with the `identity` assignment (e.g. the
+            re-ID match similarity). ``None`` if unassigned or assigned manually.
+            Kept separate from `tracking_score` (short-term tracklet vs long-term
+            identity).
         instance: Optional linked pose instance.
         category: Class label (e.g., ``"lysosome"``, ``"cell"``).
         name: Human-readable name (e.g., ``"ID43008"``).
@@ -97,6 +105,8 @@ class Centroid(EmbeddingMixin):
     z: float | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
     tracking_score: float | None = attrs.field(default=None)
+    identity: "Identity | None" = attrs.field(default=None)
+    identity_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
     category: str = attrs.field(default="")
     name: str = attrs.field(default="")
@@ -169,6 +179,8 @@ class Centroid(EmbeddingMixin):
                 score=self.score,
                 track=self.track,
                 tracking_score=self.tracking_score,
+                identity=self.identity,
+                identity_score=self.identity_score,
             )
         else:
             return Instance.from_numpy(
@@ -176,6 +188,8 @@ class Centroid(EmbeddingMixin):
                 skeleton=skeleton,
                 track=self.track,
                 tracking_score=self.tracking_score,
+                identity=self.identity,
+                identity_score=self.identity_score,
             )
 
     @classmethod
@@ -251,6 +265,8 @@ class Centroid(EmbeddingMixin):
             y=y,
             track=instance.track,
             tracking_score=instance.tracking_score,
+            identity=instance.identity,
+            identity_score=instance.identity_score,
             instance=instance,
             source=method if method != "anchor" else f"anchor:{node}",
         )

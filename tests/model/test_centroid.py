@@ -9,6 +9,7 @@ from sleap_io.model.centroid import (
     UserCentroid,
     get_centroid_skeleton,
 )
+from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.skeleton import Skeleton
 
@@ -125,6 +126,42 @@ def test_to_instance_predicted():
     np.testing.assert_allclose(pts[0], [50.0, 60.0])
     assert inst.score == 0.9
     assert inst.track is track
+
+
+def test_centroid_identity_field():
+    """Centroid carries identity / identity_score (defaults None)."""
+    ident = Identity(name="cell_A")
+    c = UserCentroid(x=1.0, y=2.0, identity=ident, identity_score=0.7)
+    assert c.identity is ident
+    assert c.identity_score == pytest.approx(0.7)
+
+    plain = UserCentroid(x=1.0, y=2.0)
+    assert plain.identity is None
+    assert plain.identity_score is None
+
+
+def test_to_instance_carries_identity():
+    """to_instance() preserves identity / identity_score onto the instance."""
+    ident = Identity(name="cell_A")
+    c = UserCentroid(x=1.0, y=2.0, identity=ident, identity_score=0.6)
+    inst = c.to_instance()
+    assert inst.identity is ident
+    assert inst.identity_score == pytest.approx(0.6)
+
+
+def test_from_instance_carries_identity():
+    """from_instance() copies the instance's identity onto the centroid."""
+    skel = Skeleton(["a", "b"])
+    ident = Identity(name="cell_A")
+    inst = Instance.from_numpy(
+        np.array([[10.0, 20.0], [30.0, 40.0]]),
+        skel,
+        identity=ident,
+        identity_score=0.55,
+    )
+    c = UserCentroid.from_instance(inst)
+    assert c.identity is ident
+    assert c.identity_score == pytest.approx(0.55)
 
 
 def test_to_instance_custom_skeleton():
