@@ -31,7 +31,7 @@ from sleap_io.model.label_image import (
     PredictedLabelImage,
     UserLabelImage,
 )
-from sleap_io.model.labels import Labels
+from sleap_io.model.labels import DEFAULT_MERGE_HISTORY_LIMIT, Labels
 from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
 from sleap_io.model.matching import (
     InstanceMatcher,
@@ -4049,6 +4049,65 @@ def test_labels_merge_provenance_mixed_filenames():
     # Source is in-memory (None), target has filename
     assert merge_record["source_filename"] is None
     assert merge_record["target_filename"] == "/path/to/base_labels.slp"
+
+
+def test_merge_history_respects_max_merge_history():
+    """merge() caps merge_history to the most recent max_merge_history records."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    labels = Labels(skeletons=[skel], videos=[video])
+    other = Labels(skeletons=[skel], videos=[video])
+
+    for _ in range(6):
+        labels.merge(other, max_merge_history=3)
+
+    assert len(labels.provenance["merge_history"]) == 3
+
+
+def test_merge_history_unbounded_when_none():
+    """max_merge_history=None keeps the full merge history."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    labels = Labels(skeletons=[skel], videos=[video])
+    other = Labels(skeletons=[skel], videos=[video])
+
+    for _ in range(5):
+        labels.merge(other, max_merge_history=None)
+
+    assert len(labels.provenance["merge_history"]) == 5
+
+
+def test_merge_history_caps_preexisting_oversized():
+    """A single merge trims a pre-existing oversized merge_history to the cap."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    labels = Labels(skeletons=[skel], videos=[video])
+    # Simulate a long-lived project loaded with many prior merge records.
+    labels.provenance["merge_history"] = [{"i": i} for i in range(10)]
+    other = Labels(skeletons=[skel], videos=[video])
+
+    labels.merge(other, max_merge_history=4)
+
+    history = labels.provenance["merge_history"]
+    assert len(history) == 4
+    # The newest pre-existing records plus this merge's record are kept.
+    assert history[0] == {"i": 7}
+    assert "timestamp" in history[-1]  # the just-added real record
+
+
+def test_merge_history_default_limit_applied():
+    """Without an explicit arg, merge() caps at DEFAULT_MERGE_HISTORY_LIMIT."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    labels = Labels(skeletons=[skel], videos=[video])
+    labels.provenance["merge_history"] = [
+        {"i": i} for i in range(DEFAULT_MERGE_HISTORY_LIMIT + 5)
+    ]
+    other = Labels(skeletons=[skel], videos=[video])
+
+    labels.merge(other)  # default cap
+
+    assert len(labels.provenance["merge_history"]) == DEFAULT_MERGE_HISTORY_LIMIT
 
 
 def test_labels_merge_custom_matchers():

@@ -732,6 +732,28 @@ Key behavior:
 
 ---
 
+## Merge history
+
+Every [`merge()`][sleap_io.Labels.merge] appends a record to
+`labels.provenance["merge_history"]` (timestamp, source/target filenames, source
+stats, strategy, sleap-io version, and result counts). This is audit metadata and
+is not consumed by any logic.
+
+Because iterative correct-and-re-merge workflows can run thousands of merges, the
+history is **bounded**: only the most recent `max_merge_history` records are kept
+(default `DEFAULT_MERGE_HISTORY_LIMIT = 1000`). Pass `max_merge_history=None` to
+retain the full history, or a smaller integer to keep fewer records:
+
+```python
+labels.merge(other)                       # keep last 1000 records (default)
+labels.merge(other, max_merge_history=50) # keep last 50
+labels.merge(other, max_merge_history=None)  # keep everything
+```
+
+Provenance is stored in the `.slp` file in a dedicated `provenance_json` dataset,
+so a large `merge_history` no longer risks exceeding HDF5's metadata limits (see
+the [SLP format](formats/slp.md) notes).
+
 ## Reference
 
 ### Labels.merge
