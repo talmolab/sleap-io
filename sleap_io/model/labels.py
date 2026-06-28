@@ -51,6 +51,14 @@ if TYPE_CHECKING:
     from sleap_io.model.roi import ROI
 
 
+# Default cap on the number of records retained in ``provenance["merge_history"]``.
+# ``merge()`` appends one record per merge; without a cap the list grows without
+# bound (iterative correct-and-re-merge loops can reach thousands of merges),
+# bloating provenance. The cap keeps the most recent records. Pass
+# ``max_merge_history=None`` to ``merge()`` to retain the full history.
+DEFAULT_MERGE_HISTORY_LIMIT = 1000
+
+
 @define
 class Labels:
     """Pose data for a set of videos that have user labels and/or predictions.
@@ -3333,6 +3341,7 @@ class Labels:
         validate: bool = True,
         progress_callback: Callable | None = None,
         error_mode: str = "continue",
+        max_merge_history: int | None = DEFAULT_MERGE_HISTORY_LIMIT,
     ) -> "MergeResult":
         """Merge another Labels object into this one.
 
@@ -3366,6 +3375,12 @@ class Labels:
                 - "continue": Log errors but continue
                 - "strict": Raise exception on first error
                 - "warn": Print warnings but continue
+            max_merge_history: Maximum number of records to retain in
+                ``provenance["merge_history"]``. After appending this merge's
+                record, only the most recent ``max_merge_history`` records are
+                kept so provenance can't grow without bound across many merges.
+                Defaults to ``DEFAULT_MERGE_HISTORY_LIMIT``; pass ``None`` to keep
+                the full history.
 
         Returns:
             MergeResult object with statistics and any errors/conflicts.
@@ -3797,6 +3812,13 @@ class Labels:
                 "conflicts": len(result.conflicts),
             }
             self.provenance["merge_history"].append(merge_record)
+
+            # Bound merge_history so provenance can't grow without limit; keep the
+            # most recent ``max_merge_history`` records (all of them if None).
+            if max_merge_history is not None:
+                history = self.provenance["merge_history"]
+                if len(history) > max_merge_history:
+                    del history[: len(history) - max_merge_history]
 
         except MergeError as e:
             result.successful = False
