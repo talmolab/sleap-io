@@ -1651,3 +1651,117 @@ class TestLazyLegacyFormatWithConfidence:
         np.testing.assert_allclose(arr[0, 0, :, :2], expected_pred)
         # Confidence should be from the predicted instance point scores
         np.testing.assert_allclose(arr[0, 0, :, 2], 0.85, rtol=0.01)
+
+
+def test_lazy_per_instance_identity_round_trip(tmp_path):
+    """Test per-instance identities materialize correctly via the lazy loader."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    id_a = sio.Identity(name="mouse_A", metadata={"sex": "F"})
+    id_b = sio.Identity(name="mouse_B")
+    insts = [
+        Instance.from_numpy(
+            np.array([[0, 1], [2, 3]]), skel, identity=id_a, identity_score=0.95
+        ),
+        PredictedInstance.from_numpy(
+            np.array([[4, 5], [6, 7]]), skel, score=0.8, identity=id_b
+        ),
+        Instance.from_numpy(np.array([[8, 9], [10, 11]]), skel),  # no identity
+    ]
+    labels = sio.Labels([LabeledFrame(video=video, frame_idx=0, instances=insts)])
+    labels.update()
+
+    path = str(tmp_path / "lazy_identities.slp")
+    sio.save_slp(labels, path)
+
+    lazy = sio.load_slp(path, lazy=True)
+    assert lazy.is_lazy
+    assert {i.name for i in lazy.identities} == {"mouse_A", "mouse_B"}
+
+    li = list(lazy[0].instances)
+    assert li[0].identity is not None
+    assert li[0].identity.name == "mouse_A"
+    assert li[0].identity.uuid == id_a.uuid
+    assert li[0].identity_score == pytest.approx(0.95)
+    assert li[1].identity is not None
+    assert li[1].identity.name == "mouse_B"
+    assert li[1].identity_score is None
+    assert li[2].identity is None
+
+    # The materialized identity is the canonical catalog object.
+    assert li[0].identity in lazy.identities
+
+    # Lazy store copy preserves identity wiring, the catalog, and consistency.
+    copied = lazy.copy()
+    cli = list(copied[0].instances)
+    assert cli[0].identity is not None
+    assert cli[0].identity.name == "mouse_A"
+    assert {i.name for i in copied.identities} == {"mouse_A", "mouse_B"}
+    assert cli[0].identity in copied.identities  # materialized inst -> catalog
+    assert copied.identities[0] is not lazy.identities[0]  # independent copy
+
+
+def test_lazy_save_persists_identities(tmp_path):
+    """Lazy save must persist identities + per-instance links.
+
+    Regression test for the silent-data-loss bug where the lazy fast-path writer
+    copied raw points/instances/tracks but skipped identities, so
+    ``load_slp(p, lazy=True).save(p2)`` dropped them. Saving the lazy labels
+    must round-trip identical to saving the eager labels.
+    """
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    id_a = sio.Identity(name="mouse_A", metadata={"sex": "F"})
+    id_b = sio.Identity(name="mouse_B")
+
+    i0 = Instance.from_numpy(
+        np.array([[0, 1], [2, 3]]), skel, identity=id_a, identity_score=0.95
+    )
+    i1 = PredictedInstance.from_numpy(
+        np.array([[4, 5], [6, 7]]), skel, score=0.8, identity=id_b
+    )
+    i2 = Instance.from_numpy(np.array([[8, 9], [10, 11]]), skel)  # no identity
+
+    labels = sio.Labels(
+        [LabeledFrame(video=video, frame_idx=0, instances=[i0, i1, i2])]
+    )
+    labels.update()
+
+    # Save eagerly, then load lazily.
+    a = str(tmp_path / "a.slp")
+    sio.save_slp(labels, a)
+    lazy = sio.load_slp(a, lazy=True)
+    assert lazy.is_lazy
+
+    # Save the LAZY labels (exercises the fast-path writer) and reload eagerly.
+    b = str(tmp_path / "b.slp")
+    sio.save_slp(lazy, b)
+
+    # The fast path must not have materialized: lazy labels stay lazy after save.
+    assert lazy.is_lazy
+
+    # Format must reflect per-instance identity links (>= 2.5).
+    with h5py.File(b, "r") as f:
+        assert f["metadata"].attrs["format_id"] >= 2.5
+        assert "identities_json" in f
+        assert "instance_identities" in f
+
+    reb = sio.load_slp(b)
+
+    # Identities survived with uuids intact.
+    assert {i.name for i in reb.identities} == {"mouse_A", "mouse_B"}
+    by_name = {i.name: i for i in reb.identities}
+    assert by_name["mouse_A"].uuid == id_a.uuid
+    assert by_name["mouse_B"].uuid == id_b.uuid
+    assert by_name["mouse_A"].metadata == {"sex": "F"}
+
+    # Per-instance identity + identity_score survived.
+    ri = reb[0].instances
+    assert ri[0].identity is not None
+    assert ri[0].identity.name == "mouse_A"
+    assert ri[0].identity.uuid == id_a.uuid
+    assert ri[0].identity_score == pytest.approx(0.95)
+    assert ri[1].identity is not None
+    assert ri[1].identity.name == "mouse_B"
+    assert ri[1].identity_score is None
+    assert ri[2].identity is None

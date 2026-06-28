@@ -19,6 +19,9 @@ Format version history:
     - 2.3: Virtual on-read video crops (/video_crops dataset)
     - 2.4: Persisted mask from_predicted provenance (from_predicted column in
             mask_dtype storing the source prediction's index in the mask list)
+    - 2.5: Added per-instance global identity links (/instance_identities dataset:
+            instance_id, identity_idx, identity_score) joining instances to the
+            identity catalog; additive, read with try/except on dataset presence
 """
 
 from __future__ import annotations
@@ -83,6 +86,7 @@ from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
+    from sleap_io.io.slp_lazy import LazyDataStore
     from sleap_io.model.centroid import Centroid
     from sleap_io.model.instance import PointsArray, PredictedPointsArray
     from sleap_io.model.labels_set import LabelsSet
@@ -1671,6 +1675,143 @@ def write_identities(labels_path: str, identities: list[Identity]):
         f.create_dataset("identities_json", data=identities_json, maxshape=(None,))
 
 
+def read_instance_identities(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> dict[int, tuple[int, float | None]]:
+    """Read per-instance identity links from a SLEAP labels file.
+
+    Links are stored in the optional ``instance_identities`` dataset (SLP format
+    2.5+), a structured array of ``(instance_id, identity_idx, identity_score)``
+    rows joining the global instance id to an index into the file's identity
+    catalog. The dataset is absent in older files, in which case an empty mapping
+    is returned (purely additive; reads are gated on dataset presence).
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
+            the data is read from this handle (left open for the caller to close);
+            otherwise `labels_path` is opened and closed internally.
+
+    Returns:
+        A dict mapping the global ``instance_id`` to a
+        ``(identity_idx, identity_score)`` tuple. ``identity_score`` is ``None``
+        when it was not recorded (stored as NaN).
+    """
+    try:
+        data = read_hdf5_dataset(
+            labels_path, "instance_identities", _hdf5_file=_hdf5_file
+        )
+    except KeyError:
+        return {}
+    result: dict[int, tuple[int, float | None]] = {}
+    for row in data:
+        score = float(row["identity_score"])
+        result[int(row["instance_id"])] = (
+            int(row["identity_idx"]),
+            None if np.isnan(score) else score,
+        )
+    return result
+
+
+def _write_instance_identity_rows(
+    labels_path: str, rows: list[tuple[int, int, float]]
+) -> None:
+    """Write ``(instance_id, identity_idx, identity_score)`` rows to a SLP file.
+
+    Shared dataset-writing core for the per-instance identity link. The rows can
+    be built either by iterating a `Labels` (the eager path, see
+    `write_instance_identities`) or from a lazy store dict (the lazy save path),
+    keeping the on-disk ``instance_identities`` layout identical for both.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        rows: A list of ``(instance_id, identity_idx, identity_score)`` tuples.
+            ``identity_score`` is a float (NaN encodes an unrecorded score). An
+            empty list is a no-op (no dataset is created).
+    """
+    if not rows:
+        return
+
+    instance_identity_dtype = np.dtype(
+        [
+            ("instance_id", "i8"),
+            ("identity_idx", "i4"),
+            ("identity_score", "f4"),
+        ]
+    )
+    arr = np.array(rows, dtype=instance_identity_dtype)
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset("instance_identities", data=arr, maxshape=(None,))
+
+
+def write_instance_identities(labels_path: str, labels: Labels) -> None:
+    """Write per-instance identity links to a SLEAP labels file.
+
+    Creates the ``instance_identities`` dataset (SLP format 2.5+) as a structured
+    array of ``(instance_id, identity_idx, identity_score)`` rows for every
+    instance carrying an `Identity` that is registered in ``labels.identities``.
+    The ``instance_id`` matches the global id assigned by `write_lfs` (enumeration
+    order over frames then instances), so the link is resolved by joining on that
+    id at read time. This keeps identity out of the fixed-layout ``instances``
+    dataset, making it purely additive: old readers simply ignore the dataset.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object to store the identity links for.
+    """
+    if not labels.identities:
+        return
+
+    rows = []
+    instance_id = 0
+    for lf in labels:
+        for inst in lf:
+            identity = getattr(inst, "identity", None)
+            if identity is not None and identity in labels.identities:
+                identity_idx = labels.identities.index(identity)
+                score = inst.identity_score
+                rows.append(
+                    (
+                        instance_id,
+                        identity_idx,
+                        float("nan") if score is None else float(score),
+                    )
+                )
+            instance_id += 1
+
+    _write_instance_identity_rows(labels_path, rows)
+
+
+def _instance_identity_rows_from_store(
+    store: "LazyDataStore",
+) -> list[tuple[int, int, float]]:
+    """Build ``instance_identities`` rows from a lazy store without materializing.
+
+    The lazy store already holds the per-instance identity links keyed by the
+    global ``instance_id`` (the same id space written by the fast path), so the
+    rows can be emitted directly without rebuilding `Instance` objects. Rows are
+    sorted by ``instance_id`` for deterministic output.
+
+    Args:
+        store: The `LazyDataStore` backing a lazy `Labels`.
+
+    Returns:
+        A list of ``(instance_id, identity_idx, identity_score)`` tuples matching
+        the format expected by `_write_instance_identity_rows`.
+    """
+    rows = []
+    for instance_id in sorted(store._instance_identities):
+        identity_idx, score = store._instance_identities[instance_id]
+        rows.append(
+            (
+                int(instance_id),
+                int(identity_idx),
+                float("nan") if score is None else float(score),
+            )
+        )
+    return rows
+
+
 def read_suggestions(
     labels_path: str,
     videos: list[Video],
@@ -2146,6 +2287,21 @@ def write_metadata(labels_path: str, labels: Labels):
     )
     if has_mask_from_predicted:
         format_id = max(format_id, 2.4)
+
+    # Bump for per-instance identity links (new in 2.5). Purely additive (a
+    # separate dataset read with try/except on presence), so it is only set when
+    # an instance actually carries an identity. For lazy `Labels` the presence
+    # check reads the lazy store dict directly, mirroring what the fast-path
+    # writer persists without materializing any frames.
+    if labels.is_lazy:
+        store = labels._lazy_store
+        has_instance_identities = bool(store._instance_identities)
+    else:
+        has_instance_identities = any(
+            getattr(inst, "identity", None) is not None for lf in labels for inst in lf
+        )
+    if has_instance_identities:
+        format_id = max(format_id, 2.5)
 
     with h5py.File(labels_path, "a") as f:
         # Bump for chunked label image format (new in 2.2)
@@ -3266,6 +3422,8 @@ def _read_labels_lazy_from_open_file(
     )
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
     tracks = read_tracks(labels_path, _hdf5_file=f)
+    identities = read_identities(labels_path, _hdf5_file=f)
+    instance_identities = read_instance_identities(labels_path, _hdf5_file=f)
     suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
     metadata = read_metadata(labels_path, _hdf5_file=f)
     provenance = read_provenance(labels_path, metadata, _hdf5_file=f)
@@ -3274,7 +3432,9 @@ def _read_labels_lazy_from_open_file(
     # Read sessions (small, no need for lazy loading)
     # Note: sessions require labeled_frames for full linking, but for lazy loading
     # we pass an empty list since we don't have materialized frames yet
-    sessions = read_sessions(labels_path, videos, [], _hdf5_file=f)
+    sessions = read_sessions(
+        labels_path, videos, [], identities=identities, _hdf5_file=f
+    )
 
     # Create LazyDataStore
     lazy_store = LazyDataStore(
@@ -3288,6 +3448,8 @@ def _read_labels_lazy_from_open_file(
         format_id=format_id,
         source_path=str(labels_path),
         negative_frames=negative_frames,
+        identities=identities,
+        instance_identities=instance_identities,
     )
 
     # Create LazyFrameList
@@ -3378,6 +3540,7 @@ def _read_labels_lazy_from_open_file(
         videos=videos,
         skeletons=skeletons,
         tracks=tracks,
+        identities=identities,
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
@@ -6072,6 +6235,15 @@ def _read_labels_from_open_file(
         )
 
     identities = read_identities(labels_path, _hdf5_file=f)
+    # Attach per-instance identity links (SLP format 2.5+). Additive: when the
+    # dataset is absent (older files) this is an empty mapping and a no-op. The
+    # global instances list is ordered by instance_id, so it indexes directly.
+    instance_identity_map = read_instance_identities(labels_path, _hdf5_file=f)
+    for inst_id, (identity_idx, identity_score) in instance_identity_map.items():
+        if 0 <= inst_id < len(instances) and 0 <= identity_idx < len(identities):
+            instances[inst_id].identity = identities[identity_idx]
+            instances[inst_id].identity_score = identity_score
+
     sessions = read_sessions(
         labels_path, videos, labeled_frames, identities=identities, _hdf5_file=f
     )
@@ -6252,6 +6424,7 @@ _KNOWN_TOPLEVEL_HDF5_NAMES = frozenset(
         "suggestions_json",
         "sessions_json",
         "identities_json",
+        "instance_identities",
         "provenance_json",
         "frames",
         "instances",
@@ -6432,6 +6605,16 @@ def _write_labels_lazy(
 
     # Write other metadata
     write_tracks(labels_path, labels.tracks)
+    # Persist identities + per-instance identity links directly from the lazy
+    # store, mirroring the eager writer (write_identities /
+    # write_instance_identities) but driven by the store dicts so no
+    # LabeledFrame/Instance is materialized. The store keys ARE the global
+    # instance_ids written above, so the join stays consistent with the raw
+    # instances emitted by the fast path.
+    write_identities(labels_path, lazy_store.identities)
+    _write_instance_identity_rows(
+        labels_path, _instance_identity_rows_from_store(lazy_store)
+    )
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     # For sessions, pass empty list since we don't have materialized frames
     # (consistent with lazy load behavior)
@@ -6695,6 +6878,7 @@ def write_labels(
     write_video_crops(labels_path, labels)
     write_tracks(labels_path, labels.tracks)
     write_identities(labels_path, labels.identities)
+    write_instance_identities(labels_path, labels)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     write_sessions(
         labels_path,

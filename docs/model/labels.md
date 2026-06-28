@@ -438,6 +438,8 @@ classDiagram
         +Skeleton skeleton
         +Track track
         +PointsArray points
+        +Identity identity
+        +float identity_score
     }
 
     class Video {

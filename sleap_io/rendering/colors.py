@@ -166,7 +166,7 @@ PaletteName = Literal[
 ]
 
 # Type alias for color schemes
-ColorScheme = Literal["track", "instance", "node", "auto"]
+ColorScheme = Literal["track", "instance", "node", "identity", "auto"]
 
 
 def get_palette(name: PaletteName | str, n_colors: int) -> list[tuple[int, int, int]]:
@@ -414,6 +414,9 @@ def build_color_map(
     n_tracks: int,
     track_indices: list[int] | None = None,
     palette: PaletteName | str = "standard",
+    identity_indices: list[int] | None = None,
+    n_identities: int = 0,
+    identity_colors: list[tuple[int, int, int] | None] | None = None,
 ) -> dict[str, list[tuple[int, int, int]]]:
     """Build color mapping based on scheme.
 
@@ -424,6 +427,12 @@ def build_color_map(
         n_tracks: Total number of tracks (for track coloring).
         track_indices: Track index for each instance (for track coloring).
         palette: Color palette name.
+        identity_indices: Global identity index for each instance (for identity
+            coloring).
+        n_identities: Total number of identities (for identity coloring).
+        identity_colors: Optional explicit RGB color for each instance, resolved
+            from ``Identity.color``. When an entry is not None it overrides the
+            palette color for that instance (used by identity coloring).
 
     Returns:
         Dictionary with 'instance_colors' and/or 'node_colors' lists.
@@ -439,6 +448,30 @@ def build_color_map(
             instance_colors = [
                 palette_colors[idx % len(palette_colors)] for idx in track_indices
             ]
+        else:
+            instance_colors = palette_colors[:n_instances]
+
+        colors["instance_colors"] = instance_colors
+
+    elif scheme == "identity":
+        # Colors based on global identity. Mirrors the track scheme: a palette
+        # index per identity, but an explicit ``Identity.color`` (resolved into
+        # ``identity_colors``) wins when set.
+        n = max(n_identities, n_instances) if n_identities > 0 else n_instances
+        palette_colors = get_palette(palette, max(n, 1))
+
+        if identity_indices is not None:
+            instance_colors = []
+            for i, idx in enumerate(identity_indices):
+                explicit = (
+                    identity_colors[i]
+                    if identity_colors is not None and i < len(identity_colors)
+                    else None
+                )
+                if explicit is not None:
+                    instance_colors.append(explicit)
+                else:
+                    instance_colors.append(palette_colors[idx % len(palette_colors)])
         else:
             instance_colors = palette_colors[:n_instances]
 

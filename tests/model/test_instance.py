@@ -5,6 +5,7 @@ import pytest
 from numpy.testing import assert_array_equal, assert_equal
 
 from sleap_io import Skeleton
+from sleap_io.model.identity import Identity
 from sleap_io.model.instance import (
     Instance,
     PredictedInstance,
@@ -453,6 +454,77 @@ def test_instance_same_identity_as():
     # Both without tracks
     inst5 = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skeleton)
     assert not inst4.same_identity_as(inst5)
+
+
+def test_instance_identity_fields():
+    """Test that Instance/PredictedInstance carry identity and identity_score."""
+    skeleton = Skeleton(["head", "tail"])
+    identity = Identity(name="mouse_A")
+
+    inst = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]),
+        skeleton=skeleton,
+        identity=identity,
+        identity_score=0.9,
+    )
+    assert inst.identity is identity
+    assert inst.identity_score == 0.9
+
+    pred = PredictedInstance.from_numpy(
+        np.array([[10, 10], [20, 20]]),
+        skeleton=skeleton,
+        score=0.8,
+        identity=identity,
+        identity_score=0.7,
+    )
+    assert pred.identity is identity
+    assert pred.identity_score == 0.7
+
+    # Defaults are None.
+    bare = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skeleton)
+    assert bare.identity is None
+    assert bare.identity_score is None
+
+    # empty() also threads identity.
+    empty = Instance.empty(skeleton, identity=identity, identity_score=0.5)
+    assert empty.identity is identity
+    assert empty.identity_score == 0.5
+
+
+def test_instance_same_identity_as_global_identity():
+    """Test that same_identity_as prefers global Identity (by uuid) over track."""
+    skeleton = Skeleton(["head", "tail"])
+    track1 = Track(name="t1")
+    track2 = Track(name="t2")
+
+    # Same uuid (e.g. two reloads of one animal) -> same identity even across
+    # different track objects.
+    idA1 = Identity(name="mouse_A", uuid="shared")
+    idA2 = Identity(name="mouse_A", uuid="shared")
+    inst1 = Instance.from_numpy(
+        np.array([[1, 1], [2, 2]]), skeleton=skeleton, track=track1, identity=idA1
+    )
+    inst2 = Instance.from_numpy(
+        np.array([[3, 3], [4, 4]]), skeleton=skeleton, track=track2, identity=idA2
+    )
+    assert inst1.same_identity_as(inst2)  # uuid matches despite different tracks
+
+    # Different uuid -> not the same identity even if tracks are the same object.
+    idB = Identity(name="mouse_B")
+    inst3 = Instance.from_numpy(
+        np.array([[5, 5], [6, 6]]), skeleton=skeleton, track=track1, identity=idB
+    )
+    assert not inst1.same_identity_as(inst3)
+
+    # When only one has an identity, fall back to track comparison.
+    inst4 = Instance.from_numpy(
+        np.array([[7, 7], [8, 8]]), skeleton=skeleton, track=track1
+    )
+    assert inst1.same_identity_as(inst4)  # idA1 has no identity peer -> track t1
+    inst5 = Instance.from_numpy(
+        np.array([[9, 9], [0, 0]]), skeleton=skeleton, track=track2
+    )
+    assert not inst1.same_identity_as(inst5)  # falls back to track, t1 != t2
 
 
 def test_instance_overlaps_with():
