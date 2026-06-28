@@ -1663,7 +1663,11 @@ class Labels:
             verbose: If `True` (the default), display a progress bar when embedding
                 frames.
             **kwargs: Additional format-specific arguments passed to the save function.
-                See `save_file` for format-specific options.
+                See `save_file` for format-specific options. For SLP this includes
+                `save_id_embeddings` (default `True`): set `False` to persist
+                identity *links* but skip the large re-ID appearance `/embeddings`
+                vectors (kept in memory). Note this is distinct from `embed`, which
+                embeds *video frames*.
         """
         from pathlib import Path
 

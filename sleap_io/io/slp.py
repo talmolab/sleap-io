@@ -7202,6 +7202,7 @@ def _write_labels_lazy(
     verbose: bool = True,
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
+    save_id_embeddings: bool = True,
 ) -> None:
     """Write lazy Labels to SLP file using fast path.
 
@@ -7232,6 +7233,9 @@ def _write_labels_lazy(
         preserve_unknown: If `True`, top-level HDF5 datasets/groups in the source
             file not recognized by sleap-io are carried over into the saved file.
             See `write_labels`.
+        save_id_embeddings: If `True` (the default), write attached re-ID
+            appearance embeddings (the `/embeddings` group). If `False`, skip them
+            while still writing identity links. See `write_labels`.
 
     Raises:
         ValueError: If labels is not lazy.
@@ -7290,9 +7294,12 @@ def _write_labels_lazy(
     identity_rows = _identity_link_rows_from_store(lazy_store)
     identity_rows.extend(_identity_link_rows_from_masks(lazy_masks, uuid_to_idx))
     _write_identity_link_rows(labels_path, identity_rows)
-    by_space = _embedding_groups_from_store(lazy_store, lazy_store.identities)
-    _add_mask_embedding_groups(by_space, lazy_masks)
-    _write_embedding_groups(labels_path, by_space)
+    # Identity links always persist; the appearance vectors are gated by
+    # save_id_embeddings (mirrors the eager path).
+    if save_id_embeddings:
+        by_space = _embedding_groups_from_store(lazy_store, lazy_store.identities)
+        _add_mask_embedding_groups(by_space, lazy_masks)
+        _write_embedding_groups(labels_path, by_space)
     _write_instance_category_rows(
         labels_path, _instance_category_rows_from_store(lazy_store)
     )
@@ -7409,6 +7416,7 @@ def write_labels(
     progress_callback: Callable[[int, int], bool] | None = None,
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
+    save_id_embeddings: bool = True,
 ):
     """Write a SLEAP labels file.
 
@@ -7461,6 +7469,11 @@ def write_labels(
             version (which would otherwise drop them, since saving rebuilds the file
             from the in-memory model). Default `False`. Best-effort: requires the
             source file to still exist and be readable HDF5.
+        save_id_embeddings: If `True` (the default), write attached re-ID appearance
+            embeddings (the `/embeddings` group). If `False`, skip them -- appearance
+            vectors are large on disk, so a producer may persist only the identity
+            *links* (`/identity_links`, always written) while keeping the vectors in
+            memory. Distinct from `embed`, which embeds *video frames*.
     """
     # Fast path for lazy labels (avoids materializing frames/instances)
     # Supported for simple embed modes: None, False, "source"
@@ -7491,6 +7504,7 @@ def write_labels(
                 verbose=verbose,
                 prefer_metadata=prefer_metadata,
                 preserve_unknown=preserve_unknown,
+                save_id_embeddings=save_id_embeddings,
             )
             return
 
@@ -7564,7 +7578,10 @@ def write_labels(
     labels._collect_identities()
     write_identities(labels_path, labels.identities)
     write_identity_links(labels_path, labels)
-    write_embeddings(labels_path, labels)
+    # Identity links always persist; the (large) appearance vectors are gated by
+    # save_id_embeddings so a producer can keep them in memory but off disk.
+    if save_id_embeddings:
+        write_embeddings(labels_path, labels)
     write_instance_categories(labels_path, labels)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     write_sessions(

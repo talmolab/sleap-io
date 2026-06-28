@@ -1412,6 +1412,68 @@ def test_save_time_autocollect_dedupes_by_uuid(tmp_path):
     assert li[1].identity is not None and li[1].identity.uuid == uuid
 
 
+def _labels_with_identity_and_embedding():
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    ident = Identity(name="mouse_A")
+    inst = Instance.from_numpy(
+        np.array([[0, 1], [2, 3]]), skel, identity=ident, identity_score=0.9
+    )
+    inst.set_embedding(np.ones(8, dtype=np.float32))
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+    return labels
+
+
+def test_save_id_embeddings_false_skips_embeddings_keeps_links(tmp_path):
+    """save_id_embeddings=False drops /embeddings but keeps /identity_links."""
+    labels = _labels_with_identity_and_embedding()
+    path = str(tmp_path / "no_emb.slp")
+    save_slp(labels, path, save_id_embeddings=False)
+
+    with h5py.File(path, "r") as f:
+        assert "embeddings" not in f  # vectors skipped
+        assert "identity_links" in f  # links still persisted
+
+    # Vectors remain in memory on the original object (not mutated by save).
+    assert list(labels[0].instances)[0].embedding is not None
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)[0]
+    assert li.identity is not None and li.identity.name == "mouse_A"
+    assert li.embedding is None  # not persisted
+
+
+def test_save_id_embeddings_default_writes_embeddings(tmp_path):
+    """Default save_id_embeddings=True writes the /embeddings group."""
+    labels = _labels_with_identity_and_embedding()
+    path = str(tmp_path / "with_emb.slp")
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        assert "embeddings" in f
+
+    # Also reachable through Labels.save(...) via **kwargs.
+    path2 = str(tmp_path / "via_save.slp")
+    labels.save(path2, save_id_embeddings=False)
+    with h5py.File(path2, "r") as f:
+        assert "embeddings" not in f
+        assert "identity_links" in f
+
+
+def test_save_id_embeddings_false_lazy(tmp_path):
+    """save_id_embeddings=False is honored on the lazy fast-path writer."""
+    labels = _labels_with_identity_and_embedding()
+    a = str(tmp_path / "a.slp")
+    save_slp(labels, a)
+    lazy = load_slp(a, lazy=True)
+    assert lazy.is_lazy
+    b = str(tmp_path / "b.slp")
+    save_slp(lazy, b, save_id_embeddings=False)
+    with h5py.File(b, "r") as f:
+        assert "embeddings" not in f
+        assert "identity_links" in f
+
+
 def test_embeddings_round_trip(tmp_path):
     """Test instance + identity embeddings round-trip through SLP (format 2.6)."""
     skel = Skeleton(["A", "B"])
