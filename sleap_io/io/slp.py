@@ -23,6 +23,7 @@ Format version history:
 
 from __future__ import annotations
 
+import io
 import sys
 import warnings
 import zlib
@@ -6185,6 +6186,122 @@ def read_labels_set(
     return LabelsSet(labels=labels_dict)
 
 
+# Top-level HDF5 names that sleap-io itself writes (regenerated from the model on
+# every save). Anything else found in a source file is treated as "unknown" and,
+# when ``preserve_unknown=True``, carried across a load/save cycle so a format
+# addition made by a newer sleap-io version is not silently dropped by an older
+# reader (which truncates and rebuilds the file from the model). Per-video embedded
+# groups (``video0``, ``video1``, ...) are also known -- see
+# ``_is_known_toplevel_name``. Forgetting to list a name here is safe: it would be
+# stashed and then skipped at restore because the known writer already produced it
+# (only marginally wasteful), so this never causes data loss or duplication.
+_KNOWN_TOPLEVEL_HDF5_NAMES = frozenset(
+    {
+        "metadata",
+        "videos_json",
+        "tracks_json",
+        "suggestions_json",
+        "sessions_json",
+        "identities_json",
+        "provenance_json",
+        "frames",
+        "instances",
+        "points",
+        "pred_points",
+        "negative_frames",
+        "video_crops",
+        "bboxes",
+        "centroids",
+        "rois",
+        "roi_wkb",
+        "roi_categories",
+        "roi_names",
+        "roi_sources",
+        "masks",
+        "mask_rle",
+        "mask_categories",
+        "mask_names",
+        "mask_sources",
+        "mask_score_map_index",
+        "mask_score_maps",
+        "label_images",
+        "label_image_objects",
+        "label_image_data",
+        "label_image_sources",
+        "label_image_obj_categories",
+        "label_image_obj_names",
+        "label_image_score_map_index",
+        "label_image_score_maps",
+    }
+)
+
+
+def _is_known_toplevel_name(name: str) -> bool:
+    """Return whether a top-level HDF5 object is one sleap-io writes itself.
+
+    Args:
+        name: A top-level member name in a ``.slp`` HDF5 file.
+
+    Returns:
+        ``True`` for names in `_KNOWN_TOPLEVEL_HDF5_NAMES` and for per-video
+        embedded groups (``video0``, ``video1``, ...); ``False`` otherwise.
+    """
+    if name in _KNOWN_TOPLEVEL_HDF5_NAMES:
+        return True
+    # Per-video embedded groups: video0, video1, ...
+    return name.startswith("video") and name[len("video") :].isdigit()
+
+
+def _stash_unknown_hdf5(source_path: str | None) -> bytes | None:
+    """Capture top-level HDF5 members not written by sleap-io from a source file.
+
+    Used to carry forward unrecognized datasets/groups (e.g. additions made by a
+    newer sleap-io version) across a load/save cycle, since saving truncates and
+    rebuilds the file from the in-memory model and would otherwise drop them.
+
+    Args:
+        source_path: Path to the file the labels were loaded from
+            (``labels.provenance["filename"]``), or ``None``.
+
+    Returns:
+        An in-memory HDF5 file image (bytes) holding the unknown members, or
+        ``None`` if there is no readable HDF5 source or it has no unknown members.
+    """
+    if not source_path:
+        return None
+    try:
+        if not (Path(source_path).is_file() and h5py.is_hdf5(source_path)):
+            return None
+        buffer = io.BytesIO()
+        with h5py.File(source_path, "r") as src, h5py.File(buffer, "w") as mem:
+            unknown = [k for k in src.keys() if not _is_known_toplevel_name(k)]
+            for name in unknown:
+                src.copy(name, mem)
+        return buffer.getvalue() if unknown else None
+    except (OSError, KeyError):
+        # Unreadable/locked/corrupt source: skip carry-over rather than fail the
+        # save. Preservation is best-effort.
+        return None
+
+
+def _restore_unknown_hdf5(dest_path: str, image: bytes | None) -> None:
+    """Re-emit stashed unknown HDF5 members into a freshly-written file.
+
+    Members whose names were already produced by the known writers are skipped, so
+    regenerated data always wins over the stashed copy.
+
+    Args:
+        dest_path: Path to the ``.slp`` file just written.
+        image: The in-memory HDF5 image from `_stash_unknown_hdf5`, or ``None``.
+    """
+    if not image:
+        return
+    with h5py.File(io.BytesIO(image), "r") as mem, h5py.File(dest_path, "a") as f:
+        for name in mem.keys():
+            if name not in f:
+                mem.copy(name, f)
+
+
 def _write_labels_lazy(
     labels_path: str,
     labels: Labels,
@@ -6192,6 +6309,7 @@ def _write_labels_lazy(
     restore_original_videos: bool = True,
     verbose: bool = True,
     prefer_metadata: bool = True,
+    preserve_unknown: bool = False,
 ) -> None:
     """Write lazy Labels to SLP file using fast path.
 
@@ -6219,6 +6337,9 @@ def _write_labels_lazy(
             shape/grayscale/fps from its `backend_metadata` when recorded there
             instead of querying the live backend. Set to `False` to always read
             through the live backend. See `video_to_dict`.
+        preserve_unknown: If `True`, top-level HDF5 datasets/groups in the source
+            file not recognized by sleap-io are carried over into the saved file.
+            See `write_labels`.
 
     Raises:
         ValueError: If labels is not lazy.
@@ -6227,6 +6348,14 @@ def _write_labels_lazy(
         raise ValueError("_write_labels_lazy requires lazy Labels")
 
     lazy_store = labels._lazy_store
+
+    # Capture unknown top-level members from the source file before it is
+    # truncated, to carry them across the load/save cycle (see write_labels).
+    unknown_stash = (
+        _stash_unknown_hdf5(labels.provenance.get("filename"))
+        if preserve_unknown
+        else None
+    )
 
     # Delete existing file if it exists
     if Path(labels_path).exists():
@@ -6351,6 +6480,9 @@ def _write_labels_lazy(
         contexts=li_ctxs,
     )
 
+    # Re-emit any unknown members captured from the source file.
+    _restore_unknown_hdf5(labels_path, unknown_stash)
+
 
 def write_labels(
     labels_path: str,
@@ -6363,6 +6495,7 @@ def write_labels(
     embed_all_videos: bool = True,
     progress_callback: Callable[[int, int], bool] | None = None,
     prefer_metadata: bool = True,
+    preserve_unknown: bool = False,
 ):
     """Write a SLEAP labels file.
 
@@ -6408,6 +6541,13 @@ def write_labels(
             metadata is already known (e.g. saving copies of labels loaded from a
             `.slp`). Set to `False` to always read through the live backend. See
             `video_to_dict`.
+        preserve_unknown: If `True`, top-level HDF5 datasets/groups present in the
+            source file (``labels.provenance["filename"]``) that sleap-io does not
+            recognize are copied into the saved file. This preserves additions made
+            by a newer sleap-io version across a load/save cycle with an older
+            version (which would otherwise drop them, since saving rebuilds the file
+            from the in-memory model). Default `False`. Best-effort: requires the
+            source file to still exist and be readable HDF5.
     """
     # Fast path for lazy labels (avoids materializing frames/instances)
     # Supported for simple embed modes: None, False, "source"
@@ -6437,8 +6577,18 @@ def write_labels(
                 restore_original_videos=restore_original_videos,
                 verbose=verbose,
                 prefer_metadata=prefer_metadata,
+                preserve_unknown=preserve_unknown,
             )
             return
+
+    # Capture unknown top-level members from the source file before it is
+    # truncated, so additions made by a newer sleap-io version survive a
+    # load/save cycle through this (potentially older) writer.
+    unknown_stash = (
+        _stash_unknown_hdf5(labels.provenance.get("filename"))
+        if preserve_unknown
+        else None
+    )
 
     if Path(labels_path).exists():
         Path(labels_path).unlink()
@@ -6588,3 +6738,6 @@ def write_labels(
         all_instances,
         contexts=li_contexts,
     )
+
+    # Re-emit any unknown members captured from the source file.
+    _restore_unknown_hdf5(labels_path, unknown_stash)
