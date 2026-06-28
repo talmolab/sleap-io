@@ -64,9 +64,16 @@ round-trip unchanged. Per-instance embeddings are loaded lazily alongside the re
 store.
 
 !!! note "Persistence scope"
-    Instance and Identity embeddings are written today. Embeddings attached to centroid / mask /
+    `Instance`, `SegmentationMask`, and `Identity` embeddings are written today (mask owners join
+    on their global mask-list index, `owner_type=3`). Embeddings attached to centroid /
     bounding-box / ROI detections are not yet persisted; saving emits a warning so they are not
     silently dropped.
+
+!!! tip "Skipping appearance vectors on disk"
+    Appearance vectors are large. Pass `labels.save(path, save_id_embeddings=False)` to skip the
+    `/embeddings` group entirely while still persisting identity *links* (`/identity_links`); the
+    vectors stay in memory (e.g. to build identity prototypes). This is distinct from `embed`,
+    which embeds *video frames*.
 
 ---
 
