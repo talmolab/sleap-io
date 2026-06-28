@@ -2409,6 +2409,57 @@ class Labels:
         self.videos.append(video)
         return video
 
+    def add_identity(self, identity: Identity, match: str = "uuid") -> Identity:
+        """Add an `Identity` to the catalog, deduping by the given match method.
+
+        Idempotent registration helper for `Labels.identities` (mirrors
+        `add_video`). Because `Identity` is ``eq=False`` (object-identity
+        equality), the plain catalog list does not dedup by the stable cross-file
+        ``uuid``, so a producer attaching one shared `Identity` to many detections
+        must funnel through this method to avoid catalog duplication.
+
+        Args:
+            identity: The identity to register.
+            match: Matching method passed to `Identity.matches` -- one of
+                ``"uuid"`` (default; the canonical cross-file key), ``"name"``, or
+                ``"identity"`` (Python object identity). This selects a single
+                method; it is not a uuid-then-name fallback chain.
+
+        Returns:
+            The canonical `Identity` to use: the pre-existing catalog entry if one
+            matches, otherwise the input ``identity`` (now appended).
+        """
+        for existing in self.identities:
+            if existing.matches(identity, method=match):
+                return existing
+        self.identities.append(identity)
+        return identity
+
+    def get_identity(
+        self, *, uuid: str | None = None, name: str | None = None
+    ) -> Identity | None:
+        """Find an `Identity` in the catalog by ``uuid`` or ``name``.
+
+        Args:
+            uuid: The stable ``uuid`` to look up. Mutually exclusive with ``name``.
+            name: The ``name`` to look up. Mutually exclusive with ``uuid``. Names
+                are not required to be unique, so the first match is returned.
+
+        Returns:
+            The first matching `Identity`, or ``None`` if none matches.
+
+        Raises:
+            ValueError: If neither or both of ``uuid`` / ``name`` are provided.
+        """
+        if (uuid is None) == (name is None):
+            raise ValueError("Provide exactly one of `uuid` or `name`.")
+        for identity in self.identities:
+            if uuid is not None and identity.uuid == uuid:
+                return identity
+            if name is not None and identity.name == name:
+                return identity
+        return None
+
     def replace_videos(
         self,
         old_videos: list[Video] | None = None,
