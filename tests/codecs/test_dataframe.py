@@ -283,6 +283,60 @@ def test_to_dataframe_instances_categories_lazy_matches_eager(tmp_path):
     assert lazy.iloc[1]["cat.strain"] == "C57BL/6"
 
 
+def test_to_dataframe_instances_lazy_categories_respect_filters(tmp_path):
+    """Test lazy category columns match eager under instance-type filters.
+
+    Regression: the lazy prescan scanned all store categories regardless of
+    include_user/predicted filters, so a filtered query produced extra all-None
+    category columns on the lazy path that the eager path did not emit.
+    """
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="test.mp4")
+    user = Instance.from_numpy(np.array([[0.0, 1.0], [2.0, 3.0]]), skeleton)
+    user.set_category("user_only", "U")
+    pred = PredictedInstance.from_numpy(
+        np.array([[4.0, 5.0], [6.0, 7.0]]), skeleton, score=0.5
+    )
+    pred.set_category("pred_only", "P")
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[user, pred])])
+    path = str(tmp_path / "filtered.slp")
+    save_slp(labels, path)
+
+    def cat_cols(df):
+        return sorted(c for c in df.columns if c.startswith("cat."))
+
+    eager = to_dataframe(
+        load_slp(path), format="instances", include_user_instances=False
+    )
+    lazy = to_dataframe(
+        load_slp(path, lazy=True), format="instances", include_user_instances=False
+    )
+    # Predicted-only query: neither path includes the user-only category column.
+    assert cat_cols(eager) == cat_cols(lazy) == ["cat.pred_only"]
+
+
+def test_from_dataframe_ignores_category_columns(tmp_path):
+    """Test to_dataframe -> from_dataframe round-trips past cat.<dim> columns.
+
+    Regression: `cat.<dim>` columns share the dotted flat-key style, so a dim
+    named like a coordinate suffix (e.g. "x") produced a `cat.x` column the
+    instances reader mistook for a node named "cat".
+    """
+    skeleton = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(np.array([[0.0, 1.0], [2.0, 3.0]]), skeleton)
+    inst.set_categories({"x": "weird", "sex": "M"})  # "x" collides with coord suffix
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+
+    df = to_dataframe(labels, format="instances")
+    assert {"cat.x", "cat.sex"}.issubset(df.columns)
+
+    rebuilt = from_dataframe(df, skeleton=skeleton, format="instances")
+    # Node detection ignores cat.* columns: skeleton is A/B, not a node "cat".
+    assert rebuilt.skeleton.node_names == ["A", "B"]
+    assert sum(len(lf.instances) for lf in rebuilt) == 1
+
+
 def test_to_dataframe_frames_format():
     """Test conversion to frames format (wide format with multiplexed instances)."""
     skeleton = Skeleton(["a", "b"])

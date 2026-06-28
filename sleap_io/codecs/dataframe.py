@@ -1499,11 +1499,27 @@ def _to_instances_df_lazy(
     coord_offset = 0.5 if store.format_id < 1.1 else 0.0
 
     # Prescan for a uniform set of category columns across all emitted rows.
-    category_columns = (
-        _prescan_category_columns(store._instance_categories.values())
-        if include_metadata
-        else []
-    )
+    # Only the instances that pass the SAME type/video filters as the main loop
+    # are scanned, so the lazy schema matches the eager paths exactly (scanning
+    # the whole store would add all-None columns for filtered-out instances).
+    category_columns: list[str] = []
+    if include_metadata and store._instance_categories:
+        emitted_categories = []
+        for inst_row in store.instances_data:
+            it = int(inst_row["instance_type"])
+            if it == InstanceType.USER and not include_user_instances:
+                continue
+            if it == InstanceType.PREDICTED and not include_predicted_instances:
+                continue
+            frame_id = int(inst_row["frame_id"])
+            if frame_id not in frame_lookup:
+                continue
+            if video_filter is not None and frame_lookup[frame_id][0] != video_filter:
+                continue
+            cats = store._instance_categories.get(int(inst_row["instance_id"]))
+            if cats:
+                emitted_categories.append(cats)
+        category_columns = _prescan_category_columns(emitted_categories)
 
     # Iterate over instances
     for inst_idx, inst_row in enumerate(store.instances_data):
@@ -2547,6 +2563,12 @@ def _from_instances_df(
     node_cols = {}  # node_name -> {"x": col, "y": col, "score": col}
 
     for col in df.columns:
+        # Skip the exported category columns (cat.<dim>[.<i>]); they share the
+        # dotted flat-key style but are not node coordinates and must not be
+        # mistaken for a node named "cat" on a to_dataframe -> from_dataframe
+        # round-trip. (identity/identity_score have no dot and are ignored below.)
+        if col.startswith("cat."):
+            continue
         if "." in col:
             parts = col.rsplit(".", 1)
             if len(parts) == 2 and parts[1] in ("x", "y", "score"):

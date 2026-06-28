@@ -1651,10 +1651,15 @@ def read_identities(
         # Legacy files written before format 2.5 lack a `uuid`; the Identity
         # factory synthesizes a fresh one (they never had global-identity
         # semantics, so there is nothing to match against).
+        # Guard against a malformed/non-dict "categories" value so a bad file
+        # cannot smuggle a non-mapping into Identity.categories.
+        categories = d.get("categories", {})
+        if not isinstance(categories, dict):
+            categories = {}
         kwargs = dict(
             name=d.get("name", ""),
             color=d.get("color", None),
-            categories=d.get("categories", {}),
+            categories=categories,
             metadata={
                 k: v
                 for k, v in d.items()
@@ -1679,14 +1684,21 @@ def write_identities(labels_path: str, identities: list[Identity]):
 
     identities_json = []
     for identity in identities:
-        d = {"name": identity.name, "uuid": identity.uuid}
+        # Start from metadata, then let the structured fields win: name/uuid/
+        # color and the entity-level "categories" (SLP 2.7+) are reserved keys
+        # that read_identities strips back out of the metadata catch-all, so a
+        # stray metadata key of the same name must not clobber the real field.
+        d = {
+            k: v
+            for k, v in identity.metadata.items()
+            if k not in ("name", "uuid", "color", "categories")
+        }
+        d["name"] = identity.name
+        d["uuid"] = identity.uuid
         if identity.color is not None:
             d["color"] = identity.color
-        # Entity-level categories (SLP format 2.7+) ride in the identity JSON
-        # under a reserved "categories" key, distinct from the metadata catch-all.
         if identity.categories:
             d["categories"] = identity.categories
-        d.update(identity.metadata)
         identities_json.append(np.bytes_(json.dumps(d, separators=(",", ":"))))
 
     with h5py.File(labels_path, "a") as f:

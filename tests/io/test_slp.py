@@ -1329,6 +1329,49 @@ def test_identity_categories_round_trip(tmp_path):
     assert loaded.identities[0].metadata == {"note": "keep"}
 
 
+def test_identity_reserved_keys_win_over_metadata(tmp_path):
+    """Test structured Identity fields are not clobbered by colliding metadata.
+
+    Regression: identities_json packed structured fields then `update(metadata)`,
+    so a metadata key named "name"/"uuid"/"color"/"categories" overwrote the real
+    field on write (silently losing real per-identity categories).
+    """
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    # Real categories AND a colliding metadata "categories" key + a "name" key.
+    identity = Identity(
+        name="real_name",
+        categories={"sex": "M"},
+        metadata={"categories": "clobber", "name": "evil", "keep": 1},
+    )
+    inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel, identity=identity)
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+
+    path = str(tmp_path / "reserved.slp")
+    save_slp(labels, path)
+
+    reloaded = load_slp(path).identities[0]
+    assert reloaded.name == "real_name"  # not "evil"
+    assert reloaded.categories == {"sex": "M"}  # not "clobber"
+    # Reserved keys are stripped from metadata; only non-reserved keys remain.
+    assert reloaded.metadata == {"keep": 1}
+
+
+def test_read_identities_guards_non_dict_categories(tmp_path):
+    """Test a malformed non-dict "categories" value is coerced to an empty dict."""
+    path = str(tmp_path / "malformed.slp")
+    # Hand-write an identities_json with a bogus non-dict categories value.
+    with h5py.File(path, "w") as f:
+        f.create_dataset(
+            "identities_json",
+            data=[np.bytes_(json.dumps({"name": "m", "categories": "oops"}))],
+            maxshape=(None,),
+        )
+    identity = read_identities(path)[0]
+    assert identity.categories == {}  # coerced, not the bare string
+
+
 def test_no_categories_keeps_low_format_and_no_dataset(tmp_path):
     """Test category-free labels stay additive (no dataset, no 2.7 bump)."""
     skel = Skeleton(["A", "B"])

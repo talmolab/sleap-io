@@ -102,6 +102,12 @@ it — so sparse categories sample cleanly:
 The DataFrame rows are flat (no live `Instance` handle survives the row), so to map sampled rows
 back to objects, key off the `video`/`frame_idx` locator columns.
 
+!!! note "Dimension naming"
+    Because export flattens each dimension to a `cat.<dim>` column (and vectors to
+    `cat.<dim>.<i>`), keep dimension names simple. A name containing `.` or one that collides with a
+    skeleton node name can produce overlapping columns. The SLP side-table itself preserves any
+    keys faithfully — this only affects the flattened DataFrame view.
+
 ---
 
 ## API reference
