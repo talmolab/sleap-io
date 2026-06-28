@@ -34,7 +34,8 @@ so the same call works for local and remote files.
     URL loading covers `.slp`/`.pkg.slp` labels and remote *media video* over
     `http`/`https` only. Every other labels format (NWB, COCO, Label Studio,
     JABS, DLC, CSV, TrackMate, LEAP, GeoJSON, Ultralytics) raises
-    `NotImplementedError` over a URL — download the file locally first.
+    `NotImplementedError` over a URL — fetch it to disk first with
+    [`sio.download`](#downloading-files-to-disk), then load the local copy.
 
 ### Command-line interface
 
@@ -62,6 +63,56 @@ local `-o/--output` (for `fix`, `--dry-run` works on a URL without `-o`). The
 
 Output paths and commands that re-encode video locally (`trim`, `reencode`,
 `transform`, `apply-crops`) require local filesystem paths.
+
+---
+
+## Downloading files to disk
+
+To simply fetch a remote file to local disk — a drop-in replacement for `curl`
+or `wget` in notebooks and demos — use [`sio.download`][sleap_io.download]. It
+accepts the same schemes as the loaders (http/https, cloud, Google Drive). HTTP
+and cloud files are streamed straight to disk with a progress bar; Google Drive
+files are buffered in memory first (see [Google Drive](#google-drive)):
+
+```python
+import sleap_io as sio
+
+# Into the current directory, using the filename from the URL.
+path = sio.download("https://example.com/labels.slp")  # -> ./labels.slp
+
+# Into a directory, or to an exact path.
+sio.download("s3://my-bucket/run/video.mp4", "data/")          # -> data/video.mp4
+sio.download("https://example.com/a.slp", "downloads/b.slp")    # -> downloads/b.slp
+
+# Fetch-then-load (handy for formats not yet loadable directly over a URL):
+labels = sio.load_nwb(sio.download("https://example.com/labels.nwb"))
+```
+
+By default the download is **idempotent**: if the destination already exists it
+is returned without re-downloading, so re-running a cell does not refetch a large
+file. Pass `overwrite=True` to force a fresh download. Authenticated sources work
+via `headers=`, e.g. `sio.download(url, headers={"Authorization": "Bearer …"})`.
+
+!!! tip "`download()` vs. `stream_mode="download"`"
+    [`sio.download`][sleap_io.download] writes a **reusable file to disk** and
+    returns its path. The `stream_mode="download"` option on the loaders instead
+    reads the bytes into **memory** for a single load (see
+    [Streaming modes & caching](#streaming-modes-caching)).
+
+On the command line, `sio download` is the equivalent (and a true `curl`/`wget`
+replacement):
+
+```bash
+# Into the current directory (filename from the URL)
+sio download https://example.com/labels.slp
+
+# Into a directory, or to an exact path
+sio download s3://my-bucket/run/video.mp4 data/
+sio download https://example.com/a.slp out.slp
+
+# With an auth header (repeatable) and forced overwrite
+sio download https://example.com/a.slp -H 'Authorization: Bearer <token>' -f
+```
 
 ---
 
