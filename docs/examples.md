@@ -647,6 +647,15 @@ This also covers `.pkg.slp` embedded-frame streaming, remote media video over
 authentication, security notes, and troubleshooting, see the
 [Remote loading](remote.md) guide.
 
+To instead fetch a remote file to local disk (a `curl`/`wget` replacement), use
+[`download`][sleap_io.download]:
+
+```python
+# Download to the current directory, or to a chosen path.
+path = sio.download("https://example.com/labels.slp")  # -> ./labels.slp
+sio.download("s3://my-bucket/run/video.mp4", "data/")  # -> data/video.mp4
+```
+
 ## Editing labels data
 
 ### Fix video paths

@@ -67,6 +67,7 @@ sio merge --help
 sio embed --help
 sio unembed --help
 sio filenames --help
+sio download --help
 sio fix --help
 sio render --help
 sio trim --help
@@ -126,6 +127,11 @@ sio filenames labels.slp                                   # List video paths
 sio filenames labels.slp -o out.slp --filename /new/video.mp4
 sio filenames labels.slp -o out.slp --map old.mp4 /new/video.mp4
 sio filenames labels.slp -o out.slp --prefix /old/path /new/path
+
+# Download a remote file to disk (curl/wget replacement)
+sio download https://example.com/labels.slp                # -> ./labels.slp
+sio download s3://my-bucket/run/video.mp4 data/            # Into a directory
+sio download https://example.com/a.slp out.slp -f          # Exact path, overwrite
 
 # Fix common issues in labels files
 sio fix labels.slp                                         # Auto-fix with defaults
@@ -2552,6 +2558,52 @@ sio transform labels.slp --config transforms.yaml -o output.slp
 ```
 
 See the [Transforms Guide](transforms.md#config-file-format) for config file format and examples.
+
+---
+
+## `sio download`
+
+Download a remote file to local disk — a drop-in replacement for `curl`/`wget`.
+Accepts the same URL schemes as the loaders: `http`/`https`, cloud storage
+(`s3`/`gs`/`gcs`/`az`/`abfs`, needs the `[cloud]` extra), and Google Drive share
+links. HTTP and cloud files are streamed straight to disk with a progress bar;
+Google Drive files are buffered in memory first and have no byte progress bar.
+
+### Basic Usage
+
+```bash
+sio download <url> [dest] [options]
+sio download <url> -o <dest> [options]
+```
+
+```bash
+# Into the current directory (filename taken from the URL)
+sio download https://example.com/labels.slp
+
+# Into a directory, or to an exact path
+sio download s3://my-bucket/run/video.mp4 data/
+sio download https://example.com/a.slp out.slp
+
+# Authenticated source, forcing a fresh download
+sio download https://example.com/a.slp -H 'Authorization: Bearer <token>' -f
+```
+
+If the destination already exists it is returned without re-downloading (pass
+`-f/--overwrite` to refetch).
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output PATH` | Destination path or directory (alternative to the positional `DEST`). |
+| `-f, --overwrite` | Re-download even if the destination already exists. |
+| `--progress / --no-progress` | Show a download progress bar (default: on). |
+| `-H, --header 'NAME: VALUE'` | Extra HTTP header (repeatable), e.g. `-H 'Authorization: Bearer <token>'`. |
+| `--retries N` | Retries for transient HTTP errors (429/5xx). Default: 3. |
+
+See the [Remote loading guide](remote.md#downloading-files-to-disk) for the
+Python [`sio.download`][sleap_io.download] equivalent, authentication, and
+supported schemes.
 
 ---
 

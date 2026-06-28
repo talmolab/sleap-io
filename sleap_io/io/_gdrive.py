@@ -24,8 +24,10 @@ from __future__ import annotations
 
 import html
 import io
+import posixpath
 import re
 import urllib.parse
+from email.message import EmailMessage
 from html.parser import HTMLParser
 
 from sleap_io.io._remote import (
@@ -361,6 +363,37 @@ def _url_from_confirmation(confirmation_html: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _filename_from_disposition(value: str | None) -> str | None:
+    """Parse the ``filename`` from a ``Content-Disposition`` header value.
+
+    Handles both the plain ``filename="…"`` form and the RFC 2231/5987
+    ``filename*=UTF-8''…`` extended form via :class:`email.message.EmailMessage`.
+    Any directory components in the returned name are stripped so a malicious
+    header cannot redirect the write outside the chosen directory.
+
+    Args:
+        value: The raw ``Content-Disposition`` header value, or None.
+
+    Returns:
+        The bare filename, or None if the header is absent or carries no
+        filename.
+    """
+    if not value:
+        return None
+    msg = EmailMessage()
+    msg["Content-Disposition"] = value
+    name = msg.get_filename()
+    if not name:
+        return None
+    # Strip any path components (defense against ``filename="../../x"``); URL/POSIX
+    # and Windows separators are both normalized before taking the basename. A bare
+    # dot-segment (``.``/``..``) survives basename, so reject it explicitly.
+    name = posixpath.basename(name.replace("\\", "/"))
+    if name in ("", ".", ".."):
+        return None
+    return name
+
+
 async def _read_body_capped(resp, max_bytes: int, url: str) -> bytes:
     """Drain a response body fully while enforcing a maximum byte budget.
 
@@ -404,8 +437,8 @@ async def _read_body_capped(resp, max_bytes: int, url: str) -> bytes:
 
 async def _resolve_and_fetch(
     file_id: str, headers: dict[str, str] | None, max_bytes: int | None = None
-) -> bytes:
-    """Run the Drive GET loop and return the resolved file bytes.
+) -> tuple[bytes, str | None]:
+    """Run the Drive GET loop and return the resolved file bytes and name.
 
     This coroutine is driven from :func:`_open_gdrive` via
     :func:`fsspec.asyn.sync` on fsspec's background event loop, so it is safe to
@@ -420,7 +453,9 @@ async def _resolve_and_fetch(
             :data:`_DEFAULT_MAX_BYTES`.
 
     Returns:
-        The fully-downloaded file bytes.
+        A ``(bytes, filename)`` tuple where ``filename`` is the name parsed from
+        the resolved response's ``Content-Disposition`` header, or None if the
+        header carried no filename.
 
     Raises:
         RemoteIOError: For quota/permission pages, an oversize file, or if
@@ -459,9 +494,14 @@ async def _resolve_and_fetch(
 
                 # A Content-Disposition header (or any non-HTML body) means we
                 # have reached the file itself: read it fully (capped) in this
-                # session.
+                # session. The Content-Disposition (when present) also carries the
+                # real filename, which has no other source on the Drive path.
                 if has_disposition or not is_html:
-                    return await _read_body_capped(resp, cap, url)
+                    name = _filename_from_disposition(
+                        resp.headers.get("Content-Disposition")
+                    )
+                    body = await _read_body_capped(resp, cap, url)
+                    return body, name
 
                 # Otherwise this is the interstitial HTML; scrape the next URL.
                 page = await resp.text()
@@ -474,6 +514,59 @@ async def _resolve_and_fetch(
     )
 
 
+def _open_gdrive_with_name(
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    max_bytes: int | None = None,
+) -> tuple[io.BytesIO, str | None]:
+    """Resolve a Google Drive share URL to its bytes and filename.
+
+    The Drive download URL carries no file extension and Drive rejects ``HEAD``
+    with 405, both of which break the lazy fsspec open path; the resolved bytes
+    are therefore fully prefetched here (within one cookie-carrying session) and
+    returned as an in-memory :class:`io.BytesIO`, mirroring ``open_url``'s
+    ``stream_mode="download"`` shape. The prefetch is bounded by ``max_bytes``
+    (default :data:`_DEFAULT_MAX_BYTES`) so a hostile or accidentally-huge file
+    cannot exhaust memory. The filename (from the resolved response's
+    ``Content-Disposition``) is returned alongside the bytes for callers that
+    need to name a local file (e.g. :func:`~sleap_io.download`).
+
+    Args:
+        url: A Google Drive / Docs share URL.
+        headers: Optional extra HTTP headers to forward.
+        max_bytes: Maximum number of bytes to buffer in memory. ``None`` uses
+            :data:`_DEFAULT_MAX_BYTES`.
+
+    Returns:
+        A ``(BytesIO, filename)`` tuple. The buffer is positioned at the start of
+        the downloaded bytes; ``filename`` is None when Drive returned no
+        ``Content-Disposition`` filename.
+
+    Raises:
+        ValueError: For folder URLs, unparsable file IDs, or confirmation
+            pages with no download link.
+        RemoteIOError: For HTTP failures, quota/permission pages, an oversize
+            file, or non-convergent resolution.
+    """
+    import fsspec.asyn
+
+    file_id, _is_folder = _parse_gdrive(url)
+
+    loop = fsspec.asyn.get_loop()
+    try:
+        data, name = fsspec.asyn.sync(
+            loop, _resolve_and_fetch, file_id, headers, max_bytes
+        )
+    except (RemoteIOError, ValueError):
+        raise
+    except Exception as e:  # noqa: BLE001 - normalize transport errors
+        from sleap_io.io._remote import _raise_remote
+
+        _raise_remote(e, url=url)
+    return io.BytesIO(data), name
+
+
 def _open_gdrive(
     url: str,
     *,
@@ -482,13 +575,9 @@ def _open_gdrive(
 ) -> io.BytesIO:
     """Resolve a Google Drive share URL and return its bytes as a BytesIO.
 
-    The Drive download URL carries no file extension and Drive rejects ``HEAD``
-    with 405, both of which break the lazy fsspec open path; the resolved bytes
-    are therefore fully prefetched here (within one cookie-carrying session) and
-    returned as an in-memory :class:`io.BytesIO`, mirroring ``open_url``'s
-    ``stream_mode="download"`` shape. The prefetch is bounded by ``max_bytes``
-    (default :data:`_DEFAULT_MAX_BYTES`) so a hostile or accidentally-huge file
-    cannot exhaust memory.
+    Thin wrapper around :func:`_open_gdrive_with_name` for callers that only need
+    the bytes (e.g. the loaders in :mod:`sleap_io.io.main`). See that function
+    for the full resolution/prefetch semantics.
 
     Args:
         url: A Google Drive / Docs share URL.
@@ -505,17 +594,5 @@ def _open_gdrive(
         RemoteIOError: For HTTP failures, quota/permission pages, an oversize
             file, or non-convergent resolution.
     """
-    import fsspec.asyn
-
-    file_id, _is_folder = _parse_gdrive(url)
-
-    loop = fsspec.asyn.get_loop()
-    try:
-        data = fsspec.asyn.sync(loop, _resolve_and_fetch, file_id, headers, max_bytes)
-    except (RemoteIOError, ValueError):
-        raise
-    except Exception as e:  # noqa: BLE001 - normalize transport errors
-        from sleap_io.io._remote import _raise_remote
-
-        _raise_remote(e, url=url)
-    return io.BytesIO(data)
+    buf, _name = _open_gdrive_with_name(url, headers=headers, max_bytes=max_bytes)
+    return buf

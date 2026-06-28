@@ -68,7 +68,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         # Streaming label image writer from sleap_io.io.slp
         "io.slp": ["LabelImageWriter"],
         # Remote URL loading helpers from sleap_io.io._remote
-        "io._remote": ["clear_remote_cache", "RemoteIOError"],
+        "io._remote": ["clear_remote_cache", "RemoteIOError", "download"],
         # Rendering from sleap_io.rendering
         "rendering.core": ["render_video", "render_image"],
         "rendering.colors": ["get_palette"],

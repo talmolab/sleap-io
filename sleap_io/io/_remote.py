@@ -20,7 +20,9 @@ import importlib
 import io
 import os
 import pathlib
+import posixpath
 import re
+import tempfile
 import time
 import urllib.parse
 import warnings
@@ -1023,6 +1025,329 @@ def clear_remote_cache(
         deleted += 1
 
     return deleted
+
+
+# ---------------------------------------------------------------------------
+# Download to local disk
+# ---------------------------------------------------------------------------
+
+
+def _filename_from_url(url: str) -> str | None:
+    """Derive a safe local filename from the path component of ``url``.
+
+    The URL path is percent-decoded *before* the basename is taken so that
+    encoded separators (``%2F``) or dot-segments (``%2E%2E``) cannot survive into
+    the result and turn a directory destination into a path-traversal write. The
+    returned value is always a bare filename (no directory components); bare
+    ``.``/``..`` and empty results yield None. URL paths are always
+    ``/``-separated, so :mod:`posixpath` is used regardless of the host platform.
+
+    Args:
+        url: The remote URL.
+
+    Returns:
+        The decoded basename of the URL path (e.g. ``labels.slp`` for
+        ``https://host/data/labels.slp``), or None if the URL has no usable
+        basename (e.g. it ends in ``/``, has an empty path, or reduces to a
+        dot-segment). Query strings and fragments are ignored.
+    """
+    path = urllib.parse.urlparse(url).path
+    decoded = urllib.parse.unquote(path).replace("\\", "/")
+    base = posixpath.basename(decoded)
+    if base in ("", ".", ".."):
+        return None
+    return base
+
+
+def _resolve_target_path(
+    dest: str | os.PathLike | None, filename: str | None
+) -> pathlib.Path | None:
+    """Resolve the local file path to download into.
+
+    Args:
+        dest: The user-provided destination. ``None`` means the current
+            directory; a path to an existing directory (or a string ending in a
+            path separator) means "into that directory"; anything else is treated
+            as the exact output file path.
+        filename: The filename to use when ``dest`` designates a directory (or is
+            None). May itself be None if it could not be derived yet.
+
+    Returns:
+        The resolved output :class:`~pathlib.Path`, or None if a directory
+        destination was given (or ``dest`` is None) but no ``filename`` is
+        available yet -- the caller must resolve the name another way (e.g. by
+        inspecting a Google Drive ``Content-Disposition`` after fetching).
+    """
+    if dest is None:
+        return pathlib.Path(filename) if filename else None
+
+    dest_path = pathlib.Path(dest)
+    is_dir = dest_path.is_dir() or os.fspath(dest).endswith(("/", os.sep))
+    if is_dir:
+        return (dest_path / filename) if filename else None
+    return dest_path
+
+
+def _download_callback(progress: bool, url: str):
+    """Build an fsspec transfer callback (a ``tqdm`` bar or a no-op).
+
+    Args:
+        progress: Whether to show a progress bar.
+        url: The URL being downloaded (its basename labels the bar; no
+            credentials are included).
+
+    Returns:
+        An ``fsspec`` callback object to pass to ``fs.get_file(..., callback=)``.
+    """
+    import fsspec.callbacks
+
+    if not progress:
+        return fsspec.callbacks.DEFAULT_CALLBACK
+    return fsspec.callbacks.TqdmCallback(
+        tqdm_kwargs={
+            "desc": f"Downloading {_filename_from_url(url) or 'file'}",
+            "unit": "B",
+            "unit_scale": True,
+            "unit_divisor": 1024,
+        }
+    )
+
+
+def _write_atomic(target: pathlib.Path, write_fn) -> pathlib.Path:
+    """Write ``target`` atomically via a uniquely-named sibling temp file.
+
+    ``write_fn(tmp_path)`` performs the actual write to a temporary sibling path;
+    on success it is atomically renamed onto ``target`` (same directory, so the
+    rename is atomic and never crosses a filesystem boundary). On any error the
+    partial file is removed so an interrupted transfer never leaves a truncated
+    file at ``target``. The temp name is unique (via :func:`tempfile.mkstemp`) so
+    two concurrent downloads to the same target do not clobber each other's
+    in-flight file.
+
+    Args:
+        target: The final output path. Its parent is created if needed.
+        write_fn: A callable taking the temporary :class:`~pathlib.Path` to write.
+
+    Returns:
+        The resolved (absolute) ``target`` path.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(target.parent), prefix=target.name + ".", suffix=".part"
+    )
+    os.close(fd)
+    tmp = pathlib.Path(tmp_name)
+    try:
+        write_fn(tmp)
+        os.replace(tmp, target)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    return target.resolve()
+
+
+def _download_fsspec(
+    url: str,
+    target: pathlib.Path,
+    *,
+    headers: dict[str, str] | None,
+    progress: bool,
+    retries: int,
+) -> pathlib.Path:
+    """Stream an HTTP/cloud URL to ``target`` (atomic, retried).
+
+    Args:
+        url: The HTTP/HTTPS or cloud URL to download.
+        target: The local output path.
+        headers: Optional HTTP headers (HTTP/HTTPS only).
+        progress: Whether to show a ``tqdm`` progress bar.
+        retries: Maximum retries for transient HTTP errors.
+
+    Returns:
+        The resolved local path of the downloaded file.
+
+    Raises:
+        RemoteIOError: For HTTP / connection failures.
+        ImportError: For cloud schemes when the ``[cloud]`` extra is missing.
+    """
+    scheme = urllib.parse.urlparse(url).scheme.lower()
+    fs = _build_fsspec_filesystem(scheme, headers=headers)
+
+    def _write(tmp: pathlib.Path) -> None:
+        def _fetch():
+            # Build a fresh callback per attempt so a retried transfer starts a
+            # clean progress bar rather than reusing a half-finished one. Both
+            # fsspec callbacks (TqdmCallback / DEFAULT_CALLBACK) expose close().
+            callback = _download_callback(progress, url)
+            try:
+                fs.get_file(url, str(tmp), callback=callback)
+            finally:
+                callback.close()
+
+        _open_with_retries(_fetch, url=url, retries=retries)
+
+    return _write_atomic(target, _write)
+
+
+def _download_gdrive(
+    url: str,
+    *,
+    dest: str | os.PathLike | None,
+    headers: dict[str, str] | None,
+    overwrite: bool,
+) -> pathlib.Path:
+    """Download a Google Drive share URL to local disk.
+
+    Drive files are fully buffered in memory by the resolver (Drive rejects
+    ``HEAD`` and can interrupt ranged reads), so the buffered bytes are written
+    to disk here. The output filename comes from ``dest`` when it names a file,
+    otherwise from the Drive ``Content-Disposition`` filename.
+
+    Args:
+        url: A Google Drive / Docs share URL.
+        dest: The destination (see :func:`download`).
+        headers: Optional HTTP headers to forward.
+        overwrite: Whether to overwrite an existing destination.
+
+    Returns:
+        The resolved local path of the downloaded (or already-present) file.
+
+    Raises:
+        ValueError: If no destination filename can be determined.
+        RemoteIOError: For HTTP failures, quota/permission pages, or an oversize
+            file.
+    """
+    from sleap_io.io._gdrive import _open_gdrive_with_name
+
+    buf, name = _open_gdrive_with_name(url, headers=headers)
+    target = _resolve_target_path(dest, name)
+    if target is None:
+        raise ValueError(
+            "Could not determine a destination filename for the Google Drive "
+            f"file ({_redact_url(url)}); pass an explicit file path as `dest`."
+        )
+    if target.is_dir():
+        raise IsADirectoryError(
+            f"Destination resolves to an existing directory: {target} (the "
+            "resolved filename collides with a subdirectory); pass an explicit "
+            "file path as `dest`."
+        )
+    if target.exists() and not overwrite:
+        return target.resolve()
+    return _write_atomic(target, lambda tmp: tmp.write_bytes(buf.getvalue()))
+
+
+def download(
+    url: str,
+    dest: str | os.PathLike | None = None,
+    *,
+    headers: dict[str, str] | None = None,
+    overwrite: bool = False,
+    progress: bool = True,
+    retries: int = 3,
+) -> pathlib.Path:
+    """Download a remote file to local disk.
+
+    A simple, protocol-agnostic replacement for ``curl``/``wget`` in notebooks
+    and demos. Supports the same URL schemes as :func:`~sleap_io.load_file`:
+    ``http``/``https``, cloud storage (``s3``/``gs``/``gcs``/``az``/``abfs`` --
+    requires ``pip install 'sleap-io[cloud]'``), and Google Drive share links.
+    Unlike the streaming :func:`~sleap_io.load_slp` path, this writes the bytes
+    to a local file (streamed to disk for HTTP/cloud, buffered in memory for
+    Drive) and returns the path.
+
+    Args:
+        url: The remote URL to download.
+        dest: Where to write the file. If ``None`` (default), the file is written
+            to the current directory using the filename from the URL. If ``dest``
+            is an existing directory (or a string ending in a path separator), the
+            file is written inside it using the URL filename. Otherwise ``dest``
+            is treated as the exact output path. Parent directories are created as
+            needed.
+        headers: Optional HTTP headers (HTTP/HTTPS only), e.g.
+            ``{"Authorization": "Bearer <token>"}``.
+        overwrite: If False (default) and the destination already exists, the
+            existing file is returned without re-downloading (idempotent, so
+            re-running a notebook cell does not re-fetch large files). Set True to
+            force a fresh download.
+        progress: If True (default), show a ``tqdm`` progress bar (HTTP/cloud
+            only; Drive downloads are buffered in memory without a byte bar).
+        retries: Maximum retries for transient HTTP errors (429/500/502/503/504),
+            with exponential backoff honoring ``Retry-After``. Applies to
+            HTTP/cloud only; Google Drive files are fetched in a single buffered
+            request and are not retried. Default: 3.
+
+    Returns:
+        The local :class:`~pathlib.Path` of the downloaded (or already-present)
+        file, resolved to an absolute path.
+
+    Raises:
+        ValueError: If ``url`` is not a remote URL, or no destination filename
+            could be determined (the URL has no basename and ``dest`` does not
+            name a file).
+        IsADirectoryError: If the destination resolves to an existing directory.
+        RemoteIOError: For HTTP / connection failures.
+        ImportError: For cloud schemes when the ``[cloud]`` extra is not
+            installed.
+
+    Examples:
+        Download to the current directory (filename from the URL)::
+
+            import sleap_io as sio
+
+            path = sio.download("https://example.com/labels.slp")  # ./labels.slp
+
+        Download into a directory, or to an exact path::
+
+            sio.download("s3://bucket/run/video.mp4", "data/")  # data/video.mp4
+            sio.download("https://example.com/a.slp", "downloads/b.slp")
+
+        Fetch then load::
+
+            labels = sio.load_slp(sio.download(url))
+    """
+    if not _is_url(url):
+        raise ValueError(
+            "download() expects a remote URL (http/https/s3/gs/gcs/az/abfs or a "
+            f"Google Drive link), got: {_redact_url(os.fspath(url))!r}. There is "
+            "nothing to download for a local path or unsupported scheme."
+        )
+
+    is_gdrive = _is_gdrive_url(url)
+
+    # For HTTP/cloud the filename is known up front (URL basename), so an existing
+    # destination can be returned without any network access. Google Drive URLs
+    # carry no filename, so the target may be unknown until the bytes (and their
+    # Content-Disposition) are fetched -- defer those to _download_gdrive.
+    filename = None if is_gdrive else _filename_from_url(url)
+    target = _resolve_target_path(dest, filename)
+
+    if target is not None and target.is_dir():
+        raise IsADirectoryError(
+            f"Destination resolves to an existing directory: {target} (the URL "
+            "basename collides with a subdirectory); pass an explicit file path "
+            "as `dest`."
+        )
+
+    if target is not None and target.exists() and not overwrite:
+        return target.resolve()
+
+    if is_gdrive:
+        return _download_gdrive(url, dest=dest, headers=headers, overwrite=overwrite)
+
+    if target is None:
+        raise ValueError(
+            "Could not determine a destination filename from the URL "
+            f"({_redact_url(url)}); pass an explicit file path as `dest`."
+        )
+
+    return _download_fsspec(
+        url,
+        target,
+        headers=headers,
+        progress=progress,
+        retries=retries,
+    )
 
 
 # Run the aiohttp version check at import time (cheap; warns on downgrade).

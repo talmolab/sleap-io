@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 import rich_click as click
 from click.testing import CliRunner
+from werkzeug.wrappers import Response
 
 from sleap_io import load_slp, save_slp, save_video
 from sleap_io.io.cli import (
@@ -29,6 +30,7 @@ from sleap_io.io.cli import (
     _is_ffmpeg_available,
     _load_images,
     _load_overlay,
+    _parse_cli_headers,
     _parse_overlay_outline_color,
     _RemoteInputPath,
     _run_subprocess_with_progress,
@@ -12457,3 +12459,144 @@ def test_ensure_utf8_streams_swallows_reconfigure_errors():
 
     # Must not raise.
     _ensure_utf8_streams([RaisingStream()])
+
+
+# ---------------------------------------------------------------------------
+# `sio download`
+# ---------------------------------------------------------------------------
+
+_DL_BODY = b"\x89HDF\r\n\x1a\n" + b"\x00" * 64
+
+
+def test_parse_cli_headers_empty():
+    """No --header options yields None."""
+    assert _parse_cli_headers(()) is None
+
+
+def test_parse_cli_headers_parses_pairs():
+    """`Name: Value` pairs are parsed and stripped."""
+    assert _parse_cli_headers(("Authorization: Bearer x", "X-Foo:bar")) == {
+        "Authorization": "Bearer x",
+        "X-Foo": "bar",
+    }
+
+
+@pytest.mark.parametrize("bad", ["no-colon", ": novalue-name"])
+def test_parse_cli_headers_invalid_raises(bad):
+    """A malformed --header value raises a ClickException."""
+    with pytest.raises(click.ClickException, match="Invalid --header"):
+        _parse_cli_headers((bad,))
+
+
+def test_download_cli_help():
+    """`sio download --help` documents the command."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["download", "--help"])
+    assert result.exit_code == 0
+    assert "Download a remote file" in result.output
+
+
+def test_download_cli_to_explicit_path(httpserver, tmp_path):
+    """`sio download URL DEST` writes the file and reports success."""
+    httpserver.expect_request("/labels.slp").respond_with_data(_DL_BODY)
+    url = httpserver.url_for("/labels.slp")
+    out = tmp_path / "out.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["download", url, str(out), "--no-progress"])
+
+    assert result.exit_code == 0, result.output
+    assert "Downloaded:" in result.output
+    assert out.read_bytes() == _DL_BODY
+
+
+def test_download_cli_into_directory(httpserver, tmp_path):
+    """A directory DEST writes inside it using the URL filename."""
+    httpserver.expect_request("/labels.slp").respond_with_data(_DL_BODY)
+    url = httpserver.url_for("/labels.slp")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["download", url, str(tmp_path), "--no-progress"])
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "labels.slp").read_bytes() == _DL_BODY
+
+
+def test_download_cli_output_option(httpserver, tmp_path):
+    """`-o/--output` is accepted as an alternative to the positional DEST."""
+    httpserver.expect_request("/labels.slp").respond_with_data(_DL_BODY)
+    url = httpserver.url_for("/labels.slp")
+    out = tmp_path / "out.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["download", url, "-o", str(out), "--no-progress"])
+
+    assert result.exit_code == 0, result.output
+    assert out.read_bytes() == _DL_BODY
+
+
+def test_download_cli_dest_conflict(httpserver, tmp_path):
+    """Specifying both positional DEST and -o is an error."""
+    url = httpserver.url_for("/labels.slp")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["download", url, str(tmp_path / "a.slp"), "-o", str(tmp_path / "b.slp")]
+    )
+    assert result.exit_code != 0
+    assert "Specify the destination once" in result.output
+
+
+def test_download_cli_bad_header(httpserver, tmp_path):
+    """A malformed --header is reported as a usage error."""
+    url = httpserver.url_for("/labels.slp")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["download", url, str(tmp_path / "x.slp"), "-H", "no-colon"]
+    )
+    assert result.exit_code != 0
+    assert "Invalid --header" in result.output
+
+
+def test_download_cli_header_forwarded(httpserver, tmp_path):
+    """`-H 'Name: Value'` is forwarded to the server."""
+    seen: list[str | None] = []
+
+    def _handler(request):
+        seen.append(request.headers.get("X-Token"))
+        return Response(_DL_BODY, status=200)
+
+    httpserver.expect_request("/labels.slp").respond_with_handler(_handler)
+    url = httpserver.url_for("/labels.slp")
+    out = tmp_path / "out.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["download", url, str(out), "--no-progress", "-H", "X-Token: secret123"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen and all(v == "secret123" for v in seen)
+
+
+def test_download_cli_local_path_rejected(tmp_path):
+    """A local path is rejected with a clear error."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["download", str(tmp_path / "local.slp")])
+    assert result.exit_code != 0
+    assert "expects a remote URL" in result.output
+
+
+def test_download_cli_404_reports_error(httpserver, tmp_path):
+    """A 404 is reported as a clean CLI error (no traceback)."""
+    httpserver.expect_request("/missing.slp").respond_with_data("no", status=404)
+    url = httpserver.url_for("/missing.slp")
+    out = tmp_path / "out.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["download", url, str(out), "--no-progress", "--retries", "0"]
+    )
+
+    assert result.exit_code != 0
+    assert not out.exists()
