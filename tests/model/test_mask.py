@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.mask import (
     PredictedSegmentationMask,
@@ -560,6 +561,45 @@ def test_to_user_metadata():
     assert user.category == "cell"
     assert user.name == "obj1"
     assert user.source == "model"
+
+
+def test_mask_identity_field():
+    """SegmentationMask carries identity / identity_score via from_numpy kwargs."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 1:4] = True
+    ident = Identity(name="mouse_A")
+    mask = UserSegmentationMask.from_numpy(data, identity=ident, identity_score=0.9)
+    assert mask.identity is ident
+    assert mask.identity_score == pytest.approx(0.9)
+
+    # Defaults to None when unset.
+    plain = UserSegmentationMask.from_numpy(data)
+    assert plain.identity is None
+    assert plain.identity_score is None
+
+
+def test_mask_resampled_preserves_identity():
+    """resampled() carries identity / identity_score across the transform."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 1:4] = True
+    ident = Identity(name="mouse_A")
+    mask = UserSegmentationMask.from_numpy(data, identity=ident, identity_score=0.6)
+    out = mask.resampled(5, 5)
+    assert out.identity is ident
+    assert out.identity_score == pytest.approx(0.6)
+
+
+def test_to_user_preserves_identity():
+    """to_user() carries identity / identity_score onto the user mask."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 1:4] = True
+    ident = Identity(name="mouse_A")
+    pred = PredictedSegmentationMask.from_numpy(
+        data, score=0.8, identity=ident, identity_score=0.75
+    )
+    user = pred.to_user()
+    assert user.identity is ident
+    assert user.identity_score == pytest.approx(0.75)
 
 
 def test_to_user_drops_score_and_score_map():
