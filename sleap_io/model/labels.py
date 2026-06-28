@@ -512,8 +512,9 @@ class Labels:
                 if inst.identity is not None and inst.identity not in self.identities:
                     self.identities.append(inst.identity)
 
-            # Collect tracks from nested annotations
+            # Collect tracks and identities from nested annotations
             self._collect_annotation_tracks(lf)
+            self._collect_annotation_identities(lf)
 
         # Collect multi-view identities bound only on InstanceGroups (sessions).
         self._collect_session_identities()
@@ -903,6 +904,49 @@ class Labels:
                 if info.track is not None and info.track not in self.tracks:
                     self.tracks.append(info.track)
 
+    def _collect_annotation_identities(self, lf: LabeledFrame):
+        """Collect identities from non-instance annotations on a frame.
+
+        Mirrors `_collect_annotation_tracks` for the global `Identity` catalog.
+        Currently only `SegmentationMask` carries an `identity`; deduped by object
+        identity (``not in``), matching the instance-identity collection in
+        update/append/extend.
+        """
+        for m in lf.masks:
+            if m.identity is not None and m.identity not in self.identities:
+                self.identities.append(m.identity)
+
+    def _collect_identities(self):
+        """Register every detection's `Identity` in the catalog, deduped by uuid.
+
+        Called at save time so a producer that sets ``inst.identity`` /
+        ``mask.identity`` without also registering it in ``self.identities`` does
+        not silently drop the link on write. Unlike the build-path collectors
+        (object-identity dedup), this dedupes by the stable cross-file ``uuid``:
+        any pre-existing uuid-duplicate catalog entries are first collapsed (the
+        first per uuid is kept), then every detection identity is registered via
+        `add_identity` (uuid match). The on-disk link resolves by uuid, so all
+        detections sharing a uuid point at the one canonical entry. Mutates
+        ``self.identities`` (eager labels only).
+        """
+        # Collapse any uuid-duplicate catalog entries (keep first seen per uuid).
+        seen: set[str] = set()
+        deduped: list[Identity] = []
+        for ident in self.identities:
+            if ident.uuid not in seen:
+                seen.add(ident.uuid)
+                deduped.append(ident)
+        self.identities[:] = deduped
+
+        for lf in self.labeled_frames:
+            for inst in lf:
+                if inst.identity is not None:
+                    self.add_identity(inst.identity)
+            for m in lf.masks:
+                if m.identity is not None:
+                    self.add_identity(m.identity)
+        self._collect_session_identities()
+
     def _collect_session_identities(self):
         """Collect multi-view identities bound only on `InstanceGroup`s.
 
@@ -950,6 +994,7 @@ class Labels:
                     self.identities.append(inst.identity)
 
             self._collect_annotation_tracks(lf)
+            self._collect_annotation_identities(lf)
             self._collect_session_identities()
 
     def extend(self, lfs: list[LabeledFrame], update: bool = True):
@@ -985,6 +1030,7 @@ class Labels:
                         self.identities.append(inst.identity)
 
                 self._collect_annotation_tracks(lf)
+                self._collect_annotation_identities(lf)
 
             self._collect_session_identities()
 
