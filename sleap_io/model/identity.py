@@ -6,6 +6,7 @@ import attrs
 from attrs import define, field
 from attrs.validators import instance_of
 
+from sleap_io.model.categories import CategoriesMixin
 from sleap_io.model.embedding import Embedding, EmbeddingMixin
 
 
@@ -15,7 +16,7 @@ def _generate_uuid() -> str:
 
 
 @define(eq=False)
-class Identity(EmbeddingMixin):
+class Identity(EmbeddingMixin, CategoriesMixin):
     """Ground-truth animal identity, persistent across sessions and videos.
 
     Unlike `Track` (an ephemeral temporal trajectory within a single video),
@@ -40,6 +41,10 @@ class Identity(EmbeddingMixin):
             `Embedding` prototype / gallery vector representing this identity in
             that space (e.g. the cluster centroid of its member instances). Empty
             by default.
+        categories: A mapping from category dimension name (e.g. ``"sex"``) to a
+            categorical label (typically a string) describing this identity at
+            the entity level. Empty by default. Use the `cat` alias /
+            `set_category` helper for read/write access.
 
     Notes:
         `Identity` objects use object-identity equality (`eq=False`), matching
@@ -52,6 +57,7 @@ class Identity(EmbeddingMixin):
     color: str | None = field(default=None, converter=attrs.converters.optional(str))
     metadata: dict = field(factory=dict, validator=instance_of(dict))
     embeddings: dict[str, Embedding] = field(factory=dict, repr=False)
+    categories: dict = field(factory=dict, repr=False)
 
     def matches(self, other: "Identity", method: str = "uuid") -> bool:
         """Check if this identity matches another identity.
