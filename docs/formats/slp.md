@@ -27,13 +27,14 @@ SLP files have the following hierarchical structure:
 file.slp
 ├── /metadata                    # Group: Format and skeleton metadata
 │   ├── @format_id               # Attribute: Format version (float, e.g., 1.4)
-│   └── @json                    # Attribute: JSON metadata string
+│   └── @json                    # Attribute: JSON metadata string (skeletons, nodes; ≤64 KB)
 │
 ├── /videos_json                 # Dataset: Video metadata (variable-length bytes)
 ├── /tracks_json                 # Dataset: Track metadata (variable-length bytes)
 ├── /suggestions_json            # Dataset: Suggestions (variable-length bytes, optional)
 ├── /sessions_json               # Dataset: Recording sessions (variable-length bytes, optional)
 ├── /identities_json             # Dataset: Identity metadata (variable-length bytes, optional)
+├── /provenance_json             # Dataset: Provenance metadata (JSON bytes, optional)
 │
 ├── /frames                      # Dataset: Labeled frame metadata (structured array)
 ├── /instances                   # Dataset: Instance metadata (structured array)
@@ -137,6 +138,28 @@ file.slp
 | `suggestions_json` | `bytes[]` | JSON array of suggested frames (optional) |
 | `sessions_json` | `bytes[]` | JSON array of recording sessions (optional) |
 | `identities_json` | `bytes[]` | JSON array of identity definitions (optional) |
+| `provenance_json` | `bytes` | JSON object of provenance metadata (optional) |
+
+### Provenance storage and the 64 KB metadata limit
+
+The skeletons and nodes live in the `metadata/@json` HDF5 *attribute*. HDF5 caps
+any single attribute at 64 KB (65,536 bytes), so provenance — which can grow
+without bound (e.g. `merge_history` accrues a record on every
+[`Labels`][sleap_io.Labels] `merge()`) — is stored in its own
+`/provenance_json` *dataset*, which has no such limit.
+
+Reading is backward compatible: provenance is read from `/provenance_json` when
+present, otherwise from the `provenance` key inside the `metadata/@json`
+attribute (the legacy layout). When provenance is small it is also mirrored into
+the attribute so that older readers, which only look at the attribute, still see
+it.
+
+As a final safeguard, if the `metadata/@json` blob would still exceed 64 KB
+after relocating provenance, its largest droppable top-level keys are removed
+(largest-first) until it fits and a `UserWarning` names the dropped keys. This is
+lossless — provenance is already in `/provenance_json` and the other droppable
+keys are empty placeholders whose data lives in their own datasets — so saving
+never fails on oversized metadata.
 
 ## Videos
 

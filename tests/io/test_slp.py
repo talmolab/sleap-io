@@ -40,11 +40,14 @@ from sleap_io import (
 )
 from sleap_io.io.slp import (
     LI_DTYPE,
+    METADATA_ATTR_SIZE_LIMIT,
     OBJ_DTYPE,
     ExportCancelled,
     LabelImageWriter,
+    _encode_metadata_attr,
     _points_from_hdf5_data,
     _write_metadata_standalone,
+    _write_provenance_dataset,
     camera_group_to_dict,
     camera_to_dict,
     can_use_fast_path,
@@ -72,6 +75,7 @@ from sleap_io.io.slp import (
     read_negative_frames,
     read_points,
     read_pred_points,
+    read_provenance,
     read_rois,
     read_sessions,
     read_skeletons,
@@ -393,6 +397,76 @@ def test_write_metadata(centered_pair, tmp_path):
         saved_skeletons[0].get_flipped_node_inds()
         == labels.skeletons[0].get_flipped_node_inds()
     )
+
+
+def test_write_metadata_provenance_dataset(centered_pair, tmp_path):
+    """Provenance is written to the dedicated ``provenance_json`` dataset."""
+    labels = read_labels(centered_pair)
+    labels.provenance["custom_key"] = "custom_value"
+    path = tmp_path / "test.slp"
+    write_metadata(path, labels)
+
+    # Provenance is stored in its own dataset (no 64 KB attribute limit) and is
+    # readable back via read_provenance.
+    with h5py.File(path, "r") as f:
+        assert "provenance_json" in f
+    md = read_metadata(path)
+    assert read_provenance(str(path), md)["custom_key"] == "custom_value"
+
+
+def test_write_metadata_does_not_mutate_provenance(tmp_path):
+    """write_metadata must not mutate the caller's ``labels.provenance``."""
+    labels = Labels(skeletons=[Skeleton(["A", "B"])])
+    labels.provenance["source"] = Path("/some/path.slp")
+    write_metadata(tmp_path / "test.slp", labels)
+
+    # The in-memory value is still a Path (serialization worked on a copy).
+    assert labels.provenance["source"] == Path("/some/path.slp")
+    assert isinstance(labels.provenance["source"], Path)
+
+
+def test_write_metadata_large_provenance_round_trips(tmp_path):
+    """Metadata over 64 KB (large merge_history) saves and round-trips."""
+    labels = Labels(skeletons=[Skeleton(["A", "B"])])
+    # Simulate ~250 merges: each record ~360 B -> well over the 64 KB attr limit.
+    labels.provenance["merge_history"] = [
+        {"i": i, "pad": "x" * 350} for i in range(250)
+    ]
+    path = tmp_path / "big.slp"
+    with pytest.warns(UserWarning, match="exceeded the .* HDF5 attribute limit"):
+        write_metadata(path, labels)
+
+    # The attr blob fits under the limit; provenance lives in the dataset.
+    with h5py.File(path, "r") as f:
+        assert len(bytes(f["metadata"].attrs["json"])) <= METADATA_ATTR_SIZE_LIMIT
+        assert "provenance_json" in f
+
+    md = read_metadata(path)
+    assert "provenance" not in md  # dropped from the oversized attr
+    prov = read_provenance(str(path), md)
+    assert len(prov["merge_history"]) == 250
+    assert prov["merge_history"][-1]["i"] == 249
+
+
+def test_save_slp_large_provenance_round_trips(tmp_path):
+    """save_slp/load_slp round-trips a Labels with >64 KB provenance."""
+    skel = Skeleton(["A", "B"])
+    lf = LabeledFrame(
+        video=Video("test.mp4"),
+        frame_idx=0,
+        instances=[Instance.from_numpy([[0, 0], [1, 1]], skeleton=skel)],
+    )
+    labels = Labels([lf])
+    labels.provenance["merge_history"] = [
+        {"i": i, "pad": "x" * 350} for i in range(250)
+    ]
+    path = tmp_path / "big.slp"
+    with pytest.warns(UserWarning, match="HDF5 attribute limit"):
+        save_slp(labels, path)
+
+    loaded = load_slp(path)
+    assert len(loaded.provenance["merge_history"]) == 250
+    assert loaded.provenance["merge_history"][-1]["i"] == 249
 
 
 def test_write_lfs(centered_pair, slp_real_data, tmp_path):
@@ -5696,6 +5770,128 @@ def test_read_metadata_malformed_json_not_remasked(tmp_path):
     with pytest.raises(ValueError) as exc_info:
         read_metadata(path)
     assert "missing its required metadata JSON blob" not in str(exc_info.value)
+
+
+def test_read_provenance_falls_back_to_attr(tmp_path):
+    """read_provenance falls back to the metadata attr for legacy files."""
+    # Legacy layout: provenance only inside the metadata/json attribute.
+    path = str(tmp_path / "legacy.slp")
+    metadata = {"version": "2.0.0", "provenance": {"sleap_version": "1.2.7"}}
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("metadata")
+        grp.attrs["json"] = np.bytes_(json.dumps(metadata))
+
+    md = read_metadata(path)
+    assert read_provenance(path, md) == {"sleap_version": "1.2.7"}
+    with h5py.File(path, "r") as f:
+        assert "provenance_json" not in f
+
+
+def test_read_provenance_prefers_dataset(tmp_path):
+    """read_provenance prefers the dataset over the attr when both exist."""
+    path = str(tmp_path / "both.slp")
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("metadata")
+        grp.attrs["json"] = np.bytes_(json.dumps({"provenance": {"src": "from_attr"}}))
+        f.create_dataset(
+            "provenance_json", data=np.bytes_(json.dumps({"src": "from_dataset"}))
+        )
+
+    md = read_metadata(path)
+    assert read_provenance(path, md)["src"] == "from_dataset"
+
+
+def test_read_provenance_ndarray_dataset(tmp_path):
+    """read_provenance decodes a provenance_json stored as a (non-scalar) array."""
+    path = str(tmp_path / "arr.slp")
+    payload = np.bytes_(json.dumps({"k": "v"}))
+    with h5py.File(path, "w") as f:
+        f.create_dataset("provenance_json", data=np.array([payload]))
+
+    assert read_provenance(path, {}) == {"k": "v"}
+
+
+def test_write_provenance_dataset_overwrites(tmp_path):
+    """_write_provenance_dataset overwrites an existing provenance_json dataset."""
+    path = str(tmp_path / "p.slp")
+    with h5py.File(path, "a") as f:
+        _write_provenance_dataset(f, {"a": 1})
+        _write_provenance_dataset(f, {"a": 2})  # exercises the delete-then-create path
+
+    assert read_provenance(path, {}) == {"a": 2}
+
+
+def test_encode_metadata_attr_under_limit_unchanged():
+    """Small metadata is serialized as-is with no keys dropped."""
+    md = {"version": "2.0.0", "skeletons": [], "nodes": [], "provenance": {"a": 1}}
+    blob = _encode_metadata_attr(md)
+    assert json.loads(bytes(blob)) == md
+    assert "provenance" in md  # input not mutated when under the limit
+
+
+def test_encode_metadata_attr_drops_largest_droppable_key():
+    """Oversized metadata drops droppable keys largest-first with a warning."""
+    md = {
+        "version": "2.0.0",
+        "skeletons": [],
+        "nodes": [],
+        "provenance": {"blob": "x" * (METADATA_ATTR_SIZE_LIMIT + 1000)},
+        "tracks": [{"small": "y"}],
+    }
+    with pytest.warns(
+        UserWarning, match=r"dropped top-level key\(s\) \['provenance'\]"
+    ):
+        blob = _encode_metadata_attr(md)
+
+    decoded = json.loads(bytes(blob))
+    assert "provenance" not in decoded  # largest droppable key removed
+    assert decoded["tracks"] == [{"small": "y"}]  # smaller droppable key kept
+    assert decoded["skeletons"] == []  # protected key kept
+
+
+def test_encode_metadata_attr_drops_multiple_keys():
+    """Multiple droppable keys are removed when dropping one is not enough."""
+    big = "x" * 50000
+    md = {
+        "version": "2.0.0",
+        "skeletons": [],
+        "nodes": [],
+        "provenance": {"b": big},
+        "tracks": [big],
+        "videos": [big],
+    }
+    # 3 * ~50 KB > limit, and dropping a single key still leaves it over -> loops.
+    with pytest.warns(UserWarning, match="HDF5 attribute limit"):
+        blob = _encode_metadata_attr(md)
+
+    decoded = json.loads(bytes(blob))
+    assert len(bytes(blob)) <= METADATA_ATTR_SIZE_LIMIT
+    # At least two of the three large droppable keys were removed.
+    assert sum(k in decoded for k in ("provenance", "tracks", "videos")) <= 1
+
+
+def test_encode_metadata_attr_protected_overflow_raises():
+    """Protected keys (skeletons/nodes) overflowing alone raises a clear error."""
+    md = {
+        "version": "2.0.0",
+        "skeletons": [{"big": "x" * (METADATA_ATTR_SIZE_LIMIT + 1000)}],
+        "nodes": [],
+    }
+    with pytest.raises(ValueError, match="skeletons/nodes metadata alone"):
+        _encode_metadata_attr(md)
+
+
+def test_write_metadata_standalone_provenance_dataset(tmp_path):
+    """_write_metadata_standalone also writes the provenance_json dataset."""
+    path = str(tmp_path / "meta.slp")
+    with h5py.File(path, "w"):
+        pass
+    _write_metadata_standalone(path, provenance={"source": "x.slp"})
+
+    with h5py.File(path, "r") as f:
+        assert "provenance_json" in f
+    md = read_metadata(path)
+    assert read_provenance(path, md)["source"] == "x.slp"
 
 
 def test_read_h5wasm_instances_float64_indices(tmp_path):
