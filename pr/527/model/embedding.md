@@ -64,10 +64,10 @@ round-trip unchanged. Per-instance embeddings are loaded lazily alongside the re
 store.
 
 !!! note "Persistence scope"
-    `Instance`, `SegmentationMask`, and `Identity` embeddings are written today (mask owners join
-    on their global mask-list index, `owner_type=3`). Embeddings attached to centroid /
-    bounding-box / ROI detections are not yet persisted; saving emits a warning so they are not
-    silently dropped.
+    `Instance`, `SegmentationMask`, `Centroid`, and `Identity` embeddings are written today (mask
+    and centroid owners join on their global per-modality list index, `owner_type=3`/`2`). Embeddings
+    attached to bounding-box / ROI detections are not yet persisted; saving emits a warning so they
+    are not silently dropped.
 
 !!! tip "Skipping appearance vectors on disk"
     Appearance vectors are large. Pass `labels.save(path, save_embedding_vectors=False)` to skip the
