@@ -45,8 +45,11 @@ from sleap_io.io.slp import (
     ExportCancelled,
     LabelImageWriter,
     _encode_metadata_attr,
+    _is_known_toplevel_name,
     _points_from_hdf5_data,
     _read_source_video_json,
+    _restore_unknown_hdf5,
+    _stash_unknown_hdf5,
     _write_metadata_standalone,
     _write_provenance_dataset,
     _write_source_video_json,
@@ -5939,6 +5942,138 @@ def test_source_video_json_spill_overwrites_dataset(tmp_path):
 
     with h5py.File(path, "r") as f:
         assert _read_source_video_json(f["video0/source_video"]) == big2
+
+
+def _save_minimal_slp_with_unknown(path):
+    """Save a minimal .slp then inject unknown top-level members; return path."""
+    skel = Skeleton(["A", "B"])
+    lf = LabeledFrame(
+        video=Video("v.mp4"),
+        frame_idx=0,
+        instances=[Instance.from_numpy([[0, 0], [1, 1]], skeleton=skel)],
+    )
+    save_slp(Labels([lf]), path)
+    with h5py.File(path, "a") as f:
+        d = f.create_dataset("future_feature_json", data=np.bytes_(b'{"v":42}'))
+        d.attrs["k"] = "val"
+        g = f.create_group("future_group")
+        g.create_dataset("inner", data=np.arange(4))
+    return path
+
+
+def test_is_known_toplevel_name():
+    """_is_known_toplevel_name recognizes sleap-io's own top-level objects."""
+    assert _is_known_toplevel_name("metadata")
+    assert _is_known_toplevel_name("provenance_json")
+    assert _is_known_toplevel_name("video0")
+    assert _is_known_toplevel_name("video12")
+    assert not _is_known_toplevel_name("future_feature_json")
+    assert not _is_known_toplevel_name("videofoo")  # not video<digits>
+
+
+def test_stash_unknown_hdf5_none_for_no_source(tmp_path):
+    """No usable source (None, missing, or non-HDF5) yields no stash."""
+    assert _stash_unknown_hdf5(None) is None
+    assert _stash_unknown_hdf5(str(tmp_path / "missing.slp")) is None
+    txt = tmp_path / "not_hdf5.txt"
+    txt.write_text("hello")
+    assert _stash_unknown_hdf5(str(txt)) is None
+
+
+def test_stash_unknown_hdf5_none_when_no_unknown(tmp_path):
+    """A file with only known members yields no stash."""
+    path = str(tmp_path / "known.slp")
+    save_slp(Labels([LabeledFrame(video=Video("v.mp4"), frame_idx=0)]), path)
+    assert _stash_unknown_hdf5(path) is None
+
+
+def test_stash_unknown_hdf5_corrupt_source_returns_none(tmp_path):
+    """A corrupt HDF5 source is skipped rather than crashing the save."""
+    path = tmp_path / "corrupt.slp"
+    path.write_bytes(b"\x89HDF\r\n\x1a\n" + b"\x00" * 200)
+    assert h5py.is_hdf5(str(path))  # valid signature, broken structure
+    assert _stash_unknown_hdf5(str(path)) is None
+
+
+def test_restore_unknown_hdf5_none_image_noop(tmp_path):
+    """Restoring a None image is a no-op."""
+    path = str(tmp_path / "x.slp")
+    with h5py.File(path, "w") as f:
+        f.create_dataset("points", data=np.arange(3))
+    _restore_unknown_hdf5(path, None)
+    with h5py.File(path, "r") as f:
+        assert list(f.keys()) == ["points"]
+
+
+def test_restore_unknown_hdf5_skips_existing_names(tmp_path):
+    """Restore never overwrites a member already present in the destination."""
+    src = _save_minimal_slp_with_unknown(str(tmp_path / "src.slp"))
+    image = _stash_unknown_hdf5(src)
+    assert image is not None
+
+    # Destination already has a member with the same name as a stashed one.
+    dest = str(tmp_path / "dest.slp")
+    with h5py.File(dest, "w") as f:
+        f.create_dataset("future_feature_json", data=np.bytes_(b'{"keep":true}'))
+
+    _restore_unknown_hdf5(dest, image)
+    with h5py.File(dest, "r") as f:
+        # Existing member is preserved (stash does not clobber it)...
+        assert bytes(f["future_feature_json"][()]) == b'{"keep":true}'
+        # ...while the other stashed member is still added.
+        assert "future_group" in f
+
+
+def test_save_slp_drops_unknown_by_default(tmp_path):
+    """Unknown top-level members are dropped on a normal save (default)."""
+    src = _save_minimal_slp_with_unknown(str(tmp_path / "src.slp"))
+    out = str(tmp_path / "out.slp")
+    save_slp(load_slp(src), out)
+    with h5py.File(out, "r") as f:
+        assert "future_feature_json" not in f
+        assert "future_group" not in f
+
+
+def test_save_slp_preserve_unknown_carries_over(tmp_path):
+    """preserve_unknown carries unknown datasets/groups + attrs across a save."""
+    src = _save_minimal_slp_with_unknown(str(tmp_path / "src.slp"))
+    out = str(tmp_path / "out.slp")
+    save_slp(load_slp(src), out, preserve_unknown=True)
+    with h5py.File(out, "r") as f:
+        assert bytes(f["future_feature_json"][()]) == b'{"v":42}'
+        assert f["future_feature_json"].attrs["k"] == "val"
+        assert f["future_group/inner"][()].tolist() == [0, 1, 2, 3]
+    assert len(load_slp(out)) == 1  # known data still loads
+
+
+def test_save_slp_preserve_unknown_inplace(tmp_path):
+    """preserve_unknown works for an in-place save (source == destination)."""
+    src = _save_minimal_slp_with_unknown(str(tmp_path / "p.slp"))
+    save_slp(load_slp(src), src, preserve_unknown=True)
+    with h5py.File(src, "r") as f:
+        assert "future_feature_json" in f
+        assert "future_group" in f
+
+
+def test_save_slp_preserve_unknown_no_source_noop(tmp_path):
+    """preserve_unknown is a no-op for in-memory labels with no source file."""
+    labels = Labels([LabeledFrame(video=Video("v.mp4"), frame_idx=0)])
+    out = str(tmp_path / "mem.slp")
+    save_slp(labels, out, preserve_unknown=True)  # must not raise
+    with h5py.File(out, "r") as f:
+        assert "future_feature_json" not in f
+
+
+def test_save_slp_preserve_unknown_lazy(tmp_path):
+    """preserve_unknown carries unknown members through the lazy write path."""
+    src = _save_minimal_slp_with_unknown(str(tmp_path / "src.slp"))
+    out = str(tmp_path / "out.slp")
+    lazy = load_slp(src, lazy=True)
+    assert lazy.is_lazy
+    save_slp(lazy, out, preserve_unknown=True)
+    with h5py.File(out, "r") as f:
+        assert "future_feature_json" in f
+        assert "future_group" in f
 
 
 def test_read_h5wasm_instances_float64_indices(tmp_path):

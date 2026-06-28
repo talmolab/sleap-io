@@ -167,6 +167,7 @@ def save_slp(
     plugin: str | None = None,
     progress_callback: Callable[[int, int], bool] | None = None,
     prefer_metadata: bool = True,
+    preserve_unknown: bool = False,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -209,6 +210,11 @@ def save_slp(
             avoids decoding a frame (and leaving a resident decoder) just to recompute
             already-known metadata. Set to `False` to always read shape/grayscale/fps
             through the live backend.
+        preserve_unknown: If `True`, top-level HDF5 datasets/groups in the source
+            file that sleap-io does not recognize are carried over into the saved
+            file. This preserves additions from a newer sleap-io version across a
+            load/save cycle. Default `False`. Best-effort (requires the source file
+            to still exist and be readable HDF5). See `write_labels`.
     """
     from sleap_io.io import slp
 
@@ -222,6 +228,7 @@ def save_slp(
         plugin=plugin,
         progress_callback=progress_callback,
         prefer_metadata=prefer_metadata,
+        preserve_unknown=preserve_unknown,
     )
 
 
