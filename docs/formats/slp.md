@@ -43,6 +43,8 @@ file.slp
 ├── /negative_frames             # Dataset: Negative frame markers (optional)
 ├── /instance_identities         # Dataset: Per-instance global identity links (Format 2.5+)
 │                                 #   structured: instance_id, identity_idx, identity_score
+├── /instance_categories         # Dataset: Per-instance categorical labels (Format 2.7+)
+│                                 #   JSON rows: {instance_id, categories: {dim: value}}
 │
 ├── /bboxes/                     # Group: Columnar bounding box storage (Format 2.0+)
 │   ├── x1                       # Dataset: float64 top-left x
@@ -153,9 +155,10 @@ file.slp
 | `tracks_json` | `bytes[]` | JSON array of track definitions |
 | `suggestions_json` | `bytes[]` | JSON array of suggested frames (optional) |
 | `sessions_json` | `bytes[]` | JSON array of recording sessions (optional) |
-| `identities_json` | `bytes[]` | JSON array of identity definitions, incl. stable `uuid` (optional) |
+| `identities_json` | `bytes[]` | JSON array of identity definitions, incl. stable `uuid` and optional entity-level `categories` (optional) |
 | `instance_identities` | structured | Per-instance global identity links: `instance_id`, `identity_idx`, `identity_score` (Format 2.5+, optional) |
 | `embeddings/<space>` | group | re-ID embedding vectors + `owner_type`/`owner_id` join columns + `meta_json` (Format 2.6+, optional) |
+| `instance_categories` | `bytes[]` | Per-instance categorical labels: JSON `{instance_id, categories}` rows (Format 2.7+, optional) |
 | `provenance_json` | `bytes` | JSON object of provenance metadata (optional) |
 
 ### Provenance storage and the 64 KB metadata limit
@@ -556,7 +559,8 @@ Each identity is stored as a JSON object:
 {
     "name": "mouse_A",
     "uuid": "3f2a9c1e4b7d4e8a9c0d1e2f3a4b5c6d",
-    "color": "#e6194b"
+    "color": "#e6194b",
+    "categories": {"species": "mouse", "sex": "M"}
 }
 ```
 
@@ -565,6 +569,7 @@ Each identity is stored as a JSON object:
 | `name` | `string` | Human-readable identity name (not required to be unique) |
 | `uuid` | `string` | Stable 32-char hex key — the canonical cross-file/merge matching key. Legacy files written before format 2.5 omit it; a fresh one is synthesized on load |
 | `color` | `string` | Optional hex color for visualization (omitted if null) |
+| `categories` | `object` | Optional entity-level categorical labels keyed by dimension (Format 2.7+; omitted if empty). A reserved key — excluded from the metadata catch-all |
 | *custom* | `any` | Additional metadata fields |
 
 ### Per-Instance Linking
@@ -578,6 +583,21 @@ Per-instance global identity assignments are stored in the optional `/instance_i
 | `identity_score` | `float32` | Identity-assignment score (NaN if unrecorded) |
 
 This is additive: old readers ignore the dataset, and instances without a global identity simply have no row. Per-identity prototype embeddings and per-instance re-ID embeddings live in the `/embeddings` group — see [Embeddings](../model/embedding.md).
+
+### Per-Instance Categories
+
+Per-instance [categorical labels](../model/categories.md) are stored in the optional `/instance_categories` dataset (Format 2.7+), a 1-D array of JSON byte-strings — one row per instance that carries any categories, joined to instances by the global `instance_id`:
+
+```json
+{"instance_id": 0, "categories": {"sex": "M", "behavior": "grooming"}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `instance_id` | `int` | Global instance id (enumeration order over frames then instances) |
+| `categories` | `object` | Mapping from dimension name to a categorical value (typically a string; any JSON-serializable value is allowed) |
+
+The mapping is variable-width, so each row is encoded as JSON (like `/identities_json`) rather than a fixed structured array. This is additive: old readers ignore the dataset, and instances with no categories simply have no row. Entity-level categories on an `Identity` ride in `/identities_json` instead (see above).
 
 ### Instance Group Linking
 
@@ -1411,7 +1431,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Triggered only when a video carries a crop; uncropped files stay byte-identical and at `format_id <= 2.2`
 - Purely additive: does not cross the only legacy threshold (`< 1.4`)
 
-### Format 2.4 (Current)
+### Format 2.4
 
 **Persisted mask `from_predicted` provenance.**
 
@@ -1419,6 +1439,32 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Lets [`UserSegmentationMask.from_predicted`][sleap_io.UserSegmentationMask] (set by [`PredictedSegmentationMask.to_user()`][sleap_io.PredictedSegmentationMask]) survive a save/load round-trip when the source prediction is also saved
 - Triggered automatically when any mask records a `from_predicted` link; otherwise the format stays at whatever other state drives `format_id`
 - Backward compatible: the column is always written but reads are gated on its presence, so files written before 2.4 (which lack the column) load `from_predicted` as `None`
+
+### Format 2.5
+
+**Per-instance global identity links.**
+
+- New optional `/instance_identities` structured dataset (`instance_id`, `identity_idx`, `identity_score`) joining instances to the `/identities_json` catalog (see [Per-Instance Linking](#per-instance-linking))
+- Triggered automatically when any instance carries an [`Identity`][sleap_io.Identity]; identity-free files stay at `format_id <= 2.4`
+- Backward compatible: reads are gated on dataset presence, so older readers ignore it
+
+### Format 2.6
+
+**Appearance / re-ID embeddings.**
+
+- New optional `/embeddings` group, one subgroup per named space holding stacked `vectors` `(n, D)` plus `owner_type`/`owner_id` join columns and a per-row `meta_json` (see [Embeddings](../model/embedding.md))
+- Persists per-instance and per-`Identity` (prototype/gallery) embeddings; large float vectors live in gzipped numeric datasets, never in JSON
+- Triggered automatically when any instance or identity carries an embedding; embedding-free files stay at `format_id <= 2.5`
+- Backward compatible: reads are gated on group presence
+
+### Format 2.7 (Current)
+
+**Per-instance and entity-level categories.**
+
+- New optional `/instance_categories` dataset — a 1-D array of `{instance_id, categories}` JSON rows joining instances to their [categorical labels](../model/categories.md) (see [Per-Instance Categories](#per-instance-categories))
+- Entity-level categories on an [`Identity`][sleap_io.Identity] ride under a reserved `categories` key in `/identities_json`
+- Triggered automatically when any instance or identity carries categories; category-free files stay at `format_id <= 2.6`
+- Backward compatible: reads are gated on presence, so older readers ignore both
 
 ## Browser-side compatibility (h5wasm / sleap-io.js)
 

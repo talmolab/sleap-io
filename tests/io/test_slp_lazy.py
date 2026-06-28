@@ -1832,3 +1832,72 @@ def test_lazy_save_persists_identities_and_embeddings(tmp_path):
     np.testing.assert_array_equal(
         by_name["mouse_A"].embedding.vector, np.ones(128, dtype=np.float32)
     )
+
+
+def test_lazy_categories_round_trip(tmp_path):
+    """Test per-instance categories materialize correctly via the lazy loader."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    i0 = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
+    i0.set_categories({"sex": "M", "behavior": "grooming"})
+    i1 = PredictedInstance.from_numpy(np.array([[4, 5], [6, 7]]), skel, score=0.8)
+    i1.set_category("sex_probs", [0.2, 0.8])
+    i2 = Instance.from_numpy(np.array([[8, 9], [10, 11]]), skel)  # no categories
+
+    labels = sio.Labels(
+        [LabeledFrame(video=video, frame_idx=0, instances=[i0, i1, i2])]
+    )
+
+    path = str(tmp_path / "lazy_categories.slp")
+    sio.save_slp(labels, path)
+
+    lazy = sio.load_slp(path, lazy=True)
+    assert lazy.is_lazy
+    li = list(lazy[0].instances)
+    assert li[0].categories == {"sex": "M", "behavior": "grooming"}
+    assert li[1].categories == {"sex_probs": [0.2, 0.8]}
+    assert li[2].categories == {}
+
+    # Mutating a materialized instance's categories must not leak into the store.
+    li[0].categories["sex"] = "F"
+    li_again = list(lazy[0].instances)
+    assert li_again[0].categories["sex"] == "M"
+
+    # Lazy store copy preserves categories.
+    cli = list(lazy.copy()[0].instances)
+    assert cli[0].categories == {"sex": "M", "behavior": "grooming"}
+
+
+def test_lazy_save_persists_categories(tmp_path):
+    """Lazy save must persist per-instance + entity-level categories (format 2.7)."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    identity = sio.Identity(name="mouse_A")
+    identity.set_categories({"species": "mouse", "sex": "M"})
+
+    i0 = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel, identity=identity)
+    i0.set_categories({"sex": "M", "behavior": "grooming"})
+    i1 = Instance.from_numpy(np.array([[8, 9], [10, 11]]), skel)  # no categories
+
+    labels = sio.Labels([LabeledFrame(video=video, frame_idx=0, instances=[i0, i1])])
+    labels.update()
+
+    a = str(tmp_path / "a.slp")
+    sio.save_slp(labels, a)
+    lazy = sio.load_slp(a, lazy=True)
+    assert lazy.is_lazy
+
+    # Save the LAZY labels (exercises the fast-path writer) and reload eagerly.
+    b = str(tmp_path / "b.slp")
+    sio.save_slp(lazy, b)
+    assert lazy.is_lazy  # fast path must not materialize
+
+    with h5py.File(b, "r") as f:
+        assert f["metadata"].attrs["format_id"] >= 2.7
+        assert "instance_categories" in f
+
+    reb = sio.load_slp(b)
+    ri = reb[0].instances
+    assert ri[0].categories == {"sex": "M", "behavior": "grooming"}
+    assert ri[1].categories == {}
+    assert reb.identities[0].categories == {"species": "mouse", "sex": "M"}

@@ -63,6 +63,17 @@ In this iteration, categories are attached to **instances and `Identity`** only.
 primitives keep their singular scalar `category` and do not yet carry the plural mapping; this can
 be extended later, exactly like the [embeddings](embedding.md) rollout.
 
+## SLP persistence
+
+Categories persist to SLP in **format 2.7+**. Per-instance categories live in the additive
+`/instance_categories` dataset — a 1-D array of `{"instance_id", "categories"}` JSON rows, one per
+instance carrying any categories, joined back to instances by the global `instance_id` (the same
+id space as the identity/embedding side-tables). Because the mapping is variable-width, each row
+is encoded as JSON rather than a fixed structured array. Entity-level `Identity` categories ride
+under a reserved `categories` key in `/identities_json`. Both are purely additive: older readers
+ignore them, and category-free files round-trip unchanged at `format_id <= 2.6`. Per-instance
+categories load lazily alongside the rest of the lazy store. See [Formats → SLP](../formats/slp.md#per-instance-categories).
+
 ---
 
 ## API reference
