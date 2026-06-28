@@ -87,8 +87,13 @@ class Identity(EmbeddingMixin, CategoriesMixin):
             raise ValueError(f"Unknown matching method: {method}")
 
     def __repr__(self) -> str:
-        """Return a readable string representation."""
-        parts = [f'Identity(name="{self.name}"']
+        """Return a readable string representation.
+
+        Surfaces a truncated `uuid` so two identities that differ only by their
+        (object-identity) `uuid` do not `repr()` identically -- useful when
+        spotting cross-file mismatches in logs.
+        """
+        parts = [f'Identity(name="{self.name}", uuid="{self.uuid[:8]}…"']
         if self.color is not None:
             parts.append(f', color="{self.color}"')
         parts.append(")")

@@ -172,6 +172,54 @@ def test_append_extend():
     assert labels.tracks == [new_track, new_track2]
 
 
+def test_add_identity_dedupes_by_uuid():
+    """add_identity is idempotent and returns the canonical catalog object."""
+    labels = Labels()
+    id_a = Identity(name="mouse_A")
+    assert labels.add_identity(id_a) is id_a
+    assert labels.identities == [id_a]
+
+    # A distinct object sharing the uuid returns the canonical entry, no dup.
+    id_a_dup = Identity(name="mouse_A_renamed", uuid=id_a.uuid)
+    assert labels.add_identity(id_a_dup) is id_a
+    assert labels.identities == [id_a]
+
+    # A different uuid is appended.
+    id_b = Identity(name="mouse_B")
+    assert labels.add_identity(id_b) is id_b
+    assert labels.identities == [id_a, id_b]
+
+
+def test_add_identity_match_name():
+    """add_identity(match="name") dedupes by name instead of uuid."""
+    labels = Labels()
+    id_a = Identity(name="mouse_A")
+    labels.add_identity(id_a)
+    # Same name, different uuid -> returns existing under name matching.
+    other = Identity(name="mouse_A")
+    assert labels.add_identity(other, match="name") is id_a
+    assert labels.identities == [id_a]
+
+
+def test_get_identity():
+    """get_identity finds by uuid or name, returns None when absent."""
+    labels = Labels()
+    id_a = Identity(name="mouse_A")
+    id_b = Identity(name="mouse_B")
+    labels.identities.extend([id_a, id_b])
+
+    assert labels.get_identity(uuid=id_b.uuid) is id_b
+    assert labels.get_identity(name="mouse_A") is id_a
+    assert labels.get_identity(uuid="0" * 32) is None
+    assert labels.get_identity(name="nope") is None
+
+    # Exactly one selector is required.
+    with pytest.raises(ValueError):
+        labels.get_identity()
+    with pytest.raises(ValueError):
+        labels.get_identity(uuid=id_a.uuid, name="mouse_A")
+
+
 def test_identities_auto_collected():
     """Test that Labels auto-collects per-instance Identity objects."""
     skel = Skeleton(["A", "B"])

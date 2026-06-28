@@ -1790,7 +1790,7 @@ def test_lazy_save_persists_identities_and_embeddings(tmp_path):
     with h5py.File(b, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.6
         assert "identities_json" in f
-        assert "instance_identities" in f
+        assert "identity_links" in f
         assert "embeddings" in f
         # Aux join columns are gzip-compressed (compression fix).
         sub = f["embeddings/reid"]

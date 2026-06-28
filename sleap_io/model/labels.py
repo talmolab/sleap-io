@@ -512,8 +512,9 @@ class Labels:
                 if inst.identity is not None and inst.identity not in self.identities:
                     self.identities.append(inst.identity)
 
-            # Collect tracks from nested annotations
+            # Collect tracks and identities from nested annotations
             self._collect_annotation_tracks(lf)
+            self._collect_annotation_identities(lf)
 
         # Collect multi-view identities bound only on InstanceGroups (sessions).
         self._collect_session_identities()
@@ -903,6 +904,53 @@ class Labels:
                 if info.track is not None and info.track not in self.tracks:
                     self.tracks.append(info.track)
 
+    def _collect_annotation_identities(self, lf: LabeledFrame):
+        """Collect identities from non-instance annotations on a frame.
+
+        Mirrors `_collect_annotation_tracks` for the global `Identity` catalog.
+        `SegmentationMask`, `Centroid`, `BoundingBox`, and `ROI` carry an
+        `identity`; deduped by object identity (``not in``), matching the
+        instance-identity collection in update/append/extend. Static ROIs (not
+        frame-bound) are swept by the save-time `_collect_identities`.
+        """
+        for ann in (*lf.masks, *lf.centroids, *lf.bboxes, *lf.rois):
+            if ann.identity is not None and ann.identity not in self.identities:
+                self.identities.append(ann.identity)
+
+    def _collect_identities(self):
+        """Register every detection's `Identity` in the catalog, deduped by uuid.
+
+        Called at save time so a producer that sets an `identity` on any detection
+        (instance / mask / centroid / bbox / ROI) without also registering it in
+        ``self.identities`` does not silently drop the link on write. Unlike the
+        build-path collectors (object-identity dedup), this dedupes by the stable
+        cross-file ``uuid``: any pre-existing uuid-duplicate catalog entries are
+        first collapsed (the first per uuid is kept), then every detection identity
+        is registered via `add_identity` (uuid match). The on-disk link resolves by
+        uuid, so all detections sharing a uuid point at the one canonical entry.
+        Mutates ``self.identities`` (eager labels only).
+        """
+        # Collapse any uuid-duplicate catalog entries (keep first seen per uuid).
+        seen: set[str] = set()
+        deduped: list[Identity] = []
+        for ident in self.identities:
+            if ident.uuid not in seen:
+                seen.add(ident.uuid)
+                deduped.append(ident)
+        self.identities[:] = deduped
+
+        for lf in self.labeled_frames:
+            for inst in lf:
+                if inst.identity is not None:
+                    self.add_identity(inst.identity)
+            for ann in (*lf.masks, *lf.centroids, *lf.bboxes, *lf.rois):
+                if ann.identity is not None:
+                    self.add_identity(ann.identity)
+        for roi in self.static_rois:
+            if roi.identity is not None:
+                self.add_identity(roi.identity)
+        self._collect_session_identities()
+
     def _collect_session_identities(self):
         """Collect multi-view identities bound only on `InstanceGroup`s.
 
@@ -950,6 +998,7 @@ class Labels:
                     self.identities.append(inst.identity)
 
             self._collect_annotation_tracks(lf)
+            self._collect_annotation_identities(lf)
             self._collect_session_identities()
 
     def extend(self, lfs: list[LabeledFrame], update: bool = True):
@@ -985,6 +1034,7 @@ class Labels:
                         self.identities.append(inst.identity)
 
                 self._collect_annotation_tracks(lf)
+                self._collect_annotation_identities(lf)
 
             self._collect_session_identities()
 
@@ -1617,7 +1667,11 @@ class Labels:
             verbose: If `True` (the default), display a progress bar when embedding
                 frames.
             **kwargs: Additional format-specific arguments passed to the save function.
-                See `save_file` for format-specific options.
+                See `save_file` for format-specific options. For SLP this includes
+                `save_embedding_vectors` (default `True`): set `False` to persist
+                identity *links* but skip the large re-ID appearance `/embeddings`
+                vectors (kept in memory). Note this is distinct from `embed`, which
+                embeds *video frames*.
         """
         from pathlib import Path
 
@@ -2408,6 +2462,57 @@ class Labels:
                 return existing
         self.videos.append(video)
         return video
+
+    def add_identity(self, identity: Identity, match: str = "uuid") -> Identity:
+        """Add an `Identity` to the catalog, deduping by the given match method.
+
+        Idempotent registration helper for `Labels.identities` (mirrors
+        `add_video`). Because `Identity` is ``eq=False`` (object-identity
+        equality), the plain catalog list does not dedup by the stable cross-file
+        ``uuid``, so a producer attaching one shared `Identity` to many detections
+        must funnel through this method to avoid catalog duplication.
+
+        Args:
+            identity: The identity to register.
+            match: Matching method passed to `Identity.matches` -- one of
+                ``"uuid"`` (default; the canonical cross-file key), ``"name"``, or
+                ``"identity"`` (Python object identity). This selects a single
+                method; it is not a uuid-then-name fallback chain.
+
+        Returns:
+            The canonical `Identity` to use: the pre-existing catalog entry if one
+            matches, otherwise the input ``identity`` (now appended).
+        """
+        for existing in self.identities:
+            if existing.matches(identity, method=match):
+                return existing
+        self.identities.append(identity)
+        return identity
+
+    def get_identity(
+        self, *, uuid: str | None = None, name: str | None = None
+    ) -> Identity | None:
+        """Find an `Identity` in the catalog by ``uuid`` or ``name``.
+
+        Args:
+            uuid: The stable ``uuid`` to look up. Mutually exclusive with ``name``.
+            name: The ``name`` to look up. Mutually exclusive with ``uuid``. Names
+                are not required to be unique, so the first match is returned.
+
+        Returns:
+            The first matching `Identity`, or ``None`` if none matches.
+
+        Raises:
+            ValueError: If neither or both of ``uuid`` / ``name`` are provided.
+        """
+        if (uuid is None) == (name is None):
+            raise ValueError("Provide exactly one of `uuid` or `name`.")
+        for identity in self.identities:
+            if uuid is not None and identity.uuid == uuid:
+                return identity
+            if name is not None and identity.name == name:
+                return identity
+        return None
 
     def replace_videos(
         self,

@@ -42,9 +42,17 @@ from sleap_io.io.slp import (
     LI_DTYPE,
     METADATA_ATTR_SIZE_LIMIT,
     OBJ_DTYPE,
+    OWNER_BBOX,
+    OWNER_CENTROID,
+    OWNER_IDENTITY,
+    OWNER_INSTANCE,
+    OWNER_MASK,
+    OWNER_ROI,
+    OWNER_TRACK,
     ExportCancelled,
     LabelImageWriter,
     _encode_metadata_attr,
+    _identity_link_rows_for_owner,
     _is_known_toplevel_name,
     _points_from_hdf5_data,
     _read_source_video_json,
@@ -70,7 +78,9 @@ from sleap_io.io.slp import (
     process_and_embed_frames,
     read_bboxes,
     read_centroids,
+    read_embeddings,
     read_identities,
+    read_identity_links,
     read_instance_categories,
     read_instances,
     read_label_images,
@@ -1148,7 +1158,11 @@ def test_per_instance_identity_round_trip(tmp_path):
     # Format bumped to 2.5 and the additive dataset is present.
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.5
-        assert "instance_identities" in f
+        assert "identity_links" in f
+        # Owner-type-aware: instance owners are written as OWNER_INSTANCE (0).
+        links = f["identity_links"][:]
+        assert "owner_type" in links.dtype.names
+        assert set(links["owner_type"].tolist()) == {0}
 
     loaded = load_slp(path)
     li = list(loaded[0].instances)
@@ -1184,10 +1198,354 @@ def test_no_identity_keeps_low_format_and_no_dataset(tmp_path):
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] < 2.5
+        assert "identity_links" not in f
         assert "instance_identities" not in f
 
     loaded = load_slp(path)
     assert list(loaded[0].instances)[0].identity is None
+
+
+def test_read_identity_links_owner_type_keyed(tmp_path):
+    """read_identity_links buckets rows by owner_type (instance owners under 0)."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    id_a = Identity(name="mouse_A")
+    insts = [
+        Instance.from_numpy(
+            np.array([[0, 1], [2, 3]]), skel, identity=id_a, identity_score=0.5
+        ),
+        Instance.from_numpy(np.array([[4, 5], [6, 7]]), skel),  # no identity
+    ]
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=insts)])
+    labels.update()
+    path = str(tmp_path / "links.slp")
+    save_slp(labels, path)
+
+    links = read_identity_links(path)
+    # Only the instance-owner bucket is present; keyed by global instance_id.
+    assert set(links) == {OWNER_INSTANCE}
+    assert links[OWNER_INSTANCE] == {0: (0, pytest.approx(0.5))}
+
+
+def test_read_identity_links_legacy_instance_identities(tmp_path):
+    """Pre-rename instance_identities (3-col, no owner_type) reads as instances."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    id_a = Identity(name="mouse_A")
+    insts = [
+        Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel, identity=id_a),
+        Instance.from_numpy(np.array([[4, 5], [6, 7]]), skel),
+    ]
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=insts)])
+    labels.update()
+    path = str(tmp_path / "legacy.slp")
+    save_slp(labels, path)
+
+    # Rewrite the new dataset as the legacy instance-only layout (no owner_type).
+    legacy_dtype = np.dtype(
+        [("instance_id", "i8"), ("identity_idx", "i4"), ("identity_score", "f4")]
+    )
+    with h5py.File(path, "a") as f:
+        del f["identity_links"]
+        f.create_dataset(
+            "instance_identities",
+            data=np.array([(0, 0, np.float32("nan"))], dtype=legacy_dtype),
+            maxshape=(None,),
+        )
+
+    # The fallback reads the legacy dataset back as instance owners.
+    links = read_identity_links(path)
+    assert links == {OWNER_INSTANCE: {0: (0, None)}}
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)
+    assert li[0].identity is not None and li[0].identity.name == "mouse_A"
+    assert li[1].identity is None
+
+
+def test_read_embeddings_skips_unknown_owner_type(tmp_path):
+    """Unknown owner_type embeddings are skipped (not mis-routed) with a warning."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
+    inst.set_embedding(np.ones(4, dtype=np.float32))
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+    path = str(tmp_path / "emb.slp")
+    save_slp(labels, path)
+
+    # Inject a track-owner (owner_type=7, reserved/unattached) row.
+    with h5py.File(path, "a") as f:
+        sub = f["embeddings/reid"]
+        for name in ("vectors", "owner_type", "owner_id", "meta_json"):
+            ds = sub[name]
+            ds.resize(ds.shape[0] + 1, axis=0)
+        sub["vectors"][-1] = np.full(4, 2.0, dtype=np.float32)
+        sub["owner_type"][-1] = OWNER_TRACK
+        sub["owner_id"][-1] = 0
+        sub["meta_json"][-1] = np.bytes_("{}")
+
+    with pytest.warns(UserWarning, match="unsupported owner_type"):
+        embeddings_by_owner = read_embeddings(path)
+
+    # The instance embedding still loads; the track row is dropped, not mis-bound.
+    assert set(embeddings_by_owner[OWNER_INSTANCE]) == {0}
+    assert "reid" in embeddings_by_owner[OWNER_INSTANCE][0]
+    assert OWNER_TRACK not in embeddings_by_owner
+    assert OWNER_IDENTITY not in embeddings_by_owner
+
+
+def _mask_frame(video, frame_idx, masks):
+    return LabeledFrame(video=video, frame_idx=frame_idx, masks=masks)
+
+
+def test_mask_identity_and_embedding_round_trip(tmp_path):
+    """Per-mask identity links + embeddings round-trip via SLP (owner_type=3)."""
+    video = Video(filename="test.mp4")
+    id_a = Identity(name="gerbil_A")
+    id_b = Identity(name="gerbil_B")
+    d1 = np.zeros((8, 8), dtype=bool)
+    d1[1:4, 1:4] = True
+    d2 = np.zeros((8, 8), dtype=bool)
+    d2[4:7, 4:7] = True
+    m1 = UserSegmentationMask.from_numpy(d1, identity=id_a, identity_score=0.9)
+    m1.set_embedding(np.arange(6, dtype=np.float32))
+    m2 = PredictedSegmentationMask.from_numpy(d2, score=0.8, identity=id_b)
+    m3 = UserSegmentationMask.from_numpy(d1)  # no identity / no embedding
+    labels = Labels([_mask_frame(video, 0, [m1, m2, m3])])
+    labels.update()
+
+    path = str(tmp_path / "mask_ids.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] >= 2.6
+        links = f["identity_links"][:]
+        # Both mask owners present (owner_type == OWNER_MASK).
+        assert set(links["owner_type"].tolist()) == {OWNER_MASK}
+        assert sorted(links["owner_id"].tolist()) == [0, 1]
+
+    loaded = load_slp(path)
+    lm = list(loaded[0].masks)
+    assert lm[0].identity is not None and lm[0].identity.name == "gerbil_A"
+    assert lm[0].identity.uuid == id_a.uuid
+    assert lm[0].identity_score == pytest.approx(0.9)
+    np.testing.assert_array_equal(lm[0].embedding.vector, np.arange(6))
+    assert lm[1].identity is not None and lm[1].identity.name == "gerbil_B"
+    assert lm[1].identity_score is None
+    assert lm[2].identity is None
+    assert lm[2].embedding is None
+    # Mask identities reuse the shared catalog (same objects as instances would).
+    assert {i.name for i in loaded.identities} == {"gerbil_A", "gerbil_B"}
+
+
+def test_mask_identity_round_trip_lazy_save(tmp_path):
+    """Mask identity/embedding survive the lazy fast-path writer."""
+    video = Video(filename="test.mp4")
+    ident = Identity(name="gerbil_A")
+    d = np.zeros((8, 8), dtype=bool)
+    d[1:4, 1:4] = True
+    m = UserSegmentationMask.from_numpy(d, identity=ident, identity_score=0.5)
+    m.set_embedding(np.ones(5, dtype=np.float32))
+    labels = Labels([_mask_frame(video, 0, [m])])
+    labels.update()
+
+    a = str(tmp_path / "a.slp")
+    save_slp(labels, a)
+    lazy = load_slp(a, lazy=True)
+    assert lazy.is_lazy
+
+    b = str(tmp_path / "b.slp")
+    save_slp(lazy, b)
+    assert lazy.is_lazy  # fast path did not materialize
+
+    reloaded = load_slp(b)
+    rm = list(reloaded[0].masks)[0]
+    assert rm.identity is not None and rm.identity.uuid == ident.uuid
+    assert rm.identity_score == pytest.approx(0.5)
+    np.testing.assert_array_equal(rm.embedding.vector, np.ones(5))
+
+
+def test_centroid_identity_and_embedding_round_trip(tmp_path):
+    """Per-centroid identity links + embeddings round-trip via SLP (owner_type=2)."""
+    video = Video(filename="test.mp4")
+    id_a = Identity(name="cell_A")
+    c1 = UserCentroid(x=5.0, y=6.0, identity=id_a, identity_score=0.8)
+    c1.set_embedding(np.arange(4, dtype=np.float32))
+    c2 = PredictedCentroid(x=1.0, y=2.0, score=0.9)  # no identity / embedding
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, centroids=[c1, c2])])
+    labels.update()
+
+    path = str(tmp_path / "centroid_ids.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] >= 2.6
+        links = f["identity_links"][:]
+        assert set(links["owner_type"].tolist()) == {OWNER_CENTROID}
+        assert links["owner_id"].tolist() == [0]
+        assert set(f["embeddings/reid/owner_type"][:].tolist()) == {OWNER_CENTROID}
+
+    loaded = load_slp(path)
+    lc = list(loaded[0].centroids)
+    assert lc[0].identity is not None and lc[0].identity.uuid == id_a.uuid
+    assert lc[0].identity_score == pytest.approx(0.8)
+    np.testing.assert_array_equal(lc[0].embedding.vector, np.arange(4))
+    assert lc[1].identity is None
+    assert lc[1].embedding is None
+
+
+def test_centroid_identity_round_trip_lazy_save(tmp_path):
+    """Centroid identity/embedding survive the lazy fast-path writer."""
+    video = Video(filename="test.mp4")
+    ident = Identity(name="cell_A")
+    c = UserCentroid(x=3.0, y=4.0, identity=ident, identity_score=0.5)
+    c.set_embedding(np.ones(6, dtype=np.float32))
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, centroids=[c])])
+    labels.update()
+
+    a = str(tmp_path / "a.slp")
+    save_slp(labels, a)
+    lazy = load_slp(a, lazy=True)
+    assert lazy.is_lazy
+    b = str(tmp_path / "b.slp")
+    save_slp(lazy, b)
+    assert lazy.is_lazy
+
+    reloaded = load_slp(b)
+    rc = list(reloaded[0].centroids)[0]
+    assert rc.identity is not None and rc.identity.uuid == ident.uuid
+    assert rc.identity_score == pytest.approx(0.5)
+    np.testing.assert_array_equal(rc.embedding.vector, np.ones(6))
+
+
+def test_save_time_autocollect_unregistered_identity(tmp_path):
+    """Post-hoc inst.identity not in the catalog is auto-collected + persisted."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+    assert labels.identities == []  # nothing registered yet
+
+    # Producer assigns an identity AFTER the instance is in Labels, bypassing the
+    # build-path collectors -- previously this was silently dropped on save.
+    inst.identity = Identity(name="mouse_X")
+    inst.identity_score = 0.42
+
+    path = str(tmp_path / "autocollect.slp")
+    save_slp(labels, path)
+
+    # Save mutated the catalog (auto-collect) so the link is honored.
+    assert [i.name for i in labels.identities] == ["mouse_X"]
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)[0]
+    assert li.identity is not None and li.identity.name == "mouse_X"
+    assert li.identity_score == pytest.approx(0.42)
+
+
+def test_save_time_autocollect_dedupes_by_uuid(tmp_path):
+    """Distinct Identity objects sharing a uuid collapse + resolve correctly."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    uuid = "0123456789abcdef0123456789abcdef"
+    i0 = Instance.from_numpy(
+        np.array([[0, 1], [2, 3]]), skel, identity=Identity(name="A", uuid=uuid)
+    )
+    # Second instance: a *different* Identity object with the SAME uuid.
+    i1 = Instance.from_numpy(
+        np.array([[4, 5], [6, 7]]), skel, identity=Identity(name="A2", uuid=uuid)
+    )
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[i0, i1])])
+    labels.update()
+    path = str(tmp_path / "dup_uuid.slp")
+    save_slp(labels, path)
+
+    # Catalog collapsed to a single entry for the shared uuid.
+    assert len(labels.identities) == 1
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)
+    assert li[0].identity is not None and li[0].identity.uuid == uuid
+    assert li[1].identity is not None and li[1].identity.uuid == uuid
+
+
+def test_identity_link_rows_for_owner_skips_unregistered():
+    """An annotation whose identity uuid is not in the catalog is skipped."""
+    d = np.zeros((4, 4), dtype=bool)
+    d[1:3, 1:3] = True
+    registered = Identity(name="A")
+    m_ok = UserSegmentationMask.from_numpy(d, identity=registered, identity_score=0.5)
+    m_unregistered = UserSegmentationMask.from_numpy(d, identity=Identity(name="B"))
+    m_none = UserSegmentationMask.from_numpy(d)
+    uuid_to_idx = {registered.uuid: 0}
+
+    rows = _identity_link_rows_for_owner(
+        [m_ok, m_unregistered, m_none], uuid_to_idx, OWNER_MASK
+    )
+    # Only the registered mask (at index 0) yields a row, under the given owner type.
+    assert rows == [(OWNER_MASK, 0, 0, pytest.approx(0.5))]
+
+
+def _labels_with_identity_and_embedding():
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    ident = Identity(name="mouse_A")
+    inst = Instance.from_numpy(
+        np.array([[0, 1], [2, 3]]), skel, identity=ident, identity_score=0.9
+    )
+    inst.set_embedding(np.ones(8, dtype=np.float32))
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+    return labels
+
+
+def test_save_embedding_vectors_false_skips_embeddings_keeps_links(tmp_path):
+    """save_embedding_vectors=False drops /embeddings but keeps /identity_links."""
+    labels = _labels_with_identity_and_embedding()
+    path = str(tmp_path / "no_emb.slp")
+    save_slp(labels, path, save_embedding_vectors=False)
+
+    with h5py.File(path, "r") as f:
+        assert "embeddings" not in f  # vectors skipped
+        assert "identity_links" in f  # links still persisted
+
+    # Vectors remain in memory on the original object (not mutated by save).
+    assert list(labels[0].instances)[0].embedding is not None
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)[0]
+    assert li.identity is not None and li.identity.name == "mouse_A"
+    assert li.embedding is None  # not persisted
+
+
+def test_save_embedding_vectors_default_writes_embeddings(tmp_path):
+    """Default save_embedding_vectors=True writes the /embeddings group."""
+    labels = _labels_with_identity_and_embedding()
+    path = str(tmp_path / "with_emb.slp")
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        assert "embeddings" in f
+
+    # Also reachable through Labels.save(...) via **kwargs.
+    path2 = str(tmp_path / "via_save.slp")
+    labels.save(path2, save_embedding_vectors=False)
+    with h5py.File(path2, "r") as f:
+        assert "embeddings" not in f
+        assert "identity_links" in f
+
+
+def test_save_embedding_vectors_false_lazy(tmp_path):
+    """save_embedding_vectors=False is honored on the lazy fast-path writer."""
+    labels = _labels_with_identity_and_embedding()
+    a = str(tmp_path / "a.slp")
+    save_slp(labels, a)
+    lazy = load_slp(a, lazy=True)
+    assert lazy.is_lazy
+    b = str(tmp_path / "b.slp")
+    save_slp(lazy, b, save_embedding_vectors=False)
+    with h5py.File(b, "r") as f:
+        assert "embeddings" not in f
+        assert "identity_links" in f
 
 
 def test_embeddings_round_trip(tmp_path):
@@ -1267,18 +1625,59 @@ def test_embeddings_inconsistent_dim_raises(tmp_path):
         save_slp(labels, str(tmp_path / "bad.slp"))
 
 
-def test_modality_embeddings_warn_on_save(tmp_path):
-    """Test a warning fires for not-yet-persisted modality embeddings."""
-    skel = Skeleton(["A", "B"])
+def test_bbox_identity_and_embedding_round_trip(tmp_path):
+    """Per-bbox identity links + embeddings round-trip via SLP (owner_type=4)."""
     video = Video(filename="test.mp4")
-    inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
-    centroid = UserCentroid(x=1.0, y=2.0)
-    centroid.set_embedding(np.ones(8))  # not yet persisted
-    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst], centroids=[centroid])
-    labels = Labels([lf])
+    id_a = Identity(name="fly_A")
+    b1 = UserBoundingBox(
+        x1=0.0, y1=0.0, x2=10.0, y2=10.0, identity=id_a, identity_score=0.8
+    )
+    b1.set_embedding(np.arange(4, dtype=np.float32))
+    b2 = PredictedBoundingBox(x1=5.0, y1=5.0, x2=9.0, y2=9.0, score=0.7)  # no identity
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, bboxes=[b1, b2])])
+    labels.update()
 
-    with pytest.warns(UserWarning, match="not yet persisted"):
-        save_slp(labels, str(tmp_path / "modality.slp"))
+    path = str(tmp_path / "bbox_ids.slp")
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        links = f["identity_links"][:]
+        assert set(links["owner_type"].tolist()) == {OWNER_BBOX}
+        assert links["owner_id"].tolist() == [0]
+        assert set(f["embeddings/reid/owner_type"][:].tolist()) == {OWNER_BBOX}
+
+    loaded = load_slp(path)
+    lb = list(loaded[0].bboxes)
+    assert lb[0].identity is not None and lb[0].identity.uuid == id_a.uuid
+    assert lb[0].identity_score == pytest.approx(0.8)
+    np.testing.assert_array_equal(lb[0].embedding.vector, np.arange(4))
+    assert lb[1].identity is None and lb[1].embedding is None
+
+
+def test_roi_identity_and_embedding_round_trip(tmp_path):
+    """Per-ROI identity links + embeddings round-trip via SLP (owner_type=5)."""
+    from shapely.geometry import box
+
+    from sleap_io.model.roi import UserROI
+
+    video = Video(filename="test.mp4")
+    id_a = Identity(name="arena_A")
+    r = UserROI(geometry=box(0, 0, 5, 5), identity=id_a, identity_score=0.6)
+    r.set_embedding(np.ones(3, dtype=np.float32))
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, rois=[r])])
+    labels.update()
+
+    path = str(tmp_path / "roi_ids.slp")
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        links = f["identity_links"][:]
+        assert set(links["owner_type"].tolist()) == {OWNER_ROI}
+        assert set(f["embeddings/reid/owner_type"][:].tolist()) == {OWNER_ROI}
+
+    loaded = load_slp(path)
+    lr = list(loaded[0].rois)[0]
+    assert lr.identity is not None and lr.identity.uuid == id_a.uuid
+    assert lr.identity_score == pytest.approx(0.6)
+    np.testing.assert_array_equal(lr.embedding.vector, np.ones(3))
 
 
 def test_per_instance_categories_round_trip(tmp_path):

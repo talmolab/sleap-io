@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 
     from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.embedding import Embedding
+    from sleap_io.model.identity import Identity
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.roi import ROI
 
@@ -130,6 +131,13 @@ class SegmentationMask(EmbeddingMixin):
         track: Optional `Track` this mask is associated with.
         tracking_score: Confidence of the track identity assignment. ``None``
             if unassigned or manually assigned.
+        identity: Optional global, ground-truth `Identity` for this mask -- the
+            persistent cross-video animal identity / re-identification key. ``None``
+            if no global identity is assigned. Mirrors `Instance.identity`.
+        identity_score: Score associated with the `identity` assignment (e.g. the
+            re-ID match similarity). ``None`` if unassigned or assigned manually.
+            Kept separate from `tracking_score` (short-term tracklet vs long-term
+            identity).
         instance: Optional `Instance` this mask is associated with.
         scale: Resolution ratio ``(sx, sy)`` where ``sx = mask_width / image_width``
             and ``sy = mask_height / image_height``. ``(1.0, 1.0)`` means full
@@ -156,6 +164,8 @@ class SegmentationMask(EmbeddingMixin):
     source: str = attrs.field(default="")
     track: "Track | None" = attrs.field(default=None)
     tracking_score: float | None = attrs.field(default=None)
+    identity: "Identity | None" = attrs.field(default=None)
+    identity_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
     scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
@@ -213,6 +223,8 @@ class SegmentationMask(EmbeddingMixin):
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
             instance=self.instance,
             scale=(1.0, 1.0),
             offset=(0.0, 0.0),
@@ -341,8 +353,8 @@ class SegmentationMask(EmbeddingMixin):
         """Convert to a BoundingBox object.
 
         Returns a ``UserBoundingBox`` or ``PredictedBoundingBox`` with metadata
-        (track, category, name, instance) inherited from this mask. Coordinates
-        are in image space (respecting scale/offset).
+        (track, identity, category, name, instance) inherited from this mask.
+        Coordinates are in image space (respecting scale/offset).
 
         Returns:
             A ``BoundingBox`` matching this mask's tight bounding box.
@@ -354,6 +366,8 @@ class SegmentationMask(EmbeddingMixin):
         kwargs: dict = dict(
             track=self.track,
             tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -409,6 +423,8 @@ class SegmentationMask(EmbeddingMixin):
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
             instance=self.instance,
         )
 
@@ -458,7 +474,8 @@ class PredictedSegmentationMask(SegmentationMask):
 
         Returns a new `UserSegmentationMask` carrying a copy of the RLE raster
         and all shared metadata (`name`, `category`, `source`, `track`,
-        `tracking_score`, `instance`, `scale`, `offset`). The prediction-only
+        `tracking_score`, `identity`, `identity_score`, `instance`, `scale`,
+        `offset`). The prediction-only
         fields (`score`, `score_map`, `score_map_scale`, `score_map_offset`)
         are dropped. This is the predicted -> user adoption path for the
         inference -> human-correct -> retrain loop, mirroring
@@ -490,6 +507,8 @@ class PredictedSegmentationMask(SegmentationMask):
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
             instance=self.instance,
             scale=self.scale,
             offset=self.offset,
