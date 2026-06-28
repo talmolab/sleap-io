@@ -78,6 +78,7 @@ classDiagram
         +Track track
         +Identity identity
         +float identity_score
+        +dict~str,Embedding~ embeddings
     }
     class PredictedInstance:::poses {
         +float score

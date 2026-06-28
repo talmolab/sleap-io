@@ -108,6 +108,13 @@ file.slp
 │
 ├── /video_crops                 # Dataset: JSON, virtual on-read crops (Format 2.3+, optional)
 │
+├── /embeddings/                 # Group: re-ID embeddings, one subgroup per space (Format 2.6+)
+│   └── <space>/                 # e.g. "reid", "jabs"
+│       ├── vectors              # Dataset: float (n, D), gzip-compressed (dtype preserved)
+│       ├── owner_type           # Dataset: uint8 (0=instance, 1=identity)
+│       ├── owner_id             # Dataset: int64 owner index (global instance_id / identity index)
+│       └── meta_json            # Dataset: per-row JSON (normalized, source, centroid_xy, metadata)
+│
 └── /video{N}/                   # Group: Per-video embedded data (one per video)
     ├── /video                   # Dataset: Embedded image data
     │   ├── @format              # Attribute: "png", "jpg", or "hdf5"
@@ -148,6 +155,7 @@ file.slp
 | `sessions_json` | `bytes[]` | JSON array of recording sessions (optional) |
 | `identities_json` | `bytes[]` | JSON array of identity definitions, incl. stable `uuid` (optional) |
 | `instance_identities` | structured | Per-instance global identity links: `instance_id`, `identity_idx`, `identity_score` (Format 2.5+, optional) |
+| `embeddings/<space>` | group | re-ID embedding vectors + `owner_type`/`owner_id` join columns + `meta_json` (Format 2.6+, optional) |
 | `provenance_json` | `bytes` | JSON object of provenance metadata (optional) |
 
 ### Provenance storage and the 64 KB metadata limit
@@ -569,7 +577,7 @@ Per-instance global identity assignments are stored in the optional `/instance_i
 | `identity_idx` | `int32` | Index into `/identities_json` |
 | `identity_score` | `float32` | Identity-assignment score (NaN if unrecorded) |
 
-This is additive: old readers ignore the dataset, and instances without a global identity simply have no row.
+This is additive: old readers ignore the dataset, and instances without a global identity simply have no row. Per-identity prototype embeddings and per-instance re-ID embeddings live in the `/embeddings` group — see [Embeddings](../model/embedding.md).
 
 ### Instance Group Linking
 

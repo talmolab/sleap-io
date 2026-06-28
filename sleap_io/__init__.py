@@ -89,6 +89,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "InstanceGroup",
             "RecordingSession",
         ],
+        "model.embedding": ["Embedding"],
         "model.identity": ["Identity"],
         "model.instance": [
             "Instance",

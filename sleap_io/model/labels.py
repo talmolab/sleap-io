@@ -841,7 +841,7 @@ class Labels:
             new_tracks = [deepcopy(t) for t in self.tracks]
             # Identities are index-referenced by the store's per-instance maps, so
             # deep-copying preserves index alignment while keeping the catalog
-            # independent.
+            # (and its prototype embeddings) independent.
             new_identities = [deepcopy(i) for i in self.identities]
 
             # Update store references
@@ -4076,7 +4076,7 @@ class Labels:
                 (deduped) `Identity` in the merged catalog. When provided, the
                 instance's identity is resolved through this map so that the same
                 animal across files points at a single catalog object. The
-                instance's ``identity_score`` is always copied.
+                instance's ``identity_score`` and ``embeddings`` are always copied.
             memo: Optional mapping from the id of the source instance to the new
                 instance, mutated in place. Used to repair ``from_predicted``
                 links so a remapped user instance references the remapped source
@@ -4132,6 +4132,7 @@ class Labels:
                 from_predicted=instance.from_predicted,
                 identity=mapped_identity,
                 identity_score=instance.identity_score,
+                embeddings=dict(instance.embeddings),
             )
         else:
             new_instance = Instance(
@@ -4142,6 +4143,7 @@ class Labels:
                 from_predicted=instance.from_predicted,
                 identity=mapped_identity,
                 identity_score=instance.identity_score,
+                embeddings=dict(instance.embeddings),
             )
         if memo is not None:
             memo[id(instance)] = new_instance

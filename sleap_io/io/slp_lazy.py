@@ -90,6 +90,10 @@ class LazyDataStore:
     _instance_identities: dict = attrs.field(
         factory=dict, repr=False, alias="instance_identities"
     )
+    # Per-instance embeddings (format 2.6+): instance_id -> {space: Embedding}.
+    _instance_embeddings: dict = attrs.field(
+        factory=dict, repr=False, alias="instance_embeddings"
+    )
 
     def __attrs_post_init__(self) -> None:
         """Validate index bounds on construction."""
@@ -168,6 +172,9 @@ class LazyDataStore:
             tracks=self.tracks,  # Share references (canonical objects)
             identities=self.identities,  # Share references (canonical objects)
             instance_identities=dict(self._instance_identities),
+            instance_embeddings={
+                k: dict(v) for k, v in self._instance_embeddings.items()
+            },
             format_id=self.format_id,
             source_path=self._source_path,
             negative_frames=self._negative_frames.copy(),
@@ -312,6 +319,14 @@ class LazyDataStore:
                     identity = self.identities[identity_idx]
                     identity_score = id_score
 
+        # Resolve optional per-instance embeddings (format 2.6+). A fresh dict per
+        # instance so mutations don't leak back into the shared lazy store.
+        embeddings = (
+            dict(self._instance_embeddings.get(instance_id, {}))
+            if self._instance_embeddings
+            else {}
+        )
+
         if instance_type == InstanceType.USER:
             pts_data = self.points_data[point_id_start:point_id_end]
             points_array = self._make_points_array(pts_data, skeleton)
@@ -325,6 +340,7 @@ class LazyDataStore:
                 tracking_score=float(tracking_score),
                 identity=identity,
                 identity_score=identity_score,
+                embeddings=embeddings,
             )
         else:  # PREDICTED
             pts_data = self.pred_points_data[point_id_start:point_id_end]
@@ -340,6 +356,7 @@ class LazyDataStore:
                 tracking_score=float(tracking_score),
                 identity=identity,
                 identity_score=identity_score,
+                embeddings=embeddings,
             )
 
     def _make_points_array(

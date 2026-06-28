@@ -1646,6 +1646,35 @@ def _print_tracks_summary(labels: Labels) -> None:
     console.print(f"  {track_names}")
 
 
+def _print_embeddings_summary(labels: Labels) -> None:
+    """Print a per-instance embedding summary (inline).
+
+    Reports the number of instances carrying embeddings and the set of embedding
+    space names. Skipped for lazy labels, since scanning instances would force a
+    full materialization.
+    """
+    # Iterating instances on lazy labels would force materialization; only
+    # summarize embeddings when the labeled frames are readily available.
+    if labels.is_lazy:
+        return
+
+    n_with_embeddings = 0
+    space_names: set[str] = set()
+    for lf in labels.labeled_frames:
+        for inst in lf.instances:
+            if inst.embeddings:
+                n_with_embeddings += 1
+                space_names.update(inst.embeddings.keys())
+
+    if n_with_embeddings == 0:
+        return
+
+    console.print()
+    console.print(f"[bold]Embeddings[/] ({n_with_embeddings} instances)")
+    spaces = ", ".join(sorted(space_names))
+    console.print(f"  [dim]Spaces:[/] {spaces}")
+
+
 def _print_tracks_details(labels: Labels) -> None:
     """Print detailed track information."""
     if not labels.tracks:
@@ -1933,6 +1962,7 @@ def show(
             _print_skeleton_summary(obj)
             _print_video_summary(obj)
             _print_tracks_summary(obj)
+            _print_embeddings_summary(obj)
         else:
             # Detailed views
             if skeleton:

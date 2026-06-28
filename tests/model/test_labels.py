@@ -12,6 +12,7 @@ from shapely.geometry import box
 
 import sleap_io
 from sleap_io import (
+    Embedding,
     FrameGroup,
     Identity,
     Instance,
@@ -4333,12 +4334,12 @@ def test_labels_merge_predicted_instance_mapping():
 
 
 def test_labels_merge_dedupes_same_uuid_identity():
-    """Merge dedupes same-uuid identities and preserves identity_score.
+    """Merge dedupes same-uuid identities and preserves score/embeddings.
 
     The same animal (shared ``uuid``) referenced by two separately-built files
     must collapse to a single canonical catalog `Identity` after merge, with both
-    instances pointing at it. Per-instance ``identity_score`` must survive the
-    rebuild in ``_map_instance``.
+    instances pointing at it. Per-instance ``identity_score`` and ``embeddings``
+    must survive the rebuild in ``_map_instance``.
     """
     skel1 = Skeleton(nodes=["head", "tail"])
     skel2 = Skeleton(nodes=["head", "tail"])  # Same structure -> matched.
@@ -4355,12 +4356,14 @@ def test_labels_merge_dedupes_same_uuid_identity():
     )
     labels1 = Labels([LabeledFrame(video=video1, frame_idx=0, instances=[inst1])])
 
+    emb = Embedding(vector=[1.0, 0.0, 0.0], name="reid")
     inst2 = Instance.from_numpy(
         np.array([[30, 30], [40, 40]]),
         skeleton=skel2,
         identity=id2,
         identity_score=0.87,
     )
+    inst2.embeddings["reid"] = emb
     labels2 = Labels([LabeledFrame(video=video2, frame_idx=0, instances=[inst2])])
 
     # Each file independently collected its own identity object.
@@ -4380,11 +4383,13 @@ def test_labels_merge_dedupes_same_uuid_identity():
     assert len(merged_instances) == 2
     assert all(inst.identity is canonical for inst in merged_instances)
 
-    # identity_score survived the merge for the incoming instance.
+    # identity_score and embeddings survived the merge for the incoming instance.
     incoming = [i for i in merged_instances if i.identity_score == 0.87]
     assert len(incoming) == 1
     inc = incoming[0]
     assert inc is not inst2  # Rebuilt by _map_instance.
+    assert inc.embeddings["reid"] is emb  # Dict shallow-copied; Embedding shared.
+    assert np.array_equal(inc.embeddings["reid"].vector, [1.0, 0.0, 0.0])
 
 
 def test_labels_merge_keeps_distinct_uuid_identities():

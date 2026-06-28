@@ -1189,6 +1189,97 @@ def test_no_identity_keeps_low_format_and_no_dataset(tmp_path):
     assert list(loaded[0].instances)[0].identity is None
 
 
+def test_embeddings_round_trip(tmp_path):
+    """Test instance + identity embeddings round-trip through SLP (format 2.6)."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    identity = Identity(name="mouse_A")
+    identity.set_embedding(np.ones(128, dtype=np.float32), source="gallery")
+
+    i0 = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel, identity=identity)
+    i0.set_embedding(np.arange(128, dtype=np.float32), source="reid_v1")
+    i0.set_embedding(np.ones(4, dtype=np.float64), name="jabs")  # 2nd space, f64
+    i1 = PredictedInstance.from_numpy(np.array([[4, 5], [6, 7]]), skel, score=0.8)
+    i1.set_embedding(np.full(128, 2.0, dtype=np.float32), centroid_xy=[10, 20])
+    i2 = Instance.from_numpy(np.array([[8, 9], [0, 1]]), skel)  # no embedding
+
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[i0, i1, i2])])
+    labels.update()
+
+    path = str(tmp_path / "embeddings.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] >= 2.6
+        assert set(f["embeddings"].keys()) == {"reid", "jabs"}
+        assert f["embeddings/reid/vectors"].dtype == np.float32
+        assert f["embeddings/jabs/vectors"].dtype == np.float64  # dtype preserved
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)
+    # Multiple named spaces on one instance.
+    assert li[0].embeddings["reid"].dim == 128
+    assert li[0].embeddings["reid"].source == "reid_v1"
+    np.testing.assert_array_equal(li[0].embeddings["reid"].vector, np.arange(128))
+    assert li[0].embeddings["jabs"].dtype == np.float64
+    # centroid_xy round-trips.
+    np.testing.assert_array_equal(li[1].embedding.centroid_xy, [10.0, 20.0])
+    # Sparse: instances without embeddings stay empty.
+    assert li[2].embeddings == {}
+    # Identity prototype embedding round-trips.
+    assert loaded.identities[0].embedding.dim == 128
+    assert loaded.identities[0].embedding.source == "gallery"
+
+
+def test_no_embeddings_keeps_low_format_and_no_group(tmp_path):
+    """Test embedding-free labels stay additive (no group, no 2.6 bump)."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)],
+            )
+        ]
+    )
+    path = str(tmp_path / "no_embeddings.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 2.6
+        assert "embeddings" not in f
+
+
+def test_embeddings_inconsistent_dim_raises(tmp_path):
+    """Test that mismatched vector dims within one space raise on save."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    i0 = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
+    i0.set_embedding(np.ones(128))
+    i1 = Instance.from_numpy(np.array([[4, 5], [6, 7]]), skel)
+    i1.set_embedding(np.ones(64))  # same "reid" space, different D
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[i0, i1])])
+
+    with pytest.raises(ValueError, match="inconsistent dimensions"):
+        save_slp(labels, str(tmp_path / "bad.slp"))
+
+
+def test_modality_embeddings_warn_on_save(tmp_path):
+    """Test a warning fires for not-yet-persisted modality embeddings."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
+    centroid = UserCentroid(x=1.0, y=2.0)
+    centroid.set_embedding(np.ones(8))  # not yet persisted
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst], centroids=[centroid])
+    labels = Labels([lf])
+
+    with pytest.warns(UserWarning, match="not yet persisted"):
+        save_slp(labels, str(tmp_path / "modality.slp"))
+
+
 def test_make_frame_group_and_frame_group_to_dict(
     frame_group_345: FrameGroup, camera_group_345: CameraGroup
 ):

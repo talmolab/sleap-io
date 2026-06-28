@@ -20,7 +20,10 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
+from sleap_io.model.embedding import EmbeddingMixin
+
 if TYPE_CHECKING:
+    from sleap_io.model.embedding import Embedding
     from sleap_io.model.instance import Instance, PredictedInstance, Track
     from sleap_io.model.skeleton import Skeleton
 
@@ -60,7 +63,7 @@ def __getattr__(name):
 
 
 @attrs.define(eq=False)
-class Centroid:
+class Centroid(EmbeddingMixin):
     """A point representing the center of an object.
 
     Supports optional 3D coordinates, track/instance metadata,
@@ -78,6 +81,8 @@ class Centroid:
         name: Human-readable name (e.g., ``"ID43008"``).
         source: How the centroid was computed (e.g., ``"center_of_mass"``,
             ``"trackmate"``).
+        embeddings: Mapping from embedding-space name to an `Embedding` describing
+            this detection's appearance for re-identification. Empty by default.
 
     Notes:
         Centroids use identity-based equality (two Centroid objects are only
@@ -96,6 +101,7 @@ class Centroid:
     category: str = attrs.field(default="")
     name: str = attrs.field(default="")
     source: str = attrs.field(default="")
+    embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
 
     # Private: deferred instance index for lazy loading.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)

@@ -62,11 +62,14 @@ def _data_path(rel: str) -> Path:
     return root / rel
 
 
-def _make_identity_slp(path: Path, *, color: str | None = "#ff0000") -> Labels:
+def _make_identity_slp(
+    path: Path, *, with_embeddings: bool = False, color: str | None = "#ff0000"
+) -> Labels:
     """Write a minimal 2-instance .slp carrying global identities.
 
     Builds one labeled frame with two instances assigned to two `Identity`
-    objects (the first optionally colored).
+    objects (the first optionally colored). When ``with_embeddings`` is set, the
+    first instance also carries a per-instance ``"reid"`` embedding.
     """
     skeleton = Skeleton(["head", "tail"])
     id_a = Identity(name="mouse_A", color=color)
@@ -78,6 +81,8 @@ def _make_identity_slp(path: Path, *, color: str | None = "#ff0000") -> Labels:
     inst_b = Instance.from_numpy(
         np.array([[30, 30], [40, 40]]), skeleton=skeleton, identity=id_b
     )
+    if with_embeddings:
+        inst_a.set_embedding(np.ones(8, dtype="float32"), name="reid")
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst_a, inst_b])
     labels = Labels(
         labeled_frames=[lf],
@@ -178,6 +183,36 @@ def test_show_reports_identities(tmp_path):
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "2 identities" in out
+
+
+def test_show_reports_embeddings(tmp_path):
+    """`sio show --no-lazy` summarizes per-instance embedding spaces."""
+    slp_path = tmp_path / "ids_emb.slp"
+    _make_identity_slp(slp_path, with_embeddings=True)
+
+    runner = CliRunner()
+    # Embedding scan is skipped for lazy labels, so request eager loading.
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--no-lazy", "--no-open-videos"]
+    )
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Embeddings (1 instances)" in out
+    assert "reid" in out
+
+
+def test_show_embeddings_skipped_when_absent(tmp_path):
+    """The embedding summary is omitted when no instance carries embeddings."""
+    slp_path = tmp_path / "ids_noemb.slp"
+    _make_identity_slp(slp_path, with_embeddings=False)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--no-lazy", "--no-open-videos"]
+    )
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Embeddings" not in out
 
 
 def test_show_lf_zero_details():

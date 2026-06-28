@@ -1701,22 +1701,68 @@ def test_lazy_per_instance_identity_round_trip(tmp_path):
     assert copied.identities[0] is not lazy.identities[0]  # independent copy
 
 
-def test_lazy_save_persists_identities(tmp_path):
-    """Lazy save must persist identities + per-instance links.
+def test_lazy_embeddings_round_trip(tmp_path):
+    """Test instance + identity embeddings materialize via the lazy loader."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    identity = sio.Identity(name="mouse_A")
+    identity.set_embedding(np.ones(128, dtype=np.float32), source="gallery")
+
+    i0 = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel, identity=identity)
+    i0.set_embedding(np.arange(128, dtype=np.float32))
+    i0.set_embedding(np.ones(4, dtype=np.float64), name="jabs")
+    i1 = PredictedInstance.from_numpy(np.array([[4, 5], [6, 7]]), skel, score=0.8)
+    i1.set_embedding(np.full(128, 2.0, dtype=np.float32), centroid_xy=[10, 20])
+    i2 = Instance.from_numpy(np.array([[8, 9], [0, 1]]), skel)  # no embedding
+
+    labels = sio.Labels(
+        [LabeledFrame(video=video, frame_idx=0, instances=[i0, i1, i2])]
+    )
+    labels.update()
+
+    path = str(tmp_path / "lazy_embeddings.slp")
+    sio.save_slp(labels, path)
+
+    lazy = sio.load_slp(path, lazy=True)
+    assert lazy.is_lazy
+    li = list(lazy[0].instances)
+    np.testing.assert_array_equal(li[0].embeddings["reid"].vector, np.arange(128))
+    assert li[0].embeddings["jabs"].dtype == np.float64
+    np.testing.assert_array_equal(li[1].embedding.centroid_xy, [10.0, 20.0])
+    assert li[2].embeddings == {}
+    # Identity prototype attaches to the eager catalog.
+    assert lazy.identities[0].embedding.dim == 128
+
+    # Mutating a materialized instance's embeddings must not leak into the store.
+    li[0].embeddings["reid"] = sio.Embedding(np.zeros(128))
+    li_again = list(lazy[0].instances)
+    np.testing.assert_array_equal(li_again[0].embeddings["reid"].vector, np.arange(128))
+
+    # Lazy store copy preserves embeddings.
+    cli = list(lazy.copy()[0].instances)
+    assert cli[0].embeddings["reid"].dim == 128
+
+
+def test_lazy_save_persists_identities_and_embeddings(tmp_path):
+    """Lazy save must persist identities + per-instance links + embeddings.
 
     Regression test for the silent-data-loss bug where the lazy fast-path writer
-    copied raw points/instances/tracks but skipped identities, so
-    ``load_slp(p, lazy=True).save(p2)`` dropped them. Saving the lazy labels
+    copied raw points/instances/tracks but skipped identities and embeddings, so
+    ``load_slp(p, lazy=True).save(p2)`` dropped them all. Saving the lazy labels
     must round-trip identical to saving the eager labels.
     """
     skel = Skeleton(["A", "B"])
     video = Video(filename="test.mp4")
     id_a = sio.Identity(name="mouse_A", metadata={"sex": "F"})
     id_b = sio.Identity(name="mouse_B")
+    # Identity prototype (gallery) embedding -> owner_type=identity.
+    id_a.set_embedding(np.ones(128, dtype=np.float32), source="gallery")
 
     i0 = Instance.from_numpy(
         np.array([[0, 1], [2, 3]]), skel, identity=id_a, identity_score=0.95
     )
+    i0.set_embedding(np.arange(128, dtype=np.float32))  # reID, float32
+    i0.set_embedding(np.ones(4, dtype=np.float64), name="jabs")  # dtype preserved
     i1 = PredictedInstance.from_numpy(
         np.array([[4, 5], [6, 7]]), skel, score=0.8, identity=id_b
     )
@@ -1740,11 +1786,16 @@ def test_lazy_save_persists_identities(tmp_path):
     # The fast path must not have materialized: lazy labels stay lazy after save.
     assert lazy.is_lazy
 
-    # Format must reflect per-instance identity links (>= 2.5).
+    # Format must reflect embeddings (>= 2.6 implies >= 2.5 for identities too).
     with h5py.File(b, "r") as f:
-        assert f["metadata"].attrs["format_id"] >= 2.5
+        assert f["metadata"].attrs["format_id"] >= 2.6
         assert "identities_json" in f
         assert "instance_identities" in f
+        assert "embeddings" in f
+        # Aux join columns are gzip-compressed (compression fix).
+        sub = f["embeddings/reid"]
+        for ds in ("vectors", "owner_type", "owner_id", "meta_json"):
+            assert sub[ds].compression == "gzip"
 
     reb = sio.load_slp(b)
 
@@ -1765,3 +1816,19 @@ def test_lazy_save_persists_identities(tmp_path):
     assert ri[1].identity.name == "mouse_B"
     assert ri[1].identity_score is None
     assert ri[2].identity is None
+
+    # Per-instance embeddings survived (vectors, dtype, space names).
+    assert set(ri[0].embeddings) == {"reid", "jabs"}
+    np.testing.assert_array_equal(
+        ri[0].embeddings["reid"].vector, np.arange(128, dtype=np.float32)
+    )
+    assert ri[0].embeddings["reid"].vector.dtype == np.float32
+    assert ri[0].embeddings["jabs"].vector.dtype == np.float64
+    assert ri[2].embeddings == {}
+
+    # Identity prototype embedding survived (owner_type=identity).
+    assert by_name["mouse_A"].embedding.dim == 128
+    assert by_name["mouse_A"].embedding.source == "gallery"
+    np.testing.assert_array_equal(
+        by_name["mouse_A"].embedding.vector, np.ones(128, dtype=np.float32)
+    )
