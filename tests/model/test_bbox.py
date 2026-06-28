@@ -6,12 +6,31 @@ import numpy as np
 import pytest
 
 from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.identity import Identity
 
 
 def test_bbox_abstract():
     """BoundingBox cannot be instantiated directly."""
     with pytest.raises(TypeError, match="BoundingBox is abstract"):
         BoundingBox(x1=0, y1=0, x2=10, y2=10)
+
+
+def test_bbox_identity_field_and_to_roi():
+    """BoundingBox carries identity; from_xywh + to_roi() preserve it."""
+    ident = Identity(name="fly_A")
+    b = UserBoundingBox(
+        x1=0.0, y1=0.0, x2=10.0, y2=10.0, identity=ident, identity_score=0.7
+    )
+    assert b.identity is ident
+    assert b.identity_score == pytest.approx(0.7)
+    # from_xywh threads identity via **kwargs.
+    assert UserBoundingBox.from_xywh(0, 0, 5, 5, identity=ident).identity is ident
+    # to_roi carries identity onto the ROI.
+    roi = b.to_roi()
+    assert roi.identity is ident
+    assert roi.identity_score == pytest.approx(0.7)
+    # Defaults to None.
+    assert UserBoundingBox(x1=0, y1=0, x2=1, y2=1).identity is None
 
 
 def test_bbox_basic():

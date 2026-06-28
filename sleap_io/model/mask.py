@@ -353,8 +353,8 @@ class SegmentationMask(EmbeddingMixin):
         """Convert to a BoundingBox object.
 
         Returns a ``UserBoundingBox`` or ``PredictedBoundingBox`` with metadata
-        (track, category, name, instance) inherited from this mask. Coordinates
-        are in image space (respecting scale/offset).
+        (track, identity, category, name, instance) inherited from this mask.
+        Coordinates are in image space (respecting scale/offset).
 
         Returns:
             A ``BoundingBox`` matching this mask's tight bounding box.
@@ -366,6 +366,8 @@ class SegmentationMask(EmbeddingMixin):
         kwargs: dict = dict(
             track=self.track,
             tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -421,6 +423,8 @@ class SegmentationMask(EmbeddingMixin):
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
             instance=self.instance,
         )
 

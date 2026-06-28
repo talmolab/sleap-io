@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
 
     from sleap_io.model.embedding import Embedding
+    from sleap_io.model.identity import Identity
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.video import Video
@@ -62,6 +63,13 @@ class ROI(EmbeddingMixin):
         track: Optional `Track` this ROI is associated with.
         tracking_score: Confidence of the track identity assignment. ``None``
             if unassigned or manually assigned.
+        identity: Optional global, ground-truth `Identity` for this ROI -- the
+            persistent cross-video animal identity / re-identification key. ``None``
+            if no global identity is assigned. Mirrors `Instance.identity`.
+        identity_score: Score associated with the `identity` assignment (e.g. the
+            re-ID match similarity). ``None`` if unassigned or assigned manually.
+            Kept separate from `tracking_score` (short-term tracklet vs long-term
+            identity).
         instance: Optional `Instance` this ROI is associated with. Persisted in
             SLP format (v1.6+) via instance index.
         embeddings: Mapping from embedding-space name to an `Embedding` describing
@@ -91,6 +99,8 @@ class ROI(EmbeddingMixin):
     video: "Video | None" = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
     tracking_score: float | None = attrs.field(default=None)
+    identity: "Identity | None" = attrs.field(default=None)
+    identity_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
     embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
 
@@ -317,6 +327,8 @@ class ROI(EmbeddingMixin):
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
             instance=self.instance,
         )
         if self.is_predicted:
@@ -352,6 +364,8 @@ class ROI(EmbeddingMixin):
                     video=self.video,
                     track=self.track,
                     tracking_score=self.tracking_score,
+                    identity=self.identity,
+                    identity_score=self.identity_score,
                     instance=self.instance,
                     **extra,
                 )

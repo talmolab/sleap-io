@@ -3,6 +3,7 @@
 import pytest
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 
+from sleap_io.model.identity import Identity
 from sleap_io.model.roi import (
     ROI,
     AnnotationType,
@@ -11,6 +12,33 @@ from sleap_io.model.roi import (
     _rasterize_geometry,
 )
 from sleap_io.model.video import Video
+
+
+def test_roi_identity_field_and_to_mask():
+    """ROI carries identity; from_xyxy + to_mask() preserve it."""
+    ident = Identity(name="arena_A")
+    r = UserROI(geometry=box(0, 0, 10, 10), identity=ident, identity_score=0.6)
+    assert r.identity is ident
+    assert r.identity_score == pytest.approx(0.6)
+    # from_xyxy threads identity via **kwargs.
+    assert UserROI.from_xyxy(0, 0, 5, 5, identity=ident).identity is ident
+    # to_mask carries identity onto the SegmentationMask.
+    mask = r.to_mask(height=12, width=12)
+    assert mask.identity is ident
+    assert mask.identity_score == pytest.approx(0.6)
+    # Defaults to None.
+    assert UserROI(geometry=box(0, 0, 1, 1)).identity is None
+
+
+def test_roi_explode_preserves_identity():
+    """explode() preserves identity on each split ROI."""
+    ident = Identity(name="arena_A")
+    multi = MultiPolygon([box(0, 0, 2, 2), box(5, 5, 7, 7)])
+    r = UserROI(geometry=multi, identity=ident, identity_score=0.4)
+    parts = r.explode()
+    assert len(parts) == 2
+    assert all(p.identity is ident for p in parts)
+    assert all(p.identity_score == pytest.approx(0.4) for p in parts)
 
 
 def test_annotation_type_enum():

@@ -602,6 +602,20 @@ def test_to_user_preserves_identity():
     assert user.identity_score == pytest.approx(0.75)
 
 
+def test_mask_to_bbox_and_to_polygon_carry_identity():
+    """mask.to_bbox / to_polygon now carry identity (targets adopted the field)."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 1:4] = True
+    ident = Identity(name="mouse_A")
+    mask = UserSegmentationMask.from_numpy(data, identity=ident, identity_score=0.8)
+    bbox = mask.to_bbox()
+    assert bbox.identity is ident
+    assert bbox.identity_score == pytest.approx(0.8)
+    roi = mask.to_polygon()
+    assert roi.identity is ident
+    assert roi.identity_score == pytest.approx(0.8)
+
+
 def test_to_user_drops_score_and_score_map():
     data = np.zeros((10, 10), dtype=bool)
     data[2:5, 3:7] = True

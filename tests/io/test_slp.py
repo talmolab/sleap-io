@@ -47,6 +47,8 @@ from sleap_io.io.slp import (
     OWNER_IDENTITY,
     OWNER_INSTANCE,
     OWNER_MASK,
+    OWNER_ROI,
+    OWNER_TRACK,
     ExportCancelled,
     LabelImageWriter,
     _encode_metadata_attr,
@@ -1272,24 +1274,24 @@ def test_read_embeddings_skips_unknown_owner_type(tmp_path):
     path = str(tmp_path / "emb.slp")
     save_slp(labels, path)
 
-    # Inject a bbox-owner (owner_type=4) row that no current reader attaches.
+    # Inject a track-owner (owner_type=7, reserved/unattached) row.
     with h5py.File(path, "a") as f:
         sub = f["embeddings/reid"]
         for name in ("vectors", "owner_type", "owner_id", "meta_json"):
             ds = sub[name]
             ds.resize(ds.shape[0] + 1, axis=0)
         sub["vectors"][-1] = np.full(4, 2.0, dtype=np.float32)
-        sub["owner_type"][-1] = OWNER_BBOX
+        sub["owner_type"][-1] = OWNER_TRACK
         sub["owner_id"][-1] = 0
         sub["meta_json"][-1] = np.bytes_("{}")
 
     with pytest.warns(UserWarning, match="unsupported owner_type"):
         embeddings_by_owner = read_embeddings(path)
 
-    # The instance embedding still loads; the bbox row is dropped, not mis-bound.
+    # The instance embedding still loads; the track row is dropped, not mis-bound.
     assert set(embeddings_by_owner[OWNER_INSTANCE]) == {0}
     assert "reid" in embeddings_by_owner[OWNER_INSTANCE][0]
-    assert OWNER_BBOX not in embeddings_by_owner
+    assert OWNER_TRACK not in embeddings_by_owner
     assert OWNER_IDENTITY not in embeddings_by_owner
 
 
@@ -1623,18 +1625,59 @@ def test_embeddings_inconsistent_dim_raises(tmp_path):
         save_slp(labels, str(tmp_path / "bad.slp"))
 
 
-def test_modality_embeddings_warn_on_save(tmp_path):
-    """Test a warning fires for not-yet-persisted modality embeddings (bbox/ROI)."""
-    skel = Skeleton(["A", "B"])
+def test_bbox_identity_and_embedding_round_trip(tmp_path):
+    """Per-bbox identity links + embeddings round-trip via SLP (owner_type=4)."""
     video = Video(filename="test.mp4")
-    inst = Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)
-    bbox = UserBoundingBox(x1=0.0, y1=0.0, x2=10.0, y2=10.0)
-    bbox.set_embedding(np.ones(8))  # bbox embeddings not yet persisted
-    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst], bboxes=[bbox])
-    labels = Labels([lf])
+    id_a = Identity(name="fly_A")
+    b1 = UserBoundingBox(
+        x1=0.0, y1=0.0, x2=10.0, y2=10.0, identity=id_a, identity_score=0.8
+    )
+    b1.set_embedding(np.arange(4, dtype=np.float32))
+    b2 = PredictedBoundingBox(x1=5.0, y1=5.0, x2=9.0, y2=9.0, score=0.7)  # no identity
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, bboxes=[b1, b2])])
+    labels.update()
 
-    with pytest.warns(UserWarning, match="not yet persisted"):
-        save_slp(labels, str(tmp_path / "modality.slp"))
+    path = str(tmp_path / "bbox_ids.slp")
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        links = f["identity_links"][:]
+        assert set(links["owner_type"].tolist()) == {OWNER_BBOX}
+        assert links["owner_id"].tolist() == [0]
+        assert set(f["embeddings/reid/owner_type"][:].tolist()) == {OWNER_BBOX}
+
+    loaded = load_slp(path)
+    lb = list(loaded[0].bboxes)
+    assert lb[0].identity is not None and lb[0].identity.uuid == id_a.uuid
+    assert lb[0].identity_score == pytest.approx(0.8)
+    np.testing.assert_array_equal(lb[0].embedding.vector, np.arange(4))
+    assert lb[1].identity is None and lb[1].embedding is None
+
+
+def test_roi_identity_and_embedding_round_trip(tmp_path):
+    """Per-ROI identity links + embeddings round-trip via SLP (owner_type=5)."""
+    from shapely.geometry import box
+
+    from sleap_io.model.roi import UserROI
+
+    video = Video(filename="test.mp4")
+    id_a = Identity(name="arena_A")
+    r = UserROI(geometry=box(0, 0, 5, 5), identity=id_a, identity_score=0.6)
+    r.set_embedding(np.ones(3, dtype=np.float32))
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, rois=[r])])
+    labels.update()
+
+    path = str(tmp_path / "roi_ids.slp")
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        links = f["identity_links"][:]
+        assert set(links["owner_type"].tolist()) == {OWNER_ROI}
+        assert set(f["embeddings/reid/owner_type"][:].tolist()) == {OWNER_ROI}
+
+    loaded = load_slp(path)
+    lr = list(loaded[0].rois)[0]
+    assert lr.identity is not None and lr.identity.uuid == id_a.uuid
+    assert lr.identity_score == pytest.approx(0.6)
+    np.testing.assert_array_equal(lr.embedding.vector, np.ones(3))
 
 
 def test_per_instance_categories_round_trip(tmp_path):

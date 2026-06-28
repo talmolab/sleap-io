@@ -113,8 +113,8 @@ file.slp
 ├── /embeddings/                 # Group: re-ID embeddings, one subgroup per space (Format 2.6+)
 │   └── <space>/                 # e.g. "reid", "jabs"
 │       ├── vectors              # Dataset: float (n, D), gzip-compressed (dtype preserved)
-│       ├── owner_type           # Dataset: uint8 (0=instance, 1=identity, 2=centroid, 3=mask)
-│       ├── owner_id             # Dataset: int64 owner index (instance_id / identity / mask / centroid list index)
+│       ├── owner_type           # Dataset: uint8 (0=instance, 1=identity, 2=centroid, 3=mask, 4=bbox, 5=roi)
+│       ├── owner_id             # Dataset: int64 owner index (instance_id / identity / per-modality list index)
 │       └── meta_json            # Dataset: per-row JSON (normalized, source, centroid_xy, metadata)
 │
 └── /video{N}/                   # Group: Per-video embedded data (one per video)
@@ -578,8 +578,8 @@ Per-detection global identity assignments are stored in the optional `/identity_
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `owner_type` | `uint8` | Detection modality code (shared `OWNER_*` codes: `0`=instance, `1`=identity, `2`=centroid, `3`=mask, `4`=bbox, `5`=roi, `6`=frame, `7`=track). Instance (`0`), mask (`3`), and centroid (`2`) owners are written today |
-| `owner_id` | `int64` | Per-owner-type positional id: the global instance id for instance owners, or the global per-modality list index for mask / centroid owners (each enumeration order over frames then the modality, matching `write_lfs` / `write_masks` / `write_centroids`) |
+| `owner_type` | `uint8` | Detection modality code (shared `OWNER_*` codes: `0`=instance, `1`=identity, `2`=centroid, `3`=mask, `4`=bbox, `5`=roi, `6`=frame, `7`=track). Instance, centroid, mask, bbox, and ROI owners are written today |
+| `owner_id` | `int64` | Per-owner-type positional id: the global instance id for instance owners, or the global per-modality list index for centroid / mask / bbox / ROI owners (each enumeration order over frames then the modality, matching `write_lfs` / `write_masks` / `write_centroids` / `write_bboxes` / `write_rois`; static ROIs follow frame ROIs) |
 | `identity_idx` | `int32` | Index into `/identities_json` |
 | `identity_score` | `float32` | Identity-assignment score (NaN if unrecorded) |
 
@@ -1445,8 +1445,8 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 
 **Per-detection global identity links.**
 
-- New optional `/identity_links` structured dataset (`owner_type`, `owner_id`, `identity_idx`, `identity_score`) joining detections to the `/identities_json` catalog (see [Per-Detection Linking](#per-detection-linking)). The `owner_type` column reuses the shared `OWNER_*` codes (same scheme as the `/embeddings` join); instance (`0`), mask (`3`), and centroid (`2`) owners are written
-- Triggered automatically when any instance, mask, or centroid carries an [`Identity`][sleap_io.Identity]; identity-free files stay at `format_id <= 2.4`
+- New optional `/identity_links` structured dataset (`owner_type`, `owner_id`, `identity_idx`, `identity_score`) joining detections to the `/identities_json` catalog (see [Per-Detection Linking](#per-detection-linking)). The `owner_type` column reuses the shared `OWNER_*` codes (same scheme as the `/embeddings` join); instance, centroid, mask, bbox, and ROI owners are written
+- Triggered automatically when any instance, centroid, mask, bbox, or ROI carries an [`Identity`][sleap_io.Identity]; identity-free files stay at `format_id <= 2.4`
 - Backward compatible: reads are gated on dataset presence, so older readers ignore it
 
 ### Format 2.6
@@ -1454,8 +1454,8 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 **Appearance / re-ID embeddings.**
 
 - New optional `/embeddings` group, one subgroup per named space holding stacked `vectors` `(n, D)` plus `owner_type`/`owner_id` join columns and a per-row `meta_json` (see [Embeddings](../model/embedding.md))
-- Persists per-instance, per-`SegmentationMask`, per-`Centroid`, and per-`Identity` (prototype/gallery) embeddings; large float vectors live in gzipped numeric datasets, never in JSON
-- Triggered automatically when any instance, mask, centroid, or identity carries an embedding; embedding-free files stay at `format_id <= 2.5`. Pass `labels.save(..., save_embedding_vectors=False)` to persist identity *links* but skip the (large) appearance vectors
+- Persists per-instance, per-`SegmentationMask`, per-`Centroid`, per-`BoundingBox`, per-`ROI`, and per-`Identity` (prototype/gallery) embeddings; large float vectors live in gzipped numeric datasets, never in JSON
+- Triggered automatically when any instance, centroid, mask, bbox, ROI, or identity carries an embedding; embedding-free files stay at `format_id <= 2.5`. Pass `labels.save(..., save_embedding_vectors=False)` to persist identity *links* but skip the (large) appearance vectors
 - Backward compatible: reads are gated on group presence
 
 ### Format 2.7 (Current)
