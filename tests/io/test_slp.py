@@ -49,6 +49,7 @@ from sleap_io.io.slp import (
     ExportCancelled,
     LabelImageWriter,
     _encode_metadata_attr,
+    _identity_link_rows_from_masks,
     _is_known_toplevel_name,
     _points_from_hdf5_data,
     _read_source_video_json,
@@ -1410,6 +1411,21 @@ def test_save_time_autocollect_dedupes_by_uuid(tmp_path):
     li = list(loaded[0].instances)
     assert li[0].identity is not None and li[0].identity.uuid == uuid
     assert li[1].identity is not None and li[1].identity.uuid == uuid
+
+
+def test_identity_link_rows_from_masks_skips_unregistered():
+    """A mask whose identity uuid is not in the catalog is skipped (defensive)."""
+    d = np.zeros((4, 4), dtype=bool)
+    d[1:3, 1:3] = True
+    registered = Identity(name="A")
+    m_ok = UserSegmentationMask.from_numpy(d, identity=registered, identity_score=0.5)
+    m_unregistered = UserSegmentationMask.from_numpy(d, identity=Identity(name="B"))
+    m_none = UserSegmentationMask.from_numpy(d)
+    uuid_to_idx = {registered.uuid: 0}
+
+    rows = _identity_link_rows_from_masks([m_ok, m_unregistered, m_none], uuid_to_idx)
+    # Only the registered mask (at index 0) yields a row.
+    assert rows == [(OWNER_MASK, 0, 0, pytest.approx(0.5))]
 
 
 def _labels_with_identity_and_embedding():
