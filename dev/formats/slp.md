@@ -117,8 +117,15 @@ file.slp
     │   └── @fps                 # Attribute: Frames per second (optional)
     ├── /frame_numbers           # Dataset: Embedded frame indices (int array)
     └── /source_video/           # Group: Source video metadata
-        └── @json                # Attribute: JSON with source video info
+        ├── @json                # Attribute: JSON with source video info (≤64 KB)
+        └── /json                # Dataset: JSON fallback when info exceeds 64 KB (optional)
 ```
+
+!!! note "Source video metadata over 64 KB"
+    Source video metadata is normally stored in the `source_video/@json`
+    attribute. If it would exceed HDF5's 64 KB attribute limit (e.g. a very large
+    `backend_metadata`), it is written to a `source_video/json` *dataset* instead
+    and a warning is emitted; readers prefer the dataset when present.
 
 ### Core Datasets
 
@@ -160,6 +167,29 @@ after relocating provenance, its largest droppable top-level keys are removed
 lossless — provenance is already in `/provenance_json` and the other droppable
 keys are empty placeholders whose data lives in their own datasets — so saving
 never fails on oversized metadata.
+
+### Forward compatibility: preserving unknown datasets
+
+Saving a `.slp` truncates the file and rebuilds it from the in-memory model, so
+any top-level dataset/group the writer does not recognize is dropped. This means
+an **older** sleap-io version round-tripping a file written by a **newer** version
+would silently lose the newer version's additions.
+
+To guard against this, pass `preserve_unknown=True` to
+[`save_slp()`][sleap_io.save_slp]:
+
+```python
+labels = sio.load_slp("from_newer_version.slp")
+sio.save_slp(labels, "out.slp", preserve_unknown=True)
+```
+
+Top-level members in the source file (`labels.provenance["filename"]`) that are
+not part of the known schema are copied verbatim into the saved file, after the
+known sections are written (regenerated data always wins on a name clash). It is
+**opt-in** (default `False`) and best-effort: it requires the source file to still
+exist and be readable HDF5. Per-video embedded groups (`video0`, `video1`, ...)
+and all datasets listed above are part of the known schema and are regenerated,
+not carried over.
 
 ## Videos
 
