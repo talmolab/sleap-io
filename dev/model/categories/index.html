@@ -1097,6 +1097,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#slp-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SLP persistence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-via-dataframes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling via DataFrames
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#api-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3677,6 +3699,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#slp-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SLP persistence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-via-dataframes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling via DataFrames
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#api-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3882,6 +3926,44 @@ animal itself rather than of one detection (e.g. the known sex or strain of <cod
 <p>In this iteration, categories are attached to <strong>instances and <code>Identity</code></strong> only. The geometry
 primitives keep their singular scalar <code>category</code> and do not yet carry the plural mapping; this can
 be extended later, exactly like the <a href="../embedding/">embeddings</a> rollout.</p>
+<h2 id="slp-persistence">SLP persistence<a class="headerlink" href="#slp-persistence" title="Permanent link">&para;</a></h2>
+<p>Categories persist to SLP in <strong>format 2.7+</strong>. Per-instance categories live in the additive
+<code>/instance_categories</code> dataset — a 1-D array of <code>{"instance_id", "categories"}</code> JSON rows, one per
+instance carrying any categories, joined back to instances by the global <code>instance_id</code> (the same
+id space as the identity/embedding side-tables). Because the mapping is variable-width, each row
+is encoded as JSON rather than a fixed structured array. Entity-level <code>Identity</code> categories ride
+under a reserved <code>categories</code> key in <code>/identities_json</code>. Both are purely additive: older readers
+ignore them, and category-free files round-trip unchanged at <code>format_id &lt;= 2.6</code>. Per-instance
+categories load lazily alongside the rest of the lazy store. See <a href="../../formats/slp/#per-instance-categories">Formats → SLP</a>.</p>
+<h2 id="sampling-via-dataframes">Sampling via DataFrames<a class="headerlink" href="#sampling-via-dataframes" title="Permanent link">&para;</a></h2>
+<p><a href="../labels/"><code>Labels.to_dataframe(format="instances")</code></a> emits one exploded <code>cat.&lt;dim&gt;</code> column per
+category dimension (vector-valued dims explode to <code>cat.&lt;dim&gt;.&lt;i&gt;</code>), alongside an <code>identity</code> column
+(and <code>identity_score</code>), so categories drive ordinary pandas/polars filtering and balanced
+sampling. Columns are uniform across all rows — a dimension is <code>NaN</code>/<code>null</code> on instances that lack
+it — so sparse categories sample cleanly:</p>
+<div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">skeleton</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Skeleton</span><span class="p">([</span><span class="s2">&quot;head&quot;</span><span class="p">,</span> <span class="s2">&quot;tail&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Video</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="s2">&quot;fake.mp4&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">inst</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Instance</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)),</span> <span class="n">skeleton</span><span class="o">=</span><span class="n">skeleton</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">inst</span><span class="o">.</span><span class="n">set_category</span><span class="p">(</span><span class="s2">&quot;sex&quot;</span><span class="p">,</span> <span class="s2">&quot;M&quot;</span> <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">2</span> <span class="k">else</span> <span class="s2">&quot;F&quot;</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">LabeledFrame</span><span class="p">(</span><span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="n">i</span><span class="p">,</span> <span class="n">instances</span><span class="o">=</span><span class="p">[</span><span class="n">inst</span><span class="p">]))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">frames</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">to_dataframe</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s2">&quot;instances&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">males</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s2">&quot;cat.sex&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;M&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">int</span><span class="p">((</span><span class="n">df</span><span class="p">[</span><span class="s2">&quot;cat.sex&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;M&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+</code></pre></div>
+<p>The DataFrame rows are flat (no live <code>Instance</code> handle survives the row), so to map sampled rows
+back to objects, key off the <code>video</code>/<code>frame_idx</code> locator columns.</p>
+<div class="admonition note">
+<p class="admonition-title">Dimension naming</p>
+<p>Because export flattens each dimension to a <code>cat.&lt;dim&gt;</code> column (and vectors to
+<code>cat.&lt;dim&gt;.&lt;i&gt;</code>), keep dimension names simple. A name containing <code>.</code> or one that collides with a
+skeleton node name can produce overlapping columns. The SLP side-table itself preserves any
+keys faithfully — this only affects the flattened DataFrame view.</p>
+</div>
 <hr />
 <h2 id="api-reference">API reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 
