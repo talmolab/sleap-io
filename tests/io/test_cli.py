@@ -12554,7 +12554,10 @@ def test_download_cli_bad_header(httpserver, tmp_path):
         cli, ["download", url, str(tmp_path / "x.slp"), "-H", "no-colon"]
     )
     assert result.exit_code != 0
-    assert "Invalid --header" in result.output
+    # rich-click colorizes option-like tokens (e.g. ``--header``) with ANSI
+    # escapes, so strip them before the substring check (color is on in CI).
+    clean = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+    assert "Invalid --header" in clean
 
 
 def test_download_cli_header_forwarded(httpserver, tmp_path):
