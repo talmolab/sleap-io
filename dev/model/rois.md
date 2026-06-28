@@ -148,6 +148,8 @@ Every ROI can carry optional metadata:
 | `video`     | [`Video`](video.md) `\| None` | Associated video — set for static ROIs, `None` for frame-bound ROIs |
 | `track`     | [`Track`](poses.md) `\| None`    | Tracking identity across frames              |
 | `tracking_score` | `float \| None` | Confidence of track identity assignment    |
+| `identity`  | [`Identity`](embedding.md) `\| None` | Global cross-video re-ID identity (mirrors `Instance.identity`); persists via `/identity_links` (`owner_type=5`) |
+| `identity_score` | `float \| None` | Confidence of the `identity` assignment      |
 | `instance`  | [`Instance`](poses.md) `\| None` | Linked pose instance                         |
 | `category`  | `str`              | Class label (e.g., `"arena"`)                |
 | `name`      | `str`              | Human-readable name                          |
