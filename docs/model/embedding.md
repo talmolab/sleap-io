@@ -28,7 +28,7 @@ name, plus a convenience `embedding` accessor and a `set_embedding()` helper:
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "tail"])
 >>> inst = sio.Instance.from_numpy(np.array([[0, 1], [2, 3]]), skeleton=skeleton)
->>> _ = inst.set_embedding(np.ones(128, dtype="float32"), name="reid", source="reid_v1")
+>>> inst.set_embedding(np.ones(128, dtype="float32"), name="reid", source="reid_v1")
 >>> print(inst.embedding.dim)
 
 ```
@@ -41,8 +41,8 @@ is exactly one, otherwise `None`. A second named space coexists without conflict
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "tail"])
 >>> inst = sio.Instance.from_numpy(np.array([[0, 1], [2, 3]]), skeleton=skeleton)
->>> _ = inst.set_embedding(np.ones(128, dtype="float32"))           # -> "reid"
->>> _ = inst.set_embedding(np.ones(64, dtype="float64"), name="jabs")
+>>> inst.set_embedding(np.ones(128, dtype="float32"))           # -> "reid"
+>>> inst.set_embedding(np.ones(64, dtype="float64"), name="jabs")
 >>> print(sorted(inst.embeddings))
 
 ```
