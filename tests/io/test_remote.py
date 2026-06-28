@@ -32,8 +32,10 @@ from werkzeug.wrappers import Response
 from yarl import URL
 
 from sleap_io.io._gdrive import (
+    _filename_from_disposition,
     _is_gdrive_url,
     _open_gdrive,
+    _open_gdrive_with_name,
     _parse_gdrive,
     _url_from_confirmation,
 )
@@ -42,6 +44,7 @@ from sleap_io.io._remote import (
     _RETRY_BACKOFF_BASE,
     RemoteIOError,
     _build_fsspec_filesystem,
+    _filename_from_url,
     _find_response_error,
     _head_or_range_probe,
     _http_inner_options,
@@ -54,6 +57,7 @@ from sleap_io.io._remote import (
     _redacted_cause_summary,
     _redirect_target,
     _require_package,
+    _resolve_target_path,
     _retry_after_seconds,
     _retry_sleep_seconds,
     _sniff_format,
@@ -61,6 +65,7 @@ from sleap_io.io._remote import (
     _strip_cross_origin_headers,
     _warn_if_old_aiohttp,
     clear_remote_cache,
+    download,
     open_remote_h5,
     open_url,
 )
@@ -1865,3 +1870,385 @@ def test_sniff_over_http_live():
     ``SLEAP_IO_RUN_LIVE=1`` and select ``-m live``.
     """
     assert _sniff_format("https://slp.sh/4M16VD/labels.slp") == "hdf5"
+
+
+# ---------------------------------------------------------------------------
+# download(): destination/filename resolution (pure, no network)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://host/data/labels.slp", "labels.slp"),
+        ("https://host/labels.slp?token=abc#frag", "labels.slp"),
+        ("https://host/a/b/c/my%20file.slp", "my file.slp"),
+        ("s3://bucket/run/video.mp4", "video.mp4"),
+        ("https://host/dir/", None),
+        ("https://host", None),
+        # Path-traversal vectors: encoded separators / dot-segments must NOT
+        # survive into the result as real separators (would escape the dest dir).
+        ("https://host/%2E%2E%2F%2E%2E%2Fevil.slp", "evil.slp"),
+        ("https://host/foo%2F..%2F..%2Fevil.slp", "evil.slp"),
+        ("https://host/%2Fetc%2Fpasswd", "passwd"),
+        ("https://evil/a%5C..%5C..%5Cevil.slp", "evil.slp"),  # backslash sep
+        ("https://host/files/..", None),
+        ("https://host/files/.", None),
+        ("https://host/%2E%2E", None),
+    ],
+)
+def test_filename_from_url(url, expected):
+    """`_filename_from_url` returns a safe decoded basename (or None)."""
+    assert _filename_from_url(url) == expected
+
+
+def test_resolve_target_path_none_dest_uses_filename():
+    """`dest=None` writes the URL filename into the current directory."""
+    assert _resolve_target_path(None, "labels.slp") == Path("labels.slp")
+
+
+def test_resolve_target_path_none_dest_no_filename_is_none():
+    """`dest=None` with no derivable filename returns None (caller must error)."""
+    assert _resolve_target_path(None, None) is None
+
+
+def test_resolve_target_path_existing_dir(tmp_path):
+    """An existing-directory dest writes inside it using the filename."""
+    assert _resolve_target_path(tmp_path, "labels.slp") == tmp_path / "labels.slp"
+
+
+def test_resolve_target_path_trailing_slash_is_dir():
+    """A dest string ending in a separator is treated as a directory."""
+    assert _resolve_target_path("out/", "labels.slp") == Path("out/labels.slp")
+
+
+def test_resolve_target_path_dir_without_filename_is_none(tmp_path):
+    """A directory dest with no filename yet returns None."""
+    assert _resolve_target_path(tmp_path, None) is None
+
+
+def test_resolve_target_path_file_dest_is_literal(tmp_path):
+    """A non-directory dest is used as the exact output path."""
+    out = tmp_path / "sub" / "out.slp"
+    assert _resolve_target_path(out, "ignored.slp") == out
+
+
+@pytest.mark.parametrize("bad", ["/abs/local/path.slp", "relative/path.slp", "x.slp"])
+def test_download_rejects_local_path(bad):
+    """`download` raises ValueError for a non-URL input."""
+    with pytest.raises(ValueError, match="expects a remote URL"):
+        download(bad)
+
+
+def test_download_no_filename_no_dest_raises():
+    """A URL with no basename and no usable dest raises a clear ValueError."""
+    with pytest.raises(ValueError, match="determine a destination filename"):
+        download("https://host/dir/")
+
+
+def test_download_url_traversal_contained(tmp_path):
+    """A malicious encoded URL basename cannot escape a directory destination."""
+    url = "https://host/%2E%2E%2F%2E%2E%2Fevil.slp"
+    name = _filename_from_url(url)
+    assert name == "evil.slp"
+    target = _resolve_target_path(tmp_path, name)
+    # The resolved target stays strictly inside the destination directory.
+    assert target.parent.resolve() == tmp_path.resolve()
+    assert tmp_path.resolve() in target.resolve().parents
+
+
+def test_download_rejects_unsupported_scheme_and_redacts_credentials():
+    """An unsupported scheme is rejected without leaking embedded credentials."""
+    with pytest.raises(ValueError) as exc:
+        download("ftp://user:s3cr3t@host/file.slp")
+    msg = str(exc.value)
+    assert "s3cr3t" not in msg
+    assert "expects a remote URL" in msg
+
+
+# ---------------------------------------------------------------------------
+# download(): over HTTP (loopback pytest-httpserver)
+# ---------------------------------------------------------------------------
+
+
+def test_download_to_explicit_path(httpserver, tmp_path):
+    """`download` writes the bytes to an explicit destination path."""
+    httpserver.expect_request("/labels.slp").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/labels.slp")
+    out = tmp_path / "out.slp"
+
+    result = download(url, out, progress=False)
+
+    assert result == out.resolve()
+    assert out.read_bytes() == _HDF5_BODY
+
+
+def test_download_default_dest_uses_url_basename(httpserver, tmp_path, monkeypatch):
+    """`dest=None` writes the URL filename into the current directory."""
+    httpserver.expect_request("/labels.slp").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/labels.slp")
+    monkeypatch.chdir(tmp_path)
+
+    result = download(url, progress=False)
+
+    assert result == (tmp_path / "labels.slp").resolve()
+    assert (tmp_path / "labels.slp").read_bytes() == _HDF5_BODY
+
+
+def test_download_into_directory(httpserver, tmp_path):
+    """A directory dest writes inside it using the URL filename."""
+    httpserver.expect_request("/labels.slp").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/labels.slp")
+    out_dir = tmp_path / "downloads"
+    out_dir.mkdir()
+
+    result = download(url, out_dir, progress=False)
+
+    assert result == (out_dir / "labels.slp").resolve()
+    assert (out_dir / "labels.slp").read_bytes() == _HDF5_BODY
+
+
+def test_download_creates_parent_dirs(httpserver, tmp_path):
+    """Missing parent directories of the destination are created."""
+    httpserver.expect_request("/labels.slp").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/labels.slp")
+    out = tmp_path / "a" / "b" / "out.slp"
+
+    download(url, out, progress=False)
+
+    assert out.read_bytes() == _HDF5_BODY
+
+
+def test_download_skips_existing_without_network(httpserver, tmp_path):
+    """An existing destination is returned without re-downloading (idempotent)."""
+    hits: list[int] = []
+
+    def _handler(request):
+        hits.append(1)
+        return Response(_HDF5_BODY, status=200)
+
+    httpserver.expect_request("/labels.slp").respond_with_handler(_handler)
+    url = httpserver.url_for("/labels.slp")
+    out = tmp_path / "out.slp"
+    out.write_bytes(b"sentinel")
+
+    result = download(url, out, progress=False)
+
+    assert result == out.resolve()
+    assert out.read_bytes() == b"sentinel"
+    assert hits == [], "server was contacted despite an existing destination"
+
+
+def test_download_overwrite_refetches(httpserver, tmp_path):
+    """`overwrite=True` re-downloads over an existing destination."""
+    httpserver.expect_request("/labels.slp").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/labels.slp")
+    out = tmp_path / "out.slp"
+    out.write_bytes(b"old")
+
+    download(url, out, overwrite=True, progress=False)
+
+    assert out.read_bytes() == _HDF5_BODY
+
+
+def test_download_dir_collision_raises(httpserver, tmp_path):
+    """A resolved target that is an existing directory raises IsADirectoryError."""
+    httpserver.expect_request("/data").respond_with_data(_HDF5_BODY)
+    url = httpserver.url_for("/data")  # basename "data"
+    (tmp_path / "data").mkdir()
+
+    with pytest.raises(IsADirectoryError, match="existing directory"):
+        download(url, tmp_path, progress=False)
+
+
+def test_download_no_part_file_left_on_success(httpserver, tmp_path):
+    """A successful download leaves no `.part` temp file behind."""
+    httpserver.expect_request("/labels.slp").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/labels.slp")
+    out = tmp_path / "out.slp"
+
+    download(url, out, progress=False)
+
+    assert list(tmp_path.glob("*.part")) == []
+
+
+def test_download_404_raises_and_cleans_up(httpserver, tmp_path):
+    """A 404 raises RemoteIOError and leaves no file or `.part` behind."""
+    httpserver.expect_request("/missing.slp").respond_with_data("no", status=404)
+    url = httpserver.url_for("/missing.slp")
+    out = tmp_path / "out.slp"
+
+    with pytest.raises(RemoteIOError):
+        download(url, out, progress=False, retries=0)
+
+    assert not out.exists()
+    assert list(tmp_path.glob("*.part")) == []
+
+
+def test_download_with_progress_bar(httpserver, tmp_path):
+    """`progress=True` (default) still produces a correct file."""
+    httpserver.expect_request("/labels.slp").respond_with_handler(
+        _make_range_handler(_HDF5_BODY)
+    )
+    url = httpserver.url_for("/labels.slp")
+    out = tmp_path / "out.slp"
+
+    download(url, out, progress=True)
+
+    assert out.read_bytes() == _HDF5_BODY
+
+
+def test_download_retries_then_succeeds(httpserver, tmp_path):
+    """A transient 503 is retried and the download then succeeds."""
+    state = {"n": 0}
+
+    def _handler(request):
+        state["n"] += 1
+        if state["n"] == 1:
+            return Response("busy", status=503)
+        return Response(_HDF5_BODY, status=200)
+
+    httpserver.expect_request("/flaky.slp").respond_with_handler(_handler)
+    url = httpserver.url_for("/flaky.slp")
+    out = tmp_path / "out.slp"
+
+    download(url, out, progress=False, retries=2)
+
+    assert out.read_bytes() == _HDF5_BODY
+    assert state["n"] >= 2
+
+
+# ---------------------------------------------------------------------------
+# download(): Google Drive
+# ---------------------------------------------------------------------------
+
+
+def test_filename_from_disposition_plain():
+    """A plain `filename="..."` Content-Disposition is parsed."""
+    assert _filename_from_disposition('attachment; filename="data.slp"') == "data.slp"
+
+
+def test_filename_from_disposition_rfc5987():
+    """An RFC 5987 `filename*=UTF-8''...` extended value is parsed and decoded."""
+    value = "attachment; filename*=UTF-8''na%C3%AFve.slp"
+    assert _filename_from_disposition(value) == "naïve.slp"
+
+
+def test_filename_from_disposition_strips_path_components():
+    """Directory components in the filename are stripped (path-traversal guard)."""
+    assert _filename_from_disposition('attachment; filename="../../etc/x"') == "x"
+
+
+@pytest.mark.parametrize("value", [None, "", "inline", "attachment"])
+def test_filename_from_disposition_none(value):
+    """Missing/filename-less Content-Disposition values yield None."""
+    assert _filename_from_disposition(value) is None
+
+
+@pytest.mark.parametrize(
+    "value", ['attachment; filename="."', 'attachment; filename=".."']
+)
+def test_filename_from_disposition_dot_segments_rejected(value):
+    """Bare dot-segment filenames are rejected (would target the dir itself)."""
+    assert _filename_from_disposition(value) is None
+
+
+def test_open_gdrive_with_name_returns_filename(gdrive_uc_template):
+    """`_open_gdrive_with_name` returns the Content-Disposition filename."""
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+
+    bio, name = _open_gdrive_with_name("https://drive.google.com/file/d/FILEID/view")
+
+    assert bio.read() == _HDF5_BODY
+    assert name == "data.bin"
+
+
+def test_download_gdrive_uses_disposition_filename(gdrive_uc_template, tmp_path):
+    """A Drive download into a directory uses the Content-Disposition filename."""
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+
+    result = download("https://drive.google.com/file/d/FILEID/view", tmp_path)
+
+    assert result == (tmp_path / "data.bin").resolve()
+    assert (tmp_path / "data.bin").read_bytes() == _HDF5_BODY
+
+
+def test_download_gdrive_explicit_dest(gdrive_uc_template, tmp_path):
+    """A Drive download to an explicit path writes there."""
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+    out = tmp_path / "labels.slp"
+
+    result = download("https://drive.google.com/file/d/FILEID/view", out)
+
+    assert result == out.resolve()
+    assert out.read_bytes() == _HDF5_BODY
+
+
+def test_download_gdrive_skips_existing_explicit_dest(gdrive_uc_template, tmp_path):
+    """An existing explicit dest skips the Drive fetch entirely (idempotent)."""
+    hits: list[int] = []
+
+    def _uc_handler(request):
+        hits.append(1)
+        return Response("<html></html>", status=200, content_type="text/html")
+
+    gdrive_uc_template.expect_request("/uc").respond_with_handler(_uc_handler)
+    out = tmp_path / "labels.slp"
+    out.write_bytes(b"sentinel")
+
+    result = download("https://drive.google.com/file/d/FILEID/view", out)
+
+    assert result == out.resolve()
+    assert out.read_bytes() == b"sentinel"
+    assert hits == [], "Drive was contacted despite an existing destination"
+
+
+def test_download_gdrive_dir_dest_skips_existing(gdrive_uc_template, tmp_path):
+    """A dir-dest Drive download skips writing if the resolved name exists.
+
+    The Drive filename is only known after fetching, so the existence check
+    happens inside ``_download_gdrive`` (not the up-front path in ``download``).
+    """
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+    existing = tmp_path / "data.bin"
+    existing.write_bytes(b"sentinel")
+
+    result = download("https://drive.google.com/file/d/FILEID/view", tmp_path)
+
+    assert result == existing.resolve()
+    assert existing.read_bytes() == b"sentinel"
+
+
+def test_download_gdrive_dir_collision_raises(gdrive_uc_template, tmp_path):
+    """A Drive filename that collides with an existing subdir raises clearly."""
+    _serve_gdrive_two_hop(gdrive_uc_template, file_bytes=_HDF5_BODY)
+    (tmp_path / "data.bin").mkdir()  # collides with the Content-Disposition name
+
+    with pytest.raises(IsADirectoryError, match="existing directory"):
+        download("https://drive.google.com/file/d/FILEID/view", tmp_path)
+
+
+def test_download_gdrive_no_filename_dir_dest_raises(gdrive_uc_template, tmp_path):
+    """A Drive file with no Content-Disposition filename + dir dest raises."""
+
+    def _handler(request):
+        # Reach the file directly (non-HTML) with NO Content-Disposition, so no
+        # filename can be derived.
+        return Response(_HDF5_BODY, status=200, content_type="application/octet-stream")
+
+    gdrive_uc_template.expect_request("/uc").respond_with_handler(_handler)
+
+    with pytest.raises(ValueError, match="determine a destination filename"):
+        download("https://drive.google.com/uc?id=FILEID", tmp_path)

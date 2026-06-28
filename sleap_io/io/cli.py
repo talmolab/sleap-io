@@ -123,6 +123,7 @@ click.rich_click.COMMAND_GROUPS = {
         },
         {"name": "Export", "commands": ["export"]},
         {"name": "Embedding", "commands": ["embed", "unembed"]},
+        {"name": "Remote", "commands": ["download"]},
         {"name": "Maintenance", "commands": ["fix"]},
         {"name": "Rendering", "commands": ["render"]},
     ]
@@ -8291,6 +8292,112 @@ def _transform_video_file(
         )
 
     console.print(f"[bold green]Saved:[/] {output_path}")
+
+
+def _parse_cli_headers(headers: tuple[str, ...]) -> dict[str, str] | None:
+    """Parse ``--header 'Name: Value'`` CLI options into a header dict.
+
+    Args:
+        headers: The raw ``--header`` option values (possibly empty).
+
+    Returns:
+        A mapping of header names to values, or None if no headers were given.
+
+    Raises:
+        click.ClickException: If any value is not of the form ``Name: Value``.
+    """
+    if not headers:
+        return None
+    parsed: dict[str, str] = {}
+    for raw in headers:
+        name, sep, value = raw.partition(":")
+        name = name.strip()
+        if not sep or not name:
+            raise click.ClickException(
+                f"Invalid --header {raw!r}; expected the form 'Name: Value'."
+            )
+        parsed[name] = value.strip()
+    return parsed
+
+
+@cli.command()
+@click.argument("url")
+@click.argument("dest", required=False, type=click.Path())
+@click.option(
+    "-o",
+    "--output",
+    "output",
+    type=click.Path(),
+    default=None,
+    help="Destination path or directory (alternative to the positional DEST).",
+)
+@click.option(
+    "-f",
+    "--overwrite",
+    is_flag=True,
+    default=False,
+    help="Re-download even if the destination already exists.",
+)
+@click.option(
+    "--progress/--no-progress",
+    default=True,
+    help="Show a download progress bar (default: on).",
+)
+@click.option(
+    "-H",
+    "--header",
+    "headers",
+    multiple=True,
+    metavar="'NAME: VALUE'",
+    help="Extra HTTP header (repeatable), e.g. -H 'Authorization: Bearer <token>'.",
+)
+@click.option(
+    "--retries",
+    type=int,
+    default=3,
+    show_default=True,
+    help="Retries for transient HTTP errors (429/5xx).",
+)
+def download(url, dest, output, overwrite, progress, headers, retries):
+    """Download a remote file to local disk (a curl/wget replacement).
+
+    [bold]URL[/] may be an http/https, cloud (s3/gs/gcs/az/abfs), or Google Drive
+    link. With no [bold]DEST[/], the file is written to the current directory
+    using the filename from the URL; a directory DEST writes inside it; any other
+    DEST is the exact output path.
+
+    [dim]Examples:[/]
+
+        $ sio download https://example.com/labels.slp
+
+        $ sio download s3://bucket/run/video.mp4 data/
+
+        $ sio download https://host/a.slp out.slp -H 'Authorization: Bearer TKN'
+    """
+    from sleap_io.io._remote import RemoteIOError
+    from sleap_io.io._remote import download as _download
+
+    if dest is not None and output is not None:
+        raise click.ClickException(
+            "Specify the destination once: as the positional DEST or with "
+            "-o/--output, not both."
+        )
+    target = dest if dest is not None else output
+    header_dict = _parse_cli_headers(headers)
+
+    try:
+        path = _download(
+            url,
+            target,
+            headers=header_dict,
+            overwrite=overwrite,
+            progress=progress,
+            retries=retries,
+        )
+    except (RemoteIOError, ValueError, ImportError) as e:
+        raise click.ClickException(str(e))
+
+    console.print(f"[bold green]Downloaded:[/] {path}")
 
 
 if __name__ == "__main__":
