@@ -105,6 +105,10 @@
          <lastmod>2026-06-28</lastmod>
     </url>
     <url>
+         <loc>https://io.sleap.ai/dev/model/categories/</loc>
+         <lastmod>2026-06-28</lastmod>
+    </url>
+    <url>
          <loc>https://io.sleap.ai/dev/model/centroids/</loc>
          <lastmod>2026-06-28</lastmod>
     </url>
@@ -282,6 +286,10 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/camera/</loc>
+         <lastmod>2026-06-28</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/model/categories/</loc>
          <lastmod>2026-06-28</lastmod>
     </url>
     <url>
