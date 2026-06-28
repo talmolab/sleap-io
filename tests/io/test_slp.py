@@ -1088,6 +1088,41 @@ def test_make_instance_group_warns_on_identity_idx_out_of_bounds(camera_group_34
     assert ig.identity is None
 
 
+def test_identities_uuid_round_trip(tmp_path):
+    """Test that Identity uuid (and name/color/metadata) round-trips through SLP."""
+    path = str(tmp_path / "identities.h5")
+    identities = [
+        Identity(name="mouse_A", color="#e6194b", metadata={"sex": "F"}),
+        Identity(name="mouse_B"),
+    ]
+    write_identities(path, identities)
+    loaded = read_identities(path)
+
+    assert len(loaded) == 2
+    assert loaded[0].uuid == identities[0].uuid
+    assert loaded[0].name == "mouse_A"
+    assert loaded[0].color == "#e6194b"
+    assert loaded[0].metadata == {"sex": "F"}
+    assert loaded[1].uuid == identities[1].uuid
+    # uuid is not leaked into metadata.
+    assert "uuid" not in loaded[0].metadata
+
+
+def test_identities_legacy_without_uuid_synthesizes_one(tmp_path):
+    """Test that legacy identity records lacking a uuid get a fresh one on load."""
+    path = str(tmp_path / "legacy_identities.h5")
+    # Emulate a pre-2.5 record: name only, no uuid key.
+    legacy = [np.bytes_(json.dumps({"name": "mouse_A"}, separators=(",", ":")))]
+    with h5py.File(path, "a") as f:
+        f.create_dataset("identities_json", data=legacy, maxshape=(None,))
+
+    loaded = read_identities(path)
+    assert len(loaded) == 1
+    assert loaded[0].name == "mouse_A"
+    assert isinstance(loaded[0].uuid, str) and len(loaded[0].uuid) == 32
+    assert "uuid" not in loaded[0].metadata
+
+
 def test_make_frame_group_and_frame_group_to_dict(
     frame_group_345: FrameGroup, camera_group_345: CameraGroup
 ):

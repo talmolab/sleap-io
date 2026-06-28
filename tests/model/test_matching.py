@@ -3,13 +3,18 @@
 import numpy as np
 
 import sleap_io as sio
+from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.matching import (
+    NAME_IDENTITY_MATCHER,
+    UUID_IDENTITY_MATCHER,
     ConflictResolution,
     ErrorMode,
     FrameStrategy,
+    IdentityMatcher,
+    IdentityMatchMethod,
     InstanceMatcher,
     InstanceMatchMethod,
     MergeError,
@@ -201,6 +206,50 @@ class TestTrackMatcher:
         matcher = TrackMatcher(method=TrackMatchMethod.IDENTITY)
         assert not matcher.match(track1, track2)  # Different objects
         assert matcher.match(track1, track3)  # Same object
+
+
+class TestIdentityMatcher:
+    """Test global identity matching functionality."""
+
+    def test_uuid_match_default(self):
+        """Test that the default method matches by stable uuid."""
+        id1 = Identity(name="mouse_A", uuid="shared")
+        id2 = Identity(name="renamed", uuid="shared")  # same uuid, diff name
+        id3 = Identity(name="mouse_A")  # same name, diff uuid
+
+        matcher = IdentityMatcher()
+        assert matcher.method == IdentityMatchMethod.UUID
+        assert matcher.match(id1, id2)  # Same uuid
+        assert not matcher.match(id1, id3)  # Different uuid
+
+    def test_name_match(self):
+        """Test identity matching by name."""
+        id1 = Identity(name="mouse_A")
+        id2 = Identity(name="mouse_A")  # Same name, different uuid
+        id3 = Identity(name="mouse_B")
+
+        matcher = IdentityMatcher(method=IdentityMatchMethod.NAME)
+        assert matcher.match(id1, id2)  # Same name
+        assert not matcher.match(id1, id3)  # Different names
+
+    def test_identity_match(self):
+        """Test identity matching by Python object identity."""
+        id1 = Identity(name="mouse_A", uuid="shared")
+        id2 = Identity(name="mouse_A", uuid="shared")  # same fields, diff object
+
+        matcher = IdentityMatcher(method=IdentityMatchMethod.IDENTITY)
+        assert not matcher.match(id1, id2)  # Different objects
+        assert matcher.match(id1, id1)  # Same object
+
+    def test_string_method_coercion(self):
+        """Test that a string method is coerced to the enum."""
+        matcher = IdentityMatcher(method="name")
+        assert matcher.method == IdentityMatchMethod.NAME
+
+    def test_prebuilt_matchers(self):
+        """Test the module-level pre-built identity matchers."""
+        assert UUID_IDENTITY_MATCHER.method == IdentityMatchMethod.UUID
+        assert NAME_IDENTITY_MATCHER.method == IdentityMatchMethod.NAME
 
 
 class TestVideoMatcher:
