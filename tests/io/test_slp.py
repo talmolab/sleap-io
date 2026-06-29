@@ -2583,6 +2583,29 @@ def test_embed_invalid_value(tmpdir, slp_real_data):
         write_labels(labels_path, base_labels, embed="invalid_embed_value")
 
 
+def test_embed_out_of_range_frame_reports_video(tmpdir, slp_real_data):
+    """Out-of-range embed error names the video, not just the frame index."""
+    base_labels = read_labels(slp_real_data)
+    video = base_labels.video
+    n_frames = len(video)
+    video_ind = base_labels.videos.index(video)
+
+    labels_path = Path(tmpdir / "labels.pkg.slp").as_posix()
+    bad_frame_idx = n_frames + 100
+    frames_metadata = prepare_frames_to_embed(
+        labels_path, base_labels, [(video, bad_frame_idx)]
+    )
+
+    with pytest.raises(IndexError) as exc_info:
+        process_and_embed_frames(labels_path, frames_metadata)
+
+    message = str(exc_info.value)
+    assert f"Frame index {bad_frame_idx} out of range" in message
+    assert f"video {video_ind}" in message
+    assert str(video.filename) in message
+    assert f"{n_frames} frames" in message
+
+
 def test_process_and_embed_frames_verbose():
     """Test that process_and_embed_frames uses tqdm when verbose=True."""
     # Since we only want to test if tqdm is imported, we can simplify
