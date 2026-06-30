@@ -774,7 +774,7 @@ def test_to_centroid_center_of_mass_with_scale_offset():
 
 
 def test_to_centroid_center_of_mass_anisotropic_scale():
-    """sx != sy: cols map to x via sx and rows map to y via sy (no axis swap)."""
+    """Anisotropic scale: cols map to x via sx, rows to y via sy (no axis swap)."""
     data = np.zeros((10, 10), dtype=bool)
     data[2:4, 3:6] = True  # rows mean 2.5, cols mean 4.0
     mask = UserSegmentationMask.from_numpy(data, scale=(0.5, 0.25), offset=(10.0, 20.0))

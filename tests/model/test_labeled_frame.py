@@ -2107,7 +2107,7 @@ def test_convert_pose_to_centroid_forwards_method_node_fallback():
 
 
 def test_convert_pose_to_centroid_anchor_fallback_engages():
-    """convert forwards fallback so an occluded anchor falls back end-to-end."""
+    """Convert forwards fallback so an occluded anchor falls back end-to-end."""
     skel = Skeleton(["A", "B"])
     # Anchor node "A" is occluded (NaN); "B" is visible at (10, 10).
     inst = Instance.from_numpy(
