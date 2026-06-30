@@ -42,6 +42,15 @@ from sleap_io.io.utils import sanitize_filename
 from sleap_io.io.video_reading import ImageVideo, MediaVideo
 from sleap_io.io.video_writing import MJPEGFrameWriter
 
+# pynwb 4.0 requires ``num_samples`` for an external-format ``ImageSeries`` that
+# uses rate-based timing (its empty ``data`` cannot imply the frame count), while
+# pynwb < 4 does not accept the argument at all. Detect support from the docval so
+# the writer works across both without forcing a pynwb upgrade.
+_PYNWB_ACCEPTS_NUM_SAMPLES = "num_samples" in {
+    arg["name"]
+    for arg in getattr(ImageSeries.__init__, "__docval__", {}).get("args", [])
+}
+
 
 def sanitize_nwb_name(name: str) -> str:
     """Sanitize a name for use in NWB files.
@@ -312,11 +321,18 @@ def sleap_video_to_nwb_image_series(
     if isinstance(filename, str):
         filename = [filename]
 
-    # Get video metadata
+    # Get video metadata. ``num_samples`` is the total frame count; on pynwb >= 4
+    # it is required for an external-format ImageSeries with rate-based timing.
     shape = sleap_video.shape
     if shape is not None:
+        num_samples = int(shape[0])
         height, width = shape[1:3]
     else:
+        # Shape is unavailable (e.g. the referenced file cannot be opened); fall
+        # back to the external-file count so ``num_samples`` is a valid positive
+        # int. The reader reconstructs the video from ``external_file`` alone, so
+        # this metadata does not affect round-trips.
+        num_samples = len(filename)
         height, width = 0, 0
 
     fps = sleap_video.fps if sleap_video.fps is not None else 30.0
@@ -324,7 +340,7 @@ def sleap_video_to_nwb_image_series(
     starting_frame = list(range(len(filename)))  # needs to match length of filenames
 
     # Create ImageSeries with external file reference
-    image_series = ImageSeries(
+    image_series_kwargs = dict(
         name=name,
         description=description,
         unit="NA",  # Standard for video data
@@ -334,6 +350,9 @@ def sleap_video_to_nwb_image_series(
         rate=fps,
         starting_frame=starting_frame,
     )
+    if _PYNWB_ACCEPTS_NUM_SAMPLES:
+        image_series_kwargs["num_samples"] = num_samples
+    image_series = ImageSeries(**image_series_kwargs)
 
     return image_series
 

@@ -15,6 +15,7 @@ from sleap_io import Labels as SleapLabels
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
 from sleap_io.io.nwb_annotations import (
+    _PYNWB_ACCEPTS_NUM_SAMPLES,
     MULTISUBJECTS_AVAILABLE,
     FrameInfo,
     FrameMap,
@@ -390,6 +391,29 @@ def test_video_roundtrip_media_video(centered_pair_low_quality_path):
 
     # Verify file path is preserved
     assert str(recovered_video.filename) == str(original_video.filename)
+
+
+@pytest.mark.skipif(
+    not _PYNWB_ACCEPTS_NUM_SAMPLES,
+    reason="pynwb < 4 does not accept num_samples on ImageSeries",
+)
+def test_image_series_num_samples_set_from_shape(centered_pair_low_quality_path):
+    """num_samples is set from the video frame count (pynwb >= 4 requires it)."""
+    original_video = SleapVideo.from_filename(centered_pair_low_quality_path)
+    image_series = sleap_video_to_nwb_image_series(original_video, name="test_media")
+    assert image_series.num_samples == original_video.shape[0]
+
+
+@pytest.mark.skipif(
+    not _PYNWB_ACCEPTS_NUM_SAMPLES,
+    reason="pynwb < 4 does not accept num_samples on ImageSeries",
+)
+def test_image_series_num_samples_falls_back_when_shape_unavailable():
+    """An unopenable video still gets a valid positive num_samples (external count)."""
+    video = SleapVideo.from_filename("does_not_exist.mp4")
+    image_series = sleap_video_to_nwb_image_series(video, name="missing")
+    assert video.shape is None
+    assert image_series.num_samples == 1
 
 
 def test_video_roundtrip_image_video(centered_pair_frame_paths):
