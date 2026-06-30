@@ -52,6 +52,31 @@ _PYNWB_ACCEPTS_NUM_SAMPLES = "num_samples" in {
 }
 
 
+def _with_num_samples(
+    kwargs: dict, num_samples: int, accepts_num_samples: bool
+) -> dict:
+    """Add ``num_samples`` to ImageSeries kwargs when the pynwb build accepts it.
+
+    pynwb >= 4 requires ``num_samples`` on an external-format ``ImageSeries`` that
+    uses rate-based timing, while pynwb < 4 does not accept the argument at all.
+    Isolating that version decision in a pure function keeps both branches
+    testable on any installed pynwb version.
+
+    Args:
+        kwargs: The base ``ImageSeries`` keyword arguments.
+        num_samples: Total frame count to record.
+        accepts_num_samples: Whether the installed pynwb accepts ``num_samples``
+            (typically ``_PYNWB_ACCEPTS_NUM_SAMPLES``).
+
+    Returns:
+        A new dict with ``num_samples`` added when ``accepts_num_samples`` is
+        ``True``, otherwise ``kwargs`` unchanged.
+    """
+    if accepts_num_samples:
+        return {**kwargs, "num_samples": num_samples}
+    return kwargs
+
+
 def sanitize_nwb_name(name: str) -> str:
     """Sanitize a name for use in NWB files.
 
@@ -350,9 +375,11 @@ def sleap_video_to_nwb_image_series(
         rate=fps,
         starting_frame=starting_frame,
     )
-    if _PYNWB_ACCEPTS_NUM_SAMPLES:
-        image_series_kwargs["num_samples"] = num_samples
-    image_series = ImageSeries(**image_series_kwargs)
+    image_series = ImageSeries(
+        **_with_num_samples(
+            image_series_kwargs, num_samples, _PYNWB_ACCEPTS_NUM_SAMPLES
+        )
+    )
 
     return image_series
 

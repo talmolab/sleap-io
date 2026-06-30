@@ -19,6 +19,7 @@ from sleap_io.io.nwb_annotations import (
     MULTISUBJECTS_AVAILABLE,
     FrameInfo,
     FrameMap,
+    _with_num_samples,
     create_nwb_to_slp_skeleton_map,
     create_nwb_to_slp_video_map,
     create_slp_to_nwb_skeleton_map,
@@ -414,6 +415,22 @@ def test_image_series_num_samples_falls_back_when_shape_unavailable():
     image_series = sleap_video_to_nwb_image_series(video, name="missing")
     assert video.shape is None
     assert image_series.num_samples == 1
+
+
+def test_with_num_samples_adds_when_accepted():
+    """The kwarg is added (without mutating the input) when pynwb accepts it."""
+    base = {"name": "v", "rate": 30.0}
+    out = _with_num_samples(base, 17, True)
+    assert out == {"name": "v", "rate": 30.0, "num_samples": 17}
+    assert "num_samples" not in base  # input untouched
+
+
+def test_with_num_samples_omitted_when_not_accepted():
+    """The kwarg is omitted for pynwb builds that do not accept it (< 4)."""
+    base = {"name": "v", "rate": 30.0}
+    out = _with_num_samples(base, 17, False)
+    assert out == base
+    assert "num_samples" not in out
 
 
 def test_video_roundtrip_image_video(centered_pair_frame_paths):
