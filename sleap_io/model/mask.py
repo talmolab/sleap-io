@@ -39,6 +39,7 @@ if TYPE_CHECKING:
         from typing_extensions import Self
 
     from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.centroid import Centroid
     from sleap_io.model.embedding import Embedding
     from sleap_io.model.identity import Identity
     from sleap_io.model.instance import Instance, Track
@@ -318,6 +319,17 @@ class SegmentationMask(EmbeddingMixin):
         return int(sum(self.rle_counts[1::2]))
 
     @property
+    def is_empty(self) -> bool:
+        """Whether the mask has no foreground pixels.
+
+        Mirrors `Instance.is_empty`. ``True`` when the mask area is zero.
+
+        Returns:
+            ``True`` if there are no foreground (True) pixels, else ``False``.
+        """
+        return self.area == 0
+
+    @property
     def bbox(self) -> tuple[float, float, float, float]:
         """Bounding box of the mask as (x, y, width, height) in image coordinates.
 
@@ -349,19 +361,107 @@ class SegmentationMask(EmbeddingMixin):
             float((rmax - rmin + 1) / sy),
         )
 
-    def to_bbox(self) -> "BoundingBox":
+    def to_centroid(
+        self,
+        method: str = "center_of_mass",
+        error_on_empty: bool = False,
+    ) -> "Centroid":
+        """Convert the mask to a centroid point.
+
+        Returns a ``UserCentroid`` or ``PredictedCentroid`` with metadata
+        (track, tracking_score, identity, identity_score, category, name,
+        source, instance) inherited from this mask. Coordinates are in image
+        space (respecting
+        ``scale``/``offset``).
+
+        Args:
+            method: How to compute the centroid. ``"center_of_mass"`` (default)
+                uses the mean of foreground pixel coordinates mapped to image
+                space. ``"bbox_center"`` uses the midpoint of the mask's tight
+                bounding box (concave-robust).
+            error_on_empty: If ``True``, raise ``ValueError`` when the mask has no
+                foreground pixels instead of returning a degenerate (NaN)
+                centroid.
+
+        Returns:
+            A ``Centroid`` at the computed location. For an empty mask, returns a
+            degenerate centroid with ``x = y = nan`` (unless ``error_on_empty``).
+
+        Raises:
+            ValueError: If ``method`` is not recognized, or if the mask is empty
+                and ``error_on_empty`` is ``True``.
+        """
+        from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+        if method not in ("center_of_mass", "bbox_center"):
+            raise ValueError(
+                f"Unknown method {method!r}. Expected 'center_of_mass' or "
+                f"'bbox_center'."
+            )
+
+        cls = PredictedCentroid if self.is_predicted else UserCentroid
+        kwargs: dict = dict(
+            track=self.track,
+            tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
+            instance=self.instance,
+            category=self.category,
+            name=self.name,
+            source=self.source,
+        )
+        if self.is_predicted:
+            kwargs["score"] = self.score
+
+        if self.is_empty:
+            if error_on_empty:
+                raise ValueError(
+                    "Cannot compute centroid of an empty mask (no foreground pixels)."
+                )
+            return cls(x=float("nan"), y=float("nan"), **kwargs)
+
+        if method == "center_of_mass":
+            sx, sy = self.scale
+            ox, oy = self.offset
+            rows, cols = np.nonzero(self.data)
+            x = float(cols.mean() / sx + ox)
+            y = float(rows.mean() / sy + oy)
+        else:  # bbox_center
+            bx, by, bw, bh = self.bbox
+            x = bx + bw / 2.0
+            y = by + bh / 2.0
+
+        return cls(x=x, y=y, **kwargs)
+
+    def to_bbox(
+        self,
+        padding: float | tuple[float, float] = 0.0,
+        error_on_empty: bool = False,
+    ) -> "BoundingBox":
         """Convert to a BoundingBox object.
 
         Returns a ``UserBoundingBox`` or ``PredictedBoundingBox`` with metadata
-        (track, identity, category, name, instance) inherited from this mask.
-        Coordinates are in image space (respecting scale/offset).
+        (track, tracking_score, identity, identity_score, category, name,
+        source, instance) inherited from this mask. Coordinates are in image
+        space (respecting scale/offset).
+
+        Args:
+            padding: Amount to inflate the tight bounding box, as a scalar (applied
+                to both axes) or ``(px, py)``. Positive values expand the box,
+                negative values shrink it. Defaults to ``0.0`` (no padding).
+            error_on_empty: If ``True``, raise ``ValueError`` when the mask has no
+                foreground pixels instead of returning a degenerate (NaN) box.
 
         Returns:
-            A ``BoundingBox`` matching this mask's tight bounding box.
+            A ``BoundingBox`` matching this mask's tight bounding box (with
+            optional padding). For an empty mask, returns a degenerate box with
+            all corners ``nan`` (unless ``error_on_empty``).
+
+        Raises:
+            ValueError: If the mask is empty and ``error_on_empty`` is ``True``.
         """
         from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 
-        x, y, w, h = self.bbox
         cls = PredictedBoundingBox if self.is_predicted else UserBoundingBox
         kwargs: dict = dict(
             track=self.track,
@@ -375,7 +475,21 @@ class SegmentationMask(EmbeddingMixin):
         )
         if self.is_predicted:
             kwargs["score"] = self.score
-        return cls.from_xywh(x, y, w, h, **kwargs)
+
+        if self.is_empty:
+            if error_on_empty:
+                raise ValueError(
+                    "Cannot compute bounding box of an empty mask (no foreground "
+                    "pixels)."
+                )
+            nan = float("nan")
+            return cls(x1=nan, y1=nan, x2=nan, y2=nan, angle=0.0, **kwargs)
+
+        from sleap_io.model.roi import _apply_padding
+
+        x, y, w, h = self.bbox
+        x1, y1, x2, y2 = _apply_padding(x, y, x + w, y + h, padding)
+        return cls(x1=x1, y1=y1, x2=x2, y2=y2, angle=0.0, **kwargs)
 
     def to_polygon(self) -> "ROI":
         """Convert the mask to a polygon ROI via row-rectangle union.
@@ -394,7 +508,7 @@ class SegmentationMask(EmbeddingMixin):
         from shapely.geometry import Polygon, box
         from shapely.ops import unary_union
 
-        from sleap_io.model.roi import UserROI
+        from sleap_io.model.roi import PredictedROI, UserROI
 
         sx, sy = self.scale
         ox, oy = self.offset
@@ -416,7 +530,8 @@ class SegmentationMask(EmbeddingMixin):
         else:
             geometry = unary_union(rectangles)
 
-        return UserROI(
+        cls = PredictedROI if self.is_predicted else UserROI
+        kwargs: dict = dict(
             geometry=geometry,
             name=self.name,
             category=self.category,
@@ -427,6 +542,18 @@ class SegmentationMask(EmbeddingMixin):
             identity_score=self.identity_score,
             instance=self.instance,
         )
+        if self.is_predicted:
+            kwargs["score"] = self.score
+        return cls(**kwargs)
+
+    def to_roi(self) -> "ROI":
+        """Convert the mask to an ROI (alias for `to_polygon`).
+
+        Returns:
+            An `ROI` with polygon geometry derived from the mask. See
+            `to_polygon` for details.
+        """
+        return self.to_polygon()
 
 
 @attrs.define(eq=False)

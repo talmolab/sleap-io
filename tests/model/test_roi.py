@@ -1,16 +1,25 @@
 """Tests for ROI data model."""
 
+import numpy as np
 import pytest
+from shapely.affinity import rotate
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.identity import Identity
+from sleap_io.model.instance import Instance, Track
 from sleap_io.model.roi import (
     ROI,
     AnnotationType,
     PredictedROI,
     UserROI,
+    _apply_padding,
+    _geometry_to_bbox_coords,
+    _pose_to_geometry,
     _rasterize_geometry,
 )
+from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
 
 
@@ -395,3 +404,370 @@ def test_roi_from_xyxy_deprecation():
     with pytest.warns(DeprecationWarning, match="ROI.from_xyxy"):
         roi = UserROI.from_xyxy(0, 0, 10, 10)
     assert roi.is_bbox
+
+
+# ---------------------------------------------------------------------------
+# ROI.is_empty
+# ---------------------------------------------------------------------------
+
+
+def test_roi_is_empty_true_for_empty_polygon():
+    """An empty geometry reports is_empty True."""
+    roi = UserROI(geometry=Polygon())
+    assert roi.is_empty is True
+
+
+def test_roi_is_empty_false_for_real_geometry():
+    """A geometry with spatial extent reports is_empty False."""
+    roi = UserROI.from_bbox(0, 0, 10, 10)
+    assert roi.is_empty is False
+
+
+# ---------------------------------------------------------------------------
+# ROI.to_centroid
+# ---------------------------------------------------------------------------
+
+
+def test_roi_to_centroid_geometric_centroid():
+    """to_centroid() returns the geometric centroid by default."""
+    roi = UserROI.from_bbox(0, 0, 10, 10)
+    c = roi.to_centroid()
+    assert isinstance(c, UserCentroid)
+    assert c.x == pytest.approx(5.0)
+    assert c.y == pytest.approx(5.0)
+    assert not c.is_empty
+
+
+def test_roi_to_centroid_representative_point():
+    """representative=True uses representative_point (inside concave shapes)."""
+    # A U-shape whose geometric centroid falls *outside* the polygon.
+    u = Polygon([(0, 0), (10, 0), (10, 10), (7, 10), (7, 3), (3, 3), (3, 10), (0, 10)])
+    roi = UserROI(geometry=u)
+
+    centroid = roi.to_centroid(representative=False)
+    assert not u.contains(Point(centroid.x, centroid.y))
+
+    rep = roi.to_centroid(representative=True)
+    expected = u.representative_point()
+    assert rep.x == pytest.approx(expected.x)
+    assert rep.y == pytest.approx(expected.y)
+    assert u.contains(Point(rep.x, rep.y))
+
+
+def test_roi_to_centroid_empty_returns_nan():
+    """Empty geometry yields a degenerate (NaN) centroid by default."""
+    roi = UserROI(geometry=Polygon())
+    c = roi.to_centroid()
+    assert isinstance(c, UserCentroid)
+    assert np.isnan(c.x)
+    assert np.isnan(c.y)
+    assert c.is_empty
+
+
+def test_roi_to_centroid_empty_error_on_empty_raises():
+    """error_on_empty raises instead of returning a NaN centroid."""
+    roi = UserROI(geometry=Polygon())
+    with pytest.raises(ValueError, match="empty ROI geometry"):
+        roi.to_centroid(error_on_empty=True)
+
+
+def test_roi_to_centroid_predicted_carries_score_and_metadata():
+    """Predicted ROI -> PredictedCentroid with score + propagated metadata."""
+    track = Track(name="t1")
+    ident = Identity(name="animal_7")
+    sk = Skeleton(["a", "b", "c"])
+    inst = Instance.from_numpy(
+        np.array([[0, 0], [10, 0], [5, 10]], dtype=float), skeleton=sk
+    )
+    roi = PredictedROI(
+        geometry=box(0, 0, 10, 10),
+        score=0.85,
+        track=track,
+        tracking_score=0.7,
+        identity=ident,
+        identity_score=0.4,
+        instance=inst,
+        category="mouse",
+        name="m7",
+        source="manual",
+    )
+    c = roi.to_centroid()
+    assert isinstance(c, PredictedCentroid)
+    assert c.score == pytest.approx(0.85)
+    assert c.track is track
+    assert c.tracking_score == pytest.approx(0.7)
+    assert c.identity is ident
+    assert c.identity_score == pytest.approx(0.4)
+    assert c.instance is inst
+    assert c.category == "mouse"
+    assert c.name == "m7"
+    assert c.source == "manual"
+
+
+# ---------------------------------------------------------------------------
+# ROI.to_bbox
+# ---------------------------------------------------------------------------
+
+
+def test_roi_to_bbox_axis_aligned():
+    """Axis-aligned to_bbox() returns the geometry bounds with angle 0."""
+    roi = UserROI.from_bbox(2, 3, 6, 4)  # xywh -> bounds (2,3,8,7)
+    b = roi.to_bbox()
+    assert isinstance(b, UserBoundingBox)
+    assert (b.x1, b.y1, b.x2, b.y2) == pytest.approx((2.0, 3.0, 8.0, 7.0))
+    assert b.angle == pytest.approx(0.0)
+
+
+def test_roi_to_bbox_scalar_padding():
+    """Scalar padding inflates the box outward on both axes."""
+    roi = UserROI.from_bbox(0, 0, 10, 10)  # bounds (0,0,10,10)
+    b = roi.to_bbox(padding=2.0)
+    assert (b.x1, b.y1, b.x2, b.y2) == pytest.approx((-2.0, -2.0, 12.0, 12.0))
+
+
+def test_roi_to_bbox_tuple_padding():
+    """Per-axis padding inflates width/height independently."""
+    roi = UserROI.from_bbox(0, 0, 10, 10)
+    b = roi.to_bbox(padding=(1.0, 3.0))
+    assert (b.x1, b.y1, b.x2, b.y2) == pytest.approx((-1.0, -3.0, 11.0, 13.0))
+
+
+def test_roi_to_bbox_rotated():
+    """rotated=True fits a minimum-area oriented box recovering w/h/angle."""
+    # Rectangle 6x2 centered at origin, rotated 30 degrees.
+    rect = rotate(box(-3, -1, 3, 1), 30, origin=(0, 0), use_radians=False)
+    roi = UserROI(geometry=rect)
+    b = roi.to_bbox(rotated=True)
+    assert b.width == pytest.approx(6.0, abs=1e-6)
+    assert b.height == pytest.approx(2.0, abs=1e-6)
+    assert b.angle == pytest.approx(np.radians(30.0), abs=1e-6)
+    assert b.x_center == pytest.approx(0.0, abs=1e-6)
+    assert b.y_center == pytest.approx(0.0, abs=1e-6)
+    # The reconstructed corners must reproduce the source rectangle (the
+    # consistency-with-BoundingBox.corners contract). Compare both corner sets
+    # lexicographically since ordering/winding may differ.
+    src = np.array(rect.exterior.coords[:4], dtype=float)
+    got = np.asarray(b.corners, dtype=float)
+    src = src[np.lexsort((src[:, 1], src[:, 0]))]
+    got = got[np.lexsort((got[:, 1], got[:, 0]))]
+    assert np.allclose(src, got, atol=1e-6)
+
+
+def test_roi_to_bbox_empty_returns_nan():
+    """Empty geometry yields a degenerate (NaN) box by default."""
+    roi = UserROI(geometry=Polygon())
+    b = roi.to_bbox()
+    assert b.is_empty
+    assert np.isnan(b.x1) and np.isnan(b.x2)
+    assert b.angle == pytest.approx(0.0)
+
+
+def test_roi_to_bbox_empty_error_on_empty_raises():
+    """error_on_empty raises instead of returning a NaN box."""
+    roi = UserROI(geometry=Polygon())
+    with pytest.raises(ValueError, match="empty ROI geometry"):
+        roi.to_bbox(error_on_empty=True)
+
+
+def test_roi_to_bbox_predicted_carries_score_and_metadata():
+    """Predicted ROI -> PredictedBoundingBox with score + metadata."""
+    track = Track(name="t1")
+    roi = PredictedROI(
+        geometry=box(0, 0, 10, 10),
+        score=0.6,
+        track=track,
+        tracking_score=0.9,
+        category="fly",
+        name="f1",
+        source="net",
+    )
+    b = roi.to_bbox()
+    assert isinstance(b, PredictedBoundingBox)
+    assert b.score == pytest.approx(0.6)
+    assert b.track is track
+    assert b.tracking_score == pytest.approx(0.9)
+    assert b.category == "fly"
+    assert b.name == "f1"
+    assert b.source == "net"
+
+
+# ---------------------------------------------------------------------------
+# _apply_padding
+# ---------------------------------------------------------------------------
+
+
+def test_apply_padding_scalar():
+    """Scalar padding expands all four edges equally."""
+    assert _apply_padding(0, 0, 10, 10, 2) == (-2, -2, 12, 12)
+
+
+def test_apply_padding_tuple():
+    """Tuple padding applies px to x edges and py to y edges."""
+    assert _apply_padding(0, 0, 10, 10, (1, 3)) == (-1, -3, 11, 13)
+
+
+def test_apply_padding_negative_shrinks():
+    """Negative padding shrinks the box and is not clamped."""
+    assert _apply_padding(0, 0, 10, 10, -1) == (1, 1, 9, 9)
+
+
+# ---------------------------------------------------------------------------
+# _pose_to_geometry
+# ---------------------------------------------------------------------------
+
+
+def test_pose_to_geometry_shapes_nodes_only():
+    """node_radius>0 buffers each visible node into circles."""
+    pts = np.array([[0, 0], [10, 0], [5, 10]], dtype=float)
+    geom = _pose_to_geometry(
+        pts, [(0, 1), (1, 2)], method="shapes", node_radius=1.0, edge_radius=0.0
+    )
+    assert not geom.is_empty
+    # Three disjoint disks -> MultiPolygon ~ 3 * pi * r^2.
+    assert geom.area == pytest.approx(3 * np.pi, abs=0.1)
+
+
+def test_pose_to_geometry_shapes_edges_only():
+    """edge_radius>0 buffers each fully-visible edge into a capsule."""
+    pts = np.array([[0, 0], [10, 0], [5, 10]], dtype=float)
+    geom = _pose_to_geometry(
+        pts, [(0, 1), (1, 2)], method="shapes", node_radius=0.0, edge_radius=1.0
+    )
+    assert not geom.is_empty
+    assert geom.geom_type in ("Polygon", "MultiPolygon")
+
+
+def test_pose_to_geometry_shapes_edge_skipped_when_endpoint_invisible():
+    """Edges with an occluded endpoint are not drawn (empty if no shapes)."""
+    pts = np.array([[0, 0], [np.nan, np.nan], [5, 10]], dtype=float)
+    # Both edges touch the occluded middle node -> no edge shapes produced.
+    geom = _pose_to_geometry(
+        pts, [(0, 1), (1, 2)], method="shapes", node_radius=0.0, edge_radius=1.0
+    )
+    assert geom.is_empty
+
+
+def test_pose_to_geometry_shapes_misconfig_raises():
+    """Both radii 0 is a misconfiguration: always raises."""
+    pts = np.array([[0, 0], [10, 0]], dtype=float)
+    with pytest.raises(ValueError, match="at least one of node_radius"):
+        _pose_to_geometry(
+            pts, [(0, 1)], method="shapes", node_radius=0.0, edge_radius=0.0
+        )
+
+
+def test_pose_to_geometry_shapes_misconfig_raises_even_with_no_points():
+    """Misconfig guard fires before the empty-points check."""
+    pts = np.array([[np.nan, np.nan]], dtype=float)
+    with pytest.raises(ValueError, match="at least one of node_radius"):
+        _pose_to_geometry(pts, [], method="shapes", node_radius=0.0, edge_radius=0.0)
+
+
+def test_pose_to_geometry_shapes_no_visible_points_empty():
+    """All-occluded points yield an empty Polygon for shapes."""
+    pts = np.array([[np.nan, np.nan], [np.nan, np.nan]], dtype=float)
+    geom = _pose_to_geometry(pts, [(0, 1)], method="shapes", node_radius=1.0)
+    assert geom.is_empty
+    assert isinstance(geom, Polygon)
+
+
+def test_pose_to_geometry_convex_hull_three_points():
+    """convex_hull of >=3 visible points is a filled polygon."""
+    pts = np.array([[0, 0], [10, 0], [5, 10]], dtype=float)
+    geom = _pose_to_geometry(pts, [], method="convex_hull")
+    assert isinstance(geom, Polygon)
+    assert geom.area == pytest.approx(50.0)
+
+
+def test_pose_to_geometry_convex_hull_one_point_is_point():
+    """convex_hull of a single visible point is a Point (degenerate)."""
+    pts = np.array([[5, 5], [np.nan, np.nan]], dtype=float)
+    geom = _pose_to_geometry(pts, [], method="convex_hull")
+    assert isinstance(geom, Point)
+
+
+def test_pose_to_geometry_convex_hull_with_radius_buffers():
+    """A radius buffers a degenerate hull into a Polygon."""
+    pts = np.array([[5, 5], [np.nan, np.nan]], dtype=float)
+    geom = _pose_to_geometry(pts, [], method="convex_hull", radius=2.0)
+    assert isinstance(geom, Polygon)
+    assert geom.area == pytest.approx(np.pi * 4, abs=0.2)
+
+
+def test_pose_to_geometry_convex_hull_no_visible_points_empty():
+    """All-occluded points yield an empty Polygon for convex_hull."""
+    pts = np.array([[np.nan, np.nan]], dtype=float)
+    geom = _pose_to_geometry(pts, [], method="convex_hull")
+    assert geom.is_empty
+    assert isinstance(geom, Polygon)
+
+
+def test_pose_to_geometry_unknown_method_raises():
+    """An unrecognized method raises ValueError."""
+    pts = np.array([[0, 0], [10, 0]], dtype=float)
+    with pytest.raises(ValueError, match="Unknown method"):
+        _pose_to_geometry(pts, [(0, 1)], method="banana")
+
+
+# ---------------------------------------------------------------------------
+# _geometry_to_bbox_coords
+# ---------------------------------------------------------------------------
+
+
+def test_geometry_to_bbox_coords_axis_aligned():
+    """Axis-aligned bounds with angle 0."""
+    coords = _geometry_to_bbox_coords(box(0, 0, 4, 2), rotated=False)
+    assert coords == pytest.approx((0.0, 0.0, 4.0, 2.0, 0.0))
+
+
+def test_geometry_to_bbox_coords_empty():
+    """Empty geometry yields all-NaN coords with angle 0."""
+    x1, y1, x2, y2, angle = _geometry_to_bbox_coords(Polygon(), rotated=True)
+    assert np.isnan(x1) and np.isnan(y1) and np.isnan(x2) and np.isnan(y2)
+    assert angle == pytest.approx(0.0)
+
+
+def test_geometry_to_bbox_coords_rotated_recovers_box():
+    """Rotated MRR recovers width, height, center, and angle."""
+    rect = rotate(box(-3, -1, 3, 1), 30, origin=(0, 0), use_radians=False)
+    x1, y1, x2, y2, angle = _geometry_to_bbox_coords(rect, rotated=True)
+    assert (x2 - x1) == pytest.approx(6.0, abs=1e-6)
+    assert (y2 - y1) == pytest.approx(2.0, abs=1e-6)
+    assert (x1 + x2) / 2 == pytest.approx(0.0, abs=1e-6)
+    assert (y1 + y2) / 2 == pytest.approx(0.0, abs=1e-6)
+    assert angle == pytest.approx(np.radians(30.0), abs=1e-6)
+
+
+def test_geometry_to_bbox_coords_rotated_axis_aligned_preserves_area():
+    """Rotated fit of an axis-aligned box preserves area and center."""
+    x1, y1, x2, y2, _ = _geometry_to_bbox_coords(box(0, 0, 4, 2), rotated=True)
+    assert (x2 - x1) * (y2 - y1) == pytest.approx(8.0, abs=1e-6)
+    assert (x1 + x2) / 2 == pytest.approx(2.0, abs=1e-6)
+    assert (y1 + y2) / 2 == pytest.approx(1.0, abs=1e-6)
+
+
+def test_geometry_to_bbox_coords_rotated_degenerate_falls_back():
+    """A collinear geometry has a degenerate MRR; fall back to bounds, angle 0."""
+    line = LineString([(0, 0), (10, 0)])
+    coords = _geometry_to_bbox_coords(line, rotated=True)
+    assert coords == pytest.approx((0.0, 0.0, 10.0, 0.0, 0.0))
+
+
+# ---------------------------------------------------------------------------
+# Round-trip: to_roi geometry rasterization consistency (via Centroid path)
+# ---------------------------------------------------------------------------
+
+
+def test_pose_to_geometry_then_rasterize_consistent():
+    """A shapes geometry rasterizes to a non-empty mask matching its extent."""
+    pts = np.array([[5, 5], [15, 5]], dtype=float)
+    geom = _pose_to_geometry(
+        pts, [(0, 1)], method="shapes", node_radius=0.0, edge_radius=3.0
+    )
+    roi = UserROI(geometry=geom)
+    mask = roi.to_mask(height=20, width=25)
+    assert mask.area > 0
+    # The mask centroid roughly tracks the segment midpoint (10, 5).
+    cy, cx = np.argwhere(mask.data).mean(axis=0)
+    assert cx == pytest.approx(10.0, abs=1.5)
+    assert cy == pytest.approx(5.0, abs=1.5)

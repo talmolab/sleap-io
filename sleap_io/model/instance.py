@@ -9,6 +9,8 @@ estimated, such as confidence scores.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import attrs
 import numpy as np
 
@@ -16,6 +18,12 @@ from sleap_io.model.categories import CategoriesMixin
 from sleap_io.model.embedding import Embedding, EmbeddingMixin
 from sleap_io.model.identity import Identity
 from sleap_io.model.skeleton import Node, Skeleton
+
+if TYPE_CHECKING:
+    from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.centroid import Centroid
+    from sleap_io.model.mask import SegmentationMask
+    from sleap_io.model.roi import ROI
 
 
 class PointsArray(np.ndarray):
@@ -600,25 +608,297 @@ class Instance(EmbeddingMixin, CategoriesMixin):
             return None
         return float(pts[visible, 0].mean()), float(pts[visible, 1].mean())
 
-    def to_centroid(self, method: str = "center_of_mass", node=None, **kwargs):
+    def to_centroid(
+        self,
+        method: str = "center_of_mass",
+        node: int | str | None = None,
+        fallback: str | None = None,
+        error_on_empty: bool = False,
+        **kwargs,
+    ) -> "Centroid":
         """Create a ``Centroid`` from this instance.
 
-        Delegates to ``Centroid.from_instance()``.
+        Delegates to ``Centroid.from_pose()``. A ``PredictedInstance`` yields a
+        ``PredictedCentroid`` carrying its ``score``; any other instance yields a
+        ``UserCentroid``. Metadata (``track``, ``tracking_score``, ``identity``,
+        ``identity_score``, ``instance=self``) is propagated.
 
         Args:
-            method: Computation method (``"center_of_mass"``,
-                ``"bbox_center"``, or ``"anchor"``).
-            node: Node specification for the ``"anchor"`` method.
+            method: Computation method (``"center_of_mass"``, ``"bbox_center"``,
+                ``"geometric_median"``, or ``"anchor"``).
+            node: Node specification for the ``"anchor"`` method. Can be a node
+                name (str) or index (int).
+            fallback: For the ``"anchor"`` method, a non-anchor method to fall
+                back to when the anchor node is occluded.
+            error_on_empty: If ``True``, raise ``ValueError`` when there are no
+                visible points instead of returning a degenerate (NaN) centroid.
             **kwargs: Additional keyword arguments passed to the centroid
                 constructor.
 
         Returns:
             A ``UserCentroid`` or ``PredictedCentroid`` depending on the
             instance type.
+
+        Raises:
+            ValueError: For an unknown ``method``, a missing ``node`` for the
+                ``"anchor"`` method, an invalid ``node`` type, or (when
+                ``error_on_empty`` is ``True``) when there are no visible points.
         """
         from sleap_io.model.centroid import Centroid
 
-        return Centroid.from_instance(self, method=method, node=node, **kwargs)
+        return Centroid.from_pose(
+            self,
+            method=method,
+            node=node,
+            fallback=fallback,
+            error_on_empty=error_on_empty,
+            **kwargs,
+        )
+
+    def to_bbox(
+        self,
+        mode: str = "tight",
+        size: float | tuple[float, float] | None = None,
+        padding: float | tuple[float, float] = 0.0,
+        node: int | str | None = None,
+        center_method: str = "center_of_mass",
+        rotated: bool = False,
+        error_on_empty: bool = False,
+    ) -> "BoundingBox":
+        """Create a bounding box from this instance.
+
+        A ``PredictedInstance`` yields a ``PredictedBoundingBox`` carrying its
+        ``score``; any other instance yields a ``UserBoundingBox``. Metadata
+        (``track``, ``tracking_score``, ``identity``, ``identity_score``,
+        ``instance=self``) is propagated.
+
+        Args:
+            mode: ``"tight"`` to fit the visible points, or ``"centered"`` to
+                build a fixed-``size`` box centered on a computed centroid.
+            size: Box size for ``mode="centered"``. A scalar yields a square box;
+                a ``(w, h)`` tuple sets width and height independently. Required
+                for ``mode="centered"``.
+            padding: Amount to inflate the box outward. Scalar applies to both
+                axes; a ``(px, py)`` tuple applies per-axis. Negative values
+                shrink the box.
+            node: Node specification passed to the centroid computation for
+                ``mode="centered"`` with ``center_method="anchor"``.
+            center_method: Centroid method used to locate the box center for
+                ``mode="centered"`` (see :meth:`to_centroid`).
+            rotated: For ``mode="tight"``, if ``True`` fit a minimum-area oriented
+                box from the convex hull of visible points; otherwise fit an
+                axis-aligned box.
+            error_on_empty: If ``True``, raise ``ValueError`` when there are no
+                visible points instead of returning a degenerate (NaN) box.
+
+        Returns:
+            A ``BoundingBox`` enclosing the instance (or NaN corners if empty).
+
+        Raises:
+            ValueError: For an unknown ``mode``, a missing ``size`` for
+                ``mode="centered"``, or (when ``error_on_empty`` is ``True``)
+                when there are no visible points.
+        """
+        from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+        from sleap_io.model.roi import (
+            _apply_padding,
+            _geometry_to_bbox_coords,
+            _pose_to_geometry,
+        )
+
+        nan = float("nan")
+        angle = 0.0
+
+        if mode == "tight":
+            pts = self.numpy(invisible_as_nan=True)
+            visible = ~np.isnan(pts[:, 0])
+            if not visible.any():
+                if error_on_empty:
+                    raise ValueError("No visible points to compute bounding box.")
+                x1 = y1 = x2 = y2 = nan
+            elif rotated:
+                hull = _pose_to_geometry(
+                    pts, self.skeleton.edge_inds, method="convex_hull"
+                )
+                x1, y1, x2, y2, angle = _geometry_to_bbox_coords(hull, rotated=True)
+                x1, y1, x2, y2 = _apply_padding(x1, y1, x2, y2, padding)
+            else:
+                vis = pts[visible]
+                x1 = float(vis[:, 0].min())
+                y1 = float(vis[:, 1].min())
+                x2 = float(vis[:, 0].max())
+                y2 = float(vis[:, 1].max())
+                x1, y1, x2, y2 = _apply_padding(x1, y1, x2, y2, padding)
+        elif mode == "centered":
+            if size is None:
+                raise ValueError("'size' is required for mode='centered'.")
+            centroid = self.to_centroid(
+                method=center_method, node=node, error_on_empty=error_on_empty
+            )
+            if centroid.is_empty:
+                x1 = y1 = x2 = y2 = nan
+            else:
+                cx, cy = centroid.xy
+                if isinstance(size, (tuple, list)):
+                    w, h = size
+                else:
+                    w = h = size
+                x1 = cx - w / 2
+                y1 = cy - h / 2
+                x2 = cx + w / 2
+                y2 = cy + h / 2
+                x1, y1, x2, y2 = _apply_padding(x1, y1, x2, y2, padding)
+        else:
+            raise ValueError(f"Unknown mode {mode!r}. Expected 'tight' or 'centered'.")
+
+        kwargs = dict(
+            x1=x1,
+            y1=y1,
+            x2=x2,
+            y2=y2,
+            angle=angle,
+            track=self.track,
+            tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
+            instance=self,
+        )
+        if isinstance(self, PredictedInstance):
+            return PredictedBoundingBox(score=self.score, **kwargs)
+        return UserBoundingBox(**kwargs)
+
+    def to_roi(
+        self,
+        method: str = "shapes",
+        node_radius: float = 0.0,
+        edge_radius: float = 0.0,
+        radius: float = 0.0,
+        quad_segs: int = 8,
+        error_on_empty: bool = False,
+    ) -> "ROI":
+        """Create a region-of-interest geometry from this instance.
+
+        A ``PredictedInstance`` yields a ``PredictedROI`` carrying its ``score``;
+        any other instance yields a ``UserROI``. Metadata (``track``,
+        ``tracking_score``, ``identity``, ``identity_score``, ``instance=self``)
+        is propagated.
+
+        Args:
+            method: ``"shapes"`` to union buffered node points and/or edge
+                segments, or ``"convex_hull"`` to take the convex hull of the
+                visible points.
+            node_radius: Buffer radius around each visible node (``"shapes"``
+                only).
+            edge_radius: Buffer radius around each fully-visible edge segment
+                (``"shapes"`` only).
+            radius: Optional buffer applied to the convex hull
+                (``"convex_hull"`` only).
+            quad_segs: Number of segments used to approximate a quarter circle
+                when buffering.
+            error_on_empty: If ``True``, raise ``ValueError`` when the resulting
+                geometry is empty instead of returning an empty-geometry ROI.
+
+        Returns:
+            A ``ROI`` whose geometry encloses the instance (an empty ``Polygon``
+            if there are no visible points).
+
+        Raises:
+            ValueError: If ``method="shapes"`` with both ``node_radius`` and
+                ``edge_radius`` equal to 0 (a misconfiguration, always raised),
+                for an unknown ``method``, or (when ``error_on_empty`` is
+                ``True``) when the resulting geometry is empty.
+        """
+        from sleap_io.model.roi import PredictedROI, UserROI, _pose_to_geometry
+
+        # Misconfiguration: raise before the empty-points check so that an empty
+        # instance still surfaces the error.
+        if method == "shapes" and node_radius == 0 and edge_radius == 0:
+            raise ValueError(
+                "method='shapes' requires at least one of node_radius or "
+                "edge_radius to be > 0."
+            )
+
+        geom = _pose_to_geometry(
+            self.numpy(invisible_as_nan=True),
+            self.skeleton.edge_inds,
+            method=method,
+            node_radius=node_radius,
+            edge_radius=edge_radius,
+            radius=radius,
+            quad_segs=quad_segs,
+        )
+
+        if geom.is_empty and error_on_empty:
+            raise ValueError("No visible points to compute ROI geometry.")
+
+        kwargs = dict(
+            geometry=geom,
+            track=self.track,
+            tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
+            instance=self,
+        )
+        if isinstance(self, PredictedInstance):
+            return PredictedROI(score=self.score, **kwargs)
+        return UserROI(**kwargs)
+
+    def to_mask(self, height: int, width: int, **roi_kwargs) -> "SegmentationMask":
+        """Rasterize this instance's ROI geometry into a segmentation mask.
+
+        Equivalent to ``self.to_roi(**roi_kwargs).to_mask(height, width)``,
+        except that a zero-area hull (``method="convex_hull"`` over fewer than
+        three visible points yields a ``Point`` or ``LineString``) rasterizes to
+        an all-background mask here instead of raising. A ``PredictedInstance``
+        yields a ``PredictedSegmentationMask`` carrying its ``score``; any other
+        instance yields a ``UserSegmentationMask``. Metadata is propagated.
+
+        Args:
+            height: Height of the output mask in pixels.
+            width: Width of the output mask in pixels.
+            **roi_kwargs: Keyword arguments forwarded to :meth:`to_roi` (e.g.
+                ``method``, ``node_radius``, ``edge_radius``, ``radius``,
+                ``quad_segs``, ``error_on_empty``).
+
+        Returns:
+            A ``SegmentationMask`` with the rasterized geometry (all background
+            if the geometry is empty or has zero area).
+
+        Raises:
+            ValueError: Propagated from :meth:`to_roi` for a ``"shapes"``
+                misconfiguration, an unknown method, or (when
+                ``error_on_empty`` is ``True``) an empty geometry.
+        """
+        from shapely.geometry import MultiPolygon, Polygon
+
+        error_on_empty = roi_kwargs.pop("error_on_empty", False)
+        roi = self.to_roi(error_on_empty=error_on_empty, **roi_kwargs)
+
+        # A non-empty but non-fillable geometry (e.g. convex_hull of <3 visible
+        # points -> Point/LineString) has zero area; rasterize it as all
+        # background rather than letting _rasterize_geometry raise a TypeError.
+        rasterizable = isinstance(roi.geometry, (Polygon, MultiPolygon))
+        if roi.geometry.is_empty or not rasterizable:
+            from sleap_io.model.mask import (
+                PredictedSegmentationMask,
+                UserSegmentationMask,
+            )
+
+            empty = np.zeros((height, width), dtype=bool)
+            kwargs = dict(
+                track=self.track,
+                tracking_score=self.tracking_score,
+                identity=self.identity,
+                identity_score=self.identity_score,
+                instance=self,
+            )
+            if isinstance(self, PredictedInstance):
+                return PredictedSegmentationMask.from_numpy(
+                    empty, score=self.score, **kwargs
+                )
+            return UserSegmentationMask.from_numpy(empty, **kwargs)
+
+        return roi.to_mask(height, width)
 
     def __getitem__(self, node: int | str | Node) -> np.ndarray:
         """Return the point associated with a node."""

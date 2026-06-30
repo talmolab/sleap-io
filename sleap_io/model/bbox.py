@@ -21,6 +21,7 @@ import numpy as np
 from sleap_io.model.embedding import EmbeddingMixin
 
 if TYPE_CHECKING:
+    from sleap_io.model.centroid import Centroid
     from sleap_io.model.embedding import Embedding
     from sleap_io.model.identity import Identity
     from sleap_io.model.instance import Instance, Track
@@ -154,6 +155,16 @@ class BoundingBox(EmbeddingMixin):
     def is_rotated(self) -> bool:
         """Whether this bounding box is rotated (non-axis-aligned)."""
         return abs(self.angle) > 1e-10
+
+    @property
+    def is_empty(self) -> bool:
+        """Whether this box is degenerate (any corner coordinate is NaN)."""
+        return bool(
+            np.isnan(self.x1)
+            or np.isnan(self.y1)
+            or np.isnan(self.x2)
+            or np.isnan(self.y2)
+        )
 
     @property
     def x_center(self) -> float:
@@ -306,6 +317,94 @@ class BoundingBox(EmbeddingMixin):
         """
         roi = self.to_roi()
         return roi.to_mask(height, width)
+
+    def to_centroid(self, error_on_empty: bool = False) -> "Centroid":
+        """Convert this bounding box to a centroid at its center.
+
+        A ``PredictedBoundingBox`` produces a ``PredictedCentroid`` carrying its
+        ``score``; any other box produces a ``UserCentroid``. Metadata (track,
+        tracking_score, identity, identity_score, category, name, source,
+        instance) is inherited.
+
+        Args:
+            error_on_empty: If ``True``, raise ``ValueError`` when this box is
+                degenerate (NaN corners) instead of returning a degenerate
+                (NaN) centroid.
+
+        Returns:
+            A ``Centroid`` located at this box's center (or NaN coordinates if
+            the box is degenerate).
+
+        Raises:
+            ValueError: If the box is degenerate and ``error_on_empty`` is
+                ``True``.
+        """
+        from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+        if self.is_empty:
+            if error_on_empty:
+                raise ValueError(
+                    "Cannot compute centroid of a degenerate (NaN) bounding box."
+                )
+            nan = float("nan")
+            x, y = nan, nan
+        else:
+            x, y = self.centroid_xy
+
+        kwargs = dict(
+            x=x,
+            y=y,
+            track=self.track,
+            tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
+            instance=self.instance,
+            category=self.category,
+            name=self.name,
+            source=self.source,
+        )
+        if self.is_predicted:
+            return PredictedCentroid(score=self.score, **kwargs)
+        return UserCentroid(**kwargs)
+
+    def pad(self, padding: float | tuple[float, float]) -> "BoundingBox":
+        """Return a new box inflated outward by ``padding``.
+
+        The returned box is the same type as this one (``UserBoundingBox`` or
+        ``PredictedBoundingBox``) and preserves ``angle``, ``score``, and all
+        metadata. For rotated boxes the pre-rotation extent is inflated about
+        the center, keeping the angle fixed.
+
+        Args:
+            padding: Amount to inflate the box outward. A scalar applies to both
+                axes; a ``(px, py)`` tuple applies per-axis. Negative values
+                shrink the box; values are not clamped.
+
+        Returns:
+            A new ``BoundingBox`` of the same type with padded corners.
+        """
+        from sleap_io.model.roi import _apply_padding
+
+        x1, y1, x2, y2 = _apply_padding(self.x1, self.y1, self.x2, self.y2, padding)
+
+        kwargs = dict(
+            x1=x1,
+            y1=y1,
+            x2=x2,
+            y2=y2,
+            angle=self.angle,
+            track=self.track,
+            tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
+            instance=self.instance,
+            category=self.category,
+            name=self.name,
+            source=self.source,
+        )
+        if self.is_predicted:
+            return PredictedBoundingBox(score=self.score, **kwargs)
+        return UserBoundingBox(**kwargs)
 
 
 @attrs.define(eq=False)

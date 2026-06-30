@@ -69,6 +69,41 @@ Any `BoundingBox` can be converted to an `ROI` with `.to_roi()`:
 
 ```
 
+## Reducing an ROI to a point or box
+
+An `ROI` participates in the unified
+[conversion matrix](segmentation.md#converting-between-annotation-types). Reduce
+it to a [`Centroid`](centroids.md) with `to_centroid()`, or fit a
+[`BoundingBox`](boxes.md) with `to_bbox()`. Predicted ROIs produce predicted
+outputs carrying their `score`:
+
+```pycon
+>>> import sleap_io as sio
+>>> from shapely.geometry import box
+>>> roi = sio.UserROI(geometry=box(10, 20, 100, 200))
+>>> print(roi.to_centroid().xy)            # geometric centroid
+>>> print(roi.to_bbox().xyxy)              # axis-aligned bounds
+>>> print(roi.to_bbox(padding=5).xyxy)     # inflated box
+
+```
+
+`to_centroid(representative=True)` uses Shapely's `representative_point()` (a
+point guaranteed to lie inside the geometry) instead of the geometric centroid.
+`to_bbox(rotated=True)` fits a minimum-area oriented box from the geometry's
+`minimum_rotated_rectangle`. Both verbs accept `error_on_empty=False`; an empty
+geometry yields a degenerate target unless you pass `error_on_empty=True`. The
+companion `is_empty` property reports whether the geometry is empty:
+
+```pycon
+>>> import sleap_io as sio
+>>> from shapely.geometry import Polygon, box
+>>> print(sio.UserROI(geometry=box(0, 0, 10, 10)).is_empty)
+False
+>>> print(sio.UserROI(geometry=Polygon()).is_empty)
+True
+
+```
+
 ## Multi-polygon ROIs
 
 For disjoint regions, use `from_multi_polygon`:
@@ -164,7 +199,7 @@ Every ROI can carry optional metadata:
 
     - **[Centroids](centroids.md)**, **[Boxes](boxes.md)**, **[Segmentation](segmentation.md)** — the other spatial annotation types.
     - **[Labels & Frames](labels.md)**: Accessing ROIs via `labels.rois`, video-level `labels.static_rois`, and `get_rois()`.
-    - **[Converting between annotation types](segmentation.md#converting-between-annotation-types)**: `roi.to_mask()` and more.
+    - **[Converting between annotation types](segmentation.md#converting-between-annotation-types)**: `roi.to_centroid()`, `roi.to_bbox()`, `roi.to_mask()`, and the full modality matrix.
 
 ---
 

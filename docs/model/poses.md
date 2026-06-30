@@ -179,27 +179,73 @@ Create an instance with no visible points (all coordinates are unset):
     [`LabeledFrame`](labels.md#labeled-frames) and [`Labels`](labels.md#labels).
     See the [Labels & Frames](labels.md) page for the full picture.
 
-### Centroid integration
+### Converting to other modalities
 
-A pose `Instance` can be summarized as a single point without losing its metadata. [`Instance.centroid_xy`][sleap_io.Instance.centroid_xy] returns the `(x, y)` of the visible landmarks, and [`Instance.to_centroid()`][sleap_io.Instance.to_centroid] produces a full [`UserCentroid`][sleap_io.UserCentroid] (or [`PredictedCentroid`][sleap_io.PredictedCentroid] for a `PredictedInstance`) carrying the same track, category, and confidence metadata.
+A pose `Instance` can be projected onto any of the other spatial detection
+modalities without losing its metadata, through the unified
+[conversion matrix](segmentation.md#converting-between-annotation-types). Every
+verb returns the `User*`/`Predicted*` variant matching the instance (a
+`PredictedInstance` carries its `score`) and propagates `track`,
+`tracking_score`, and an `instance=self` backref.
+
+[`Instance.centroid_xy`][sleap_io.Instance.centroid_xy] returns the raw `(x, y)`
+of the visible landmarks, while [`Instance.to_centroid()`][sleap_io.Instance.to_centroid]
+produces a full [`Centroid`](centroids.md) object:
 
 ```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
->>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
+>>> skeleton = sio.Skeleton(
+...     ["head", "thorax", "abdomen"],
+...     edges=[("head", "thorax"), ("thorax", "abdomen")],
+... )
 >>> inst = sio.Instance.from_numpy(
 ...     np.array([[10, 20], [30, 40], [50, 60]]),
 ...     skeleton=skeleton,
 ... )
->>> print(inst.centroid_xy)       # (mean_x, mean_y) of the visible points
+>>> print(inst.centroid_xy)        # (mean_x, mean_y) of the visible points
 >>> c = inst.to_centroid()
 >>> print(type(c).__name__, c.xy)
 
 ```
 
+[`Instance.to_bbox()`][sleap_io.Instance.to_bbox],
+[`Instance.to_roi()`][sleap_io.Instance.to_roi], and
+[`Instance.to_mask()`][sleap_io.Instance.to_mask] fit a
+[`BoundingBox`](boxes.md), [`ROI`](rois.md), or `SegmentationMask` to the pose:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skeleton = sio.Skeleton(
+...     ["head", "thorax", "abdomen"],
+...     edges=[("head", "thorax"), ("thorax", "abdomen")],
+... )
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 20], [30, 40], [50, 60]]),
+...     skeleton=skeleton,
+... )
+>>> print(inst.to_bbox().xyxy)                      # tight box of visible points
+>>> print(inst.to_bbox(mode="centered", size=30).xyxy)
+>>> roi = inst.to_roi(method="shapes", node_radius=5, edge_radius=2)
+>>> print(roi.is_empty)
+>>> mask = inst.to_mask(80, 80, method="shapes", node_radius=5, edge_radius=2)
+>>> print(mask.area > 0)
+
+```
+
+`to_bbox` supports `mode="tight"` (axis-aligned or `rotated=True`) and
+`mode="centered"` (a fixed `size` box around a computed centroid). `to_roi`
+"burns in" the pose with `method="shapes"` (union of discs around nodes and
+capsules around edges; at least one of `node_radius`/`edge_radius` must be
+`> 0`) or `method="convex_hull"`. `to_mask(height, width, **roi_kwargs)` is
+exactly `to_roi(**roi_kwargs).to_mask(height, width)`. All verbs accept
+`error_on_empty=False` and return an empty target for an instance with no
+visible points.
+
 Centroids can be turned back into single-node instances with
-[`Centroid.to_instance`][sleap_io.Centroid.to_instance], so the two
-representations are fully interchangeable. See
+[`Centroid.to_pose`][sleap_io.Centroid.to_pose] (formerly `to_instance`, now a
+deprecated alias), so the two representations are fully interchangeable. See
 [Regions → Centroids](centroids.md) for the full data model.
 
 ---

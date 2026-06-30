@@ -86,6 +86,38 @@ meaningful for axis-aligned rectangles:
 
 ```
 
+## Converting to other modalities
+
+A `BoundingBox` participates in the unified
+[conversion matrix](segmentation.md#converting-between-annotation-types): it can
+be reduced to a [`Centroid`](centroids.md) at its center, inflated with
+`pad()`, or projected to an [`ROI`](rois.md) / `SegmentationMask`. Predicted
+boxes produce predicted outputs carrying their `score`:
+
+```pycon
+>>> import sleap_io as sio
+>>> bbox = sio.UserBoundingBox(x1=75, y1=160, x2=125, y2=240)
+>>> print(bbox.to_centroid().xy)   # center of the box
+>>> print(bbox.pad(10).xyxy)       # inflate 10 px on every side
+>>> print(bbox.to_roi().area)
+
+```
+
+`pad(padding)` returns a new box of the same type inflated by `padding` (scalar
+or `(px, py)`; negatives shrink), preserving `angle`, `score`, and metadata.
+`to_centroid()` and the other verbs accept `error_on_empty=False`; a degenerate
+box (NaN corners) yields a degenerate target unless you pass
+`error_on_empty=True`. The companion `is_empty` property reports whether any
+corner is NaN:
+
+```pycon
+>>> import sleap_io as sio
+>>> bbox = sio.UserBoundingBox(x1=75, y1=160, x2=125, y2=240)
+>>> print(bbox.is_empty)
+False
+
+```
+
 ## Metadata fields
 
 Every bounding box can carry optional metadata:
@@ -111,7 +143,7 @@ Every bounding box can carry optional metadata:
     - **[Centroids](centroids.md)**, **[ROIs](rois.md)**, **[Segmentation](segmentation.md)** — the other spatial annotation types.
     - **[Labels & Frames](labels.md)**: Accessing boxes via `labels.bboxes` and filtered queries with `get_bboxes()`.
     - **[Formats: COCO](../formats/coco.md)** and **[Ultralytics YOLO](../formats/ultralytics.md)**: Bounding-box detection round-trips.
-    - **[Converting between annotation types](segmentation.md#converting-between-annotation-types)**: `bbox.to_roi()`, `bbox.to_mask()`, and more.
+    - **[Converting between annotation types](segmentation.md#converting-between-annotation-types)**: `bbox.to_centroid()`, `bbox.pad()`, `bbox.to_roi()`, `bbox.to_mask()`, and the full modality matrix.
 
 ---
 

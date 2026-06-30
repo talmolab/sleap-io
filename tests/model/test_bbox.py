@@ -6,7 +6,9 @@ import numpy as np
 import pytest
 
 from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.identity import Identity
+from sleap_io.model.instance import Track
 
 
 def test_bbox_abstract():
@@ -308,3 +310,215 @@ def test_bbox_roundtrip_xyxy():
 def test_bbox_roundtrip_xywh():
     bbox = UserBoundingBox.from_xywh(10, 20, 40, 40)
     assert bbox.xywh == pytest.approx((10, 20, 40, 40))
+
+
+# ---------------------------------------------------------------------------
+# is_empty
+# ---------------------------------------------------------------------------
+
+
+def test_bbox_is_empty_false():
+    """A box with finite corners is not empty."""
+    bbox = UserBoundingBox(x1=0, y1=10, x2=100, y2=90)
+    assert bbox.is_empty is False
+
+
+@pytest.mark.parametrize("corner", ["x1", "y1", "x2", "y2"])
+def test_bbox_is_empty_each_corner_nan(corner):
+    """Any single NaN corner makes the box empty."""
+    coords = dict(x1=0.0, y1=10.0, x2=100.0, y2=90.0)
+    coords[corner] = float("nan")
+    bbox = UserBoundingBox(**coords)
+    assert bbox.is_empty is True
+
+
+def test_bbox_is_empty_returns_plain_bool():
+    """is_empty returns a builtin bool, not a numpy bool."""
+    bbox = UserBoundingBox(x1=0, y1=0, x2=1, y2=1)
+    assert type(bbox.is_empty) is bool
+
+
+# ---------------------------------------------------------------------------
+# to_centroid
+# ---------------------------------------------------------------------------
+
+
+def test_bbox_to_centroid_user():
+    """User box yields a UserCentroid at its center."""
+    bbox = UserBoundingBox(x1=0, y1=10, x2=100, y2=90)
+    centroid = bbox.to_centroid()
+    assert isinstance(centroid, UserCentroid)
+    assert not isinstance(centroid, PredictedCentroid)
+    assert centroid.x == pytest.approx(50.0)
+    assert centroid.y == pytest.approx(50.0)
+
+
+def test_bbox_to_centroid_propagates_metadata():
+    """Metadata is inherited onto the centroid."""
+    track = Track(name="t1")
+    ident = Identity(name="fly_A")
+    inst = object()
+    bbox = UserBoundingBox(
+        x1=0,
+        y1=10,
+        x2=100,
+        y2=90,
+        track=track,
+        tracking_score=0.6,
+        identity=ident,
+        identity_score=0.8,
+        instance=inst,
+        category="mouse",
+        name="b1",
+        source="manual",
+    )
+    centroid = bbox.to_centroid()
+    assert centroid.track is track
+    assert centroid.tracking_score == pytest.approx(0.6)
+    assert centroid.identity is ident
+    assert centroid.identity_score == pytest.approx(0.8)
+    assert centroid.instance is inst
+    assert centroid.category == "mouse"
+    assert centroid.name == "b1"
+    assert centroid.source == "manual"
+
+
+def test_bbox_to_centroid_predicted_carries_score():
+    """Predicted box yields a PredictedCentroid carrying its score."""
+    bbox = PredictedBoundingBox(
+        x1=10, y1=20, x2=50, y2=30, score=0.93, tracking_score=0.4
+    )
+    centroid = bbox.to_centroid()
+    assert isinstance(centroid, PredictedCentroid)
+    assert centroid.score == pytest.approx(0.93)
+    assert centroid.tracking_score == pytest.approx(0.4)
+    assert centroid.x == pytest.approx(30.0)
+    assert centroid.y == pytest.approx(25.0)
+
+
+def test_bbox_to_centroid_degenerate_returns_nan():
+    """Degenerate box returns a NaN (empty) centroid by default."""
+    bbox = UserBoundingBox(x1=float("nan"), y1=0, x2=10, y2=10)
+    centroid = bbox.to_centroid()
+    assert isinstance(centroid, UserCentroid)
+    assert centroid.is_empty
+    assert np.isnan(centroid.x)
+    assert np.isnan(centroid.y)
+
+
+def test_bbox_to_centroid_degenerate_predicted_returns_nan():
+    """Degenerate predicted box returns a NaN PredictedCentroid with score."""
+    bbox = PredictedBoundingBox(x1=0, y1=0, x2=10, y2=float("nan"), score=0.5)
+    centroid = bbox.to_centroid()
+    assert isinstance(centroid, PredictedCentroid)
+    assert centroid.score == pytest.approx(0.5)
+    assert centroid.is_empty
+
+
+def test_bbox_to_centroid_degenerate_error_on_empty():
+    """error_on_empty raises for degenerate boxes."""
+    bbox = UserBoundingBox(x1=float("nan"), y1=0, x2=10, y2=10)
+    with pytest.raises(ValueError, match="degenerate"):
+        bbox.to_centroid(error_on_empty=True)
+
+
+def test_bbox_to_centroid_error_on_empty_ok_when_finite():
+    """error_on_empty does not raise for finite boxes."""
+    bbox = UserBoundingBox(x1=0, y1=0, x2=10, y2=10)
+    centroid = bbox.to_centroid(error_on_empty=True)
+    assert centroid.x == pytest.approx(5.0)
+    assert centroid.y == pytest.approx(5.0)
+
+
+# ---------------------------------------------------------------------------
+# pad
+# ---------------------------------------------------------------------------
+
+
+def test_bbox_pad_scalar():
+    """Scalar padding inflates both axes equally."""
+    bbox = UserBoundingBox(x1=10, y1=20, x2=30, y2=40)
+    padded = bbox.pad(5)
+    assert (padded.x1, padded.y1, padded.x2, padded.y2) == pytest.approx(
+        (5, 15, 35, 45)
+    )
+
+
+def test_bbox_pad_per_axis():
+    """Tuple padding inflates each axis independently."""
+    bbox = UserBoundingBox(x1=10, y1=20, x2=30, y2=40)
+    padded = bbox.pad((2, 7))
+    assert (padded.x1, padded.y1, padded.x2, padded.y2) == pytest.approx(
+        (8, 13, 32, 47)
+    )
+
+
+def test_bbox_pad_negative_shrinks():
+    """Negative padding shrinks the box and is not clamped."""
+    bbox = UserBoundingBox(x1=10, y1=20, x2=30, y2=40)
+    padded = bbox.pad(-3)
+    assert (padded.x1, padded.y1, padded.x2, padded.y2) == pytest.approx(
+        (13, 23, 27, 37)
+    )
+
+
+def test_bbox_pad_zero_is_noop():
+    """Zero padding leaves coordinates unchanged."""
+    bbox = UserBoundingBox(x1=10, y1=20, x2=30, y2=40)
+    padded = bbox.pad(0)
+    assert (padded.x1, padded.y1, padded.x2, padded.y2) == pytest.approx(
+        (10, 20, 30, 40)
+    )
+
+
+def test_bbox_pad_returns_new_object():
+    """Pad returns a new object, leaving the original unchanged."""
+    bbox = UserBoundingBox(x1=10, y1=20, x2=30, y2=40)
+    padded = bbox.pad(5)
+    assert padded is not bbox
+    assert (bbox.x1, bbox.y1, bbox.x2, bbox.y2) == (10, 20, 30, 40)
+
+
+def test_bbox_pad_preserves_angle_and_metadata():
+    """Pad preserves angle and all metadata on a user box."""
+    track = Track(name="t1")
+    ident = Identity(name="fly_A")
+    inst = object()
+    bbox = UserBoundingBox(
+        x1=10,
+        y1=20,
+        x2=30,
+        y2=40,
+        angle=0.5,
+        track=track,
+        tracking_score=0.6,
+        identity=ident,
+        identity_score=0.8,
+        instance=inst,
+        category="mouse",
+        name="b1",
+        source="manual",
+    )
+    padded = bbox.pad(5)
+    assert isinstance(padded, UserBoundingBox)
+    assert padded.angle == pytest.approx(0.5)
+    assert padded.track is track
+    assert padded.tracking_score == pytest.approx(0.6)
+    assert padded.identity is ident
+    assert padded.identity_score == pytest.approx(0.8)
+    assert padded.instance is inst
+    assert padded.category == "mouse"
+    assert padded.name == "b1"
+    assert padded.source == "manual"
+
+
+def test_bbox_pad_predicted_preserves_type_and_score():
+    """Padding a predicted box keeps the type and score."""
+    bbox = PredictedBoundingBox(x1=10, y1=20, x2=30, y2=40, score=0.9, angle=0.3)
+    padded = bbox.pad(5)
+    assert isinstance(padded, PredictedBoundingBox)
+    assert padded.score == pytest.approx(0.9)
+    assert padded.angle == pytest.approx(0.3)
+    assert (padded.x1, padded.y1, padded.x2, padded.y2) == pytest.approx(
+        (5, 15, 35, 45)
+    )

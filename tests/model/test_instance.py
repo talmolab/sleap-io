@@ -5,12 +5,16 @@ import pytest
 from numpy.testing import assert_array_equal, assert_equal
 
 from sleap_io import Skeleton
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import (
     Instance,
     PredictedInstance,
     Track,
 )
+from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
+from sleap_io.model.roi import PredictedROI, UserROI
 
 
 def test_track():
@@ -655,3 +659,431 @@ def test_track_similarity_to():
     sim = track4.similarity_to(track4)
     assert sim["same_name"] is True
     assert sim["name_similarity"] == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Modality conversions (issue #529): to_centroid / to_bbox / to_roi / to_mask
+# ---------------------------------------------------------------------------
+
+
+def _tri_skeleton() -> Skeleton:
+    """Return a simple 3-node skeleton with two edges."""
+    skel = Skeleton(["a", "b", "c"])
+    skel.add_edge("a", "b")
+    skel.add_edge("a", "c")
+    return skel
+
+
+def test_instance_to_centroid_delegates_default():
+    """Instance.to_centroid delegates to Centroid.from_pose (center_of_mass)."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [9, 0], [0, 9]]), skeleton=skel)
+
+    cent = inst.to_centroid()
+
+    assert isinstance(cent, UserCentroid)
+    assert cent.source == "center_of_mass"
+    assert cent.instance is inst
+    assert cent.xy == pytest.approx((3.0, 3.0))
+
+
+def test_instance_to_centroid_anchor_with_fallback():
+    """Occluded anchor falls back and records the fallback in the source tag."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(
+        np.array([[np.nan, np.nan], [10, 0], [0, 10]]), skeleton=skel
+    )
+
+    cent = inst.to_centroid(method="anchor", node="a", fallback="center_of_mass")
+
+    assert cent.source == "anchor:a->center_of_mass"
+    assert cent.xy == pytest.approx((5.0, 5.0))
+
+
+def test_instance_to_centroid_predicted_carries_score():
+    """A PredictedInstance yields a PredictedCentroid carrying its score."""
+    skel = _tri_skeleton()
+    inst = PredictedInstance.from_numpy(
+        np.array([[0, 0], [4, 0], [0, 4]]), skeleton=skel, score=0.8
+    )
+
+    cent = inst.to_centroid()
+
+    assert isinstance(cent, PredictedCentroid)
+    assert cent.score == pytest.approx(0.8)
+    assert cent.instance is inst
+
+
+def test_instance_to_bbox_tight():
+    """Tight axis-aligned bbox encloses all visible points."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[5, 10], [15, 20], [10, 30]]), skeleton=skel)
+
+    bbox = inst.to_bbox()
+
+    assert isinstance(bbox, UserBoundingBox)
+    assert bbox.angle == 0.0
+    assert bbox.xyxy == pytest.approx((5.0, 10.0, 15.0, 30.0))
+    assert bbox.instance is inst
+
+
+def test_instance_to_bbox_tight_ignores_invisible():
+    """Tight bbox ignores invisible (NaN) points."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(
+        np.array([[5, 10], [np.nan, np.nan], [10, 30]]), skeleton=skel
+    )
+
+    bbox = inst.to_bbox()
+
+    assert bbox.xyxy == pytest.approx((5.0, 10.0, 10.0, 30.0))
+
+
+def test_instance_to_bbox_tight_padding():
+    """Padding inflates the tight bbox; tuple padding is per-axis."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [10, 0], [0, 10]]), skeleton=skel)
+
+    bbox = inst.to_bbox(padding=(2, 3))
+
+    assert bbox.xyxy == pytest.approx((-2.0, -3.0, 12.0, 13.0))
+
+
+def test_instance_to_bbox_tight_rotated():
+    """Rotated tight bbox fits an oriented box from the convex hull."""
+    skel = Skeleton(["a", "b", "c", "d"])
+    # Axis-aligned square rotated 45 degrees about the origin.
+    inst = Instance.from_numpy(
+        np.array([[1, 0], [0, 1], [-1, 0], [0, -1]]), skeleton=skel
+    )
+
+    bbox = inst.to_bbox(rotated=True)
+
+    # The minimum-area rectangle of a diamond is a square of side sqrt(2).
+    assert bbox.is_rotated
+    assert bbox.width == pytest.approx(np.sqrt(2), abs=1e-6)
+    assert bbox.height == pytest.approx(np.sqrt(2), abs=1e-6)
+
+
+def test_instance_to_bbox_tight_rotated_padding():
+    """Padding on a rotated tight bbox enlarges the pre-rotation extent."""
+    skel = Skeleton(["a", "b", "c", "d"])
+    inst = Instance.from_numpy(
+        np.array([[1, 0], [0, 1], [-1, 0], [0, -1]]), skeleton=skel
+    )
+
+    base = inst.to_bbox(rotated=True)
+    padded = inst.to_bbox(rotated=True, padding=1.0)
+
+    assert padded.width == pytest.approx(base.width + 2.0, abs=1e-6)
+    assert padded.height == pytest.approx(base.height + 2.0, abs=1e-6)
+    assert padded.angle == pytest.approx(base.angle)
+
+
+def test_instance_to_bbox_centered_scalar():
+    """Centered bbox builds a fixed square box around the centroid."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [9, 0], [0, 9]]), skeleton=skel)
+
+    bbox = inst.to_bbox(mode="centered", size=4)
+
+    # Centroid is (3, 3); a size-4 box spans +/- 2.
+    assert bbox.xyxy == pytest.approx((1.0, 1.0, 5.0, 5.0))
+
+
+def test_instance_to_bbox_centered_size_tuple():
+    """Centered bbox accepts a (w, h) tuple for size."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[2, 2], [2, 2], [2, 2]]), skeleton=skel)
+
+    bbox = inst.to_bbox(mode="centered", size=(4, 6))
+
+    assert bbox.xyxy == pytest.approx((0.0, -1.0, 4.0, 5.0))
+
+
+def test_instance_to_bbox_centered_anchor_node():
+    """Centered bbox can center on an anchor node."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[10, 20], [0, 0], [0, 0]]), skeleton=skel)
+
+    bbox = inst.to_bbox(mode="centered", size=2, center_method="anchor", node="a")
+
+    assert bbox.xyxy == pytest.approx((9.0, 19.0, 11.0, 21.0))
+
+
+def test_instance_to_bbox_centered_requires_size():
+    """mode='centered' without a size is a misconfiguration."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [9, 0], [0, 9]]), skeleton=skel)
+
+    with pytest.raises(ValueError, match="size"):
+        inst.to_bbox(mode="centered")
+
+
+def test_instance_to_bbox_unknown_mode_raises():
+    """An unknown bbox mode raises ValueError."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [9, 0], [0, 9]]), skeleton=skel)
+
+    with pytest.raises(ValueError, match="Unknown mode"):
+        inst.to_bbox(mode="bogus")
+
+
+def test_instance_to_bbox_empty_degenerate():
+    """No visible points yields a degenerate (NaN) bbox."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.full((3, 2), np.nan), skeleton=skel)
+
+    bbox = inst.to_bbox()
+
+    assert bbox.is_empty
+    assert np.isnan(bbox.x1)
+
+
+def test_instance_to_bbox_empty_error_on_empty():
+    """error_on_empty raises for an empty tight bbox."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.full((3, 2), np.nan), skeleton=skel)
+
+    with pytest.raises(ValueError, match="No visible points"):
+        inst.to_bbox(error_on_empty=True)
+
+
+def test_instance_to_bbox_centered_empty_degenerate():
+    """Centered mode with no visible points yields a degenerate bbox."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.full((3, 2), np.nan), skeleton=skel)
+
+    bbox = inst.to_bbox(mode="centered", size=4)
+
+    assert bbox.is_empty
+
+
+def test_instance_to_bbox_centered_empty_error_on_empty():
+    """Centered mode propagates error_on_empty through the centroid step."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.full((3, 2), np.nan), skeleton=skel)
+
+    with pytest.raises(ValueError):
+        inst.to_bbox(mode="centered", size=4, error_on_empty=True)
+
+
+def test_instance_to_bbox_predicted_carries_score():
+    """A PredictedInstance yields a PredictedBoundingBox carrying its score."""
+    skel = _tri_skeleton()
+    inst = PredictedInstance.from_numpy(
+        np.array([[0, 0], [9, 0], [0, 9]]), skeleton=skel, score=0.6
+    )
+
+    bbox = inst.to_bbox()
+
+    assert isinstance(bbox, PredictedBoundingBox)
+    assert bbox.score == pytest.approx(0.6)
+    assert bbox.instance is inst
+
+
+def test_instance_to_roi_shapes_nodes():
+    """method='shapes' with node_radius unions buffered node disks."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [10, 0], [0, 10]]), skeleton=skel)
+
+    roi = inst.to_roi(node_radius=2)
+
+    assert isinstance(roi, UserROI)
+    assert not roi.is_empty
+    assert roi.instance is inst
+
+
+def test_instance_to_roi_shapes_edges():
+    """method='shapes' with edge_radius buffers fully-visible edge segments."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [10, 0], [0, 10]]), skeleton=skel)
+
+    roi = inst.to_roi(edge_radius=1.0)
+
+    assert not roi.is_empty
+    # Two edges (a-b, a-c) each of length 10 buffered by 1 -> area roughly
+    # the union of two capsules.
+    assert roi.geometry.area > 0
+
+
+def test_instance_to_roi_convex_hull():
+    """method='convex_hull' returns the hull polygon of visible points."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [10, 0], [0, 10]]), skeleton=skel)
+
+    roi = inst.to_roi(method="convex_hull")
+
+    assert roi.geometry.geom_type == "Polygon"
+    assert roi.geometry.area == pytest.approx(50.0)
+
+
+def test_instance_to_roi_convex_hull_radius_quad_segs():
+    """convex_hull radius buffers the hull; quad_segs controls smoothness."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [10, 0], [0, 10]]), skeleton=skel)
+
+    coarse = inst.to_roi(method="convex_hull", radius=2.0, quad_segs=1)
+    fine = inst.to_roi(method="convex_hull", radius=2.0, quad_segs=16)
+
+    # Both enclose the bare hull (area 50); finer rounding has larger area.
+    assert coarse.geometry.area > 50.0
+    assert fine.geometry.area > coarse.geometry.area
+
+
+def test_instance_to_roi_shapes_misconfig_always_raises():
+    """Both radii zero is a misconfiguration that raises even with empty input."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [10, 0], [0, 10]]), skeleton=skel)
+    empty = Instance.from_numpy(np.full((3, 2), np.nan), skeleton=skel)
+
+    with pytest.raises(ValueError, match="at least one"):
+        inst.to_roi()
+    # Misconfiguration raises even when error_on_empty=True and no points.
+    with pytest.raises(ValueError, match="at least one"):
+        empty.to_roi(error_on_empty=True)
+
+
+def test_instance_to_roi_unknown_method_raises():
+    """An unknown ROI method raises ValueError."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[0, 0], [10, 0], [0, 10]]), skeleton=skel)
+
+    with pytest.raises(ValueError, match="Unknown method"):
+        inst.to_roi(method="bogus")
+
+
+def test_instance_to_roi_empty_degenerate():
+    """No visible points yields an empty-geometry ROI."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.full((3, 2), np.nan), skeleton=skel)
+
+    roi = inst.to_roi(node_radius=2)
+
+    assert roi.is_empty
+
+
+def test_instance_to_roi_empty_error_on_empty():
+    """error_on_empty raises for an empty ROI geometry."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.full((3, 2), np.nan), skeleton=skel)
+
+    with pytest.raises(ValueError, match="No visible points"):
+        inst.to_roi(node_radius=2, error_on_empty=True)
+
+
+def test_instance_to_roi_predicted_carries_score():
+    """A PredictedInstance yields a PredictedROI carrying its score."""
+    skel = _tri_skeleton()
+    inst = PredictedInstance.from_numpy(
+        np.array([[0, 0], [10, 0], [0, 10]]), skeleton=skel, score=0.9
+    )
+
+    roi = inst.to_roi(node_radius=2)
+
+    assert isinstance(roi, PredictedROI)
+    assert roi.score == pytest.approx(0.9)
+    assert roi.instance is inst
+
+
+def test_instance_to_mask_matches_roi_to_mask():
+    """to_mask equals to_roi(...).to_mask(h, w) for the same kwargs."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.array([[2, 2], [12, 2], [2, 12]]), skeleton=skel)
+
+    via_mask = inst.to_mask(20, 20, node_radius=3)
+    via_roi = inst.to_roi(node_radius=3).to_mask(20, 20)
+
+    assert isinstance(via_mask, UserSegmentationMask)
+    assert via_mask.area == via_roi.area
+    np.testing.assert_array_equal(via_mask.data, via_roi.data)
+    assert via_mask.instance is inst
+
+
+def test_instance_to_mask_empty_all_background():
+    """An empty instance rasterizes to an all-background mask."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.full((3, 2), np.nan), skeleton=skel)
+
+    mask = inst.to_mask(8, 12, node_radius=2)
+
+    assert isinstance(mask, UserSegmentationMask)
+    assert mask.area == 0
+    assert mask.data.shape == (8, 12)
+    assert mask.instance is inst
+
+
+def test_instance_to_mask_empty_error_on_empty():
+    """error_on_empty raises for an empty instance to_mask."""
+    skel = _tri_skeleton()
+    inst = Instance.from_numpy(np.full((3, 2), np.nan), skeleton=skel)
+
+    with pytest.raises(ValueError, match="No visible points"):
+        inst.to_mask(8, 8, node_radius=2, error_on_empty=True)
+
+
+def test_instance_to_mask_convex_hull_degenerate_all_background():
+    """A zero-area convex hull (<3 visible points) rasterizes to all background.
+
+    With fewer than three visible points the convex hull is a Point/LineString,
+    which is non-empty but non-fillable; ``to_mask`` returns an all-background
+    mask instead of leaking the rasterizer's ``TypeError``.
+    """
+    skel = _tri_skeleton()
+    # Only two visible points -> hull is a LineString (zero area).
+    inst = Instance.from_numpy(
+        np.array([[0.0, 0.0], [10.0, 10.0], [np.nan, np.nan]]), skeleton=skel
+    )
+
+    mask = inst.to_mask(20, 20, method="convex_hull", radius=0.0)
+
+    assert isinstance(mask, UserSegmentationMask)
+    assert mask.is_empty
+    assert mask.area == 0
+    assert mask.data.shape == (20, 20)
+    assert mask.instance is inst
+
+
+def test_instance_to_mask_convex_hull_degenerate_predicted_carries_score():
+    """The degenerate convex-hull path preserves the predicted variant + score."""
+    skel = _tri_skeleton()
+    inst = PredictedInstance.from_numpy(
+        np.array([[0.0, 0.0], [10.0, 10.0], [np.nan, np.nan]]),
+        skeleton=skel,
+        score=0.8,
+    )
+
+    mask = inst.to_mask(20, 20, method="convex_hull", radius=0.0)
+
+    assert isinstance(mask, PredictedSegmentationMask)
+    assert mask.score == pytest.approx(0.8)
+    assert mask.is_empty
+
+
+def test_instance_to_mask_predicted_carries_score():
+    """A PredictedInstance yields a PredictedSegmentationMask carrying its score."""
+    skel = _tri_skeleton()
+    inst = PredictedInstance.from_numpy(
+        np.array([[2, 2], [12, 2], [2, 12]]), skeleton=skel, score=0.75
+    )
+
+    mask = inst.to_mask(20, 20, node_radius=3)
+
+    assert isinstance(mask, PredictedSegmentationMask)
+    assert mask.score == pytest.approx(0.75)
+    assert mask.area > 0
+    assert mask.instance is inst
+
+
+def test_instance_to_mask_predicted_empty_carries_score():
+    """An empty PredictedInstance to_mask is all-background but keeps its score."""
+    skel = _tri_skeleton()
+    inst = PredictedInstance.from_numpy(
+        np.full((3, 2), np.nan), skeleton=skel, score=0.3
+    )
+
+    mask = inst.to_mask(6, 6, node_radius=2)
+
+    assert isinstance(mask, PredictedSegmentationMask)
+    assert mask.score == pytest.approx(0.3)
+    assert mask.area == 0

@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from shapely.geometry import Polygon
     from shapely.geometry.base import BaseGeometry
 
+    from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.centroid import Centroid
     from sleap_io.model.embedding import Embedding
     from sleap_io.model.identity import Identity
     from sleap_io.model.instance import Instance, Track
@@ -118,6 +120,11 @@ class ROI(EmbeddingMixin):
     def is_predicted(self) -> bool:
         """Whether this ROI is a model prediction."""
         return isinstance(self, PredictedROI)
+
+    @property
+    def is_empty(self) -> bool:
+        """Whether this ROI's geometry is empty (no spatial extent)."""
+        return bool(self.geometry.is_empty)
 
     @classmethod
     def from_bbox(
@@ -337,6 +344,120 @@ class ROI(EmbeddingMixin):
             )
         return UserSegmentationMask.from_numpy(mask, **kwargs)
 
+    def to_centroid(
+        self, representative: bool = False, error_on_empty: bool = False
+    ) -> "Centroid":
+        """Reduce this ROI to a single centroid point.
+
+        A `PredictedROI` produces a `PredictedCentroid` carrying its `score`; any
+        other ROI produces a `UserCentroid`. Metadata (track, tracking_score,
+        identity, identity_score, category, name, source, instance) is inherited.
+
+        Args:
+            representative: If ``True``, use Shapely's ``representative_point()``
+                (a point guaranteed to lie within the geometry); otherwise use the
+                geometric ``centroid`` (which may fall outside concave shapes).
+            error_on_empty: If ``True``, raise ``ValueError`` when the geometry is
+                empty instead of returning a degenerate (NaN) centroid.
+
+        Returns:
+            A `Centroid` at the geometry's centroid (or NaN if empty).
+
+        Raises:
+            ValueError: If the geometry is empty and ``error_on_empty`` is ``True``.
+        """
+        from sleap_io.model.centroid import PredictedCentroid, UserCentroid
+
+        if self.geometry.is_empty:
+            if error_on_empty:
+                raise ValueError("Cannot compute centroid of an empty ROI geometry.")
+            x = y = float("nan")
+        else:
+            pt = (
+                self.geometry.representative_point()
+                if representative
+                else self.geometry.centroid
+            )
+            x, y = float(pt.x), float(pt.y)
+
+        kwargs = dict(
+            x=x,
+            y=y,
+            track=self.track,
+            tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
+            instance=self.instance,
+            category=self.category,
+            name=self.name,
+            source=self.source,
+        )
+        if self.is_predicted:
+            return PredictedCentroid(score=self.score, **kwargs)
+        return UserCentroid(**kwargs)
+
+    def to_bbox(
+        self,
+        padding: float | tuple[float, float] = 0.0,
+        rotated: bool = False,
+        error_on_empty: bool = False,
+    ) -> "BoundingBox":
+        """Reduce this ROI to a bounding box.
+
+        A `PredictedROI` produces a `PredictedBoundingBox` carrying its `score`;
+        any other ROI produces a `UserBoundingBox`. Metadata (track,
+        tracking_score, identity, identity_score, category, name, source,
+        instance) is inherited.
+
+        Args:
+            padding: Amount to inflate the box outward. Scalar applies to both
+                axes; a ``(px, py)`` tuple applies per-axis. Negative values
+                shrink the box. For rotated boxes, padding enlarges the
+                pre-rotation extent about the center while preserving the angle.
+            rotated: If ``True``, fit a minimum-area oriented box (rotated). If
+                ``False``, fit an axis-aligned box from the geometry bounds.
+            error_on_empty: If ``True``, raise ``ValueError`` when the geometry is
+                empty instead of returning a degenerate (NaN) box.
+
+        Returns:
+            A `BoundingBox` enclosing the geometry (or NaN corners if empty).
+
+        Raises:
+            ValueError: If the geometry is empty and ``error_on_empty`` is ``True``.
+        """
+        from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+
+        if self.geometry.is_empty:
+            if error_on_empty:
+                raise ValueError(
+                    "Cannot compute bounding box of an empty ROI geometry."
+                )
+            nan = float("nan")
+            x1 = y1 = x2 = y2 = nan
+            angle = 0.0
+        else:
+            x1, y1, x2, y2, angle = _geometry_to_bbox_coords(self.geometry, rotated)
+            x1, y1, x2, y2 = _apply_padding(x1, y1, x2, y2, padding)
+
+        kwargs = dict(
+            x1=x1,
+            y1=y1,
+            x2=x2,
+            y2=y2,
+            angle=angle,
+            track=self.track,
+            tracking_score=self.tracking_score,
+            identity=self.identity,
+            identity_score=self.identity_score,
+            instance=self.instance,
+            category=self.category,
+            name=self.name,
+            source=self.source,
+        )
+        if self.is_predicted:
+            return PredictedBoundingBox(score=self.score, **kwargs)
+        return UserBoundingBox(**kwargs)
+
     def explode(self) -> list["ROI"]:
         """Split a multi-geometry ROI into individual ROIs.
 
@@ -474,6 +595,168 @@ def _scanline_fill(
             x_start = max(0, int(np.floor(intersections[j])))
             x_end = min(width, int(np.ceil(intersections[j + 1])))
             mask[y, x_start:x_end] = fill
+
+
+def _apply_padding(
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    padding: float | tuple[float, float],
+) -> tuple[float, float, float, float]:
+    """Inflate an axis-aligned box by a scalar or per-axis padding.
+
+    Shared padding logic used by centroid/bbox/instance conversions so that all
+    paths inflate boxes identically.
+
+    Args:
+        x1: Left edge x-coordinate.
+        y1: Top edge y-coordinate.
+        x2: Right edge x-coordinate.
+        y2: Bottom edge y-coordinate.
+        padding: Scalar applied to both axes, or a ``(px, py)`` tuple applied
+            per-axis. Negative values shrink the box; values are not clamped.
+
+    Returns:
+        The padded ``(x1, y1, x2, y2)`` tuple.
+    """
+    if isinstance(padding, (tuple, list)):
+        px, py = padding
+    else:
+        px = py = padding
+    return (x1 - px, y1 - py, x2 + px, y2 + py)
+
+
+def _pose_to_geometry(
+    points: np.ndarray,
+    edges: list[tuple[int, int]],
+    method: str = "shapes",
+    node_radius: float = 0.0,
+    edge_radius: float = 0.0,
+    radius: float = 0.0,
+    quad_segs: int = 8,
+) -> "BaseGeometry":
+    """Build a Shapely geometry from pose points (central pose->vector hub).
+
+    Args:
+        points: ``(n_nodes, 2)`` array of node coordinates; invisible nodes are
+            ``NaN``.
+        edges: List of ``(src, dst)`` node-index pairs (e.g.
+            ``skeleton.edge_inds``).
+        method: ``"shapes"`` to union buffered node points and/or edge segments,
+            or ``"convex_hull"`` to take the convex hull of visible points.
+        node_radius: Buffer radius around each visible node (``"shapes"`` only).
+        edge_radius: Buffer radius around each fully-visible edge segment
+            (``"shapes"`` only).
+        radius: Optional buffer applied to the convex hull (``"convex_hull"``
+            only).
+        quad_segs: Number of segments used to approximate a quarter circle when
+            buffering.
+
+    Returns:
+        A Shapely geometry. An empty ``Polygon`` is returned when there are no
+        visible points (or no shapes were produced).
+
+    Raises:
+        ValueError: If ``method="shapes"`` with both ``node_radius`` and
+            ``edge_radius`` equal to 0 (a misconfiguration), or if ``method`` is
+            not recognized.
+    """
+    from shapely.geometry import LineString, MultiPoint, Point, Polygon
+    from shapely.ops import unary_union
+
+    points = np.asarray(points, dtype=float)
+    visible = ~np.isnan(points[:, 0])
+
+    if method == "shapes":
+        if node_radius == 0 and edge_radius == 0:
+            raise ValueError(
+                "method='shapes' requires at least one of node_radius or "
+                "edge_radius to be > 0."
+            )
+        if not visible.any():
+            return Polygon()
+        shapes: list[BaseGeometry] = []
+        if node_radius > 0:
+            for i in np.nonzero(visible)[0]:
+                x, y = points[i]
+                shapes.append(
+                    Point(float(x), float(y)).buffer(node_radius, quad_segs=quad_segs)
+                )
+        if edge_radius > 0:
+            for src, dst in edges:
+                if visible[src] and visible[dst]:
+                    xs, ys = points[src]
+                    xd, yd = points[dst]
+                    shapes.append(
+                        LineString(
+                            [(float(xs), float(ys)), (float(xd), float(yd))]
+                        ).buffer(edge_radius, quad_segs=quad_segs)
+                    )
+        if shapes:
+            return unary_union(shapes)
+        return Polygon()
+
+    elif method == "convex_hull":
+        if not visible.any():
+            return Polygon()
+        visible_xy = points[visible]
+        hull = MultiPoint([tuple(p) for p in visible_xy]).convex_hull
+        if radius > 0:
+            hull = hull.buffer(radius, quad_segs=quad_segs)
+        return hull
+
+    else:
+        raise ValueError(
+            f"Unknown method {method!r}. Expected 'shapes' or 'convex_hull'."
+        )
+
+
+def _geometry_to_bbox_coords(
+    geometry: "BaseGeometry", rotated: bool = False
+) -> tuple[float, float, float, float, float]:
+    """Compute bounding-box ``(x1, y1, x2, y2, angle)`` from a geometry.
+
+    Args:
+        geometry: A Shapely geometry to enclose.
+        rotated: If ``True``, fit a minimum-area oriented box and return its
+            centered ``(x1, y1, x2, y2)`` plus rotation ``angle`` (radians),
+            consistent with ``BoundingBox.corners``. If ``False``, return the
+            axis-aligned bounds with ``angle=0``.
+
+    Returns:
+        A tuple ``(x1, y1, x2, y2, angle)``. For an empty geometry, all corner
+        values are ``NaN`` and ``angle`` is 0.
+    """
+    if geometry.is_empty:
+        nan = float("nan")
+        return (nan, nan, nan, nan, 0.0)
+
+    if not rotated:
+        minx, miny, maxx, maxy = geometry.bounds
+        return (float(minx), float(miny), float(maxx), float(maxy), 0.0)
+
+    from shapely.geometry import Polygon
+
+    mrr = geometry.minimum_rotated_rectangle
+    if not isinstance(mrr, Polygon) or mrr.is_empty:
+        # Degenerate MRR (Point/LineString): fall back to axis-aligned bounds.
+        minx, miny, maxx, maxy = geometry.bounds
+        return (float(minx), float(miny), float(maxx), float(maxy), 0.0)
+
+    pts = np.asarray(mrr.exterior.coords[:4], dtype=float)
+    cx = float(pts[:, 0].mean())
+    cy = float(pts[:, 1].mean())
+    edge0 = pts[1] - pts[0]
+    edge1 = pts[2] - pts[1]
+    width = float(np.hypot(edge0[0], edge0[1]))
+    height = float(np.hypot(edge1[0], edge1[1]))
+    angle = float(np.arctan2(edge0[1], edge0[0]))
+    x1 = cx - width / 2
+    y1 = cy - height / 2
+    x2 = cx + width / 2
+    y2 = cy + height / 2
+    return (x1, y1, x2, y2, angle)
 
 
 @attrs.define(eq=False)
