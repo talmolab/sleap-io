@@ -1,11 +1,20 @@
 """Tests for methods in sleap_io.model.labeled_frame file."""
 
 import numpy as np
+import pytest
 from numpy.testing import assert_equal
+from shapely.geometry import box
 
 from sleap_io import Instance, PredictedInstance, Skeleton, Track, Video
+from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.centroid import Centroid, PredictedCentroid, UserCentroid
 from sleap_io.model.labeled_frame import LabeledFrame
-from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
+from sleap_io.model.mask import (
+    PredictedSegmentationMask,
+    SegmentationMask,
+    UserSegmentationMask,
+)
+from sleap_io.model.roi import ROI, PredictedROI, UserROI
 
 
 def test_labeled_frame():
@@ -1291,7 +1300,7 @@ def test_labeled_frame_is_user_labeled_with_annotations():
 
 def test_labeled_frame_is_user_labeled_with_rois():
     """is_user_labeled is True for a UserROI-only frame, False for predicted-only."""
-    from sleap_io.model.roi import PredictedROI, UserROI
+    from sleap_io.model.roi import UserROI
 
     video = Video(filename="test.mp4", open_backend=False)
 
@@ -1851,7 +1860,7 @@ def test_merge_annotations_auto_rois():
     """Auto spatial matching works for ROIs."""
     from shapely.geometry import box
 
-    from sleap_io.model.roi import PredictedROI, UserROI
+    from sleap_io.model.roi import UserROI
 
     video = Video(filename="test.mp4", open_backend=False)
 
@@ -2034,3 +2043,283 @@ def test_merge_is_negative_replace_predictions():
     base.merge(incoming, frame="replace_predictions")
 
     assert base.is_negative is True
+
+
+# -- LabeledFrame.convert ----------------------------------------------------
+
+
+def _pose_frame():
+    """Frame with a single two-node user instance at (0,0)-(10,10)."""
+    skel = Skeleton(["A", "B"])
+    inst = Instance([[0, 0], [10, 10]], skeleton=skel)
+    return LabeledFrame(video=Video("test.mp4"), frame_idx=0, instances=[inst]), inst
+
+
+def test_convert_pose_to_centroid():
+    """convert(pose -> centroid) dispatches to Instance.to_centroid."""
+    lf, inst = _pose_frame()
+    out = lf.convert("centroid", source="pose")
+    assert len(out) == 1
+    assert isinstance(out[0], Centroid)
+    # center_of_mass of (0,0) and (10,10) is (5,5)
+    assert out[0].x == pytest.approx(5.0)
+    assert out[0].y == pytest.approx(5.0)
+    # Default inplace=False does not mutate the frame.
+    assert lf.centroids == []
+
+
+def test_convert_pose_to_bbox():
+    """convert(pose -> bbox) produces a tight box of the visible points."""
+    lf, inst = _pose_frame()
+    out = lf.convert("bbox", source="pose")
+    assert len(out) == 1
+    assert isinstance(out[0], BoundingBox)
+    assert (out[0].x1, out[0].y1, out[0].x2, out[0].y2) == (0.0, 0.0, 10.0, 10.0)
+
+
+def test_convert_pose_to_roi_forwards_node_radius():
+    """convert(pose -> roi) forwards node_radius to Instance.to_roi."""
+    lf, inst = _pose_frame()
+    out = lf.convert("roi", source="pose", node_radius=2.0)
+    assert len(out) == 1
+    assert isinstance(out[0], ROI)
+    assert not out[0].is_empty
+
+
+def test_convert_pose_to_mask_forwards_size_kwargs():
+    """convert(pose -> mask) forwards height/width/node_radius."""
+    lf, inst = _pose_frame()
+    out = lf.convert("mask", source="pose", height=20, width=20, node_radius=3.0)
+    assert len(out) == 1
+    assert isinstance(out[0], SegmentationMask)
+    assert not out[0].is_empty
+
+
+def test_convert_pose_to_centroid_forwards_method_node_fallback():
+    """Convert forwards method/node/fallback to the anchor centroid computation."""
+    lf, inst = _pose_frame()
+    out = lf.convert(
+        "centroid", source="pose", method="anchor", node="A", fallback="center_of_mass"
+    )
+    assert out[0].x == pytest.approx(0.0)
+    assert out[0].y == pytest.approx(0.0)
+    assert out[0].source == "anchor:A"
+
+
+def test_convert_pose_to_centroid_anchor_fallback_engages():
+    """Convert forwards fallback so an occluded anchor falls back end-to-end."""
+    skel = Skeleton(["A", "B"])
+    # Anchor node "A" is occluded (NaN); "B" is visible at (10, 10).
+    inst = Instance.from_numpy(
+        np.array([[np.nan, np.nan], [10.0, 10.0]]), skeleton=skel
+    )
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, instances=[inst])
+    out = lf.convert(
+        "centroid", source="pose", method="anchor", node="A", fallback="center_of_mass"
+    )
+    # Fallback center_of_mass over the single visible node "B" -> (10, 10).
+    assert out[0].x == pytest.approx(10.0)
+    assert out[0].y == pytest.approx(10.0)
+    assert out[0].source == "anchor:A->center_of_mass"
+
+
+def test_convert_centroid_to_bbox_forwards_size_padding():
+    """convert(centroid -> bbox) forwards size and padding kwargs."""
+    c = UserCentroid(x=5.0, y=5.0)
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, centroids=[c])
+    out = lf.convert("bbox", source="centroid", size=4.0, padding=1.0)
+    assert len(out) == 1
+    # 4x4 box centered at (5,5) -> (3,3,7,7), padded by 1 -> (2,2,8,8)
+    assert (out[0].x1, out[0].y1, out[0].x2, out[0].y2) == (2.0, 2.0, 8.0, 8.0)
+
+
+def test_convert_centroid_to_roi_forwards_radius():
+    """convert(centroid -> roi) forwards radius."""
+    c = UserCentroid(x=5.0, y=5.0)
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, centroids=[c])
+    out = lf.convert("roi", source="centroid", radius=3.0)
+    assert isinstance(out[0], ROI)
+    assert out[0].geometry.area == pytest.approx(np.pi * 9, rel=0.05)
+
+
+def test_convert_centroid_to_mask_forwards_radius_size():
+    """convert(centroid -> mask) forwards height/width/radius."""
+    c = UserCentroid(x=5.0, y=5.0)
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, centroids=[c])
+    out = lf.convert("mask", source="centroid", height=12, width=12, radius=3.0)
+    assert isinstance(out[0], SegmentationMask)
+    assert not out[0].is_empty
+
+
+def test_convert_centroid_to_pose():
+    """convert(centroid -> pose) is the only defined conversion into pose."""
+    c = UserCentroid(x=5.0, y=5.0)
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, centroids=[c])
+    out = lf.convert("pose", source="centroid")
+    assert len(out) == 1
+    assert isinstance(out[0], Instance)
+    assert out[0].numpy()[0].tolist() == [5.0, 5.0]
+
+
+def test_convert_bbox_to_centroid():
+    """convert(bbox -> centroid) uses the box center."""
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10)
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, bboxes=[b])
+    out = lf.convert("centroid", source="bbox")
+    assert out[0].x == pytest.approx(5.0)
+    assert out[0].y == pytest.approx(5.0)
+
+
+def test_convert_mask_to_centroid():
+    """convert(mask -> centroid) reduces a mask to its center of mass."""
+    m = UserSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool))
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, masks=[m])
+    out = lf.convert("centroid", source="mask")
+    assert out[0].x == pytest.approx(2.0)
+    assert out[0].y == pytest.approx(2.0)
+
+
+def test_convert_mask_to_bbox_forwards_padding():
+    """convert(mask -> bbox) forwards padding."""
+    m = UserSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool))
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, masks=[m])
+    out = lf.convert("bbox", source="mask")
+    assert isinstance(out[0], BoundingBox)
+    assert not out[0].is_empty
+
+
+def test_convert_mask_to_roi():
+    """convert(mask -> roi) produces a polygon ROI."""
+    m = UserSegmentationMask.from_numpy(np.ones((5, 5), dtype=bool))
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, masks=[m])
+    out = lf.convert("roi", source="mask")
+    assert isinstance(out[0], ROI)
+    assert not out[0].is_empty
+
+
+def test_convert_roi_to_centroid():
+    """convert(roi -> centroid)."""
+    r = UserROI(geometry=box(0, 0, 10, 10))
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, rois=[r])
+    out = lf.convert("centroid", source="roi")
+    assert out[0].x == pytest.approx(5.0)
+    assert out[0].y == pytest.approx(5.0)
+
+
+def test_convert_roi_to_bbox():
+    """convert(roi -> bbox)."""
+    r = UserROI(geometry=box(0, 0, 10, 10))
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, rois=[r])
+    out = lf.convert("bbox", source="roi")
+    assert (out[0].x1, out[0].y1, out[0].x2, out[0].y2) == (0.0, 0.0, 10.0, 10.0)
+
+
+def test_convert_roi_to_mask():
+    """convert(roi -> mask) forwards height/width."""
+    r = UserROI(geometry=box(0, 0, 10, 10))
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, rois=[r])
+    out = lf.convert("mask", source="roi", height=12, width=12)
+    assert isinstance(out[0], SegmentationMask)
+    assert not out[0].is_empty
+
+
+def test_convert_predicted_source_yields_predicted_target():
+    """A predicted source annotation converts to a predicted target carrying score."""
+    c = PredictedCentroid(x=5.0, y=5.0, score=0.7)
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, centroids=[c])
+    out = lf.convert("bbox", source="centroid", size=4.0)
+    assert isinstance(out[0], PredictedBoundingBox)
+    assert out[0].score == pytest.approx(0.7)
+
+
+def test_convert_inplace_appends_and_returns():
+    """inplace=True appends each result to the frame and returns them."""
+    lf, inst = _pose_frame()
+    out = lf.convert("centroid", source="pose", inplace=True)
+    assert len(out) == 1
+    # Returned objects are the same that were appended.
+    assert lf.centroids == out
+    # The source list is untouched.
+    assert lf.instances == [inst]
+
+
+@pytest.mark.parametrize(
+    "target,kwargs,list_attr",
+    [
+        ("bbox", {"size": 4.0}, "bboxes"),
+        ("roi", {"radius": 3.0}, "rois"),
+        ("mask", {"height": 12, "width": 12, "radius": 3.0}, "masks"),
+    ],
+)
+def test_convert_inplace_appends_non_centroid_targets(target, kwargs, list_attr):
+    """inplace=True routes non-centroid targets to their own frame lists."""
+    c = UserCentroid(x=5.0, y=5.0)
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, centroids=[c])
+    out = lf.convert(target, source="centroid", inplace=True, **kwargs)
+    assert getattr(lf, list_attr) == out
+    # The source list is untouched.
+    assert lf.centroids == [c]
+
+
+def test_convert_inplace_false_does_not_mutate():
+    """inplace=False leaves the frame's target list empty."""
+    lf, inst = _pose_frame()
+    before = list(lf.centroids)
+    lf.convert("centroid", source="pose", inplace=False)
+    assert lf.centroids == before == []
+
+
+def test_convert_multiple_sources():
+    """Convert maps over every source annotation in the list."""
+    c1 = UserCentroid(x=1.0, y=1.0)
+    c2 = UserCentroid(x=2.0, y=2.0)
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, centroids=[c1, c2])
+    out = lf.convert("bbox", source="centroid", size=2.0)
+    assert len(out) == 2
+
+
+def test_convert_empty_source_returns_empty_list():
+    """Convert over an empty source list returns an empty list."""
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0)
+    assert lf.convert("centroid", source="centroid") == []
+
+
+def test_convert_unknown_target_raises():
+    """An unrecognized target modality raises ValueError."""
+    lf, inst = _pose_frame()
+    with pytest.raises(ValueError, match="Unknown target modality"):
+        lf.convert("blob", source="pose")
+
+
+def test_convert_unknown_source_raises():
+    """An unrecognized source modality raises ValueError."""
+    lf, inst = _pose_frame()
+    with pytest.raises(ValueError, match="Unknown source modality"):
+        lf.convert("centroid", source="blob")
+
+
+def test_convert_pose_to_pose_raises():
+    """Pose -> pose is ill-defined and raises."""
+    lf, inst = _pose_frame()
+    with pytest.raises(ValueError, match="not supported"):
+        lf.convert("pose", source="pose")
+
+
+def test_convert_bbox_to_pose_raises():
+    """Only centroid -> pose is defined; other sources to pose raise."""
+    b = UserBoundingBox(x1=0, y1=0, x2=10, y2=10)
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, bboxes=[b])
+    with pytest.raises(ValueError, match="not supported"):
+        lf.convert("pose", source="bbox")
+
+
+def test_convert_missing_verb_raises():
+    """A source object lacking the target verb raises a clear ValueError.
+
+    ``ROI`` has no ``to_roi`` method, so converting an ROI source to the roi
+    modality exercises the missing-verb guard.
+    """
+    r = UserROI(geometry=box(0, 0, 10, 10))
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, rois=[r])
+    with pytest.raises(ValueError, match="has no to_roi"):
+        lf.convert("roi", source="roi")

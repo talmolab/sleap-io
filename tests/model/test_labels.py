@@ -8647,3 +8647,197 @@ def test_remap_frame_annotations_with_rois():
 
     assert roi.video is new_video
     assert roi.track is new_track
+
+
+def test_labels_convert_maps_over_frames_flat_list():
+    """Labels.convert returns one flat list of results across all frames."""
+    video = Video(filename="a.mp4", open_backend=False)
+    skeleton = Skeleton(["a", "b"])
+    i1 = Instance.from_numpy(np.array([[0.0, 0.0], [10.0, 10.0]]), skeleton)
+    i2 = Instance.from_numpy(np.array([[2.0, 2.0], [4.0, 4.0]]), skeleton)
+    i3 = Instance.from_numpy(np.array([[6.0, 6.0], [8.0, 8.0]]), skeleton)
+    lf1 = LabeledFrame(video=video, frame_idx=0, instances=[i1, i2])
+    lf2 = LabeledFrame(video=video, frame_idx=1, instances=[i3])
+    labels = Labels([lf1, lf2])
+
+    results = labels.convert("centroid", source="pose")
+
+    # Flat list: 2 from the first frame + 1 from the second, in frame order.
+    assert isinstance(results, list)
+    assert len(results) == 3
+    assert all(isinstance(r, UserCentroid) for r in results)
+    assert results[0].xy == pytest.approx((5.0, 5.0))
+    assert results[1].xy == pytest.approx((3.0, 3.0))
+    assert results[2].xy == pytest.approx((7.0, 7.0))
+
+
+def test_labels_convert_not_inplace_leaves_frames_unmodified():
+    """Labels.convert with inplace=False does not mutate any frame."""
+    video = Video(filename="a.mp4", open_backend=False)
+    skeleton = Skeleton(["a", "b"])
+    i1 = Instance.from_numpy(np.array([[0.0, 0.0], [10.0, 10.0]]), skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[i1])
+    labels = Labels([lf])
+
+    labels.convert("centroid", source="pose")
+
+    assert lf.centroids == []
+
+
+def test_labels_convert_inplace_appends_to_each_frame():
+    """Labels.convert with inplace=True appends results to their own frames."""
+    video = Video(filename="a.mp4", open_backend=False)
+    skeleton = Skeleton(["a", "b"])
+    i1 = Instance.from_numpy(np.array([[0.0, 0.0], [10.0, 10.0]]), skeleton)
+    i2 = Instance.from_numpy(np.array([[2.0, 2.0], [4.0, 4.0]]), skeleton)
+    lf1 = LabeledFrame(video=video, frame_idx=0, instances=[i1])
+    lf2 = LabeledFrame(video=video, frame_idx=1, instances=[i2])
+    labels = Labels([lf1, lf2])
+
+    results = labels.convert("centroid", source="pose", inplace=True)
+
+    assert len(results) == 2
+    assert lf1.centroids == [results[0]]
+    assert lf2.centroids == [results[1]]
+
+
+def test_labels_convert_empty_labels_returns_empty_list():
+    """Labels.convert over a Labels with no frames returns an empty list."""
+    assert Labels([]).convert("centroid", source="pose") == []
+
+
+def test_labels_convert_predicted_source_to_predicted_target():
+    """Predicted source maps to predicted target with score + metadata carried."""
+    video = Video(filename="a.mp4", open_backend=False)
+    skeleton = Skeleton(["a", "b"])
+    track = Track(name="t")
+    pred = PredictedInstance.from_numpy(
+        np.array([[0.0, 0.0], [10.0, 10.0]]),
+        skeleton,
+        score=0.75,
+        track=track,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[pred])
+    labels = Labels([lf])
+
+    results = labels.convert("centroid", source="pose")
+
+    assert len(results) == 1
+    centroid = results[0]
+    assert isinstance(centroid, PredictedCentroid)
+    assert centroid.score == pytest.approx(0.75)
+    assert centroid.track is track
+    assert centroid.instance is pred
+
+
+def test_labels_convert_centroid_to_pose():
+    """Centroid -> pose is the only defined pose target and works via Labels."""
+    video = Video(filename="a.mp4", open_backend=False)
+    centroid = UserCentroid(x=5.0, y=6.0)
+    lf = LabeledFrame(video=video, frame_idx=0, centroids=[centroid])
+    labels = Labels([lf])
+
+    results = labels.convert("pose", source="centroid")
+
+    assert len(results) == 1
+    assert isinstance(results[0], Instance)
+    assert results[0].numpy()[0] == pytest.approx([5.0, 6.0])
+
+
+def test_labels_convert_bbox_to_centroid():
+    """Bbox -> centroid path forwards through Labels.convert."""
+    video = Video(filename="a.mp4", open_backend=False)
+    bbox = UserBoundingBox(x1=0.0, y1=0.0, x2=10.0, y2=20.0)
+    lf = LabeledFrame(video=video, frame_idx=0, bboxes=[bbox])
+    labels = Labels([lf])
+
+    results = labels.convert("centroid", source="bbox")
+
+    assert len(results) == 1
+    assert isinstance(results[0], UserCentroid)
+    assert results[0].xy == pytest.approx((5.0, 10.0))
+
+
+def test_labels_convert_roi_to_mask_forwards_kwargs():
+    """Roi -> mask forwards height/width kwargs to the per-object verb."""
+    video = Video(filename="a.mp4", open_backend=False)
+    roi = UserROI(geometry=box(0.0, 0.0, 4.0, 4.0))
+    lf = LabeledFrame(video=video, frame_idx=0, rois=[roi])
+    labels = Labels([lf])
+
+    results = labels.convert("mask", source="roi", height=8, width=8)
+
+    assert len(results) == 1
+    assert isinstance(results[0], UserSegmentationMask)
+    assert results[0].area == pytest.approx(16, abs=1)
+
+
+def test_labels_convert_unknown_target_raises():
+    """An unrecognized target modality raises ValueError."""
+    video = Video(filename="a.mp4", open_backend=False)
+    skeleton = Skeleton(["a", "b"])
+    i1 = Instance.from_numpy(np.array([[0.0, 0.0], [10.0, 10.0]]), skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[i1])
+    labels = Labels([lf])
+
+    with pytest.raises(ValueError, match="Unknown target modality"):
+        labels.convert("bogus", source="pose")
+
+
+def test_labels_convert_unknown_source_raises():
+    """An unrecognized source modality raises ValueError."""
+    video = Video(filename="a.mp4", open_backend=False)
+    skeleton = Skeleton(["a", "b"])
+    i1 = Instance.from_numpy(np.array([[0.0, 0.0], [10.0, 10.0]]), skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[i1])
+    labels = Labels([lf])
+
+    with pytest.raises(ValueError, match="Unknown source modality"):
+        labels.convert("centroid", source="bogus")
+
+
+def test_labels_convert_pose_to_pose_raises():
+    """Pose -> pose is undefined and raises a clear ValueError."""
+    video = Video(filename="a.mp4", open_backend=False)
+    skeleton = Skeleton(["a", "b"])
+    i1 = Instance.from_numpy(np.array([[0.0, 0.0], [10.0, 10.0]]), skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[i1])
+    labels = Labels([lf])
+
+    with pytest.raises(ValueError, match="to 'pose' is not supported"):
+        labels.convert("pose", source="pose")
+
+
+def test_labels_convert_missing_verb_raises():
+    """A source object lacking the target verb raises ValueError."""
+    video = Video(filename="a.mp4", open_backend=False)
+    bbox = UserBoundingBox(x1=0.0, y1=0.0, x2=10.0, y2=10.0)
+    lf = LabeledFrame(video=video, frame_idx=0, bboxes=[bbox])
+    labels = Labels([lf])
+
+    # BoundingBox has no to_bbox verb.
+    with pytest.raises(ValueError, match="Cannot convert 'bbox' to 'bbox'"):
+        labels.convert("bbox", source="bbox")
+
+
+def test_labels_convert_inplace_lazy_raises(slp_typical):
+    """inplace=True on a lazy-loaded Labels raises instead of silently no-op'ing.
+
+    Iterating ``labeled_frames`` on a lazy Labels yields freshly materialized
+    frames that are discarded each iteration, so the appended annotations would
+    be lost. The guard converts this silent failure into a clear RuntimeError.
+    """
+    lazy = load_slp(slp_typical, lazy=True)
+    assert lazy.is_lazy
+
+    with pytest.raises(RuntimeError, match="Cannot convert on lazy-loaded Labels"):
+        lazy.convert("centroid", source="pose", inplace=True)
+
+
+def test_labels_convert_lazy_read_only_allowed(slp_typical):
+    """inplace=False on a lazy-loaded Labels is read-only and works."""
+    lazy = load_slp(slp_typical, lazy=True)
+    assert lazy.is_lazy
+
+    results = lazy.convert("centroid", source="pose")
+    assert isinstance(results, list)

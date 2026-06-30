@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.mask import (
@@ -14,6 +15,7 @@ from sleap_io.model.mask import (
     _encode_rle,
     _resize_nearest,
 )
+from sleap_io.model.roi import PredictedROI, UserROI
 from sleap_io.model.skeleton import Skeleton
 
 
@@ -527,7 +529,11 @@ def test_to_bbox_empty_mask():
     data = np.zeros((10, 10), dtype=bool)
     mask = UserSegmentationMask.from_numpy(data)
     bb = mask.to_bbox()
-    assert bb.xywh == pytest.approx((0.0, 0.0, 0.0, 0.0))
+    assert bb.is_empty
+    assert np.isnan(bb.x1) and np.isnan(bb.y1)
+    assert np.isnan(bb.x2) and np.isnan(bb.y2)
+    with pytest.raises(ValueError):
+        mask.to_bbox(error_on_empty=True)
 
 
 def test_to_user_basic():
@@ -727,3 +733,311 @@ def test_from_predicted_does_not_affect_identity_equality():
     assert user1.from_predicted is user2.from_predicted
     assert user1 != user2
     assert user1 == user1
+
+
+# -- is_empty property --------------------------------------------------------
+
+
+def test_is_empty_true_for_blank_mask():
+    mask = UserSegmentationMask.from_numpy(np.zeros((6, 6), dtype=bool))
+    assert mask.is_empty is True
+
+
+def test_is_empty_false_with_foreground():
+    data = np.zeros((6, 6), dtype=bool)
+    data[1, 1] = True
+    mask = UserSegmentationMask.from_numpy(data)
+    assert mask.is_empty is False
+
+
+# -- to_centroid: center_of_mass ----------------------------------------------
+
+
+def test_to_centroid_center_of_mass():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:6, 4:8] = True  # rows 2..5 (mean 3.5), cols 4..7 (mean 5.5)
+    mask = UserSegmentationMask.from_numpy(data)
+    c = mask.to_centroid()  # default method
+    assert isinstance(c, UserCentroid)
+    assert c.x == pytest.approx(5.5)
+    assert c.y == pytest.approx(3.5)
+
+
+def test_to_centroid_center_of_mass_with_scale_offset():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:4, 3:6] = True  # rows mean 2.5, cols mean 4.0
+    mask = UserSegmentationMask.from_numpy(data, scale=(0.5, 0.5), offset=(10.0, 20.0))
+    c = mask.to_centroid(method="center_of_mass")
+    # image = pixel / scale + offset
+    assert c.x == pytest.approx(4.0 / 0.5 + 10.0)  # 18.0
+    assert c.y == pytest.approx(2.5 / 0.5 + 20.0)  # 25.0
+
+
+def test_to_centroid_center_of_mass_anisotropic_scale():
+    """Anisotropic scale: cols map to x via sx, rows to y via sy (no axis swap)."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:4, 3:6] = True  # rows mean 2.5, cols mean 4.0
+    mask = UserSegmentationMask.from_numpy(data, scale=(0.5, 0.25), offset=(10.0, 20.0))
+    c = mask.to_centroid(method="center_of_mass")
+    assert c.x == pytest.approx(4.0 / 0.5 + 10.0)  # 18.0
+    assert c.y == pytest.approx(2.5 / 0.25 + 20.0)  # 30.0
+    # bbox_center applies sx to x and sy to y the same way (no axis swap): the
+    # pixel bbox is cols [3,6), rows [2,4) -> image center via self.bbox.
+    bx, by, bw, bh = mask.bbox
+    cb = mask.to_centroid(method="bbox_center")
+    assert cb.x == pytest.approx(bx + bw / 2)
+    assert cb.y == pytest.approx(by + bh / 2)
+    # x uses sx (0.5), y uses sy (0.25): distinct scales prove no swap.
+    assert cb.x == pytest.approx(3 / 0.5 + 10.0 + (3 / 0.5) / 2)  # 19.0
+    assert cb.y == pytest.approx(2 / 0.25 + 20.0 + (2 / 0.25) / 2)  # 32.0
+
+
+def test_to_centroid_center_of_mass_concave():
+    """center_of_mass can fall outside a concave shape (unlike bbox_center)."""
+    # C-shaped mask: the mean of foreground pixels sits left of the gap.
+    data = np.zeros((10, 10), dtype=bool)
+    data[0:3, 0:8] = True  # top bar
+    data[3:7, 0:3] = True  # left column
+    data[7:10, 0:8] = True  # bottom bar
+    rows, cols = np.nonzero(data)
+    mask = UserSegmentationMask.from_numpy(data)
+    c = mask.to_centroid(method="center_of_mass")
+    assert c.x == pytest.approx(cols.mean())
+    assert c.y == pytest.approx(rows.mean())
+
+
+# -- to_centroid: bbox_center -------------------------------------------------
+
+
+def test_to_centroid_bbox_center():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:6, 4:8] = True  # bbox x=4,y=2,w=4,h=4 -> center (6,4)
+    mask = UserSegmentationMask.from_numpy(data)
+    c = mask.to_centroid(method="bbox_center")
+    assert c.x == pytest.approx(6.0)
+    assert c.y == pytest.approx(4.0)
+
+
+def test_to_centroid_bbox_center_concave_inside_bbox():
+    """bbox_center uses the tight pixel bbox midpoint (concave-robust)."""
+    data = np.zeros((10, 10), dtype=bool)
+    data[0:3, 0:8] = True
+    data[3:7, 0:3] = True
+    data[7:10, 0:8] = True
+    mask = UserSegmentationMask.from_numpy(data)
+    bx, by, bw, bh = mask.bbox
+    c = mask.to_centroid(method="bbox_center")
+    assert c.x == pytest.approx(bx + bw / 2.0)
+    assert c.y == pytest.approx(by + bh / 2.0)
+
+
+def test_to_centroid_bbox_center_with_scale_offset():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:4, 3:6] = True
+    mask = UserSegmentationMask.from_numpy(data, scale=(0.5, 0.5), offset=(10.0, 20.0))
+    bx, by, bw, bh = mask.bbox
+    c = mask.to_centroid(method="bbox_center")
+    assert c.x == pytest.approx(bx + bw / 2.0)
+    assert c.y == pytest.approx(by + bh / 2.0)
+
+
+# -- to_centroid: degenerate / errors / predicted -----------------------------
+
+
+def test_to_centroid_empty_degenerate():
+    mask = UserSegmentationMask.from_numpy(np.zeros((8, 8), dtype=bool))
+    c = mask.to_centroid()
+    assert isinstance(c, UserCentroid)
+    assert np.isnan(c.x) and np.isnan(c.y)
+    assert c.is_empty is True
+
+
+def test_to_centroid_empty_bbox_center_degenerate():
+    """bbox_center on an empty mask is also degenerate (NaN), not (0,0)."""
+    mask = UserSegmentationMask.from_numpy(np.zeros((8, 8), dtype=bool))
+    c = mask.to_centroid(method="bbox_center")
+    assert np.isnan(c.x) and np.isnan(c.y)
+
+
+def test_to_centroid_empty_error_on_empty():
+    mask = UserSegmentationMask.from_numpy(np.zeros((8, 8), dtype=bool))
+    with pytest.raises(ValueError, match="empty mask"):
+        mask.to_centroid(error_on_empty=True)
+
+
+def test_to_centroid_unknown_method_raises():
+    data = np.zeros((8, 8), dtype=bool)
+    data[1:3, 1:3] = True
+    mask = UserSegmentationMask.from_numpy(data)
+    with pytest.raises(ValueError, match="Unknown method"):
+        mask.to_centroid(method="median")
+
+
+def test_to_centroid_predicted_carries_score():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 3:6] = True
+    mask = PredictedSegmentationMask.from_numpy(data, score=0.77)
+    c = mask.to_centroid()
+    assert isinstance(c, PredictedCentroid)
+    assert c.score == pytest.approx(0.77)
+
+
+def test_to_centroid_predicted_empty_carries_score():
+    mask = PredictedSegmentationMask.from_numpy(
+        np.zeros((6, 6), dtype=bool), score=0.42
+    )
+    c = mask.to_centroid()
+    assert isinstance(c, PredictedCentroid)
+    assert c.score == pytest.approx(0.42)
+    assert np.isnan(c.x)
+
+
+def test_to_centroid_propagates_metadata():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 1:4] = True
+    track = Track(name="t1")
+    ident = Identity(name="mouse_A")
+    mask = UserSegmentationMask.from_numpy(
+        data,
+        track=track,
+        tracking_score=0.6,
+        identity=ident,
+        identity_score=0.8,
+        category="cell",
+        name="obj1",
+        source="manual",
+    )
+    c = mask.to_centroid()
+    assert c.track is track
+    assert c.tracking_score == pytest.approx(0.6)
+    assert c.identity is ident
+    assert c.identity_score == pytest.approx(0.8)
+    assert c.category == "cell"
+    assert c.name == "obj1"
+    assert c.source == "manual"
+
+
+# -- to_bbox: padding ---------------------------------------------------------
+
+
+def test_to_bbox_scalar_padding():
+    data = np.zeros((10, 10), dtype=bool)
+    data[3:6, 2:5] = True  # x=2,y=3,w=3,h=3
+    mask = UserSegmentationMask.from_numpy(data)
+    bb = mask.to_bbox(padding=1.0)
+    assert bb.x1 == pytest.approx(1.0)
+    assert bb.y1 == pytest.approx(2.0)
+    assert bb.x2 == pytest.approx(6.0)  # 2 + 3 + 1
+    assert bb.y2 == pytest.approx(7.0)  # 3 + 3 + 1
+
+
+def test_to_bbox_tuple_padding():
+    data = np.zeros((10, 10), dtype=bool)
+    data[3:6, 2:5] = True
+    mask = UserSegmentationMask.from_numpy(data)
+    bb = mask.to_bbox(padding=(2.0, 1.0))
+    assert bb.x1 == pytest.approx(0.0)  # 2 - 2
+    assert bb.y1 == pytest.approx(2.0)  # 3 - 1
+    assert bb.x2 == pytest.approx(7.0)  # 2 + 3 + 2
+    assert bb.y2 == pytest.approx(7.0)  # 3 + 3 + 1
+
+
+# -- to_polygon predicted-variant fix + to_roi alias --------------------------
+
+
+def test_to_polygon_predicted_returns_predicted_roi():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:6, 2:6] = True
+    mask = PredictedSegmentationMask.from_numpy(data, score=0.66)
+    roi = mask.to_polygon()
+    assert isinstance(roi, PredictedROI)
+    assert roi.score == pytest.approx(0.66)
+
+
+def test_to_polygon_user_returns_user_roi():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:6, 2:6] = True
+    mask = UserSegmentationMask.from_numpy(data)
+    roi = mask.to_polygon()
+    assert isinstance(roi, UserROI)
+
+
+def test_to_roi_alias_matches_to_polygon():
+    data = np.zeros((10, 10), dtype=bool)
+    data[3:7, 3:7] = True
+    mask = UserSegmentationMask.from_numpy(data)
+    roi = mask.to_roi()
+    assert isinstance(roi, UserROI)
+    assert roi.geometry.equals(mask.to_polygon().geometry)
+
+
+def test_to_roi_alias_predicted():
+    data = np.zeros((10, 10), dtype=bool)
+    data[3:7, 3:7] = True
+    mask = PredictedSegmentationMask.from_numpy(data, score=0.9)
+    roi = mask.to_roi()
+    assert isinstance(roi, PredictedROI)
+    assert roi.score == pytest.approx(0.9)
+
+
+def test_to_polygon_propagates_metadata():
+    data = np.zeros((10, 10), dtype=bool)
+    data[2:5, 1:4] = True
+    track = Track(name="t1")
+    ident = Identity(name="mouse_A")
+    mask = UserSegmentationMask.from_numpy(
+        data,
+        track=track,
+        tracking_score=0.6,
+        identity=ident,
+        identity_score=0.8,
+        category="cell",
+        name="obj1",
+        source="manual",
+    )
+    roi = mask.to_polygon()
+    assert roi.track is track
+    assert roi.tracking_score == pytest.approx(0.6)
+    assert roi.identity is ident
+    assert roi.identity_score == pytest.approx(0.8)
+    assert roi.category == "cell"
+    assert roi.name == "obj1"
+    assert roi.source == "manual"
+
+
+# -- round-trip mask -> polygon -> mask ---------------------------------------
+
+
+def test_mask_polygon_mask_roundtrip_solid():
+    data = np.zeros((20, 20), dtype=bool)
+    data[5:15, 5:15] = True
+    mask = UserSegmentationMask.from_numpy(data)
+    roundtrip = mask.to_polygon().to_mask(20, 20)
+    assert roundtrip.area == pytest.approx(mask.area, abs=2)
+
+
+def test_mask_polygon_mask_roundtrip_concave():
+    data = np.zeros((20, 20), dtype=bool)
+    data[2:5, 2:16] = True  # top bar
+    data[5:14, 2:6] = True  # left column
+    data[14:17, 2:16] = True  # bottom bar
+    mask = UserSegmentationMask.from_numpy(data)
+    roundtrip = mask.to_polygon().to_mask(20, 20)
+    assert roundtrip.area == pytest.approx(mask.area, abs=4)
+
+
+def test_mask_polygon_mask_roundtrip_predicted_keeps_score():
+    data = np.zeros((20, 20), dtype=bool)
+    data[5:15, 5:15] = True
+    mask = PredictedSegmentationMask.from_numpy(data, score=0.81)
+    roundtrip = mask.to_polygon().to_mask(20, 20)
+    assert isinstance(roundtrip, PredictedSegmentationMask)
+    assert roundtrip.score == pytest.approx(0.81)
+
+
+def test_from_numpy_all_zero_nonbool_int_is_empty():
+    """An all-zero non-bool int array has no nonzero values to validate."""
+    arr = np.zeros((4, 4), dtype=np.int32)
+    mask = UserSegmentationMask.from_numpy(arr)
+    assert mask.area == 0
+    assert mask.is_empty is True

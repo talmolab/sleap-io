@@ -591,6 +591,82 @@ class LabeledFrame:
         """Remove all instances with no visible points."""
         self.instances = [inst for inst in self.instances if not inst.is_empty]
 
+    def convert(
+        self,
+        to: str,
+        source: str = "pose",
+        inplace: bool = False,
+        **kwargs,
+    ) -> list:
+        """Convert annotations between detection modalities.
+
+        Reads every annotation of the ``source`` modality from this frame and
+        converts each one to the ``to`` modality by dispatching to the matching
+        per-object verb (``to_centroid``, ``to_bbox``, ``to_mask``, ``to_roi`` or
+        ``to_pose``). Keyword arguments are forwarded unchanged to the per-object
+        verb (e.g. ``height``/``width`` for ``to="mask"``).
+
+        Args:
+            to: Target modality, one of ``"pose"``, ``"centroid"``, ``"bbox"``,
+                ``"mask"`` or ``"roi"``.
+            source: Source modality, one of ``"pose"``, ``"centroid"``, ``"bbox"``,
+                ``"mask"`` or ``"roi"``. Reads from the matching frame list
+                (``instances``, ``centroids``, ``bboxes``, ``masks`` or ``rois``).
+            inplace: If ``True``, append each produced annotation to this frame
+                (via `append`) in addition to returning them. If ``False``
+                (default), the frame is left unmodified.
+            **kwargs: Forwarded to the per-object conversion verb.
+
+        Returns:
+            A list of the produced annotations (one per source annotation), of the
+            ``to`` modality.
+
+        Raises:
+            ValueError: If ``to`` or ``source`` is not a recognized modality, if
+                ``to="pose"`` is requested from a non-centroid source (only
+                ``centroid`` → ``pose`` is defined), or if a source annotation
+                lacks the target conversion verb.
+        """
+        modalities = {
+            "pose": "instances",
+            "centroid": "centroids",
+            "bbox": "bboxes",
+            "mask": "masks",
+            "roi": "rois",
+        }
+        if to not in modalities:
+            raise ValueError(
+                f"Unknown target modality {to!r}. Expected one of: "
+                f"{', '.join(modalities)}."
+            )
+        if source not in modalities:
+            raise ValueError(
+                f"Unknown source modality {source!r}. Expected one of: "
+                f"{', '.join(modalities)}."
+            )
+        if to == "pose" and source != "centroid":
+            raise ValueError(
+                f"Conversion from {source!r} to 'pose' is not supported; only "
+                "'centroid' -> 'pose' is defined."
+            )
+
+        verb = "to_pose" if to == "pose" else f"to_{to}"
+        sources = getattr(self, modalities[source])
+
+        results = []
+        for obj in sources:
+            method = getattr(obj, verb, None)
+            if method is None:
+                raise ValueError(
+                    f"Cannot convert {source!r} to {to!r}: "
+                    f"{type(obj).__name__} has no {verb}() method."
+                )
+            result = method(**kwargs)
+            results.append(result)
+            if inplace:
+                self.append(result)
+        return results
+
     def matches(self, other: "LabeledFrame", video_must_match: bool = True) -> bool:
         """Check if this frame matches another frame's identity.
 

@@ -1878,6 +1878,51 @@ class Labels:
                 videos=False,
             )
 
+    def convert(
+        self,
+        to: str,
+        source: str = "pose",
+        inplace: bool = False,
+        **kwargs,
+    ) -> list:
+        """Convert annotations between detection modalities across all frames.
+
+        Applies `LabeledFrame.convert` to every frame in `labeled_frames` and
+        collects the produced annotations into a single flat list (annotations
+        from all frames concatenated together, not grouped per frame).
+
+        Args:
+            to: Target modality, one of ``"pose"``, ``"centroid"``, ``"bbox"``,
+                ``"mask"`` or ``"roi"``.
+            source: Source modality, one of ``"pose"``, ``"centroid"``, ``"bbox"``,
+                ``"mask"`` or ``"roi"``.
+            inplace: If ``True``, append each produced annotation to its frame in
+                addition to returning it. If ``False`` (default), frames are left
+                unmodified. Forwarded to `LabeledFrame.convert`.
+            **kwargs: Forwarded to the per-object conversion verb (e.g.
+                ``height``/``width`` for ``to="mask"``).
+
+        Returns:
+            A flat list of all produced annotations across every frame, of the
+            ``to`` modality.
+
+        Raises:
+            ValueError: If ``to`` or ``source`` is not a recognized modality, if
+                ``to="pose"`` is requested from a non-centroid source, or if a
+                source annotation lacks the target conversion verb.
+            RuntimeError: If ``inplace=True`` and Labels is lazy-loaded. In-place
+                mutation is not supported on lazy Labels because iterating
+                ``labeled_frames`` yields freshly materialized frames that are
+                discarded after each iteration, so the appended annotations would
+                be silently lost. Materialize first (``labels.materialize()``).
+        """
+        if inplace:
+            self._check_not_lazy("convert")
+        results = []
+        for lf in self.labeled_frames:
+            results.extend(lf.convert(to, source=source, inplace=inplace, **kwargs))
+        return results
+
     @property
     def user_labeled_frames(self) -> list[LabeledFrame]:
         """Return all labeled frames with user instances OR marked as negative.

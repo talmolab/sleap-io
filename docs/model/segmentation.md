@@ -688,34 +688,91 @@ by the `Labels` object and can be explicitly closed with `labels.close()`.
 
 ## Converting between annotation types
 
-The four spatial annotation types can be converted between each other where
-geometrically meaningful:
+sleap-io models five spatial detection modalities — **pose** ([`Instance`](poses.md)),
+[`Centroid`](centroids.md), [`BoundingBox`](boxes.md), `SegmentationMask`, and
+[`ROI`](rois.md) (polygon) — and every modality exposes the same verb set
+(`.to_centroid()`, `.to_bbox()`, `.to_mask()`, `.to_roi()`) so you can move
+freely between them. Geometry conversions are centralized on the two hubs that
+already exist — `ROI` (Shapely) for vector ops and `SegmentationMask` for raster
+— so `obj.to_mask(height, width)` is always `obj.to_roi(...).to_mask(height, width)`.
 
-| From                | To                    | Method                            |
-| ------------------- | --------------------- | --------------------------------- |
-| `BoundingBox`       | `ROI`                 | `bbox.to_roi()`                   |
-| `BoundingBox`       | `SegmentationMask`    | `bbox.to_mask(height, width)`     |
-| `ROI`               | `SegmentationMask`    | `roi.to_mask(height, width)`      |
-| `SegmentationMask`  | `ROI` (polygon)       | `mask.to_polygon()`               |
-| `SegmentationMask`  | `BoundingBox`         | `mask.to_bbox()`                  |
-| `PredictedSegmentationMask` | `UserSegmentationMask` | `pred_mask.to_user()`     |
-| `LabelImage`        | `list[SegmentationMask]` | `li.to_masks()`                |
-| `LabelImage`        | `list[BoundingBox]`   | `li.to_bboxes()`                  |
-| `list[SegmentationMask]` | `LabelImage`     | `UserLabelImage.from_masks(masks)` |
+### The conversion matrix
 
-All conversions preserve metadata (track, instance, name,
-category, source) when applicable. `to_bbox()` and `to_bboxes()` preserve
-prediction semantics (`Predicted*` inputs produce `Predicted*` outputs with
-scores). Other conversions return `User*` types.
+| from ↓ \ to →        | Centroid                          | BoundingBox                          | SegmentationMask                          | ROI (polygon)                         |
+| -------------------- | --------------------------------- | ------------------------------------ | ----------------------------------------- | ------------------------------------- |
+| **Pose** (`Instance`) | `to_centroid(method=, node=, fallback=)` | `to_bbox(mode=, size=, padding=, rotated=)` | `to_mask(height, width, **roi_kwargs)` | `to_roi(method=, node_radius=, edge_radius=, radius=)` |
+| **Centroid**         | —                                 | `to_bbox(size, padding=)`            | `to_mask(height, width, radius)`          | `to_roi(radius)`                      |
+| **BoundingBox**      | `to_centroid()`                   | `pad(padding)`                       | `to_mask(height, width)`                  | `to_roi()`                            |
+| **SegmentationMask** | `to_centroid(method=)`            | `to_bbox(padding=)`                  | —                                         | `to_polygon()` / `to_roi()`           |
+| **ROI**              | `to_centroid(representative=)`    | `to_bbox(padding=, rotated=)`        | `to_mask(height, width)`                  | —                                     |
 
-The geometry conversions above project to a different shape, so they carry the
-identifying metadata but drop `tracking_score` (the geometry, not the track
-assignment, is what's being reinterpreted). `to_user()` is different: it is the
-predicted -> user *adoption* path (see
-[below](#user-vs-predicted-segmentation-masks)), so it faithfully carries the
+The reverse direction back to pose is [`Centroid.to_pose(skeleton=None)`][sleap_io.Centroid.to_pose],
+which reconstructs a single-node `Instance` (the only modality→pose conversion
+that is geometrically well-defined). `bbox→pose` and `mask→pose` are out of
+scope — they would require a target skeleton.
+
+Key kwargs by verb:
+
+| Verb                         | Key kwargs                                                                                         |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `Instance.to_centroid`       | `method` (`center_of_mass` \| `bbox_center` \| `anchor` \| `geometric_median`), `node`, `fallback` |
+| `Instance.to_bbox`           | `mode` (`tight` \| `centered`), `size`, `padding`, `node`, `center_method`, `rotated`              |
+| `Instance.to_roi`            | `method` (`shapes` \| `convex_hull`), `node_radius`, `edge_radius`, `radius`, `quad_segs`          |
+| `Centroid.to_bbox`           | `size` (required), `padding`                                                                        |
+| `Centroid.to_roi` / `to_mask` | `radius` (required)                                                                                |
+| `*.to_bbox`                  | `padding` (scalar or `(px, py)`); `rotated` on `ROI`                                                |
+| `SegmentationMask.to_centroid` | `method` (`center_of_mass` \| `bbox_center`)                                                      |
+| `ROI.to_centroid`            | `representative`                                                                                    |
+
+### Predicted variants, metadata, and degenerate inputs
+
+Every conversion returns the `User*`/`Predicted*` variant matching the source:
+a `Predicted*` input produces a `Predicted*` output carrying its `score`. The
+identifying metadata (`track`, `category`, `name`, `source`, and the
+`instance=` backref) is propagated where present; the geometry conversions drop
+`tracking_score` (the shape, not the track assignment, is being reinterpreted).
+`to_user()` is the separate predicted → user *adoption* path (see
+[below](#user-vs-predicted-segmentation-masks)), which faithfully carries the
 full annotation — including `tracking_score`, `scale`, and `offset` — dropping
-only the prediction-only fields (`score`, `score_map`) and recording the source
-prediction on `from_predicted`.
+only the prediction-only fields (`score`, `score_map`).
+
+The `to_X()` verbs are **return-type stable**: they always return the target
+class, never `None`. When the input is degenerate (no visible points, an empty
+mask, or an occluded `anchor` whose fallback is exhausted), the result is an
+*empty* target instance:
+
+- `Centroid` / `BoundingBox` → NaN coordinates (`x = y = nan`, all corners NaN).
+- `ROI` → empty `Polygon()`.
+- `SegmentationMask` → all-background mask (zero foreground pixels).
+
+Each verb accepts `error_on_empty=False`; pass `error_on_empty=True` to raise a
+`ValueError` instead of returning an empty result. A companion **`is_empty`**
+property is available on `Centroid`, `BoundingBox`, `ROI`, and
+`SegmentationMask` (mirroring [`Instance.is_empty`][sleap_io.Instance.is_empty])
+so an empty result is cheap to detect:
+
+```pycon
+>>> import sleap_io as sio
+>>> empty_box = sio.UserBoundingBox(
+...     x1=float("nan"), y1=float("nan"), x2=float("nan"), y2=float("nan"),
+... )
+>>> print(empty_box.is_empty)
+True
+
+```
+
+One case is *not* degenerate input: `Instance.to_roi(method="shapes")` with both
+`node_radius == 0` and `edge_radius == 0` is a misconfiguration and **always**
+raises `ValueError`, regardless of `error_on_empty`.
+
+The `LabelImage` decompositions round out the table:
+
+| From                | To                       | Method                             |
+| ------------------- | ------------------------ | ---------------------------------- |
+| `PredictedSegmentationMask` | `UserSegmentationMask` | `pred_mask.to_user()`        |
+| `LabelImage`        | `list[SegmentationMask]` | `li.to_masks()`                    |
+| `LabelImage`        | `list[BoundingBox]`      | `li.to_bboxes()`                   |
+| `list[SegmentationMask]` | `LabelImage`        | `UserLabelImage.from_masks(masks)` |
 
 ```pycon
 >>> import sleap_io as sio
@@ -731,6 +788,97 @@ prediction on `from_predicted`.
 >>> print(polygon_roi.area)
 
 ```
+
+`mask.to_polygon()` (and its `to_roi()` alias) preserves prediction semantics: a
+`PredictedSegmentationMask` produces a `PredictedROI` carrying the mask's
+`score` (earlier versions always returned a `UserROI`, silently dropping the
+predicted variant):
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> mask_data = np.zeros((100, 100), dtype=bool)
+>>> mask_data[20:40, 30:60] = True
+>>> pred_mask = sio.PredictedSegmentationMask.from_numpy(mask_data, score=0.9)
+>>> pred_roi = pred_mask.to_roi()
+>>> print(type(pred_roi).__name__)
+>>> print(pred_roi.score)
+
+```
+
+### Reducing a mask to a point or box
+
+`SegmentationMask.to_centroid()` reduces a mask to a single
+[`Centroid`](centroids.md). `method="center_of_mass"` (default) takes the mean
+of the foreground pixels; `method="bbox_center"` takes the midpoint of the
+pixel bounding box (concave-robust). Both map back to image space via the mask's
+`scale`/`offset`. `to_bbox(padding=)` adds optional padding to the tight box:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> mask_data = np.zeros((100, 100), dtype=bool)
+>>> mask_data[20:40, 30:60] = True
+>>> mask = sio.UserSegmentationMask.from_numpy(mask_data)
+>>> print(mask.to_centroid().xy)
+>>> print(mask.to_centroid(method="bbox_center").xy)
+>>> print(mask.to_bbox(padding=4).xyxy)
+
+```
+
+### Batch conversion: `LabeledFrame.convert` / `Labels.convert`
+
+Rather than a combinatorial set of helpers, [`LabeledFrame.convert`][sleap_io.LabeledFrame.convert]
+(and [`Labels.convert`][sleap_io.Labels.convert]) names the `source` and `to`
+modalities and forwards all remaining kwargs to the matching per-object
+`to_<target>()`. This reaches every cell of the matrix through one entry point.
+`source` reads from the matching per-frame list (`instances`, `centroids`,
+`bboxes`, `masks`, `rois`); `inplace=True` also appends the results to the frame:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 20], [30, 40], [50, 60]]), skeleton=skeleton,
+... )
+>>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+>>> # pose -> centroid with an anchor node + fallback
+>>> centroids = lf.convert(
+...     to="centroid", method="anchor", node="thorax", fallback="center_of_mass",
+... )
+>>> print(centroids[0].xy, centroids[0].source)
+>>> # pose -> mask (burns nodes + edges into a raster)
+>>> masks = lf.convert(
+...     to="mask", source="pose", method="shapes",
+...     node_radius=6, edge_radius=3, height=80, width=80,
+... )
+>>> print(masks[0].area > 0)
+
+```
+
+`Labels.convert` maps `LabeledFrame.convert` over every frame and returns a
+single flat list of all produced annotations:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> mask_data = np.zeros((100, 100), dtype=bool)
+>>> mask_data[20:40, 30:60] = True
+>>> mask = sio.UserSegmentationMask.from_numpy(mask_data)
+>>> lf = sio.LabeledFrame(video=video, frame_idx=0, masks=[mask])
+>>> labels = sio.Labels([lf])
+>>> boxes = labels.convert(to="bbox", source="mask", padding=4, inplace=True)
+>>> print(boxes[0].xyxy)
+>>> print(len(lf.bboxes))  # appended in place
+
+```
+
+Converting `to="pose"` is only defined from a `centroid` source (it calls
+`Centroid.to_pose`); any other source raises a clear `ValueError`. Unknown
+modality strings also raise.
 
 ---
 
