@@ -996,10 +996,20 @@ def process_and_embed_frames(
         # /video_crops and re-applied on load, so it is baked exactly once. This
         # matches the crop-over-embedded path (which already embeds the uncropped
         # source) and keeps the reloaded video a CropVideoBackend over full frames.
-        if isinstance(video.backend, CropVideoBackend):
-            frame = video.backend.inner.get_frame(frame_idx)
-        else:
-            frame = video[frame_idx]
+        try:
+            if isinstance(video.backend, CropVideoBackend):
+                frame = video.backend.inner.get_frame(frame_idx)
+            else:
+                frame = video[frame_idx]
+        except IndexError as e:
+            # Surface which video the missing frame belongs to. The bare backend
+            # error only reports the frame index, which is not actionable when a
+            # project has more than one video.
+            raise IndexError(
+                f"Frame index {frame_idx} out of range for video "
+                f"{frame_meta['video_ind']} ({video.filename}), which has "
+                f"{len(video)} frames."
+            ) from e
 
         # Encode the frame
         if image_format == "hdf5":
