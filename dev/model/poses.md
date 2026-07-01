@@ -85,6 +85,28 @@ indices.
 
 ```
 
+When a skeleton is imported without symmetry metadata (common for formats that
+don't store it) but its node names encode laterality, you can infer the pairs
+from names instead of adding them one by one. `infer_symmetries_by_name` is
+**non-mutating** -- it returns suggested `(left_index, right_index)` pairs so you
+can review them before applying, since a wrong guess would silently corrupt flip
+augmentation:
+
+```pycon
+>>> import sleap_io as sio
+>>> skel = sio.Skeleton(["nose", "eye_L", "eye_R", "ear_L", "ear_R"])
+>>> skel.infer_symmetries_by_name()
+[(1, 2), (3, 4)]
+>>> skel.add_symmetries(skel.infer_symmetries_by_name())  # apply if they look right
+>>> print(skel.symmetry_names)
+
+```
+
+Names are matched by splitting on separators (`_`, `-`, `.`, space), camelCase
+boundaries, and letter/digit boundaries, so `Ear_L`/`Ear_R`, `left_eye`/`right_eye`,
+`LeftPaw`/`RightPaw`, and `L1`/`R1` all pair up. Truly non-semantic pairings such
+as `L1`/`L2` cannot be inferred and must be declared with `add_symmetry`.
+
 ### Node, Edge, and Symmetry
 
 These are lightweight value types that you rarely need to construct directly --
