@@ -93,6 +93,7 @@ can review them before applying, since a wrong guess would silently corrupt flip
 augmentation:
 
 ```pycon
+>>> import sleap_io as sio
 >>> skel = sio.Skeleton(["nose", "eye_L", "eye_R", "ear_L", "ear_R"])
 >>> skel.infer_symmetries_by_name()
 [(1, 2), (3, 4)]
