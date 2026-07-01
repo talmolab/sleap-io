@@ -7,6 +7,7 @@ differently depending on the underlying pose model.
 
 from __future__ import annotations
 
+import re
 import typing
 from functools import lru_cache
 
@@ -478,6 +479,51 @@ class Skeleton:
         for symmetry in symmetries:
             self.add_symmetry(*symmetry)
 
+    def infer_symmetries_by_name(
+        self,
+        token_pairs: list[tuple[str, str]] | None = None,
+    ) -> list[tuple[int, int]]:
+        """Infer left/right symmetric node pairs from node names.
+
+        Useful when a skeleton has no symmetries defined (e.g. imported from a
+        format that does not carry symmetry metadata) but its node names encode
+        laterality, so that flip-dependent tooling (augmentation, QC) still
+        works. Names are matched by splitting on separators (`_`, `-`, `.`,
+        space), camelCase boundaries, and letter/digit boundaries, then pairing
+        nodes that share a stem but differ by a single left/right token. For
+        example, `Ear_L`/`Ear_R`, `left_eye`/`right_eye`, `LeftPaw`/`RightPaw`,
+        and `L1`/`R1` all pair up.
+
+        This is intentionally **non-mutating** and conservative: it returns
+        suggested pairs rather than writing them onto the skeleton, since a wrong
+        guess would silently corrupt flip augmentation. Apply the result
+        explicitly if desired, e.g.
+        `skel.add_symmetries(skel.infer_symmetries_by_name())`. Node names
+        without a delimited or camelCase/digit token boundary (e.g. `larm`) and
+        truly non-semantic pairings (e.g. `L1`/`L2`) cannot be inferred and must
+        be declared with `add_symmetry`.
+
+        Args:
+            token_pairs: List of `(left_token, right_token)` string pairs used to
+                recognize laterality, matched case-insensitively against whole
+                name segments. Defaults to `[("left", "right"), ("l", "r")]`.
+
+        Returns:
+            A list of `(left_index, right_index)` node-index pairs, ordered by
+            left index. Each node appears in at most one pair, and only stems
+            with exactly one left and one right member are paired (ambiguous
+            groups are skipped).
+
+        Example:
+            >>> skel = Skeleton(["nose", "eye_L", "eye_R", "ear_L", "ear_R"])
+            >>> skel.infer_symmetries_by_name()
+            [(1, 2), (3, 4)]
+            >>> skel.add_symmetries(skel.infer_symmetries_by_name())
+            >>> skel.symmetry_names
+            [('eye_L', 'eye_R'), ('ear_L', 'ear_R')]
+        """
+        return infer_symmetry_pairs_by_name(self.node_names, token_pairs=token_pairs)
+
     def rename_nodes(self, name_map: dict[NodeOrIndex, str] | list[str]):
         """Rename nodes in the skeleton.
 
@@ -820,3 +866,101 @@ def match_nodes_cached(
     inds_b = tuple([b_index_map[val] for val in a_arr[mask]])
 
     return inds_a, inds_b
+
+
+# Default left/right token pairs recognized by `infer_symmetry_pairs_by_name`.
+DEFAULT_LR_TOKENS: list[tuple[str, str]] = [("left", "right"), ("l", "r")]
+
+# Separators between name parts, and intra-part boundaries used to tokenize a
+# node name into whole segments so a left/right token can be matched exactly.
+_NAME_SEPARATORS = re.compile(r"[ _\-.]+")
+_SEGMENT_BOUNDARIES = [
+    re.compile(r"(?<=[a-z])(?=[A-Z])"),  # camelCase: ...aB... -> ...a B...
+    re.compile(r"(?<=[A-Z])(?=[A-Z][a-z])"),  # acronym+word: ...ABc... -> ...A Bc...
+    re.compile(r"(?<=[A-Za-z])(?=[0-9])"),  # letter -> digit: ...a1... -> ...a 1...
+    re.compile(r"(?<=[0-9])(?=[A-Za-z])"),  # digit -> letter: ...1a... -> ...1 a...
+]
+
+
+def _split_name_segments(name: str) -> list[str]:
+    """Split a node name into lowercase segments for token matching.
+
+    Splits on separators (`_`, `-`, `.`, space), camelCase boundaries, and
+    letter/digit boundaries so that a left/right token can be recognized as a
+    whole segment. For example, `"frontLeftPaw"` -> `["front", "left", "paw"]`
+    and `"Ear_L"` -> `["ear", "l"]`.
+
+    Args:
+        name: The node name.
+
+    Returns:
+        The lowercased segments in order (empty if `name` has no content).
+    """
+    segments: list[str] = []
+    for chunk in _NAME_SEPARATORS.split(name):
+        if not chunk:
+            continue
+        for boundary in _SEGMENT_BOUNDARIES:
+            chunk = boundary.sub(" ", chunk)
+        segments.extend(seg.lower() for seg in chunk.split())
+    return segments
+
+
+def infer_symmetry_pairs_by_name(
+    node_names: list[str],
+    token_pairs: list[tuple[str, str]] | None = None,
+) -> list[tuple[int, int]]:
+    """Infer left/right symmetric node pairs from node names.
+
+    See `Skeleton.infer_symmetries_by_name` for the full description. This is the
+    underlying name-only implementation, exposed for callers that have a list of
+    node names but not a `Skeleton`.
+
+    Args:
+        node_names: Ordered node names (index = node index).
+        token_pairs: List of `(left_token, right_token)` pairs, matched
+            case-insensitively against whole name segments. Defaults to
+            `[("left", "right"), ("l", "r")]`.
+
+    Returns:
+        A list of `(left_index, right_index)` pairs ordered by left index. Each
+        node appears in at most one pair; only stems with exactly one left and
+        one right member are paired.
+    """
+    if token_pairs is None:
+        token_pairs = DEFAULT_LR_TOKENS
+
+    left_tokens = {left.lower() for left, _ in token_pairs}
+    right_tokens = {right.lower() for _, right in token_pairs}
+    # A token declared as both a left and a right marker is ambiguous; drop it.
+    ambiguous = left_tokens & right_tokens
+    left_tokens -= ambiguous
+    right_tokens -= ambiguous
+    side_tokens = left_tokens | right_tokens
+
+    # Group nodes by stem (name minus its single side token) and side.
+    groups: dict[str, dict[str, list[int]]] = {}
+    for idx, name in enumerate(node_names):
+        segments = _split_name_segments(name)
+        side_positions = [i for i, seg in enumerate(segments) if seg in side_tokens]
+        # Require exactly one side token: none = not a lateral node, more than one
+        # = ambiguous.
+        if len(side_positions) != 1:
+            continue
+        pos = side_positions[0]
+        side = "left" if segments[pos] in left_tokens else "right"
+        stem = "".join(segments[:pos] + segments[pos + 1 :])
+        # A bare side token (e.g. "L", "left") carries no landmark identity.
+        if not stem:
+            continue
+        bucket = groups.setdefault(stem, {"left": [], "right": []})
+        bucket[side].append(idx)
+
+    pairs: list[tuple[int, int]] = []
+    for bucket in groups.values():
+        # Only pair unambiguous 1:1 stems (exactly one left and one right member).
+        if len(bucket["left"]) == 1 and len(bucket["right"]) == 1:
+            pairs.append((bucket["left"][0], bucket["right"][0]))
+
+    pairs.sort(key=lambda pair: pair[0])
+    return pairs

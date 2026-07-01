@@ -2,7 +2,13 @@
 
 import pytest
 
-from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
+from sleap_io.model.skeleton import (
+    Edge,
+    Node,
+    Skeleton,
+    Symmetry,
+    infer_symmetry_pairs_by_name,
+)
 
 
 def test_edge():
@@ -621,3 +627,126 @@ def test_skeleton_matches_symmetry_mismatch():
     )
 
     assert not skel1.matches(skel3, require_same_order=False)
+
+
+def test_infer_symmetries_by_name_suffix_and_prefix():
+    """Infer L/R pairs from delimited suffix and prefix tokens."""
+    skel = Skeleton(["nose", "eye_L", "eye_R", "L_ear", "R_ear"])
+    # (left_index, right_index), ordered by left index.
+    assert skel.infer_symmetries_by_name() == [(1, 2), (3, 4)]
+
+    # Full words too.
+    skel = Skeleton(["left_wing", "right_wing", "thorax"])
+    assert skel.infer_symmetries_by_name() == [(0, 1)]
+
+
+def test_infer_symmetries_by_name_module_function_matches_method():
+    """The module-level helper and the method agree."""
+    names = ["nose", "eye_L", "eye_R"]
+    # Skeleton() converts its node list in place, so pass a copy to keep `names`
+    # as strings for the module-level call below.
+    skel = Skeleton(list(names))
+    assert infer_symmetry_pairs_by_name(names) == skel.infer_symmetries_by_name()
+    assert infer_symmetry_pairs_by_name(names) == [(1, 2)]
+
+
+def test_infer_symmetries_by_name_camelcase():
+    """Infer pairs across camelCase boundaries (no separators)."""
+    assert infer_symmetry_pairs_by_name(["LeftEar", "RightEar"]) == [(0, 1)]
+    assert infer_symmetry_pairs_by_name(["earLeft", "earRight"]) == [(0, 1)]
+    # ALLCAPS acronym prefix + Word exercises the acronym boundary split.
+    assert infer_symmetry_pairs_by_name(["HINDLeftPaw", "HINDRightPaw"]) == [(0, 1)]
+
+
+def test_infer_symmetries_by_name_numeric_tokens():
+    """Infer pairs across letter/digit boundaries, e.g. L1/R1."""
+    assert infer_symmetry_pairs_by_name(["L1", "R1", "L2", "R2"]) == [(0, 1), (2, 3)]
+    # A digit in the middle exercises letter->digit and digit->letter splits.
+    assert infer_symmetry_pairs_by_name(["seg1Left", "seg1Right"]) == [(0, 1)]
+
+
+def test_infer_symmetries_by_name_embedded_and_lr_suffix():
+    """Infer pairs with a token embedded between stem parts, and bare l/r."""
+    assert infer_symmetry_pairs_by_name(["front_left_paw", "front_right_paw"]) == [
+        (0, 1)
+    ]
+    assert infer_symmetry_pairs_by_name(["frontLeftPaw", "frontRightPaw"]) == [(0, 1)]
+    assert infer_symmetry_pairs_by_name(["forelegL", "forelegR"]) == [(0, 1)]
+
+
+def test_infer_symmetries_by_name_returns_left_right_order():
+    """Each pair is (left_index, right_index), not sorted within the pair."""
+    names = ["right_a", "left_a", "right_b", "left_b"]
+    assert infer_symmetry_pairs_by_name(names) == [(1, 0), (3, 2)]
+
+
+def test_infer_symmetries_by_name_ignores_tokenless_names():
+    """Names without a whole L/R token segment are not paired."""
+    # "thorax"/"tail" contain the letters 'r'/'l' but not as a segment.
+    assert infer_symmetry_pairs_by_name(["nose", "thorax", "tail", "abdomen"]) == []
+    # A single side present without its partner yields nothing.
+    assert infer_symmetry_pairs_by_name(["eye_L", "nose"]) == []
+
+
+def test_infer_symmetries_by_name_bare_tokens_skipped():
+    """A bare side token has no stem/landmark identity, so it is skipped."""
+    assert infer_symmetry_pairs_by_name(["L", "R"]) == []
+    assert infer_symmetry_pairs_by_name(["left", "right"]) == []
+
+
+def test_infer_symmetries_by_name_non_semantic_not_inferred():
+    """Same-side names like L1/L2 cannot be inferred (must be declared)."""
+    assert infer_symmetry_pairs_by_name(["L1", "L2"]) == []
+
+
+def test_infer_symmetries_by_name_ambiguous_stem_skipped():
+    """A stem with more than one left (or right) member is ambiguous -> skipped."""
+    names = ["ear_left", "ear_right", "ear_l"]  # two 'left' members for stem "ear"
+    assert infer_symmetry_pairs_by_name(names) == []
+
+
+def test_infer_symmetries_by_name_multiple_tokens_skipped():
+    """A name carrying more than one side token is ambiguous -> skipped."""
+    assert infer_symmetry_pairs_by_name(["left_right_node", "middle"]) == []
+
+
+def test_infer_symmetries_by_name_stray_separators():
+    """Leading/trailing/repeated separators are tolerated."""
+    assert infer_symmetry_pairs_by_name(["ear_L_", "_ear_R"]) == [(0, 1)]
+
+
+def test_infer_symmetries_by_name_custom_tokens():
+    """Custom token pairs are honored; defaults then don't match."""
+    names = ["fin_top", "fin_bottom"]
+    assert infer_symmetry_pairs_by_name(names, token_pairs=[("top", "bottom")]) == [
+        (0, 1)
+    ]
+    # The method forwards token_pairs too (pass a copy; Skeleton() mutates it).
+    assert Skeleton(list(names)).infer_symmetries_by_name(
+        token_pairs=[("top", "bottom")]
+    ) == [(0, 1)]
+    # With the default L/R tokens, top/bottom are not recognized.
+    assert infer_symmetry_pairs_by_name(names) == []
+
+
+def test_infer_symmetries_by_name_ambiguous_token_config_skipped():
+    """A token declared as both left and right is dropped (no matches)."""
+    assert infer_symmetry_pairs_by_name(["l_a", "r_a"], token_pairs=[("l", "l")]) == []
+
+
+def test_infer_symmetries_by_name_empty():
+    """A skeleton with no nodes yields no pairs."""
+    assert Skeleton([]).infer_symmetries_by_name() == []
+
+
+def test_infer_symmetries_by_name_apply_is_idempotent():
+    """Inferred pairs can be applied via add_symmetries and are idempotent."""
+    skel = Skeleton(["nose", "eye_L", "eye_R", "ear_L", "ear_R"])
+    assert skel.symmetries == []
+
+    skel.add_symmetries(skel.infer_symmetries_by_name())
+    assert skel.symmetry_names == [("eye_L", "eye_R"), ("ear_L", "ear_R")]
+
+    # Applying again does not duplicate.
+    skel.add_symmetries(skel.infer_symmetries_by_name())
+    assert len(skel.symmetries) == 2
