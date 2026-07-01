@@ -122,7 +122,13 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "model.labels_set": ["LabelsSet"],
         "model.matching": ["MatchResult"],
         "model.roi": ["AnnotationType", "ROI", "UserROI", "PredictedROI"],
-        "model.skeleton": ["Edge", "Node", "Skeleton", "Symmetry"],
+        "model.skeleton": [
+            "Edge",
+            "Node",
+            "Skeleton",
+            "Symmetry",
+            "infer_symmetry_pairs_by_name",
+        ],
         "model.suggestions": ["SuggestionFrame"],
         "model.video": ["Video"],
         # Transform module
