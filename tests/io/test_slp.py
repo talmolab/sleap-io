@@ -1201,7 +1201,7 @@ def test_read_embeddings_skips_unknown_owner_type(tmp_path):
     labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
     labels.update()
     path = str(tmp_path / "emb.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, save_embedding_vectors=True)
 
     # Inject a row with an unsupported owner_type (99, not one of the OWNER_*).
     unknown_owner_type = 99
@@ -1248,7 +1248,7 @@ def test_mask_identity_and_embedding_round_trip(tmp_path):
     labels.update()
 
     path = str(tmp_path / "mask_ids.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, save_embedding_vectors=True)
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.5
@@ -1286,12 +1286,12 @@ def test_mask_identity_round_trip_lazy_save(tmp_path):
     labels.update()
 
     a = str(tmp_path / "a.slp")
-    save_slp(labels, a)
+    save_slp(labels, a, save_embedding_vectors=True)
     lazy = load_slp(a, lazy=True)
     assert lazy.is_lazy
 
     b = str(tmp_path / "b.slp")
-    save_slp(lazy, b)
+    save_slp(lazy, b, save_embedding_vectors=True)
     assert lazy.is_lazy  # fast path did not materialize
 
     reloaded = load_slp(b)
@@ -1317,7 +1317,7 @@ def test_centroid_identity_and_embedding_round_trip(tmp_path):
     labels.update()
 
     path = str(tmp_path / "centroid_ids.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, save_embedding_vectors=True)
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.5
@@ -1350,11 +1350,11 @@ def test_centroid_identity_round_trip_lazy_save(tmp_path):
     labels.update()
 
     a = str(tmp_path / "a.slp")
-    save_slp(labels, a)
+    save_slp(labels, a, save_embedding_vectors=True)
     lazy = load_slp(a, lazy=True)
     assert lazy.is_lazy
     b = str(tmp_path / "b.slp")
-    save_slp(lazy, b)
+    save_slp(lazy, b, save_embedding_vectors=True)
     assert lazy.is_lazy
 
     reloaded = load_slp(b)
@@ -1442,17 +1442,18 @@ def test_save_embedding_vectors_false_skips_embeddings_keeps_links(tmp_path):
     assert li.identity_embedding is None  # not persisted
 
 
-def test_save_embedding_vectors_default_writes_embeddings(tmp_path):
-    """Default save_embedding_vectors=True writes the /embeddings group."""
+def test_save_embedding_vectors_default_skips_embeddings(tmp_path):
+    """Default save_embedding_vectors=False skips /embeddings, keeps identity links."""
     labels = _labels_with_identity_and_embedding()
-    path = str(tmp_path / "with_emb.slp")
+    path = str(tmp_path / "no_emb.slp")
     save_slp(labels, path)
     with h5py.File(path, "r") as f:
-        assert "embeddings" in f
+        assert "embeddings" not in f
+        assert "links" in f["identity"]
 
     # Also reachable through Labels.save(...) via **kwargs.
     path2 = str(tmp_path / "via_save.slp")
-    labels.save(path2, save_embedding_vectors=False)
+    labels.save(path2)
     with h5py.File(path2, "r") as f:
         assert "embeddings" not in f
         assert "links" in f["identity"]
@@ -1493,7 +1494,7 @@ def test_embeddings_round_trip(tmp_path):
     labels.update()
 
     path = str(tmp_path / "embeddings.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, save_embedding_vectors=True)
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.5
@@ -1547,7 +1548,7 @@ def test_embeddings_inconsistent_dim_raises(tmp_path):
     labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[i0, i1])])
 
     with pytest.raises(ValueError, match="inconsistent dimensions"):
-        save_slp(labels, str(tmp_path / "bad.slp"))
+        save_slp(labels, str(tmp_path / "bad.slp"), save_embedding_vectors=True)
 
 
 def test_bbox_identity_and_embedding_round_trip(tmp_path):
@@ -1568,7 +1569,7 @@ def test_bbox_identity_and_embedding_round_trip(tmp_path):
     labels.update()
 
     path = str(tmp_path / "bbox_ids.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, save_embedding_vectors=True)
     with h5py.File(path, "r") as f:
         links = f["identity"]["links"][:]
         assert set(links["owner_type"].tolist()) == {OWNER_BBOX}
@@ -1599,7 +1600,7 @@ def test_roi_identity_and_embedding_round_trip(tmp_path):
     labels.update()
 
     path = str(tmp_path / "roi_ids.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, save_embedding_vectors=True)
     with h5py.File(path, "r") as f:
         links = f["identity"]["links"][:]
         assert set(links["owner_type"].tolist()) == {OWNER_ROI}

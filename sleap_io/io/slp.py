@@ -7044,7 +7044,7 @@ def _write_labels_lazy(
     verbose: bool = True,
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
-    save_embedding_vectors: bool = True,
+    save_embedding_vectors: bool = False,
 ) -> None:
     """Write lazy Labels to SLP file using fast path.
 
@@ -7075,9 +7075,9 @@ def _write_labels_lazy(
         preserve_unknown: If `True`, top-level HDF5 datasets/groups in the source
             file not recognized by sleap-io are carried over into the saved file.
             See `write_labels`.
-        save_embedding_vectors: If `True` (the default), write attached re-ID
-            appearance embeddings (the `/embeddings` group). If `False`, skip them
-            while still writing identity links. See `write_labels`.
+        save_embedding_vectors: If `False` (the default), skip the `/embeddings`
+            group while still writing identity links. Set `True` to also write the
+            attached re-ID appearance embeddings. See `write_labels`.
 
     Raises:
         ValueError: If labels is not lazy.
@@ -7276,7 +7276,7 @@ def write_labels(
     progress_callback: Callable[[int, int], bool] | None = None,
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
-    save_embedding_vectors: bool = True,
+    save_embedding_vectors: bool = False,
 ):
     """Write a SLEAP labels file.
 
@@ -7329,11 +7329,12 @@ def write_labels(
             version (which would otherwise drop them, since saving rebuilds the file
             from the in-memory model). Default `False`. Best-effort: requires the
             source file to still exist and be readable HDF5.
-        save_embedding_vectors: If `True` (the default), write attached re-ID appearance
-            embeddings (the `/embeddings` group). If `False`, skip them -- appearance
-            vectors are large on disk, so a producer may persist only the identity
-            *links* (`/identity/links`, always written) while keeping the vectors in
-            memory. Distinct from `embed`, which embeds *video frames*.
+        save_embedding_vectors: If `False` (the default), skip the `/embeddings`
+            group -- appearance vectors are large on disk, so only the identity
+            *links* (`/identity/links`, always written) are persisted by default,
+            keeping the vectors in memory. Set `True` to also write the attached
+            re-ID appearance embeddings. Off by default, mirroring `embed` (which
+            embeds *video frames*).
     """
     # Fast path for lazy labels (avoids materializing frames/instances)
     # Supported for simple embed modes: None, False, "source"

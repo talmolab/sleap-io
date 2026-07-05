@@ -1727,7 +1727,7 @@ def test_lazy_embeddings_round_trip(tmp_path):
     labels.update()
 
     path = str(tmp_path / "lazy_embeddings.slp")
-    sio.save_slp(labels, path)
+    sio.save_slp(labels, path, save_embedding_vectors=True)
 
     lazy = sio.load_slp(path, lazy=True)
     assert lazy.is_lazy
@@ -1791,13 +1791,13 @@ def test_lazy_save_persists_identities_and_embeddings(tmp_path):
 
     # Save eagerly, then load lazily.
     a = str(tmp_path / "a.slp")
-    sio.save_slp(labels, a)
+    sio.save_slp(labels, a, save_embedding_vectors=True)
     lazy = sio.load_slp(a, lazy=True)
     assert lazy.is_lazy
 
     # Save the LAZY labels (exercises the fast-path writer) and reload eagerly.
     b = str(tmp_path / "b.slp")
-    sio.save_slp(lazy, b)
+    sio.save_slp(lazy, b, save_embedding_vectors=True)
 
     # The fast path must not have materialized: lazy labels stay lazy after save.
     assert lazy.is_lazy
