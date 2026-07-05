@@ -15,8 +15,6 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
-from sleap_io.model.embedding import EmbeddingMixin
-
 if TYPE_CHECKING:
     from shapely.geometry import Polygon
     from shapely.geometry.base import BaseGeometry
@@ -49,7 +47,7 @@ class AnnotationType(IntEnum):
 
 
 @attrs.define(eq=False)
-class ROI(EmbeddingMixin):
+class ROI:
     """A region of interest defined by vector geometry.
 
     ROIs store Shapely geometry objects and optional metadata for associating
@@ -74,8 +72,8 @@ class ROI(EmbeddingMixin):
             identity).
         instance: Optional `Instance` this ROI is associated with. Persisted in
             SLP format (v1.6+) via instance index.
-        embeddings: Mapping from embedding-space name to an `Embedding` describing
-            this detection's appearance for re-identification. Empty by default.
+        identity_embedding: Optional `Embedding` describing this detection's
+            appearance for re-identification. ``None`` by default.
 
     Notes:
         ROIs use identity-based equality (two ROI objects are only equal if they
@@ -104,7 +102,7 @@ class ROI(EmbeddingMixin):
     identity: "Identity | None" = attrs.field(default=None)
     identity_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
-    embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
+    identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
 
     # Private: deferred instance index for lazy loading. When ROIs are read
     # from a file without materialized instances (e.g., lazy mode), this stores
@@ -336,6 +334,7 @@ class ROI(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
         )
         if self.is_predicted:
@@ -387,6 +386,7 @@ class ROI(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -449,6 +449,7 @@ class ROI(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -487,6 +488,7 @@ class ROI(EmbeddingMixin):
                     tracking_score=self.tracking_score,
                     identity=self.identity,
                     identity_score=self.identity_score,
+                    identity_embedding=self.identity_embedding,
                     instance=self.instance,
                     **extra,
                 )

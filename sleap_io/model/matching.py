@@ -8,7 +8,7 @@ Key features:
 - Skeleton matching: exact, structure-based, overlap, and subset matching
 - Instance matching: spatial proximity, track identity, and bounding box IoU
 - Track matching: by name or object identity
-- Identity matching: by stable uuid, name, or object identity
+- Identity matching: by name or object identity
 - Video matching: path, basename, content, and auto matching
 
 Video matching supports path-based, filename-based, content-based, and
@@ -79,13 +79,11 @@ class IdentityMatchMethod(str, Enum):
     """Methods for matching global identities.
 
     Attributes:
-        UUID: Match identities by their stable `uuid` key, which survives
-            serialization and cross-file merges (correctness-first default).
-        NAME: Match identities by their `name` attribute.
+        NAME: Match identities by their `name` attribute, which survives
+            serialization and cross-file merges (default).
         IDENTITY: Match identities by Python object identity (same object).
     """
 
-    UUID = "uuid"
     NAME = "name"
     IDENTITY = "identity"
 
@@ -895,12 +893,12 @@ class IdentityMatcher:
     Attributes:
         method: The matching method to use. Can be an IdentityMatchMethod enum
             value or a string that will be converted to the enum. Default is
-            UUID (matches by the stable cross-file `uuid` key; correctness-first).
-            Use NAME to match by identity name.
+            NAME (matches by the identity `name`, which survives serialization
+            and cross-file merges).
     """
 
     method: IdentityMatchMethod | str = attrs.field(
-        default=IdentityMatchMethod.UUID,
+        default=IdentityMatchMethod.NAME,
         converter=lambda x: IdentityMatchMethod(x) if isinstance(x, str) else x,
     )
 
@@ -1273,7 +1271,6 @@ IDENTITY_INSTANCE_MATCHER = InstanceMatcher(method=InstanceMatchMethod.IDENTITY)
 NAME_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.NAME)
 IDENTITY_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.IDENTITY)
 
-UUID_IDENTITY_MATCHER = IdentityMatcher(method=IdentityMatchMethod.UUID)
 NAME_IDENTITY_MATCHER = IdentityMatcher(method=IdentityMatchMethod.NAME)
 
 AUTO_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.AUTO)

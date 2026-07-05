@@ -221,7 +221,7 @@ def save_slp(
             skip the `/embeddings` group entirely -- appearance vectors are large
             on disk, and a producer may want only the identity *links* persisted
             while keeping the vectors in memory (e.g. to build identity
-            prototypes). Identity links (`/identity_links`) are written regardless.
+            prototypes). Identity links (`/identity/links`) are written regardless.
     """
     from sleap_io.io import slp
 

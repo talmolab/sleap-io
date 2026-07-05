@@ -842,7 +842,7 @@ class Labels:
             new_tracks = [deepcopy(t) for t in self.tracks]
             # Identities are index-referenced by the store's per-instance maps, so
             # deep-copying preserves index alignment while keeping the catalog
-            # (and its prototype embeddings) independent.
+            # independent.
             new_identities = [deepcopy(i) for i in self.identities]
 
             # Update store references
@@ -918,37 +918,29 @@ class Labels:
                 self.identities.append(ann.identity)
 
     def _collect_identities(self):
-        """Register every detection's `Identity` in the catalog, deduped by uuid.
+        """Register every detection's `Identity` in the catalog.
 
         Called at save time so a producer that sets an `identity` on any detection
         (instance / mask / centroid / bbox / ROI) without also registering it in
-        ``self.identities`` does not silently drop the link on write. Unlike the
-        build-path collectors (object-identity dedup), this dedupes by the stable
-        cross-file ``uuid``: any pre-existing uuid-duplicate catalog entries are
-        first collapsed (the first per uuid is kept), then every detection identity
-        is registered via `add_identity` (uuid match). The on-disk link resolves by
-        uuid, so all detections sharing a uuid point at the one canonical entry.
-        Mutates ``self.identities`` (eager labels only).
+        ``self.identities`` does not silently drop the link on write. Deduplication
+        is by object identity (like the build-path collectors and `Labels.tracks`),
+        using an ``id()``-keyed set so this stays O(number of detections) even with
+        a large catalog. Mutates ``self.identities`` (eager labels only).
         """
-        # Collapse any uuid-duplicate catalog entries (keep first seen per uuid).
-        seen: set[str] = set()
-        deduped: list[Identity] = []
-        for ident in self.identities:
-            if ident.uuid not in seen:
-                seen.add(ident.uuid)
-                deduped.append(ident)
-        self.identities[:] = deduped
+        seen: set[int] = {id(ident) for ident in self.identities}
+
+        def register(identity: "Identity | None") -> None:
+            if identity is not None and id(identity) not in seen:
+                seen.add(id(identity))
+                self.identities.append(identity)
 
         for lf in self.labeled_frames:
             for inst in lf:
-                if inst.identity is not None:
-                    self.add_identity(inst.identity)
+                register(inst.identity)
             for ann in (*lf.masks, *lf.centroids, *lf.bboxes, *lf.rois):
-                if ann.identity is not None:
-                    self.add_identity(ann.identity)
+                register(ann.identity)
         for roi in self.static_rois:
-            if roi.identity is not None:
-                self.add_identity(roi.identity)
+            register(roi.identity)
         self._collect_session_identities()
 
     def _collect_session_identities(self):
@@ -2508,57 +2500,6 @@ class Labels:
         self.videos.append(video)
         return video
 
-    def add_identity(self, identity: Identity, match: str = "uuid") -> Identity:
-        """Add an `Identity` to the catalog, deduping by the given match method.
-
-        Idempotent registration helper for `Labels.identities` (mirrors
-        `add_video`). Because `Identity` is ``eq=False`` (object-identity
-        equality), the plain catalog list does not dedup by the stable cross-file
-        ``uuid``, so a producer attaching one shared `Identity` to many detections
-        must funnel through this method to avoid catalog duplication.
-
-        Args:
-            identity: The identity to register.
-            match: Matching method passed to `Identity.matches` -- one of
-                ``"uuid"`` (default; the canonical cross-file key), ``"name"``, or
-                ``"identity"`` (Python object identity). This selects a single
-                method; it is not a uuid-then-name fallback chain.
-
-        Returns:
-            The canonical `Identity` to use: the pre-existing catalog entry if one
-            matches, otherwise the input ``identity`` (now appended).
-        """
-        for existing in self.identities:
-            if existing.matches(identity, method=match):
-                return existing
-        self.identities.append(identity)
-        return identity
-
-    def get_identity(
-        self, *, uuid: str | None = None, name: str | None = None
-    ) -> Identity | None:
-        """Find an `Identity` in the catalog by ``uuid`` or ``name``.
-
-        Args:
-            uuid: The stable ``uuid`` to look up. Mutually exclusive with ``name``.
-            name: The ``name`` to look up. Mutually exclusive with ``uuid``. Names
-                are not required to be unique, so the first match is returned.
-
-        Returns:
-            The first matching `Identity`, or ``None`` if none matches.
-
-        Raises:
-            ValueError: If neither or both of ``uuid`` / ``name`` are provided.
-        """
-        if (uuid is None) == (name is None):
-            raise ValueError("Provide exactly one of `uuid` or `name`.")
-        for identity in self.identities:
-            if uuid is not None and identity.uuid == uuid:
-                return identity
-            if name is not None and identity.name == name:
-                return identity
-        return None
-
     def replace_videos(
         self,
         old_videos: list[Video] | None = None,
@@ -3557,11 +3498,11 @@ class Labels:
                 meaningful (e.g. user-assigned identities or identity-classification
                 model outputs).
             identity: Global `Identity` catalog matching method. Can be a string
-                ("uuid", "name") or an IdentityMatcher object. Default is "uuid",
-                which dedupes the identity catalog by the stable cross-file `uuid`
-                key so the same animal across files collapses to one canonical
-                `Identity`. Pass "name" to dedupe by name instead. Per-instance
-                identity links always join by `uuid`.
+                ("name") or an IdentityMatcher object. Default is "name", which
+                dedupes the identity catalog by `name` so the same animal across
+                files collapses to one canonical `Identity`. Pass an
+                `IdentityMatcher` with method "identity" to dedupe by object
+                identity instead.
             frame: Frame merge strategy. One of "auto", "keep_original",
                 "keep_new", "keep_both", "update_tracks", "replace_predictions".
                 Default is "auto".
@@ -3609,7 +3550,7 @@ class Labels:
 
         import sleap_io
         from sleap_io.model.matching import (
-            UUID_IDENTITY_MATCHER,
+            NAME_IDENTITY_MATCHER,
             ConflictResolution,
             ErrorMode,
             IdentityMatcher,
@@ -3860,20 +3801,18 @@ class Labels:
                 other, video_map, track_map, track_matcher, instance_matcher
             )
 
-            # Step 3b: Match and merge identities (dedupe by stable uuid).
-            # Mirrors track matching above, but keyed by ``Identity.uuid`` so the
-            # same animal across files maps to a single canonical catalog object.
-            # ``identity_map`` is threaded into ``_map_instance`` so per-instance
+            # Step 3b: Match and merge identities (dedupe by name).
+            # Mirrors track matching above: the same animal across files maps to a
+            # single canonical catalog object. ``identity_map`` (keyed by the source
+            # identity's object id) is threaded into ``_map_instance`` so per-instance
             # identities point at the deduped catalog entry instead of a copy.
-            # The matcher controls how catalog entries are deduped; the map is
-            # always keyed by ``Identity.uuid`` (the per-instance join key).
             if isinstance(identity, IdentityMatcher):
                 identity_matcher = identity
             elif isinstance(identity, str):
                 identity_matcher = IdentityMatcher(method=identity)
             else:
-                identity_matcher = UUID_IDENTITY_MATCHER
-            identity_map: dict[str, Identity] = {}
+                identity_matcher = NAME_IDENTITY_MATCHER
+            identity_map: dict[int, Identity] = {}
             for other_identity in other.identities:
                 matched_identity = None
                 for self_identity in self.identities:
@@ -3882,11 +3821,11 @@ class Labels:
                         break
 
                 if matched_identity is None:
-                    # Add new identity if no uuid match.
+                    # Add new identity if no match.
                     self.identities.append(other_identity)
                     matched_identity = other_identity
 
-                identity_map[other_identity.uuid] = matched_identity
+                identity_map[id(other_identity)] = matched_identity
 
             # Step 4: Merge frames
             total_frames = len(other.labeled_frames)
@@ -4213,7 +4152,7 @@ class Labels:
         instance: Instance | PredictedInstance,
         skeleton_map: dict[Skeleton, Skeleton],
         track_map: dict[Track, Track],
-        identity_map: dict[str, Identity] | None = None,
+        identity_map: dict[int, Identity] | None = None,
         memo: dict[int, Instance | PredictedInstance] | None = None,
     ) -> Instance | PredictedInstance:
         """Map an instance to use mapped skeleton, track, and identity.
@@ -4222,12 +4161,12 @@ class Labels:
             instance: Instance to map.
             skeleton_map: Dictionary mapping old skeletons to new ones.
             track_map: Dictionary mapping old tracks to new ones.
-            identity_map: Optional mapping from ``Identity.uuid`` to the canonical
-                (deduped) `Identity` in the merged catalog. When provided, the
-                instance's identity is resolved through this map so that the same
-                animal across files points at a single catalog object. The
-                instance's ``identity_score``, ``embeddings``, and ``categories``
-                are always copied.
+            identity_map: Optional mapping from the source `Identity`'s object id to
+                the canonical (deduped) `Identity` in the merged catalog. When
+                provided, the instance's identity is resolved through this map so
+                that the same animal across files points at a single catalog object.
+                The instance's ``identity_score`` and ``identity_embedding`` are
+                always copied.
             memo: Optional mapping from the id of the source instance to the new
                 instance, mutated in place. Used to repair ``from_predicted``
                 links so a remapped user instance references the remapped source
@@ -4249,11 +4188,12 @@ class Labels:
         mapped_track = (
             track_map.get(instance.track, instance.track) if instance.track else None
         )
-        # Resolve the identity through the catalog dedup map (keyed by uuid) so the
-        # same animal across merged files maps to one canonical Identity. Falls back
-        # to the instance's own identity when no map/identity is present.
+        # Resolve the identity through the catalog dedup map (keyed by the source
+        # identity's object id) so the same animal across merged files maps to one
+        # canonical Identity. Falls back to the instance's own identity when no
+        # map/identity is present.
         mapped_identity = (
-            identity_map.get(instance.identity.uuid, instance.identity)
+            identity_map.get(id(instance.identity), instance.identity)
             if (instance.identity is not None and identity_map)
             else instance.identity
         )
@@ -4283,8 +4223,7 @@ class Labels:
                 from_predicted=instance.from_predicted,
                 identity=mapped_identity,
                 identity_score=instance.identity_score,
-                embeddings=dict(instance.embeddings),
-                categories=dict(instance.categories),
+                identity_embedding=instance.identity_embedding,
             )
         else:
             new_instance = Instance(
@@ -4295,8 +4234,7 @@ class Labels:
                 from_predicted=instance.from_predicted,
                 identity=mapped_identity,
                 identity_score=instance.identity_score,
-                embeddings=dict(instance.embeddings),
-                categories=dict(instance.categories),
+                identity_embedding=instance.identity_embedding,
             )
         if memo is not None:
             memo[id(instance)] = new_instance

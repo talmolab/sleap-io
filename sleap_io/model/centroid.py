@@ -20,8 +20,6 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
-from sleap_io.model.embedding import EmbeddingMixin
-
 if TYPE_CHECKING:
     from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.embedding import Embedding
@@ -98,7 +96,7 @@ def _geometric_median(pts: np.ndarray) -> tuple[float, float]:
 
 
 @attrs.define(eq=False)
-class Centroid(EmbeddingMixin):
+class Centroid:
     """A point representing the center of an object.
 
     Supports optional 3D coordinates, track/instance metadata,
@@ -123,8 +121,8 @@ class Centroid(EmbeddingMixin):
         name: Human-readable name (e.g., ``"ID43008"``).
         source: How the centroid was computed (e.g., ``"center_of_mass"``,
             ``"trackmate"``).
-        embeddings: Mapping from embedding-space name to an `Embedding` describing
-            this detection's appearance for re-identification. Empty by default.
+        identity_embedding: Optional `Embedding` describing this detection's
+            appearance for re-identification. ``None`` by default.
 
     Notes:
         Centroids use identity-based equality (two Centroid objects are only
@@ -145,7 +143,7 @@ class Centroid(EmbeddingMixin):
     category: str = attrs.field(default="")
     name: str = attrs.field(default="")
     source: str = attrs.field(default="")
-    embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
+    identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
 
     # Private: deferred instance index for lazy loading.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
@@ -220,6 +218,7 @@ class Centroid(EmbeddingMixin):
                 tracking_score=self.tracking_score,
                 identity=self.identity,
                 identity_score=self.identity_score,
+                identity_embedding=self.identity_embedding,
             )
         else:
             return Instance.from_numpy(
@@ -229,6 +228,7 @@ class Centroid(EmbeddingMixin):
                 tracking_score=self.tracking_score,
                 identity=self.identity,
                 identity_score=self.identity_score,
+                identity_embedding=self.identity_embedding,
             )
 
     def to_instance(
@@ -375,6 +375,7 @@ class Centroid(EmbeddingMixin):
             tracking_score=instance.tracking_score,
             identity=instance.identity,
             identity_score=instance.identity_score,
+            identity_embedding=instance.identity_embedding,
             instance=instance,
             source=source,
         )
@@ -492,6 +493,7 @@ class Centroid(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -539,6 +541,7 @@ class Centroid(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -591,6 +594,7 @@ class Centroid(EmbeddingMixin):
                 tracking_score=self.tracking_score,
                 identity=self.identity,
                 identity_score=self.identity_score,
+                identity_embedding=self.identity_embedding,
                 instance=self.instance,
                 category=self.category,
                 name=self.name,

@@ -17,7 +17,7 @@ The pose data model is built around four key types:
 - **[`Track`][sleap_io.Track]** is the **video-local identity**: links the same animal across frames of one recording.
 - **[`Identity`](3d.md#identity)** is the **global identity**: a persistent, cross-session animal label assigned via `Instance.identity` (with `identity_score`), distinct from the ephemeral `Track`.
 
-A `Skeleton` is shared across all instances in a dataset. Each `Instance` references a `Skeleton` to know which landmarks it contains, optionally a `Track` (and a global `Identity`) to indicate which animal it belongs to, optionally re-ID [`embeddings`](embedding.md) describing its appearance, and optionally [`categories`](categories.md) tagging it with discrete attributes (e.g. `sex`, `strain`).
+A `Skeleton` is shared across all instances in a dataset. Each `Instance` references a `Skeleton` to know which landmarks it contains, optionally a `Track` (and a global `Identity`) to indicate which animal it belongs to, and optionally a re-ID [`identity_embedding`](embedding.md) describing its appearance.
 
 ---
 
@@ -402,8 +402,7 @@ classDiagram
         +Track track
         +Identity identity
         +float identity_score
-        +dict~str,Embedding~ embeddings
-        +dict~str,object~ categories
+        +Embedding identity_embedding
         +numpy() ndarray
         +n_visible: int
         +is_empty: bool
