@@ -997,34 +997,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="categories/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Categories
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -2569,34 +2541,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../reference/sleap_io/model/categories/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    categories
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../reference/sleap_io/model/centroid/" class="md-nav__link">
         
   
@@ -3581,7 +3525,7 @@ Static, video-level ROIs (with no frame association) live separately on
         +Track track
         +Identity identity
         +float identity_score
-        +dict~str,Embedding~ embeddings
+        +Embedding identity_embedding
     }
     class PredictedInstance:::poses {
         +float score
@@ -3639,7 +3583,7 @@ Static, video-level ROIs (with no frame association) live separately on
     }
     class Identity:::threed {
         +str name
-        +str color
+        +dict~str,str~ metadata
     }
     class Instance3D:::threed {
         +ndarray points
