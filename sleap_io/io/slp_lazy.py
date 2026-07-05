@@ -90,13 +90,9 @@ class LazyDataStore:
     _instance_identities: dict = attrs.field(
         factory=dict, repr=False, alias="instance_identities"
     )
-    # Per-instance embeddings (format 2.6+): instance_id -> {space: Embedding}.
+    # Per-instance re-ID embeddings (format 2.5+): instance_id -> Embedding.
     _instance_embeddings: dict = attrs.field(
         factory=dict, repr=False, alias="instance_embeddings"
-    )
-    # Per-instance categories (format 2.7+): instance_id -> {dim: value}.
-    _instance_categories: dict = attrs.field(
-        factory=dict, repr=False, alias="instance_categories"
     )
 
     def __attrs_post_init__(self) -> None:
@@ -176,12 +172,7 @@ class LazyDataStore:
             tracks=self.tracks,  # Share references (canonical objects)
             identities=self.identities,  # Share references (canonical objects)
             instance_identities=dict(self._instance_identities),
-            instance_embeddings={
-                k: dict(v) for k, v in self._instance_embeddings.items()
-            },
-            instance_categories={
-                k: dict(v) for k, v in self._instance_categories.items()
-            },
+            instance_embeddings=dict(self._instance_embeddings),
             format_id=self.format_id,
             source_path=self._source_path,
             negative_frames=self._negative_frames.copy(),
@@ -326,21 +317,10 @@ class LazyDataStore:
                     identity = self.identities[identity_idx]
                     identity_score = id_score
 
-        # Resolve optional per-instance embeddings (format 2.6+). A fresh dict per
-        # instance so mutations don't leak back into the shared lazy store.
-        embeddings = (
-            dict(self._instance_embeddings.get(instance_id, {}))
-            if self._instance_embeddings
-            else {}
-        )
-
-        # Resolve optional per-instance categories (format 2.7+). A fresh dict per
-        # instance so mutations don't leak back into the shared lazy store.
-        categories = (
-            dict(self._instance_categories.get(instance_id, {}))
-            if self._instance_categories
-            else {}
-        )
+        # Resolve the optional per-instance re-ID embedding (format 2.5+). The
+        # stored `Embedding` is shared by reference; its vector array is treated as
+        # immutable.
+        identity_embedding = self._instance_embeddings.get(instance_id)
 
         if instance_type == InstanceType.USER:
             pts_data = self.points_data[point_id_start:point_id_end]
@@ -355,8 +335,7 @@ class LazyDataStore:
                 tracking_score=float(tracking_score),
                 identity=identity,
                 identity_score=identity_score,
-                embeddings=embeddings,
-                categories=categories,
+                identity_embedding=identity_embedding,
             )
         else:  # PREDICTED
             pts_data = self.pred_points_data[point_id_start:point_id_end]
@@ -372,8 +351,7 @@ class LazyDataStore:
                 tracking_score=float(tracking_score),
                 identity=identity,
                 identity_score=identity_score,
-                embeddings=embeddings,
-                categories=categories,
+                identity_embedding=identity_embedding,
             )
 
     def _make_points_array(

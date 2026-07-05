@@ -1648,32 +1648,30 @@ def _print_tracks_summary(labels: Labels) -> None:
 
 
 def _print_embeddings_summary(labels: Labels) -> None:
-    """Print a per-instance embedding summary (inline).
+    """Print a per-detection re-ID embedding summary (inline).
 
-    Reports the number of instances carrying embeddings and the set of embedding
-    space names. Skipped for lazy labels, since scanning instances would force a
-    full materialization.
+    Reports the number of instances carrying an ``identity_embedding``. Skipped for
+    lazy labels, since scanning instances would force a full materialization.
     """
     # Iterating instances on lazy labels would force materialization; only
     # summarize embeddings when the labeled frames are readily available.
     if labels.is_lazy:
         return
 
-    n_with_embeddings = 0
-    space_names: set[str] = set()
-    for lf in labels.labeled_frames:
-        for inst in lf.instances:
-            if inst.embeddings:
-                n_with_embeddings += 1
-                space_names.update(inst.embeddings.keys())
-
+    n_with_embeddings = sum(
+        1
+        for lf in labels.labeled_frames
+        for inst in lf.instances
+        if inst.identity_embedding is not None
+    )
     if n_with_embeddings == 0:
         return
 
     console.print()
-    console.print(f"[bold]Embeddings[/] ({n_with_embeddings} instances)")
-    spaces = ", ".join(sorted(space_names))
-    console.print(f"  [dim]Spaces:[/] {spaces}")
+    console.print(
+        f"[bold]Embeddings[/] ({n_with_embeddings} instance"
+        f"{'s' if n_with_embeddings != 1 else ''} with an identity embedding)"
+    )
 
 
 def _print_tracks_details(labels: Labels) -> None:
@@ -3011,8 +3009,8 @@ def unsplit(
 )
 @click.option(
     "--identity",
-    type=click.Choice(["uuid", "name"]),
-    default="uuid",
+    type=click.Choice(["name", "identity"]),
+    default="name",
     show_default=True,
     help="Identity matching method for deduping the identity catalog.",
 )
@@ -3106,8 +3104,8 @@ def merge(
       • iou: Match by bounding box overlap
 
     [dim]Identity:[/] How to dedupe the global identity catalog
-      • uuid: Match identities by stable UUID key [default]
-      • name: Match identities by name
+      • name: Match identities by name [default]
+      • identity: Match identities by object identity
 
     [dim]Examples:[/]
 

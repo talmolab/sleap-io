@@ -36,6 +36,7 @@ from sleap_io.io.cli import (
     _run_subprocess_with_progress,
     cli,
 )
+from sleap_io.model.embedding import Embedding
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
@@ -64,17 +65,15 @@ def _data_path(rel: str) -> Path:
     return root / rel
 
 
-def _make_identity_slp(
-    path: Path, *, with_embeddings: bool = False, color: str | None = "#ff0000"
-) -> Labels:
+def _make_identity_slp(path: Path, *, with_embeddings: bool = False) -> Labels:
     """Write a minimal 2-instance .slp carrying global identities.
 
     Builds one labeled frame with two instances assigned to two `Identity`
-    objects (the first optionally colored). When ``with_embeddings`` is set, the
-    first instance also carries a per-instance ``"reid"`` embedding.
+    objects. When ``with_embeddings`` is set, the first instance also carries a
+    per-instance ``identity_embedding``.
     """
     skeleton = Skeleton(["head", "tail"])
-    id_a = Identity(name="mouse_A", color=color)
+    id_a = Identity(name="mouse_A")
     id_b = Identity(name="mouse_B")
     video = Video(filename="dummy.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
     inst_a = Instance.from_numpy(
@@ -84,7 +83,7 @@ def _make_identity_slp(
         np.array([[30, 30], [40, 40]]), skeleton=skeleton, identity=id_b
     )
     if with_embeddings:
-        inst_a.set_embedding(np.ones(8, dtype="float32"), name="reid")
+        inst_a.identity_embedding = Embedding(vector=np.ones(8, dtype="float32"))
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst_a, inst_b])
     labels = Labels(
         labeled_frames=[lf],
@@ -188,7 +187,7 @@ def test_show_reports_identities(tmp_path):
 
 
 def test_show_reports_embeddings(tmp_path):
-    """`sio show --no-lazy` summarizes per-instance embedding spaces."""
+    """`sio show --no-lazy` summarizes per-instance identity embeddings."""
     slp_path = tmp_path / "ids_emb.slp"
     _make_identity_slp(slp_path, with_embeddings=True)
 
@@ -199,8 +198,7 @@ def test_show_reports_embeddings(tmp_path):
     )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
-    assert "Embeddings (1 instances)" in out
-    assert "reid" in out
+    assert "Embeddings (1 instance with an identity embedding)" in out
 
 
 def test_show_embeddings_skipped_when_absent(tmp_path):
@@ -4243,9 +4241,9 @@ def test_merge_all_options(tmp_path, slp_typical):
     assert "Merged 2 files:" in output
 
 
-@pytest.mark.parametrize("method", ["uuid", "name"])
+@pytest.mark.parametrize("method", ["name", "identity"])
 def test_merge_identity_option_accepted(method, tmp_path):
-    """`sio merge --identity {uuid,name}` is accepted and runs."""
+    """`sio merge --identity {name,identity}` is accepted and runs."""
     a = tmp_path / "a.slp"
     b = tmp_path / "b.slp"
     _make_identity_slp(a)
@@ -5101,11 +5099,11 @@ def test_render_single_frame_masks_only_no_skeleton(specifier, tmp_path):
 def test_render_color_by_identity(tmp_path):
     """`sio render --color-by identity` is accepted and renders an image.
 
-    The first identity is colored (``#ff0000``), exercising the
-    ``Identity.color`` preference path; the second falls back to the palette.
+    Each identity is colored by its index in ``Labels.identities`` via the
+    palette (mirroring ``color_by="track"``).
     """
     slp_path = tmp_path / "ids.slp"
-    _make_identity_slp(slp_path, color="#ff0000")
+    _make_identity_slp(slp_path)
 
     output_path = tmp_path / "frame.png"
     runner = CliRunner()

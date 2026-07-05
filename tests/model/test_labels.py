@@ -172,54 +172,6 @@ def test_append_extend():
     assert labels.tracks == [new_track, new_track2]
 
 
-def test_add_identity_dedupes_by_uuid():
-    """add_identity is idempotent and returns the canonical catalog object."""
-    labels = Labels()
-    id_a = Identity(name="mouse_A")
-    assert labels.add_identity(id_a) is id_a
-    assert labels.identities == [id_a]
-
-    # A distinct object sharing the uuid returns the canonical entry, no dup.
-    id_a_dup = Identity(name="mouse_A_renamed", uuid=id_a.uuid)
-    assert labels.add_identity(id_a_dup) is id_a
-    assert labels.identities == [id_a]
-
-    # A different uuid is appended.
-    id_b = Identity(name="mouse_B")
-    assert labels.add_identity(id_b) is id_b
-    assert labels.identities == [id_a, id_b]
-
-
-def test_add_identity_match_name():
-    """add_identity(match="name") dedupes by name instead of uuid."""
-    labels = Labels()
-    id_a = Identity(name="mouse_A")
-    labels.add_identity(id_a)
-    # Same name, different uuid -> returns existing under name matching.
-    other = Identity(name="mouse_A")
-    assert labels.add_identity(other, match="name") is id_a
-    assert labels.identities == [id_a]
-
-
-def test_get_identity():
-    """get_identity finds by uuid or name, returns None when absent."""
-    labels = Labels()
-    id_a = Identity(name="mouse_A")
-    id_b = Identity(name="mouse_B")
-    labels.identities.extend([id_a, id_b])
-
-    assert labels.get_identity(uuid=id_b.uuid) is id_b
-    assert labels.get_identity(name="mouse_A") is id_a
-    assert labels.get_identity(uuid="0" * 32) is None
-    assert labels.get_identity(name="nope") is None
-
-    # Exactly one selector is required.
-    with pytest.raises(ValueError):
-        labels.get_identity()
-    with pytest.raises(ValueError):
-        labels.get_identity(uuid=id_a.uuid, name="mouse_A")
-
-
 def test_identities_auto_collected():
     """Test that Labels auto-collects per-instance Identity objects."""
     skel = Skeleton(["A", "B"])
@@ -267,7 +219,10 @@ def test_identities_auto_collected():
     # update() rebuilds from scratch without duplicating.
     labels.update()
     assert labels.identities == [id_a, id_b, id_c]
-    """Structurally-equal, same-order skeletons collapse to one on update."""
+
+
+def test_constructor_dedupes_same_order_skeletons():
+    """Structurally-equal, same-order skeletons collapse to one on construction."""
     skel1 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
     skel2 = Skeleton(nodes=["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
     assert skel1 is not skel2
@@ -4381,11 +4336,13 @@ def test_labels_merge_predicted_instance_mapping():
     assert np.array_equal(mapped_inst.numpy(), inst.numpy())
 
 
-def test_labels_merge_map_instance_preserves_categories():
-    """Test _map_instance copies per-instance categories (independent dict).
+def test_labels_merge_map_instance_preserves_identity():
+    """_map_instance propagates identity, identity_score, and identity_embedding.
 
-    Regression: the merge rebuild copied identity/embeddings but dropped
-    `Instance.categories`, silently losing category labels on a merge.
+    Regression guard: the merge rebuild in `_map_instance` must carry the
+    per-instance re-ID data (identity link, its score, and the appearance
+    embedding) onto the mapped instance, otherwise a merge would silently drop
+    identity annotations.
     """
     skel1 = Skeleton(nodes=["head", "tail"])
     skel2 = Skeleton(nodes=["head", "tail"])
@@ -4393,54 +4350,62 @@ def test_labels_merge_map_instance_preserves_categories():
     labels.skeletons.append(skel1)
     skeleton_map = {skel2: skel1}
 
-    inst = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel2)
-    inst.set_categories({"sex": "M", "probs": [0.2, 0.8]})
+    identity = Identity(name="mouse_A")
+    emb = Embedding(vector=[1.0, 0.0, 0.0])
+    inst = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]),
+        skeleton=skel2,
+        identity=identity,
+        identity_score=0.75,
+        identity_embedding=emb,
+    )
     mapped = labels._map_instance(inst, skeleton_map, {})
-    assert mapped.categories == {"sex": "M", "probs": [0.2, 0.8]}
-    # The mapped dict is independent of the source (shallow-copied).
-    mapped.categories["sex"] = "F"
-    assert inst.categories["sex"] == "M"
+    assert mapped is not inst  # Rebuilt onto the canonical skeleton.
+    assert mapped.skeleton is skel1
+    assert mapped.identity is identity
+    assert mapped.identity_score == 0.75
+    assert mapped.identity_embedding is emb  # Embedding shared, not copied.
+    assert np.array_equal(mapped.identity_embedding.vector, [1.0, 0.0, 0.0])
 
     pred = PredictedInstance.from_numpy(
-        np.array([[1, 1], [2, 2]]), skeleton=skel2, score=0.9
+        np.array([[1, 1], [2, 2]]), skeleton=skel2, score=0.9, identity=identity
     )
-    pred.set_category("view", "top")
     mapped_pred = labels._map_instance(pred, skeleton_map, {})
     assert isinstance(mapped_pred, PredictedInstance)
-    assert mapped_pred.categories == {"view": "top"}
+    assert mapped_pred.identity is identity
 
 
-def test_labels_merge_dedupes_same_uuid_identity():
-    """Merge dedupes same-uuid identities and preserves score/embeddings.
+def test_labels_merge_dedupes_same_name_identity():
+    """Default merge collapses same-named identities and preserves re-ID data.
 
-    The same animal (shared ``uuid``) referenced by two separately-built files
-    must collapse to a single canonical catalog `Identity` after merge, with both
-    instances pointing at it. Per-instance ``identity_score`` and ``embeddings``
-    must survive the rebuild in ``_map_instance``.
+    The same animal (shared ``name``) referenced by two separately-built files
+    must collapse to a single canonical catalog `Identity` after a default merge,
+    with both instances pointing at it. Per-instance ``identity_score`` and
+    ``identity_embedding`` must survive the rebuild in ``_map_instance``.
     """
     skel1 = Skeleton(nodes=["head", "tail"])
     skel2 = Skeleton(nodes=["head", "tail"])  # Same structure -> matched.
     video1 = Video(filename="video1.mp4")
     video2 = Video(filename="video2.mp4")  # Different video -> new frame.
 
-    # Distinct Identity objects that share a stable uuid (same animal).
-    shared_uuid = "a" * 32
-    id1 = Identity(name="mouse_A", uuid=shared_uuid)
-    id2 = Identity(name="mouse_A", uuid=shared_uuid)
+    # Distinct Identity objects that share a name (the same animal across files).
+    id1 = Identity(name="mouse_A")
+    id2 = Identity(name="mouse_A")
+    assert id1 is not id2
 
     inst1 = Instance.from_numpy(
         np.array([[10, 10], [20, 20]]), skeleton=skel1, identity=id1
     )
     labels1 = Labels([LabeledFrame(video=video1, frame_idx=0, instances=[inst1])])
 
-    emb = Embedding(vector=[1.0, 0.0, 0.0], name="reid")
+    emb = Embedding(vector=[1.0, 0.0, 0.0])
     inst2 = Instance.from_numpy(
         np.array([[30, 30], [40, 40]]),
         skeleton=skel2,
         identity=id2,
         identity_score=0.87,
+        identity_embedding=emb,
     )
-    inst2.embeddings["reid"] = emb
     labels2 = Labels([LabeledFrame(video=video2, frame_idx=0, instances=[inst2])])
 
     # Each file independently collected its own identity object.
@@ -4450,7 +4415,7 @@ def test_labels_merge_dedupes_same_uuid_identity():
     video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
     labels1.merge(labels2, video=video_matcher)
 
-    # Deduped to a single canonical catalog identity (no duplicate uuids).
+    # Deduped to a single canonical catalog identity (matched by name).
     assert len(labels1.identities) == 1
     canonical = labels1.identities[0]
     assert canonical is id1  # Existing self identity is canonical.
@@ -4460,24 +4425,24 @@ def test_labels_merge_dedupes_same_uuid_identity():
     assert len(merged_instances) == 2
     assert all(inst.identity is canonical for inst in merged_instances)
 
-    # identity_score and embeddings survived the merge for the incoming instance.
+    # identity_score and identity_embedding survived the merge rebuild.
     incoming = [i for i in merged_instances if i.identity_score == 0.87]
     assert len(incoming) == 1
     inc = incoming[0]
     assert inc is not inst2  # Rebuilt by _map_instance.
-    assert inc.embeddings["reid"] is emb  # Dict shallow-copied; Embedding shared.
-    assert np.array_equal(inc.embeddings["reid"].vector, [1.0, 0.0, 0.0])
+    assert inc.identity_embedding is emb  # Embedding shared, not copied.
+    assert np.array_equal(inc.identity_embedding.vector, [1.0, 0.0, 0.0])
 
 
-def test_labels_merge_keeps_distinct_uuid_identities():
-    """Merge keeps both identities when their uuids differ."""
+def test_labels_merge_keeps_distinct_name_identities():
+    """Default merge keeps identities with distinct names as separate entries."""
     skel1 = Skeleton(nodes=["head", "tail"])
     skel2 = Skeleton(nodes=["head", "tail"])
     video1 = Video(filename="video1.mp4")
     video2 = Video(filename="video2.mp4")
 
-    id1 = Identity(name="mouse_A")  # Auto-generated, distinct uuid.
-    id2 = Identity(name="mouse_B")  # Different uuid.
+    id1 = Identity(name="mouse_A")
+    id2 = Identity(name="mouse_B")  # Different name.
 
     inst1 = Instance.from_numpy(
         np.array([[10, 10], [20, 20]]), skeleton=skel1, identity=id1
@@ -4494,22 +4459,22 @@ def test_labels_merge_keeps_distinct_uuid_identities():
 
     # Both distinct identities appear in the catalog.
     assert len(labels1.identities) == 2
-    assert {i.uuid for i in labels1.identities} == {id1.uuid, id2.uuid}
+    assert {i.name for i in labels1.identities} == {"mouse_A", "mouse_B"}
     assert id1 in labels1.identities
     assert id2 in labels1.identities
 
 
 def test_labels_merge_identity_by_name():
-    """merge(identity="name") dedupes the catalog by name despite distinct uuids."""
+    """merge(identity="name") dedupes the catalog by name across distinct objects."""
     skel1 = Skeleton(nodes=["head", "tail"])
     skel2 = Skeleton(nodes=["head", "tail"])
     video1 = Video(filename="video1.mp4")
     video2 = Video(filename="video2.mp4")
 
-    # Same name, different (auto) uuids — the uuid default would keep both.
+    # Distinct Identity objects that share a name.
     id1 = Identity(name="mouse_A")
     id2 = Identity(name="mouse_A")
-    assert id1.uuid != id2.uuid
+    assert id1 is not id2
 
     inst1 = Instance.from_numpy(
         np.array([[10, 10], [20, 20]]), skeleton=skel1, identity=id1
@@ -4526,6 +4491,35 @@ def test_labels_merge_identity_by_name():
     # Name matching collapses the two into a single canonical catalog entry.
     assert len(labels1.identities) == 1
     assert labels1.identities[0] is id1
+
+
+def test_labels_merge_identity_by_object_identity():
+    """merge(identity="identity") keeps distinct same-named objects separate."""
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+
+    # Same name, but distinct objects: object-identity matching keeps both.
+    id1 = Identity(name="mouse_A")
+    id2 = Identity(name="mouse_A")
+
+    inst1 = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skel1, identity=id1
+    )
+    labels1 = Labels([LabeledFrame(video=video1, frame_idx=0, instances=[inst1])])
+    inst2 = Instance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skel2, identity=id2
+    )
+    labels2 = Labels([LabeledFrame(video=video2, frame_idx=0, instances=[inst2])])
+
+    video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    labels1.merge(labels2, video=video_matcher, identity="identity")
+
+    # Object-identity matching keeps both distinct objects in the catalog.
+    assert len(labels1.identities) == 2
+    assert id1 in labels1.identities
+    assert id2 in labels1.identities
 
 
 def test_update_collects_instance_group_identity():

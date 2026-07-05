@@ -14,8 +14,7 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
-from sleap_io.model.categories import CategoriesMixin
-from sleap_io.model.embedding import Embedding, EmbeddingMixin
+from sleap_io.model.embedding import Embedding
 from sleap_io.model.identity import Identity
 from sleap_io.model.skeleton import Node, Skeleton
 
@@ -395,7 +394,7 @@ class Track:
 
 
 @attrs.define(auto_attribs=True, slots=True, eq=False)
-class Instance(EmbeddingMixin, CategoriesMixin):
+class Instance:
     """This class represents a ground truth instance such as an animal.
 
     An `Instance` has a set of landmarks (points) that correspond to a `Skeleton`. Each
@@ -427,14 +426,9 @@ class Instance(EmbeddingMixin, CategoriesMixin):
             separate from `tracking_score` (short-term tracklet vs long-term identity).
         from_predicted: The `PredictedInstance` (if any) that this instance was
             initialized from. This is used with human-in-the-loop workflows.
-        embeddings: A mapping from embedding-space name (e.g. ``"reid"``) to an
-            `Embedding` describing this instance's appearance for re-identification.
-            Empty by default. Use the `embedding` accessor / `set_embedding` helper
-            for the common single-vector case.
-        categories: A mapping from category dimension name (e.g. ``"sex"``) to a
-            categorical label (typically a string). Empty by default. Use the
-            `cat` alias / `set_category` helper for read/write access. Distinct
-            from the singular scalar ``category`` on geometry primitives.
+        identity_embedding: An optional `Embedding` describing this instance's
+            appearance for re-identification (e.g. a vector produced by a re-ID
+            model). ``None`` by default.
     """
 
     points: PointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
@@ -444,8 +438,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
     identity: Identity | None = None
     identity_score: float | None = None
     from_predicted: "PredictedInstance | None" = None
-    embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
-    categories: dict = attrs.field(factory=dict, repr=False)
+    identity_embedding: Embedding | None = attrs.field(default=None, repr=False)
 
     @classmethod
     def empty(
@@ -455,6 +448,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
         tracking_score: float | None = None,
         identity: Identity | None = None,
         identity_score: float | None = None,
+        identity_embedding: Embedding | None = None,
         from_predicted: "PredictedInstance | None" = None,
     ) -> "Instance":
         """Create an empty instance with no points.
@@ -469,6 +463,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
                 track or if the track was assigned manually.
             identity: An optional global `Identity` for this instance.
             identity_score: The score associated with the `identity` assignment.
+            identity_embedding: An optional re-ID `Embedding` for this instance.
             from_predicted: The `PredictedInstance` (if any) that this instance was
                 initialized from. This is used with human-in-the-loop workflows.
 
@@ -485,6 +480,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
             tracking_score=tracking_score,
             identity=identity,
             identity_score=identity_score,
+            identity_embedding=identity_embedding,
             from_predicted=from_predicted,
         )
 
@@ -514,6 +510,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
         tracking_score: float | None = None,
         identity: Identity | None = None,
         identity_score: float | None = None,
+        identity_embedding: Embedding | None = None,
         from_predicted: "PredictedInstance | None" = None,
     ) -> "Instance":
         """Create an instance object from a numpy array.
@@ -541,6 +538,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
                 track or if the track was assigned manually.
             identity: An optional global `Identity` for this instance.
             identity_score: The score associated with the `identity` assignment.
+            identity_embedding: An optional re-ID `Embedding` for this instance.
             from_predicted: The `PredictedInstance` (if any) that this instance was
                 initialized from. This is used with human-in-the-loop workflows.
 
@@ -554,6 +552,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
             tracking_score=tracking_score,
             identity=identity,
             identity_score=identity_score,
+            identity_embedding=identity_embedding,
             from_predicted=from_predicted,
         )
 
@@ -621,7 +620,8 @@ class Instance(EmbeddingMixin, CategoriesMixin):
         Delegates to ``Centroid.from_pose()``. A ``PredictedInstance`` yields a
         ``PredictedCentroid`` carrying its ``score``; any other instance yields a
         ``UserCentroid``. Metadata (``track``, ``tracking_score``, ``identity``,
-        ``identity_score``, ``instance=self``) is propagated.
+        ``identity_score``, ``identity_embedding``, ``instance=self``) is
+        propagated.
 
         Args:
             method: Computation method (``"center_of_mass"``, ``"bbox_center"``,
@@ -670,7 +670,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
         A ``PredictedInstance`` yields a ``PredictedBoundingBox`` carrying its
         ``score``; any other instance yields a ``UserBoundingBox``. Metadata
         (``track``, ``tracking_score``, ``identity``, ``identity_score``,
-        ``instance=self``) is propagated.
+        ``identity_embedding``, ``instance=self``) is propagated.
 
         Args:
             mode: ``"tight"`` to fit the visible points, or ``"centered"`` to
@@ -761,6 +761,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self,
         )
         if isinstance(self, PredictedInstance):
@@ -780,8 +781,8 @@ class Instance(EmbeddingMixin, CategoriesMixin):
 
         A ``PredictedInstance`` yields a ``PredictedROI`` carrying its ``score``;
         any other instance yields a ``UserROI``. Metadata (``track``,
-        ``tracking_score``, ``identity``, ``identity_score``, ``instance=self``)
-        is propagated.
+        ``tracking_score``, ``identity``, ``identity_score``,
+        ``identity_embedding``, ``instance=self``) is propagated.
 
         Args:
             method: ``"shapes"`` to union buffered node points and/or edge
@@ -837,6 +838,7 @@ class Instance(EmbeddingMixin, CategoriesMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self,
         )
         if isinstance(self, PredictedInstance):
@@ -1078,13 +1080,13 @@ class Instance(EmbeddingMixin, CategoriesMixin):
 
         Notes:
             Global `Identity` takes precedence: if both instances carry an
-            `Identity`, they match when their `uuid`s match (which survives
+            `Identity`, they match when their `name`s match (which survives
             serialization and cross-file merges). Otherwise this falls back to
             the ephemeral `Track`, where instances match only when they share the
             same `Track` object (by object identity, not just by name).
         """
         if self.identity is not None and other.identity is not None:
-            return self.identity.matches(other.identity, method="uuid")
+            return self.identity.matches(other.identity, method="name")
         if self.track is None or other.track is None:
             return False
         return self.track is other.track
@@ -1187,10 +1189,8 @@ class PredictedInstance(Instance):
         identity: An optional global `Identity` (see `Instance.identity`).
         identity_score: The score associated with the `identity` assignment (see
             `Instance.identity_score`).
-        embeddings: A mapping from embedding-space name to an `Embedding` (see
-            `Instance.embeddings`).
-        categories: A mapping from category dimension name to a categorical label
-            (see `Instance.categories`).
+        identity_embedding: An optional re-ID `Embedding` (see
+            `Instance.identity_embedding`).
     """
 
     points: PredictedPointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
@@ -1201,8 +1201,7 @@ class PredictedInstance(Instance):
     identity: Identity | None = None
     identity_score: float | None = None
     from_predicted: "PredictedInstance | None" = None
-    embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
-    categories: dict = attrs.field(factory=dict, repr=False)
+    identity_embedding: Embedding | None = attrs.field(default=None, repr=False)
 
     def __repr__(self) -> str:
         """Return a readable representation of the instance."""
@@ -1229,6 +1228,7 @@ class PredictedInstance(Instance):
         tracking_score: float | None = None,
         identity: Identity | None = None,
         identity_score: float | None = None,
+        identity_embedding: Embedding | None = None,
         from_predicted: "PredictedInstance | None" = None,
     ) -> "PredictedInstance":
         """Create an empty instance with no points."""
@@ -1243,6 +1243,7 @@ class PredictedInstance(Instance):
             tracking_score=tracking_score,
             identity=identity,
             identity_score=identity_score,
+            identity_embedding=identity_embedding,
             from_predicted=from_predicted,
         )
 
@@ -1274,6 +1275,7 @@ class PredictedInstance(Instance):
         tracking_score: float | None = None,
         identity: Identity | None = None,
         identity_score: float | None = None,
+        identity_embedding: Embedding | None = None,
         from_predicted: "PredictedInstance | None" = None,
     ) -> "PredictedInstance":
         """Create a predicted instance object from a numpy array."""
@@ -1289,6 +1291,7 @@ class PredictedInstance(Instance):
             tracking_score=tracking_score,
             identity=identity,
             identity_score=identity_score,
+            identity_embedding=identity_embedding,
             from_predicted=from_predicted,
         )
 

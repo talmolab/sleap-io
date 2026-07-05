@@ -18,8 +18,6 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
-from sleap_io.model.embedding import EmbeddingMixin
-
 if TYPE_CHECKING:
     from sleap_io.model.centroid import Centroid
     from sleap_io.model.embedding import Embedding
@@ -30,7 +28,7 @@ if TYPE_CHECKING:
 
 
 @attrs.define(eq=False)
-class BoundingBox(EmbeddingMixin):
+class BoundingBox:
     """A bounding box annotation.
 
     Supports axis-aligned and oriented (rotated) bounding boxes with optional
@@ -56,8 +54,8 @@ class BoundingBox(EmbeddingMixin):
         category: Class label (e.g., "mouse", "fly").
         name: Human-readable name.
         source: Annotation source identifier.
-        embeddings: Mapping from embedding-space name to an `Embedding` describing
-            this detection's appearance for re-identification. Empty by default.
+        identity_embedding: Optional `Embedding` describing this detection's
+            appearance for re-identification. ``None`` by default.
 
     Notes:
         Bounding boxes use identity-based equality (two BoundingBox objects are
@@ -80,7 +78,7 @@ class BoundingBox(EmbeddingMixin):
     category: str = attrs.field(default="")
     name: str = attrs.field(default="")
     source: str = attrs.field(default="")
-    embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
+    identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
 
     # Private: deferred instance index for lazy loading.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
@@ -302,6 +300,7 @@ class BoundingBox(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
         )
 
@@ -358,6 +357,7 @@ class BoundingBox(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -397,6 +397,7 @@ class BoundingBox(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
             name=self.name,

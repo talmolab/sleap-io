@@ -496,15 +496,15 @@ def test_instance_identity_fields():
 
 
 def test_instance_same_identity_as_global_identity():
-    """Test that same_identity_as prefers global Identity (by uuid) over track."""
+    """Test that same_identity_as prefers global Identity (by name) over track."""
     skeleton = Skeleton(["head", "tail"])
     track1 = Track(name="t1")
     track2 = Track(name="t2")
 
-    # Same uuid (e.g. two reloads of one animal) -> same identity even across
+    # Same name (e.g. two reloads of one animal) -> same identity even across
     # different track objects.
-    idA1 = Identity(name="mouse_A", uuid="shared")
-    idA2 = Identity(name="mouse_A", uuid="shared")
+    idA1 = Identity(name="mouse_A")
+    idA2 = Identity(name="mouse_A")
     inst1 = Instance.from_numpy(
         np.array([[1, 1], [2, 2]]), skeleton=skeleton, track=track1, identity=idA1
     )

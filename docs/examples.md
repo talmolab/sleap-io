@@ -205,8 +205,9 @@ import sleap_io as sio
 
 skel = sio.Skeleton(nodes=["head", "tail"], edges=[("head", "tail")])
 
-# Persistent per-animal identity (color is free-form and optional)
-mouse_a = sio.Identity(name="mouse_A", color="#e6194b")
+# Persistent per-animal identity (matched by name; a color, if wanted, is just
+# a conventional free-form metadata key, e.g. metadata={"color": "#e6194b"})
+mouse_a = sio.Identity(name="mouse_A")
 
 # 3-D keypoint storage, aligned to a skeleton
 pts = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
@@ -230,7 +231,7 @@ group = sio.InstanceGroup(
 labels = sio.Labels(identities=[mouse_a])
 ```
 
-Identities and `Instance3D` both persist into SLP format v1.9+, so round-tripping between sleap-io and sleap-io.js / luc3d is lossless.
+Identities persist into SLP format v2.5+ and `Instance3D` into v1.9+, so round-tripping between sleap-io and sleap-io.js / luc3d is lossless.
 
 !!! note "See also"
     [3D model](model/3d.md): `Camera`, `CameraGroup`, `RecordingSession`, `FrameGroup`, `InstanceGroup`, `Identity`, `Instance3D`.

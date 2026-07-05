@@ -583,40 +583,34 @@ def _apply_overlay(
 def _compute_identity_coloring(
     instances: Iterable,
     catalog: list | None,
-) -> tuple[list[int], int, list[tuple[int, int, int] | None]]:
-    """Compute per-instance identity indices and explicit colors.
+) -> tuple[list[int], int]:
+    """Compute per-instance identity indices for the ``identity`` color scheme.
 
-    Mirrors the track-index plumbing for the ``identity`` color scheme. Each
-    instance is mapped to a stable index in the identity catalog (the
-    ``Labels.identities`` order when available, otherwise discovered from the
-    instances in encounter order). Instances without an identity map to index 0.
-    When an identity carries an explicit ``color``, it is resolved to RGB and
-    used in preference to the palette color.
+    Mirrors the track-index plumbing. Each instance is mapped to a stable index in
+    the identity catalog (the ``Labels.identities`` order when available, otherwise
+    discovered from the instances in encounter order). Instances without an identity
+    map to index 0. Coloring is by palette index, exactly like the ``track`` scheme.
 
     Args:
         instances: Instances to color (order matches the rendered points).
         catalog: Optional starting identity catalog (e.g. ``labels.identities``).
 
     Returns:
-        Tuple of ``(identity_indices, n_identities, identity_colors)``.
+        Tuple of ``(identity_indices, n_identities)``.
     """
     catalog = list(catalog) if catalog else []
     idmap = {id(idn): i for i, idn in enumerate(catalog)}
     identity_indices: list[int] = []
-    identity_colors: list[tuple[int, int, int] | None] = []
     for inst in instances:
         idn = getattr(inst, "identity", None)
         if idn is None:
             identity_indices.append(0)
-            identity_colors.append(None)
             continue
         if id(idn) not in idmap:
             idmap[id(idn)] = len(catalog)
             catalog.append(idn)
         identity_indices.append(idmap[id(idn)])
-        color = getattr(idn, "color", None)
-        identity_colors.append(resolve_color(color) if color else None)
-    return identity_indices, len(catalog), identity_colors
+    return identity_indices, len(catalog)
 
 
 def render_frame(
@@ -641,7 +635,6 @@ def render_frame(
     # Identity info for identity coloring
     identity_indices: list[int] | None = None,
     n_identities: int = 0,
-    identity_colors: list[tuple[int, int, int] | None] | None = None,
     # Callbacks
     pre_render_callback: Callable[[RenderContext], None] | None = None,
     post_render_callback: Callable[[RenderContext], None] | None = None,
@@ -674,10 +667,8 @@ def render_frame(
         track_indices: Track index for each instance (for track coloring).
         n_tracks: Total number of tracks (for track coloring).
         identity_indices: Global identity index for each instance (for identity
-            coloring).
+            coloring; a palette index into ``Labels.identities`` order).
         n_identities: Total number of identities (for identity coloring).
-        identity_colors: Optional explicit RGB color per instance resolved from
-            ``Identity.color`` (for identity coloring).
         pre_render_callback: Called before poses are drawn.
         post_render_callback: Called after poses are drawn.
         per_instance_callback: Called after each instance is drawn.
@@ -722,7 +713,6 @@ def render_frame(
         palette=palette,
         identity_indices=identity_indices,
         n_identities=n_identities,
-        identity_colors=identity_colors,
     )
 
     # Get drawing function for marker shape
@@ -1425,16 +1415,13 @@ def render_image(
             meta["confidence"] = inst.score
         instance_metadata.append(meta)
 
-    # Compute identity coloring (per-instance index + explicit colors) when the
-    # resolved scheme is "identity", mirroring the track-index plumbing.
+    # Compute per-instance identity indices when the resolved scheme is
+    # "identity", mirroring the track-index plumbing.
     identity_indices = None
     n_identities = 0
-    identity_colors = None
     if resolved_scheme == "identity":
         catalog = source.identities if isinstance(source, Labels) else None
-        identity_indices, n_identities, identity_colors = _compute_identity_coloring(
-            instances, catalog
-        )
+        identity_indices, n_identities = _compute_identity_coloring(instances, catalog)
 
     # Render
     rendered = render_frame(
@@ -1455,7 +1442,6 @@ def render_image(
         n_tracks=n_tracks,
         identity_indices=identity_indices,
         n_identities=n_identities,
-        identity_colors=identity_colors,
         pre_render_callback=pre_render_callback,
         post_render_callback=post_render_callback,
         per_instance_callback=per_instance_callback,
@@ -2222,16 +2208,13 @@ def render_video(
                     tidx = _track_idx_map.get(id(inst.track)) if inst.track else None
                     track_indices.append(tidx if tidx is not None else 0)
 
-            # Get identity indices/colors when coloring by identity
+            # Get identity indices when coloring by identity
             identity_indices = None
             n_identities = 0
-            identity_colors = None
             if resolved_scheme == "identity":
-                (
-                    identity_indices,
-                    n_identities,
-                    identity_colors,
-                ) = _compute_identity_coloring(instances, _identity_catalog)
+                identity_indices, n_identities = _compute_identity_coloring(
+                    instances, _identity_catalog
+                )
 
             # Build instance metadata
             instance_metadata = []
@@ -2304,7 +2287,6 @@ def render_video(
                 n_tracks=n_tracks,
                 identity_indices=identity_indices,
                 n_identities=n_identities,
-                identity_colors=identity_colors,
                 pre_render_callback=pre_render_callback,
                 post_render_callback=post_render_callback,
                 per_instance_callback=per_instance_callback,

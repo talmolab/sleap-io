@@ -78,7 +78,7 @@ classDiagram
         +Track track
         +Identity identity
         +float identity_score
-        +dict~str,Embedding~ embeddings
+        +Embedding identity_embedding
     }
     class PredictedInstance:::poses {
         +float score
@@ -136,7 +136,7 @@ classDiagram
     }
     class Identity:::threed {
         +str name
-        +str color
+        +dict~str,str~ metadata
     }
     class Instance3D:::threed {
         +ndarray points

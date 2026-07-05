@@ -30,8 +30,6 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
-from sleap_io.model.embedding import EmbeddingMixin
-
 if TYPE_CHECKING:
     if sys.version_info >= (3, 11):
         from typing import Self
@@ -118,7 +116,7 @@ def _resize_nearest(array: np.ndarray, target_h: int, target_w: int) -> np.ndarr
 
 
 @attrs.define(eq=False)
-class SegmentationMask(EmbeddingMixin):
+class SegmentationMask:
     """A segmentation mask stored as run-length encoded (RLE) data.
 
     Attributes:
@@ -146,8 +144,8 @@ class SegmentationMask(EmbeddingMixin):
             covers 2x2 image pixels). Coordinate mapping:
             ``image_coord = mask_coord / scale + offset``.
         offset: Origin ``(x, y)`` of the mask in image pixel coordinates.
-        embeddings: Mapping from embedding-space name to an `Embedding` describing
-            this detection's appearance for re-identification. Empty by default.
+        identity_embedding: Optional `Embedding` describing this detection's
+            appearance for re-identification. ``None`` by default.
 
     Notes:
         Masks use identity-based equality (two mask objects are only equal if they
@@ -171,7 +169,7 @@ class SegmentationMask(EmbeddingMixin):
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
     scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
     offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))
-    embeddings: dict[str, Embedding] = attrs.field(factory=dict, repr=False)
+    identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
 
     def __attrs_post_init__(self):
         """Validate that this class is not instantiated directly."""
@@ -226,6 +224,7 @@ class SegmentationMask(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             scale=(1.0, 1.0),
             offset=(0.0, 0.0),
@@ -405,6 +404,7 @@ class SegmentationMask(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -468,6 +468,7 @@ class SegmentationMask(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
             name=self.name,
@@ -540,6 +541,7 @@ class SegmentationMask(EmbeddingMixin):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
         )
         if self.is_predicted:
@@ -636,6 +638,7 @@ class PredictedSegmentationMask(SegmentationMask):
             tracking_score=self.tracking_score,
             identity=self.identity,
             identity_score=self.identity_score,
+            identity_embedding=self.identity_embedding,
             instance=self.instance,
             scale=self.scale,
             offset=self.offset,

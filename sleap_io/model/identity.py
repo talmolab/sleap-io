@@ -1,74 +1,48 @@
 """Identity data structure for ground-truth animal identification."""
 
-import uuid as uuid_module
+from __future__ import annotations
 
-import attrs
 from attrs import define, field
 from attrs.validators import instance_of
 
-from sleap_io.model.categories import CategoriesMixin
-from sleap_io.model.embedding import Embedding, EmbeddingMixin
-
-
-def _generate_uuid() -> str:
-    """Generate a new random UUID hex string for an `Identity`."""
-    return uuid_module.uuid4().hex
-
 
 @define(eq=False)
-class Identity(EmbeddingMixin, CategoriesMixin):
+class Identity:
     """Ground-truth animal identity, persistent across sessions and videos.
 
     Unlike `Track` (an ephemeral temporal trajectory within a single video),
     `Identity` represents a known animal that can be recognized across videos,
-    sessions, and experiments. It carries a stable `uuid` so it can be matched
-    and deduplicated across separately-loaded files and merges, where Python
-    object identity (used by `Track`) and positional indices both fail.
-
-    In multi-view setups, multiple per-camera `Track`s may map to a single
-    `Identity`. The per-instance binding is stored on `Instance.identity`; the
-    triangulated multi-view binding is stored on `InstanceGroup.identity`.
+    sessions, and experiments. In multi-view setups, multiple per-camera `Track`s
+    may map to a single `Identity`. The per-detection binding is stored on
+    ``Instance.identity`` (and the analogous slot on the other detection
+    modalities); the triangulated multi-view binding is stored on
+    ``InstanceGroup.identity``.
 
     Attributes:
-        name: Human-readable name for this identity (e.g., "mouse_A"). Not
-            required to be unique.
-        uuid: Stable 32-character hex string identifying this animal across files
-            and merges. Auto-generated if not provided. This is the canonical
-            cross-file matching key.
-        color: Optional hex color string for visualization (e.g., "#e6194b").
-        metadata: Arbitrary metadata dictionary.
-        embeddings: A mapping from embedding-space name (e.g. ``"reid"``) to an
-            `Embedding` prototype / gallery vector representing this identity in
-            that space (e.g. the cluster centroid of its member instances). Empty
-            by default.
-        categories: A mapping from category dimension name (e.g. ``"sex"``) to a
-            categorical label (typically a string) describing this identity at
-            the entity level. Empty by default. Use the `cat` alias /
-            `set_category` helper for read/write access.
+        name: Human-readable name for this identity (e.g., ``"mouse_A"``). Not
+            required to be unique, but ``name`` is how identities are matched
+            across separately-loaded files and merges.
+        metadata: Arbitrary string-keyed, string-valued metadata (e.g.
+            ``{"color": "#e6194b", "strain": "C57BL/6"}``). Empty by default.
 
     Notes:
-        `Identity` objects use object-identity equality (`eq=False`), matching
-        `Track`. Use `matches()` (default `method="uuid"`) to compare identities
-        across files where object identity is not meaningful.
+        `Identity` objects use object-identity equality (``eq=False``), matching
+        `Track`. Use `matches()` (default ``method="name"``) to compare identities
+        across files, where Python object identity is not meaningful.
     """
 
     name: str = field(default="", validator=instance_of(str))
-    uuid: str = field(factory=_generate_uuid, validator=instance_of(str))
-    color: str | None = field(default=None, converter=attrs.converters.optional(str))
-    metadata: dict = field(factory=dict, validator=instance_of(dict))
-    embeddings: dict[str, Embedding] = field(factory=dict, repr=False)
-    categories: dict = field(factory=dict, repr=False)
+    metadata: dict[str, str] = field(factory=dict, validator=instance_of(dict))
 
-    def matches(self, other: "Identity", method: str = "uuid") -> bool:
+    def matches(self, other: "Identity", method: str = "name") -> bool:
         """Check if this identity matches another identity.
 
         Args:
             other: Another identity to compare with.
             method: Matching method:
 
-                - ``"uuid"`` (default): match by the stable `uuid` key, which
+                - ``"name"`` (default): match by the `name` attribute, which
                   survives serialization and cross-file merges.
-                - ``"name"``: match by the `name` attribute.
                 - ``"identity"``: match by Python object identity (same object).
 
         Returns:
@@ -77,9 +51,7 @@ class Identity(EmbeddingMixin, CategoriesMixin):
         Raises:
             ValueError: If `method` is not one of the supported values.
         """
-        if method == "uuid":
-            return self.uuid == other.uuid
-        elif method == "name":
+        if method == "name":
             return self.name == other.name
         elif method == "identity":
             return self is other
@@ -87,14 +59,5 @@ class Identity(EmbeddingMixin, CategoriesMixin):
             raise ValueError(f"Unknown matching method: {method}")
 
     def __repr__(self) -> str:
-        """Return a readable string representation.
-
-        Surfaces a truncated `uuid` so two identities that differ only by their
-        (object-identity) `uuid` do not `repr()` identically -- useful when
-        spotting cross-file mismatches in logs.
-        """
-        parts = [f'Identity(name="{self.name}", uuid="{self.uuid[:8]}…"']
-        if self.color is not None:
-            parts.append(f', color="{self.color}"')
-        parts.append(")")
-        return "".join(parts)
+        """Return a readable string representation."""
+        return f'Identity(name="{self.name}")'
