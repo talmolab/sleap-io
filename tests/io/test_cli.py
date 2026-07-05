@@ -91,7 +91,7 @@ def _make_identity_slp(path: Path, *, with_embeddings: bool = False) -> Labels:
         skeletons=[skeleton],
         identities=[id_a, id_b],
     )
-    save_slp(labels, str(path))
+    save_slp(labels, str(path), save_embedding_vectors=with_embeddings)
     return labels
 
 

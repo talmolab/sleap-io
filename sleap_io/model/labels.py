@@ -1660,10 +1660,11 @@ class Labels:
                 frames.
             **kwargs: Additional format-specific arguments passed to the save function.
                 See `save_file` for format-specific options. For SLP this includes
-                `save_embedding_vectors` (default `True`): set `False` to persist
-                identity *links* but skip the large re-ID appearance `/embeddings`
-                vectors (kept in memory). Note this is distinct from `embed`, which
-                embeds *video frames*.
+                `save_embedding_vectors` (default `False`, like `embed`): identity
+                *links* are always persisted, but the large re-ID appearance
+                `/embeddings` vectors are skipped unless this is set `True` (they
+                stay in memory). Note this is distinct from `embed`, which embeds
+                *video frames*.
         """
         from pathlib import Path
 
