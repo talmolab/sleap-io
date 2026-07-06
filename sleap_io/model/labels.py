@@ -3830,6 +3830,7 @@ class Labels:
 
             # Step 4: Merge frames
             total_frames = len(other.labeled_frames)
+            frame_index = self._ensure_frame_index()
 
             for frame_idx, other_frame in enumerate(other.labeled_frames):
                 if progress_callback:
@@ -3882,6 +3883,9 @@ class Labels:
                     self._remap_frame_annotations(new_frame, video_map, track_map)
 
                     self.append(new_frame)
+                    frame_index[(id(new_frame.video), new_frame.frame_idx)] = new_frame
+                    self._frame_index = frame_index
+                    self._frame_index_len = len(self.labeled_frames)
                     result.frames_merged += 1
 
                 else:
