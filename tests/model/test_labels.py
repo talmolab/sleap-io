@@ -7453,6 +7453,240 @@ def test_frame_index_duplicate_warning():
     assert labels.get_frame(video, 0) is lf0b
 
 
+def test_append_indexed_updates_live_index():
+    """``_append_indexed`` updates a live frame index in place (no rebuild)."""
+    video = Video(filename="test.mp4", open_backend=False)
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf0], videos=[video])
+    index = labels._ensure_frame_index()  # build once; capture the dict object
+
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    labels._append_indexed(lf1)
+
+    # Same dict object, updated in place — the index was never rebuilt.
+    assert labels._frame_index is index
+    assert labels._frame_index_len == 2
+    assert labels.get_frame(video, 1) is lf1
+    assert labels.get_frame(video, 0) is lf0
+
+
+def test_append_indexed_when_index_not_built():
+    """``_append_indexed`` leaves the index lazy when it was not yet built."""
+    video = Video(filename="test.mp4", open_backend=False)
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(labeled_frames=[lf0], videos=[video])
+    labels.reindex()  # ensure the index is not built
+    assert labels._frame_index is None
+
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    labels._append_indexed(lf1)
+
+    # Not eagerly rebuilt, but still resolves correctly on demand.
+    assert labels._frame_index is None
+    assert labels.get_frame(video, 1) is lf1
+    assert labels.get_frame(video, 0) is lf0
+
+
+def test_merge_appends_keep_frame_index_queryable():
+    """Frames appended during merge are immediately queryable via the index."""
+    skel = Skeleton(nodes=["a", "b"])
+    va = Video(filename="a.mp4")
+    base = Labels(skeletons=[skel], videos=[va])
+    base.append(LabeledFrame(video=va, frame_idx=0))
+    base.get_frame(va, 0)  # warm the index, as in real usage before a merge
+
+    vb = Video(filename="b.mp4")
+    other = Labels(skeletons=[Skeleton(nodes=["a", "b"])], videos=[vb])
+    other.append(LabeledFrame(video=vb, frame_idx=1))
+    other.append(LabeledFrame(video=vb, frame_idx=2))
+
+    # Distinct video paths => frames are appended, not merged into existing ones.
+    result = base.merge(
+        other, video=VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    )
+    assert result.successful
+
+    # Every appended frame is resolvable via the incrementally-maintained index.
+    assert base.get_frame(vb, 1) is not None
+    assert base.get_frame(vb, 1).frame_idx == 1
+    assert base.get_frame(vb, 2).frame_idx == 2
+    assert len(base.find(vb, 1)) == 1
+
+
+def test_merge_frame_index_matches_fresh_rebuild():
+    """After an appending merge, the live index equals a from-scratch rebuild."""
+    skel = Skeleton(nodes=["a", "b"])
+    va = Video(filename="a.mp4")
+    base = Labels(skeletons=[skel], videos=[va])
+    for i in range(3):
+        base.append(LabeledFrame(video=va, frame_idx=i))
+    base.get_frame(va, 0)  # warm
+
+    vb = Video(filename="b.mp4")
+    other = Labels(skeletons=[Skeleton(nodes=["a", "b"])], videos=[vb])
+    for i in range(4):
+        other.append(LabeledFrame(video=vb, frame_idx=i))
+
+    base.merge(other, video=VideoMatcher(method=VideoMatchMethod.PATH, strict=True))
+
+    # Snapshot the incrementally-maintained index, then force a fresh rebuild.
+    incremental = dict(base._frame_index)
+    base.reindex()
+    rebuilt = base._ensure_frame_index()
+
+    assert incremental.keys() == rebuilt.keys()
+    for key, lf in rebuilt.items():
+        assert incremental[key] is lf
+    # And it indexes exactly the current frames — nothing missing or stale.
+    assert set(incremental.keys()) == {
+        (id(lf.video), lf.frame_idx) for lf in base.labeled_frames
+    }
+
+
+def test_merge_reuses_frame_index_without_rebuild():
+    """An appending merge maintains the index in place instead of rebuilding it.
+
+    Regression guard for the O(N^2) rebuild that occurred when every appended
+    frame invalidated the index and the next lookup rescanned all frames.
+    """
+    skel = Skeleton(nodes=["a", "b"])
+    va = Video(filename="a.mp4")
+    base = Labels(skeletons=[skel], videos=[va])
+    base.append(LabeledFrame(video=va, frame_idx=0))
+    warmed = base._ensure_frame_index()  # build once; capture the dict object
+
+    vb = Video(filename="b.mp4")
+    other = Labels(skeletons=[Skeleton(nodes=["a", "b"])], videos=[vb])
+    for i in range(5):
+        other.append(LabeledFrame(video=vb, frame_idx=i))
+
+    n_before = len(base.labeled_frames)
+    result = base.merge(
+        other, video=VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    )
+
+    # The frames were genuinely appended (not merged into existing ones), so the
+    # in-place-update branch of `_append_indexed` was actually exercised.
+    assert result.frames_merged == 5
+    assert len(base.labeled_frames) == n_before + 5
+
+    # The same dict object was updated in place — never rebuilt from scratch.
+    assert base._frame_index is warmed
+    assert base._frame_index_len == len(base.labeled_frames)
+
+
+def test_merge_empty_other_keeps_index_queryable():
+    """Merging an empty Labels is a no-op that leaves the index usable."""
+    skel = Skeleton(nodes=["a", "b"])
+    va = Video(filename="a.mp4")
+    base = Labels(skeletons=[skel], videos=[va])
+    lf0 = LabeledFrame(video=va, frame_idx=0)
+    base.append(lf0)
+
+    result = base.merge(Labels())
+    assert result.successful
+    assert base.get_frame(va, 0) is lf0
+
+
+def _assert_incremental_index_matches_rebuild(labels):
+    """The live frame index must equal a from-scratch rebuild (keys + identity)."""
+    incremental = dict(labels._frame_index)
+    labels.reindex()
+    rebuilt = labels._ensure_frame_index()
+    assert incremental.keys() == rebuilt.keys()
+    for key, lf in rebuilt.items():
+        assert incremental[key] is lf
+
+
+def test_merge_mixes_append_and_merge_into_existing():
+    """A single merge that both appends and merges-into-existing stays consistent.
+
+    This is the realistic case (overlapping video plus new frames): frame idx 1
+    merges into the existing frame while idx 2 is appended via ``_append_indexed``,
+    all against one warm, incrementally-maintained index.
+    """
+    skel = Skeleton(nodes=["a", "b"])
+    va = Video(filename="a.mp4")
+    base = Labels(skeletons=[skel], videos=[va])
+    lf0 = LabeledFrame(video=va, frame_idx=0)
+    lf1 = LabeledFrame(video=va, frame_idx=1)
+    base.append(lf0)
+    base.append(lf1)
+    base.get_frame(va, 0)  # warm
+
+    vb = Video(filename="a.mp4")  # same path => matches base's video
+    other = Labels(skeletons=[Skeleton(nodes=["a", "b"])], videos=[vb])
+    other.append(LabeledFrame(video=vb, frame_idx=1))  # merges into existing lf1
+    other.append(LabeledFrame(video=vb, frame_idx=2))  # appended
+
+    result = base.merge(
+        other, video=VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    )
+    assert result.successful
+
+    # Merge-into-existing kept the original frame object; append added a new one.
+    assert base.get_frame(va, 1) is lf1
+    assert base.get_frame(va, 2) is not None
+    assert base.get_frame(va, 2).frame_idx == 2
+    assert {lf.frame_idx for lf in base.labeled_frames} == {0, 1, 2}
+    _assert_incremental_index_matches_rebuild(base)
+
+
+def test_merge_mixes_append_before_merge_into_existing():
+    """Same as above but the appended frame precedes the merged one in ``other``.
+
+    Guards the interleaving where an append has already mutated the live index in
+    this loop before a later ``find()`` must still return a pre-existing frame.
+    """
+    skel = Skeleton(nodes=["a", "b"])
+    va = Video(filename="a.mp4")
+    base = Labels(skeletons=[skel], videos=[va])
+    lf0 = LabeledFrame(video=va, frame_idx=0)
+    lf1 = LabeledFrame(video=va, frame_idx=1)
+    base.append(lf0)
+    base.append(lf1)
+    base.get_frame(va, 0)  # warm
+
+    vb = Video(filename="a.mp4")
+    other = Labels(skeletons=[Skeleton(nodes=["a", "b"])], videos=[vb])
+    other.append(LabeledFrame(video=vb, frame_idx=2))  # appended first
+    other.append(LabeledFrame(video=vb, frame_idx=1))  # then merge into existing
+
+    result = base.merge(
+        other, video=VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    )
+    assert result.successful
+
+    assert base.get_frame(va, 1) is lf1
+    assert base.get_frame(va, 2).frame_idx == 2
+    assert {lf.frame_idx for lf in base.labeled_frames} == {0, 1, 2}
+    _assert_incremental_index_matches_rebuild(base)
+
+
+def test_merge_without_prewarm_matches_fresh_rebuild():
+    """A cold-start merge (no prior lookup) still yields a correct live index.
+
+    The pre-loop warm call was removed, so correctness relies on the loop's first
+    ``find()`` building the index before ``_append_indexed`` snapshots it.
+    """
+    skel = Skeleton(nodes=["a", "b"])
+    va = Video(filename="a.mp4")
+    base = Labels(skeletons=[skel], videos=[va])
+    for i in range(3):
+        base.append(LabeledFrame(video=va, frame_idx=i))
+    base.reindex()  # ensure the index starts cold; no get_frame before merge
+    assert base._frame_index is None
+
+    vb = Video(filename="b.mp4")
+    other = Labels(skeletons=[Skeleton(nodes=["a", "b"])], videos=[vb])
+    for i in range(4):
+        other.append(LabeledFrame(video=vb, frame_idx=i))
+
+    base.merge(other, video=VideoMatcher(method=VideoMatchMethod.PATH, strict=True))
+
+    _assert_incremental_index_matches_rebuild(base)
+
+
 def test_track_index_build_and_lookup():
     """Track index provides O(1) lookup by (video, track)."""
     video = Video(filename="test.mp4", open_backend=False)
