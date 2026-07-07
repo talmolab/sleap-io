@@ -87,6 +87,8 @@ sio show labels.slp --tracks           # Track details
 sio show labels.slp --provenance       # Metadata/provenance
 sio show labels.slp --all              # Everything
 sio show labels.slp --lf 0             # Labeled frame details
+sio show labels.slp --json             # Machine-readable JSON output
+sio show labels.slp --json --frames    # JSON with per-frame listing
 
 # Inspect a video file directly
 sio show video.mp4                     # Video properties and metadata
@@ -249,6 +251,8 @@ The default view shows:
 | `--provenance` | `-p` | Show provenance/metadata from the file |
 | `--all` | `-a` | Show all details (combines all flags above) |
 | `--lf N` | | Show details for labeled frame at index N |
+| `--frames` | | List all labeled frames (video, frame index, instance counts) |
+| `--json` | | Output as JSON (machine-readable, includes all details) |
 | `--open-videos` | | Force open video backends |
 | `--no-open-videos` | | Don't open video backends (overrides -v default) |
 
@@ -406,6 +410,88 @@ sio show labels.slp --all
 ```
 
 Combines `--skeleton`, `--video`, `--tracks`, and `--provenance` for a complete view.
+
+### JSON Output
+
+```bash
+sio show labels.slp --json
+```
+
+Emits a single machine-readable JSON document on stdout, designed for scripting
+and for LLM agents inspecting SLP files. JSON mode always includes all details
+(full skeleton definitions, per-video info, tracks, identities, and provenance),
+so the individual detail flags are not needed:
+
+```json
+{
+  "path": "/data/labels.slp",
+  "name": "labels.slp",
+  "size_bytes": 20120,
+  "format": "labels",
+  "stats": {
+    "n_videos": 1,
+    "n_labeled_frames": 800,
+    "n_user_frames": 800,
+    "n_user_instances": 2376,
+    "n_predicted_instances": 0,
+    "n_skeletons": 1,
+    "n_tracks": 0,
+    "n_identities": 0,
+    "n_masks": 0,
+    "n_rois": 0,
+    "n_instances_with_identity_embedding": null
+  },
+  "skeletons": [
+    {
+      "index": 0,
+      "name": "Skeleton-0",
+      "nodes": ["head", "thorax", "abdomen"],
+      "edges": [{"source": "head", "destination": "thorax", "indices": [0, 1]}],
+      "symmetries": []
+    }
+  ],
+  "videos": [
+    {
+      "index": 0,
+      "filename": "/data/video.mp4",
+      "type": "MediaVideo",
+      "embedded": false,
+      "exists": true,
+      "shape": {"frames": 1100, "height": 384, "width": 384, "channels": 1},
+      "n_labeled_frames": 800,
+      "source_video": null
+    }
+  ],
+  "tracks": [],
+  "identities": [],
+  "provenance": {}
+}
+```
+
+Combine with the navigation flags for deeper inspection:
+
+```bash
+# Per-frame listing: which frames are labeled, in which video, with how many
+# instances (fast even on large files thanks to lazy loading)
+sio show labels.slp --json --frames
+
+# Full detail for one labeled frame, including per-instance points
+# (x, y coordinates in skeleton node order; occluded points are [null, null])
+sio show labels.slp --json --lf 0
+
+# Standalone video files work too (shape, fps, codec, bitrate, GOP size)
+sio show video.mp4 --json
+```
+
+Notes:
+
+- Output is strict JSON: NaN/Infinity are converted to `null`, so it parses
+  with any standard JSON library (`sio show x.slp --json | jq .stats`).
+- `stats.n_instances_with_identity_embedding` is `null` when lazy loading is
+  active (counting would require materializing all frames); pass `--no-lazy`
+  to compute it.
+- Embedded package details (`embedded`, `shape`, `embedded_frames`) require
+  open video backends; pass `--open-videos` to populate them.
 
 ### Standalone Video Files
 
@@ -1409,6 +1495,31 @@ Video filenames in labels.slp:
 
 This is a quick way to check video paths before deciding how to update them.
 
+For machine-readable output (scripting, LLM agents), use `--json`:
+
+```bash
+sio filenames labels.slp --json
+```
+
+```json
+{
+  "path": "/data/labels.slp",
+  "name": "labels.slp",
+  "videos": [
+    {
+      "index": 0,
+      "filename": "/home/user/data/video.mp4",
+      "source": null,
+      "original": null
+    }
+  ]
+}
+```
+
+The `source` and `original` fields report the embedded source video and the
+root of the provenance chain (equivalent to `--source`/`--original` in text
+mode). `--json` is only valid in inspection mode, not with update flags.
+
 ### Update Modes
 
 When you provide `-o` and one of the update flags, the command updates paths and saves:
@@ -1430,6 +1541,7 @@ You must specify exactly one update mode when updating.
 | `--filename` | New filename (repeat for each video in list mode) |
 | `--map OLD NEW` | Replace OLD filename with NEW (repeat for multiple mappings) |
 | `--prefix OLD NEW` | Replace OLD prefix with NEW (repeat for multiple prefixes) |
+| `--json` | Output as JSON (inspection mode only) |
 
 ### List Mode
 
