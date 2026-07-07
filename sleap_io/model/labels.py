@@ -1030,6 +1030,41 @@ class Labels:
 
             self._collect_session_identities()
 
+    def _append_indexed(self, lf: LabeledFrame, update: bool = True) -> None:
+        """Append a labeled frame while keeping the frame index warm.
+
+        Behaves like `append`, but when the frame index is already built and
+        current, the new frame is added to it in place instead of invalidating
+        it. This keeps `find`/`get_frame` at O(1) during bulk-append loops (such
+        as `merge`), where relying on lazy rebuilds would rescan every labeled
+        frame on each iteration and make the loop O(N^2) in the project size.
+
+        The track index is intentionally left to rebuild lazily (matching
+        `append`); only the frame index is maintained incrementally, since it is
+        the one consulted by the append loop.
+
+        Args:
+            lf: A labeled frame to add to the labels.
+            update: If `True` (the default), update list of videos, tracks and
+                skeletons from the contents.
+
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
+        """
+        # Snapshot the index before `append` invalidates it, and only reuse it
+        # if it was already built and consistent with the current frame count.
+        frame_index = self._frame_index
+        index_live = frame_index is not None and self._frame_index_len == len(
+            self.labeled_frames
+        )
+
+        self.append(lf, update=update)
+
+        if index_live:
+            frame_index[(id(lf.video), lf.frame_idx)] = lf
+            self._frame_index = frame_index
+            self._frame_index_len = len(self.labeled_frames)
+
     def numpy(
         self,
         video: Video | str | Path | int | None = None,
@@ -3881,7 +3916,7 @@ class Labels:
                     new_frame._merge_annotations(other_frame)
                     self._remap_frame_annotations(new_frame, video_map, track_map)
 
-                    self.append(new_frame)
+                    self._append_indexed(new_frame)
                     result.frames_merged += 1
 
                 else:
