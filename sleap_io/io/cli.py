@@ -8,6 +8,7 @@ in minimal environments and CI.
 
 from __future__ import annotations
 
+import json
 import posixpath
 import re
 import subprocess
@@ -31,7 +32,7 @@ from rich.table import Table
 from sleap_io.io import main as io_main
 from sleap_io.io._remote import _is_url, _redact_url
 from sleap_io.io.video_reading import HDF5Video
-from sleap_io.model.instance import PredictedInstance
+from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
@@ -1769,8 +1770,6 @@ def _print_provenance(labels: Labels, compact: bool = False) -> None:
         compact: If True, use compact formatting (for default view).
             If False, use expanded pretty printing (for --provenance flag).
     """
-    import json
-
     from rich.syntax import Syntax
 
     if not labels.provenance:
@@ -1809,6 +1808,357 @@ def _print_provenance(labels: Labels, compact: bool = False) -> None:
         else:
             # Simple scalar values - show in full
             console.print(f"  [dim]{key}:[/] {value}")
+
+
+def _json_sanitize(obj: Any) -> Any:
+    """Recursively convert a value into JSON-serializable built-ins.
+
+    Numpy scalars/arrays become Python numbers/lists, non-finite floats become
+    None (strict JSON has no NaN/Infinity), and unknown objects fall back to
+    their string representation.
+    """
+    if isinstance(obj, dict):
+        return {str(k): _json_sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_sanitize(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return [_json_sanitize(v) for v in obj.tolist()]
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        f = float(obj)
+        return f if np.isfinite(f) else None
+    if obj is None or isinstance(obj, (bool, int, str)):
+        return obj
+    return str(obj)
+
+
+def _echo_json(payload: dict) -> None:
+    """Print a payload as strict, indented JSON on stdout."""
+    click.echo(json.dumps(_json_sanitize(payload), indent=2, allow_nan=False))
+
+
+def _build_skeleton_dict(sk: Skeleton, index: int) -> dict:
+    """Build a JSON-serializable dict describing a skeleton."""
+    edges = []
+    for e in sk.edges:
+        src_idx = sk.node_names.index(e.source.name)
+        dst_idx = sk.node_names.index(e.destination.name)
+        edges.append(
+            {
+                "source": e.source.name,
+                "destination": e.destination.name,
+                "indices": [src_idx, dst_idx],
+            }
+        )
+
+    symmetries = []
+    for s in sk.symmetries:
+        nodes_list = list(s.nodes)
+        symmetries.append([nodes_list[0].name, nodes_list[1].name])
+
+    return {
+        "index": index,
+        "name": sk.name,
+        "nodes": list(sk.node_names),
+        "edges": edges,
+        "symmetries": symmetries,
+    }
+
+
+def _build_video_dict(vid: Video, index: int, n_labeled_frames: int) -> dict:
+    """Build a JSON-serializable dict describing a video within a labels file."""
+    filenames = _get_image_filenames(vid)
+    is_embedded = _is_embedded(vid)
+
+    d: dict[str, Any] = {
+        "index": index,
+        "filename": vid.filename,
+        "type": _get_video_type(vid),
+        "embedded": is_embedded,
+        "exists": bool(vid.exists()),
+        "backend_loaded": vid.backend is not None,
+        "plugin": _get_plugin(vid),
+        "shape": None,
+        "shape_source": _get_shape_source(vid),
+        "n_labeled_frames": n_labeled_frames,
+    }
+
+    if filenames is not None:
+        d["n_images"] = len(filenames)
+
+    if vid.shape:
+        n_frames, h, w, c = vid.shape
+        d["shape"] = {"frames": n_frames, "height": h, "width": w, "channels": c}
+
+    dataset = _get_dataset(vid)
+    if dataset:
+        d["dataset"] = dataset
+
+    if is_embedded and isinstance(vid.backend, HDF5Video):
+        d["image_format"] = vid.backend.image_format
+        inds = vid.backend.source_inds
+        if inds is not None and len(inds):
+            # Summarize rather than dump: embedded packages can hold thousands
+            # of source indices.
+            d["embedded_frames"] = {
+                "n": len(inds),
+                "first": inds[0],
+                "last": inds[-1],
+            }
+
+    if vid.source_video is not None:
+        src = vid.source_video
+        src_d: dict[str, Any] = {
+            "filename": src.filename,
+            "type": _get_video_type(src),
+            "shape": None,
+        }
+        src_shape = src.backend_metadata.get("shape")
+        if src_shape and len(src_shape) == 4:
+            src_frames, src_h, src_w, src_c = src_shape
+            src_d["shape"] = {
+                "frames": src_frames,
+                "height": src_h,
+                "width": src_w,
+                "channels": src_c,
+            }
+        d["source_video"] = src_d
+    else:
+        d["source_video"] = None
+
+    return d
+
+
+def _build_instance_dict(inst: Instance, index: int) -> dict:
+    """Build a JSON-serializable dict describing an instance in a frame."""
+    is_predicted = isinstance(inst, PredictedInstance)
+    pts = inst.numpy()
+    points: list[list[float | None]] = []
+    for pt in pts:
+        if np.all(np.isfinite(pt)):
+            points.append([round(float(pt[0]), 2), round(float(pt[1]), 2)])
+        else:
+            points.append([None, None])
+
+    d: dict[str, Any] = {
+        "index": index,
+        "type": "predicted" if is_predicted else "user",
+        "track": inst.track.name if inst.track else None,
+        "n_visible": inst.n_visible,
+        "n_nodes": len(inst),
+        "points": points,
+    }
+    if is_predicted:
+        d["score"] = inst.score
+    return d
+
+
+def _build_labeled_frame_dict(labels: Labels, frame_idx: int) -> dict:
+    """Build a JSON-serializable dict for the labeled frame at ``frame_idx``.
+
+    Args:
+        labels: Labels object to read from.
+        frame_idx: Index into ``labels.labeled_frames`` (0-based).
+
+    Raises:
+        click.ClickException: If ``frame_idx`` is out of range.
+    """
+    if frame_idx < 0 or frame_idx >= len(labels.labeled_frames):
+        raise click.ClickException(
+            f"--lf out of range (0..{len(labels.labeled_frames) - 1})"
+        )
+
+    lf = labels.labeled_frames[frame_idx]
+    video_index = labels.videos.index(lf.video) if lf.video in labels.videos else None
+
+    return {
+        "lf_index": frame_idx,
+        "video_index": video_index,
+        "video_filename": lf.video.filename,
+        "frame_idx": lf.frame_idx,
+        "n_instances": len(lf),
+        "n_masks": len(lf.masks),
+        "n_rois": len(lf.rois),
+        "instances": [
+            _build_instance_dict(inst, i) for i, inst in enumerate(lf.instances)
+        ],
+    }
+
+
+def _iter_frame_summaries(labels: Labels):
+    """Yield per-labeled-frame summary dicts.
+
+    Uses the raw frame/instance tables when lazy-loaded so listing frames does
+    not force materialization of LabeledFrame objects.
+    """
+    if labels.is_lazy:
+        from sleap_io.io.slp import InstanceType
+
+        store = labels.labeled_frames._store
+        inst_types = store.instances_data["instance_type"]
+        for i, row in enumerate(store.frames_data):
+            start = int(row["instance_id_start"])
+            end = int(row["instance_id_end"])
+            types = inst_types[start:end]
+            n_user = int((types == InstanceType.USER).sum())
+            yield {
+                "lf_index": i,
+                "video_index": int(row["video"]),
+                "frame_idx": int(row["frame_idx"]),
+                "n_instances": end - start,
+                "n_user_instances": n_user,
+                "n_predicted_instances": (end - start) - n_user,
+            }
+    else:
+        video_indices = {v: i for i, v in enumerate(labels.videos)}
+        for i, lf in enumerate(labels.labeled_frames):
+            n_user = len(lf.user_instances)
+            yield {
+                "lf_index": i,
+                "video_index": video_indices.get(lf.video),
+                "frame_idx": lf.frame_idx,
+                "n_instances": len(lf),
+                "n_user_instances": n_user,
+                "n_predicted_instances": len(lf) - n_user,
+            }
+
+
+def _print_frames_summary(labels: Labels) -> None:
+    """Print a compact per-labeled-frame listing."""
+    console.print()
+    console.print(f"[bold]Labeled Frames[/] ({len(labels.labeled_frames)})")
+    console.print()
+    console.print("  [dim]lf     video  frame_idx  instances (user/pred)[/]")
+    for fs in _iter_frame_summaries(labels):
+        console.print(
+            f"  [dim][{fs['lf_index']}][/] "
+            f"{fs['video_index']:>6} "
+            f"{fs['frame_idx']:>10}  "
+            f"{fs['n_instances']} "
+            f"({fs['n_user_instances']}/{fs['n_predicted_instances']})"
+        )
+
+
+def _build_labels_json(
+    path: Path,
+    labels: Labels,
+    lf_index: int | None = None,
+    include_frames: bool = False,
+) -> dict:
+    """Build the full JSON payload for ``sio show --json`` on a labels file.
+
+    Args:
+        path: Path of the loaded file.
+        labels: Loaded Labels object (eager or lazy).
+        lf_index: If given, include full detail for this labeled frame.
+        include_frames: If True, include a per-labeled-frame summary listing.
+
+    Returns:
+        JSON-serializable dict with file info, stats, skeletons, videos,
+        tracks, identities, and provenance.
+    """
+    file_size = path.stat().st_size if path.exists() else None
+    is_pkg = _is_pkg_slp(path)
+
+    n_total_frames = len(labels.labeled_frames)
+    frame_counts = labels.n_frames_per_video()
+    track_counts = labels.n_instances_per_track()
+
+    # Scanning instances for identity embeddings would force materialization
+    # of lazy labels; report null (unknown) instead in that case.
+    if labels.is_lazy:
+        n_with_embeddings = None
+    else:
+        n_with_embeddings = sum(
+            1
+            for lf in labels.labeled_frames
+            for inst in lf.instances
+            if inst.identity_embedding is not None
+        )
+
+    payload: dict[str, Any] = {
+        "path": str(path.resolve()),
+        "name": path.name,
+        "size_bytes": file_size,
+        "format": "labels_package" if is_pkg else "labels",
+        "stats": {
+            "n_videos": len(labels.videos),
+            "n_labeled_frames": n_total_frames,
+            "n_user_frames": labels.n_user_frames,
+            "n_user_instances": labels.n_user_instances,
+            "n_predicted_instances": labels.n_pred_instances,
+            "n_skeletons": len(labels.skeletons),
+            "n_tracks": len(labels.tracks),
+            "n_identities": len(labels.identities),
+            "n_masks": len(labels.masks),
+            "n_rois": len(labels.rois),
+            "n_instances_with_identity_embedding": n_with_embeddings,
+        },
+        "skeletons": [
+            _build_skeleton_dict(sk, i) for i, sk in enumerate(labels.skeletons)
+        ],
+        "videos": [
+            _build_video_dict(vid, i, frame_counts.get(vid, 0))
+            for i, vid in enumerate(labels.videos)
+        ],
+        "tracks": [
+            {"index": i, "name": t.name, "n_instances": track_counts.get(t, 0)}
+            for i, t in enumerate(labels.tracks)
+        ],
+        "identities": [
+            {"index": i, "name": ident.name}
+            for i, ident in enumerate(labels.identities)
+        ],
+        "provenance": dict(labels.provenance),
+    }
+
+    if include_frames:
+        payload["frames"] = list(_iter_frame_summaries(labels))
+
+    if lf_index is not None:
+        if n_total_frames == 0:
+            raise click.ClickException("No labeled frames present in file.")
+        payload["labeled_frame"] = _build_labeled_frame_dict(labels, lf_index)
+
+    return payload
+
+
+def _build_video_file_json(path: Path, video: Video) -> dict:
+    """Build the JSON payload for ``sio show --json`` on a standalone video."""
+    file_size = path.stat().st_size if path.exists() else None
+
+    payload: dict[str, Any] = {
+        "path": str(path.resolve()),
+        "name": path.name,
+        "size_bytes": file_size,
+        "format": "video",
+        "type": _get_video_type(video),
+        "shape": None,
+        "fps": video.fps,
+    }
+
+    if video.shape:
+        n_frames, h, w, c = video.shape
+        payload["shape"] = {
+            "frames": n_frames,
+            "height": h,
+            "width": w,
+            "channels": c,
+        }
+
+    enc_info = _get_video_encoding_info(path)
+    if enc_info:
+        payload["encoding"] = {
+            "codec": enc_info.codec,
+            "codec_profile": enc_info.codec_profile,
+            "pixel_format": enc_info.pixel_format,
+            "fps": enc_info.fps,
+            "bitrate_kbps": enc_info.bitrate_kbps,
+            "gop_size": enc_info.gop_size or _estimate_gop_size(path),
+        }
+
+    return payload
 
 
 @cli.command()
@@ -1888,6 +2238,22 @@ def _print_provenance(labels: Labels, compact: bool = False) -> None:
     is_flag=True,
     help="Print all available details.",
 )
+@click.option(
+    "frames",
+    "--frames",
+    is_flag=True,
+    help="List all labeled frames (index, video, frame_idx, instance counts).",
+)
+@click.option(
+    "as_json",
+    "--json",
+    is_flag=True,
+    help=(
+        "Output as JSON (machine-readable, includes all details). "
+        "Combine with --lf N for per-instance points and --frames for a "
+        "per-frame listing."
+    ),
+)
 def show(
     path_arg: Path | None,
     path_opt: Path | None,
@@ -1900,6 +2266,8 @@ def show(
     tracks: bool,
     provenance: bool,
     show_all: bool,
+    frames: bool,
+    as_json: bool,
 ):
     """Print labels file summary with rich formatting.
 
@@ -1908,6 +2276,10 @@ def show(
 
     Use the detail flags to show additional information.
 
+    Use --json for machine-readable output that includes all details
+    (skeletons, videos, tracks, identities, provenance) in one structured
+    document.
+
     [dim]Examples:[/]
 
         $ sio show labels.slp
@@ -1915,6 +2287,9 @@ def show(
         $ sio show labels.slp --skeleton
         $ sio show labels.slp --lf 0
         $ sio show labels.slp --all
+        $ sio show labels.slp --json
+        $ sio show labels.slp --json --lf 0
+        $ sio show labels.slp --json --frames
     """
     # Resolve input from positional arg or -i option
     path = _resolve_input(path_arg, path_opt, "input file")
@@ -1948,6 +2323,20 @@ def show(
         else:
             raise
 
+    if as_json:
+        if isinstance(obj, Labels):
+            payload = _build_labels_json(
+                path, obj, lf_index=lf_index, include_frames=frames
+            )
+        elif isinstance(obj, Video):
+            payload = _build_video_file_json(path, obj)
+        else:
+            raise click.ClickException(
+                f"--json is not supported for {type(obj).__name__} objects."
+            )
+        _echo_json(payload)
+        return
+
     if isinstance(obj, Labels):
         # Always show header
         _print_header(path, obj)
@@ -1980,6 +2369,9 @@ def show(
                 if len(obj.labeled_frames) == 0:
                     raise click.ClickException("No labeled frames present in file.")
                 _print_labeled_frame(obj, lf_index)
+
+        if frames:
+            _print_frames_summary(obj)
 
         # Always show provenance if present
         # Use compact mode by default, full mode when -p/--provenance is explicitly used
@@ -3296,6 +3688,12 @@ def merge(
     default=False,
     help="Show all details: full image lists, source videos, original videos.",
 )
+@click.option(
+    "as_json",
+    "--json",
+    is_flag=True,
+    help="Output as JSON (inspection mode only, includes source/original videos).",
+)
 def filenames(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -3306,6 +3704,7 @@ def filenames(
     show_source: bool,
     show_original: bool,
     show_all: bool,
+    as_json: bool,
 ):
     r"""List or update video filenames in a labels file.
 
@@ -3355,6 +3754,30 @@ def filenames(
 
     # Inspection mode: just list filenames
     if not has_update_flags:
+        if as_json:
+            videos_payload = []
+            for i, vid in enumerate(labels.videos):
+                entry: dict[str, Any] = {"index": i, "filename": vid.filename}
+                if isinstance(vid.filename, list):
+                    entry["n_images"] = len(vid.filename)
+                entry["source"] = (
+                    vid.source_video.filename if vid.source_video is not None else None
+                )
+                entry["original"] = (
+                    vid.original_video.filename
+                    if vid.original_video is not None
+                    else None
+                )
+                videos_payload.append(entry)
+            _echo_json(
+                {
+                    "path": str(input_path.resolve()),
+                    "name": input_path.name,
+                    "videos": videos_payload,
+                }
+            )
+            return
+
         # Determine effective flags
         show_source_effective = show_source or show_all
         show_original_effective = show_original or show_all
@@ -3386,6 +3809,11 @@ def filenames(
         return
 
     # Update mode: require -o
+    if as_json:
+        raise click.ClickException(
+            "--json is only supported in inspection mode "
+            "(without --filename, --map, or --prefix)"
+        )
     if output_path is None:
         raise click.ClickException(
             "Output path (-o) required when using --filename, --map, or --prefix"

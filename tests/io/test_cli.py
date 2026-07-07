@@ -662,6 +662,291 @@ def test_show_short_flags():
     assert "Tracks" in _strip_ansi(result.output)
 
 
+def _invoke_json(args: list[str]) -> dict:
+    """Invoke the CLI and parse its stdout as JSON."""
+    runner = CliRunner()
+    result = runner.invoke(cli, args)
+    assert result.exit_code == 0, result.output
+    return json.loads(result.output)
+
+
+def test_show_json_labels():
+    """`sio show --json` emits a full machine-readable summary."""
+    path = _data_path("slp/typical.slp")
+    data = _invoke_json(["show", str(path), "--json", "--no-open-videos"])
+
+    assert data["name"] == "typical.slp"
+    assert data["format"] == "labels"
+    assert data["size_bytes"] > 0
+
+    stats = data["stats"]
+    assert stats["n_videos"] == 1
+    assert stats["n_labeled_frames"] == 1
+    assert stats["n_user_instances"] == 2
+    assert stats["n_predicted_instances"] == 1
+    assert stats["n_tracks"] == 2
+
+    # Full skeleton detail is always included in JSON mode.
+    sk = data["skeletons"][0]
+    assert sk["nodes"] == ["A", "B"]
+    assert sk["edges"] == [{"source": "A", "destination": "B", "indices": [0, 1]}]
+
+    vid = data["videos"][0]
+    assert vid["index"] == 0
+    assert vid["type"] == "MediaVideo"
+    assert vid["n_labeled_frames"] == 1
+
+    assert [t["name"] for t in data["tracks"]] == ["1", "2"]
+    assert "provenance" in data
+
+    # --lf/--frames extras are absent unless requested.
+    assert "labeled_frame" not in data
+    assert "frames" not in data
+
+
+def test_show_json_skeleton_symmetries():
+    """JSON skeletons include symmetry pairs when present."""
+    path = _data_path("slp/centered_pair_predictions.slp")
+    data = _invoke_json(["show", str(path), "--json", "--no-open-videos"])
+    sk = data["skeletons"][0]
+    assert len(sk["symmetries"]) > 0
+    assert all(len(pair) == 2 for pair in sk["symmetries"])
+
+
+def test_show_json_lf_points():
+    """`--json --lf N` includes per-instance points and metadata."""
+    path = _data_path("slp/typical.slp")
+    data = _invoke_json(["show", str(path), "--json", "--lf", "0", "--no-open-videos"])
+
+    lf = data["labeled_frame"]
+    assert lf["lf_index"] == 0
+    assert lf["video_index"] == 0
+    assert lf["n_instances"] == 3
+
+    inst = lf["instances"][0]
+    assert inst["type"] == "user"
+    assert inst["track"] == "1"
+    assert inst["n_nodes"] == 2
+    assert len(inst["points"]) == 2
+    assert all(len(pt) == 2 for pt in inst["points"])
+    assert "score" not in inst
+
+    pred = lf["instances"][2]
+    assert pred["type"] == "predicted"
+    assert "score" in pred
+
+
+def test_show_json_lf_out_of_range():
+    """`--json --lf N` errors cleanly on out-of-range indices."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(
+        cli, ["show", str(path), "--json", "--lf", "9999", "--no-open-videos"]
+    )
+    assert result.exit_code != 0
+    assert "out of range" in result.output
+
+
+def test_show_json_empty_labels_with_lf(tmp_path):
+    """`--json --lf N` errors cleanly when the file has no labeled frames."""
+    from sleap_io import save_file
+
+    slp_path = tmp_path / "empty.slp"
+    save_file(Labels(), slp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--json", "--lf", "0", "--no-open-videos"]
+    )
+    assert result.exit_code != 0
+    assert "No labeled frames present in file" in result.output
+
+
+def test_show_json_frames_lazy_matches_eager():
+    """The `--frames` listing is identical for lazy and eager loading."""
+    path = _data_path("slp/typical.slp")
+    lazy = _invoke_json(["show", str(path), "--json", "--frames", "--no-open-videos"])
+    eager = _invoke_json(
+        ["show", str(path), "--json", "--frames", "--no-lazy", "--no-open-videos"]
+    )
+
+    assert lazy["frames"] == eager["frames"]
+    frame = lazy["frames"][0]
+    assert frame == {
+        "lf_index": 0,
+        "video_index": 0,
+        "frame_idx": 0,
+        "n_instances": 3,
+        "n_user_instances": 2,
+        "n_predicted_instances": 1,
+    }
+
+
+def test_show_json_identities_and_embeddings(tmp_path):
+    """JSON output reports identities and the embedding count (eager only)."""
+    slp_path = tmp_path / "ids_emb.slp"
+    _make_identity_slp(slp_path, with_embeddings=True)
+
+    data = _invoke_json(
+        ["show", str(slp_path), "--json", "--no-lazy", "--no-open-videos"]
+    )
+    assert data["stats"]["n_identities"] == 2
+    assert data["stats"]["n_instances_with_identity_embedding"] == 1
+    assert [i["name"] for i in data["identities"]] == ["mouse_A", "mouse_B"]
+
+    # Lazy loading skips the embedding scan and reports null (unknown).
+    lazy = _invoke_json(["show", str(slp_path), "--json", "--no-open-videos"])
+    assert lazy["stats"]["n_instances_with_identity_embedding"] is None
+
+
+def test_show_json_embedded_pkg():
+    """JSON output describes embedded videos when backends are open."""
+    path = _data_path("slp/minimal_instance.pkg.slp")
+    data = _invoke_json(["show", str(path), "--json", "--open-videos"])
+
+    assert data["format"] == "labels_package"
+    vid = data["videos"][0]
+    assert vid["embedded"] is True
+    assert vid["type"] == "HDF5Video"
+    assert vid["shape"] is not None
+    assert vid["embedded_frames"]["n"] == vid["shape"]["frames"]
+
+
+def test_show_json_video_file():
+    """`sio show --json` on a standalone video emits shape and encoding info."""
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+    data = _invoke_json(["show", str(path), "--json", "--open-videos"])
+
+    assert data["format"] == "video"
+    assert data["type"] == "MediaVideo"
+    assert data["shape"]["frames"] == 1100
+    assert data["shape"]["height"] == 384
+    if _is_ffmpeg_available():
+        assert data["encoding"]["codec"] == "h264"
+
+
+def test_show_frames_text_mode():
+    """`--frames` without --json prints a per-frame listing."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(cli, ["show", str(path), "--frames", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Labeled Frames (1)" in out
+    assert "frame_idx" in out
+
+
+def test_json_sanitize_edge_cases():
+    """_json_sanitize converts numpy types and non-finite floats."""
+    from sleap_io.io.cli import _json_sanitize
+
+    assert _json_sanitize(np.int64(5)) == 5
+    assert _json_sanitize(np.float32(1.5)) == 1.5
+    assert _json_sanitize(float("nan")) is None
+    assert _json_sanitize(float("inf")) is None
+    assert _json_sanitize(np.array([1, 2])) == [1, 2]
+    assert _json_sanitize((1, "a")) == [1, "a"]
+    assert _json_sanitize({1: Path("x")}) == {"1": "x"}
+    assert _json_sanitize({"k": [True, None]}) == {"k": [True, None]}
+
+
+def test_show_json_image_sequence_video(tmp_path):
+    """JSON video entries report image counts for image-sequence videos."""
+    imgs = [
+        str(_data_path("videos/imgs/img.00.jpg")),
+        str(_data_path("videos/imgs/img.01.jpg")),
+        str(_data_path("videos/imgs/img.02.jpg")),
+    ]
+    video = Video(filename=imgs)
+    labels = Labels(videos=[video], skeletons=[Skeleton(nodes=["A"])])
+    slp_path = tmp_path / "imgseq.slp"
+    save_slp(labels, str(slp_path))
+
+    data = _invoke_json(["show", str(slp_path), "--json", "--no-open-videos"])
+    vid = data["videos"][0]
+    assert vid["n_images"] == 3
+    assert isinstance(vid["filename"], list)
+    assert len(vid["filename"]) == 3
+
+
+def test_show_json_occluded_points(tmp_path):
+    """Occluded (NaN) points serialize as [null, null] in JSON."""
+    skeleton = Skeleton(["head", "tail"])
+    video = Video(filename="dummy.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    inst = Instance.from_numpy(
+        np.array([[10.0, 20.0], [np.nan, np.nan]]), skeleton=skeleton
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
+    slp_path = tmp_path / "occluded.slp"
+    save_slp(labels, str(slp_path))
+
+    data = _invoke_json(
+        ["show", str(slp_path), "--json", "--lf", "0", "--no-open-videos"]
+    )
+    inst_d = data["labeled_frame"]["instances"][0]
+    assert inst_d["points"] == [[10.0, 20.0], [None, None]]
+    assert inst_d["n_visible"] == 1
+
+
+def test_build_video_dict_source_video_shape():
+    """Source video shape metadata is included when available."""
+    from sleap_io.io.cli import _build_video_dict
+
+    source = Video(
+        filename="original.mp4",
+        backend_metadata={"shape": (100, 384, 384, 1)},
+        open_backend=False,
+    )
+    video = Video(
+        filename="labels.pkg.slp",
+        source_video=source,
+        open_backend=False,
+    )
+    d = _build_video_dict(video, 0, 5)
+    assert d["source_video"]["filename"] == "original.mp4"
+    assert d["source_video"]["shape"] == {
+        "frames": 100,
+        "height": 384,
+        "width": 384,
+        "channels": 1,
+    }
+
+
+def test_filenames_json():
+    """`sio filenames --json` lists videos with source/original fields."""
+    path = _data_path("slp/minimal_instance.pkg.slp")
+    data = _invoke_json(["filenames", str(path), "--json"])
+
+    assert data["name"] == "minimal_instance.pkg.slp"
+    vid = data["videos"][0]
+    assert vid["index"] == 0
+    assert "filename" in vid
+    assert "source" in vid
+    assert "original" in vid
+
+
+def test_filenames_json_rejects_update_flags(tmp_path):
+    """`--json` combined with update flags errors instead of writing."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            str(path),
+            "--json",
+            "-o",
+            str(tmp_path / "out.slp"),
+            "--filename",
+            "/new/video.mp4",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "inspection mode" in result.output
+    assert not (tmp_path / "out.slp").exists()
+
+
 def test_show_skeleton_with_symmetries():
     """Test skeleton display shows symmetries when present."""
     runner = CliRunner()
