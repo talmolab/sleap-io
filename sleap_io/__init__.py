@@ -90,6 +90,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "RecordingSession",
         ],
         "model.embedding": ["Embedding"],
+        "model.event": ["Event", "EventType", "UserEvent", "PredictedEvent"],
         "model.identity": ["Identity"],
         "model.instance": [
             "Instance",
