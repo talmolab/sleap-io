@@ -1014,6 +1014,11 @@ class Labels:
         """
         self._collect_event_types()
         for ev in self.events:
+            # An event may reference a video that carries no pose labels and so is
+            # not otherwise in the catalog; collect it (like suggestion videos in
+            # `update`) so its reference is not dropped (written as -1) on save.
+            if ev.video is not None and ev.video not in self.videos:
+                self.videos.append(ev.video)
             for participant in (ev.subject, ev.target):
                 if isinstance(participant, Track):
                     if participant not in self.tracks:
@@ -2729,6 +2734,11 @@ class Labels:
         for sf in self.suggestions:
             if sf.video in video_map:
                 sf.video = video_map[sf.video]
+
+        # Update frame-spanning events (video is a required field on every event).
+        for ev in self.events:
+            if ev.video in video_map:
+                ev.video = video_map[ev.video]
 
         # Update the list of videos.
         self.videos = [video_map.get(video, video) for video in self.videos]

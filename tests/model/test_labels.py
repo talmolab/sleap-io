@@ -9242,3 +9242,30 @@ def test_labels_merge_events():
     rear = la.get_events(type="rear")[0]
     assert rear.is_predicted
     assert_allclose(rear.scores, [0.1, 0.2, 0.3])
+
+
+def test_labels_collect_event_video():
+    """Constructing Labels collects an event's video into labels.videos."""
+    from sleap_io.model.event import UserEvent
+
+    v = Video(filename="clip.mp4")
+    # Video is referenced only by an event (no labeled frame / suggestion / videos=).
+    labels = Labels(
+        events=[UserEvent(type="stim", video=v, start_frame=5, end_frame=9)]
+    )
+    assert v in labels.videos
+
+
+def test_labels_replace_videos_remaps_events():
+    """replace_videos remaps event.video references onto the new videos."""
+    from sleap_io.model.event import UserEvent
+
+    old = Video(filename="old.mp4")
+    new = Video(filename="new.mp4")
+    labels = Labels(
+        videos=[old],
+        events=[UserEvent(type="x", video=old, start_frame=0, end_frame=2)],
+    )
+    labels.replace_videos(video_map={old: new})
+    assert labels.events[0].video is new
+    assert labels.videos == [new]

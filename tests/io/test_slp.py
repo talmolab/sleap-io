@@ -10746,3 +10746,62 @@ def test_slp_event_mixed_scalar_score(tmp_path):
     assert by_type["a"].score == pytest.approx(0.5) and by_type["a"].scores is None
     assert by_type["b"].score is None
     np.testing.assert_allclose(by_type["b"].scores, [0.1, 0.2, 0.3])
+
+
+def test_slp_event_only_video_roundtrip(tmp_path):
+    """A video referenced only by an event is persisted, not dropped to None."""
+    video = Video(filename="clip.mp4")
+    labels = Labels(
+        events=[UserEvent(type="stim", video=video, start_frame=5, end_frame=9)]
+    )
+    # Collected into the catalog at construction (not on any frame/suggestion).
+    assert video in labels.videos
+    path = tmp_path / "eventvid.slp"
+    save_slp(labels, path)
+    loaded = load_slp(path)
+    assert loaded.events[0].video is not None
+    assert loaded.events[0].video in loaded.videos
+
+
+def test_slp_event_only_video_roundtrip_lazy(tmp_path):
+    """An event-only video appended to a lazy Labels survives the lazy save path."""
+    base = Labels(videos=[Video(filename="base.mp4")])
+    path = tmp_path / "base.slp"
+    save_slp(base, path)
+
+    lazy = load_slp(path, lazy=True)
+    extra = Video(filename="extra.mp4")
+    lazy.events.append(UserEvent(type="x", video=extra, start_frame=0, end_frame=2))
+    path2 = tmp_path / "with_event.slp"
+    save_slp(lazy, path2)
+
+    loaded = load_slp(path2)
+    assert len(loaded.events) == 1
+    ev = loaded.events[0]
+    assert ev.video is not None and ev.video in loaded.videos
+    assert str(ev.video.filename).endswith("extra.mp4")
+
+
+def test_slp_event_video_survives_embed(tmp_path):
+    """event.video is remapped to the embedded video on save_slp(embed=True).
+
+    ``embed_videos`` swaps each source video for a new embedded one via
+    ``Labels.replace_videos``; without remapping ``event.video`` there, the event's
+    video would strand and serialize to the ``-1`` sentinel (silent data loss).
+    """
+    video = Video.from_filename("tests/data/videos/small_robot_3_frame.mp4")
+    lf = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        events=[UserEvent(type="attack", video=video, start_frame=0, end_frame=0)],
+    )
+    out = tmp_path / "embedded.pkg.slp"
+    save_slp(labels, out, embed=True)
+
+    loaded = load_slp(out)
+    assert len(loaded.events) == 1
+    ev = loaded.events[0]
+    # The video reference survives and points at the (embedded) catalog video.
+    assert ev.video is not None
+    assert ev.video in loaded.videos

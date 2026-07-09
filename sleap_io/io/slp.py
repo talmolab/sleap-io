@@ -7541,6 +7541,12 @@ def _write_labels_lazy(
     else:
         reference_mode = VideoReferenceMode.EMBED
 
+    # Collect event catalog + participants (including each event's own video)
+    # before write_videos / write_tracks so event videos/tracks/identities land in
+    # the written catalogs (events live on top-level lists, not the lazy store, so
+    # this is identical to the eager path).
+    labels._collect_events()
+
     # Write videos metadata (uses labels.videos which may have been modified)
     write_videos(
         labels_path,
@@ -7554,10 +7560,6 @@ def _write_labels_lazy(
     write_video_crops(labels_path, labels)
 
     # Write other metadata
-    # Collect event catalog + participants before write_tracks so event tracks/
-    # identities land in the written catalogs (events live on top-level lists, not
-    # the lazy store, so this is identical to the eager path).
-    labels._collect_events()
     write_tracks(labels_path, labels.tracks)
     # Persist identities + per-detection identity links + embeddings directly from
     # the lazy store, mirroring the eager writer (write_identities /
@@ -7847,6 +7849,14 @@ def write_labels(
                 (video_map.get(video, video), frame_idx) for video, frame_idx in embed
             ]
 
+    # Auto-collect event catalog entries + participants (event types into
+    # labels.event_types, subject/target tracks/identities into labels.tracks/
+    # labels.identities, and the event's own video into labels.videos) BEFORE the
+    # original-videos snapshot and embedding, so an event-only video is embedded and
+    # remapped like any other and every event reference is persisted (a post-hoc
+    # `labels.events.append(...)` is not dropped). Mutates labels (eager path).
+    labels._collect_events()
+
     # Store original videos before embedding modifies them
     # We need to make a copy of the actual video objects, not just the list
     original_videos = [v for v in labels.videos] if embed else None
@@ -7881,11 +7891,6 @@ def write_labels(
     # Emit virtual crop records (after videos_json so indices line up). Omitted
     # entirely when no video is cropped (uncropped files stay byte-identical).
     write_video_crops(labels_path, labels)
-    # Auto-collect event catalog entries + participants (event types into
-    # labels.event_types, subject/target tracks/identities into labels.tracks/
-    # labels.identities) BEFORE write_tracks / write_identities so a post-hoc
-    # `labels.events.append(...)` is fully persisted. Mutates labels (eager path).
-    labels._collect_events()
     write_tracks(labels_path, labels.tracks)
     # Auto-collect any detection identity not yet registered in the catalog
     # (object-identity deduped) so post-hoc `inst.identity` / `mask.identity`
