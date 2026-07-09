@@ -9269,3 +9269,17 @@ def test_labels_replace_videos_remaps_events():
     labels.replace_videos(video_map={old: new})
     assert labels.events[0].video is new
     assert labels.videos == [new]
+
+
+def test_labels_merge_event_only_video():
+    """Merging a Labels whose event references an event-only video keeps the video."""
+    from sleap_io.model.event import UserEvent
+
+    la = Labels(videos=[Video(filename="a.mp4")])
+    vb = Video(filename="b.mp4")
+    lb = Labels(events=[UserEvent(type="x", video=vb, start_frame=0, end_frame=2)])
+    la.merge(lb)
+    assert len(la.events) == 1
+    ev = la.events[0]
+    assert ev.video is not None
+    assert ev.video in la.videos
