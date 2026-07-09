@@ -148,14 +148,73 @@ False
 | `scores` | `np.ndarray \| None` | *(PredictedEvent)* framewise `(n_frames,)` trace, `float32` |
 | `score` | `float \| None` | *(PredictedEvent)* scalar event-level confidence |
 
+## On `Labels`
+
+Events and their catalog live on the top-level container as two lists,
+[`Labels.events`][sleap_io.Labels] and `Labels.event_types` — siblings of `videos` /
+`tracks` / `suggestions`, **not** nested on any [`LabeledFrame`](labels.md) (an event
+may cover frames that carry no pose labels). Constructing a `Labels` auto-collects the
+catalog (deduped by name) and any `Track` / `Identity` used as a participant, exactly
+like tracks are collected from instances:
+
+```pycon
+>>> import sleap_io as sio
+>>> video = sio.Video(filename="clip.mp4")
+>>> mouse1, mouse2 = sio.Track(name="mouse1"), sio.Track(name="mouse2")
+>>> labels = sio.Labels(
+...     videos=[video],
+...     tracks=[mouse1, mouse2],
+...     events=[
+...         sio.UserEvent(type="attack", video=video, start_frame=100,
+...                       end_frame=140, subject=mouse1, target=mouse2),
+...         sio.UserEvent(type="rear", video=video, start_frame=120, subject=mouse2),
+...     ],
+... )
+>>> [et.name for et in labels.event_types]   # catalog auto-collected from events
+['attack', 'rear']
+>>> len(labels.get_events(type="attack"))
+1
+>>> len(labels.events_at(video, 130))        # events whose span covers frame 130
+1
+
+```
+
+[`get_events`][sleap_io.Labels.get_events] filters by `video`, `subject`, `type` (an
+`EventType` or a bare name), `frame_idx` (events whose span *covers* that frame), and
+`predicted`. [`events_at`][sleap_io.Labels.events_at] is the shorthand for "what is
+happening at this frame?". `copy()` and `merge()` carry events across too: merging
+concatenates events, dedupes the catalog by name, and rebinds each event's
+video / subject / target / type onto the merged catalogs.
+
+## SLP persistence
+
+Events persist to SLP in **format 2.6+** via two additive, presence-guarded HDF5 groups
+(older readers ignore them; event-free files are byte-identical):
+
+- `/event_types` — the catalog (a `name` string dataset, an optional `description`, and
+  an optional entity-attribute-value `meta_*` table), mirroring `/identity`.
+- `/events` — a columnar struct-of-arrays (one dataset per field, like `/bboxes`) plus a
+  ragged CSR pair (`scores` flat float32 + `score_offsets`) for the optional framewise
+  `PredictedEvent.scores`. Participants are stored as a `(kind, idx)` pair
+  (`0`=none/self, `1`=track, `2`=identity). The scalar `score` column and both trace
+  datasets are written only when some event uses them, so unused features cost zero
+  bytes.
+
+```python
+labels.save("behavior.slp")            # writes /event_types + /events (format 2.6)
+loaded = sio.load_slp("behavior.slp")  # events + catalog fully reconstructed
+loaded.events, loaded.event_types
+```
+
 ---
 
 !!! note "See also"
 
     - **[Poses](poses.md)** and **[Embeddings](embedding.md)**: the `Track` and
       `Identity` catalogs that events reference as participants.
-    - **[Labels & Frames](labels.md)**: the top-level container. Attaching events to
-      `Labels` and persisting them to the SLP format land in follow-up work.
+    - **[Labels & Frames](labels.md)**: the top-level container holding
+      `labels.events` / `labels.event_types` and the `get_events()` / `events_at()`
+      queries.
 
 ---
 
