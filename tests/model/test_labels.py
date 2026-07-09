@@ -9069,3 +9069,176 @@ def test_labels_convert_lazy_read_only_allowed(slp_typical):
 
     results = lazy.convert("centroid", source="pose")
     assert isinstance(results, list)
+
+
+# --- Frame-spanning events -------------------------------------------------
+
+
+def test_labels_events_collection():
+    """Constructing Labels collects event types (name-dedup) and participants."""
+    from sleap_io.model.event import EventType, PredictedEvent, UserEvent
+
+    v = Video(filename="clip.mp4")
+    m1, m2 = Track(name="mouse1"), Track(name="mouse2")
+    idA = Identity(name="mouseA")
+    # Two separate string-typed "attack" events -> one catalog entry, rebound.
+    e1 = UserEvent(
+        type="attack", video=v, start_frame=0, end_frame=5, subject=m1, target=m2
+    )
+    e2 = UserEvent(type="attack", video=v, start_frame=10, subject=m2)
+    e3 = PredictedEvent(type="rear", video=v, start_frame=3, subject=idA)
+    labels = Labels(videos=[v], events=[e1, e2, e3])
+
+    assert sorted(et.name for et in labels.event_types) == ["attack", "rear"]
+    # Name-dedup rebinds both "attack" events to the canonical EventType.
+    assert e1.type is e2.type
+    assert isinstance(e1.type, EventType)
+    # Participants collected into the catalogs.
+    assert m1 in labels.tracks and m2 in labels.tracks
+    assert idA in labels.identities
+
+
+def test_labels_events_collection_preserves_existing_catalog():
+    """A pre-supplied event_types entry is the canonical one events bind to."""
+    from sleap_io.model.event import EventType, UserEvent
+
+    v = Video(filename="clip.mp4")
+    canonical = EventType(name="attack", description="canonical")
+    e = UserEvent(type="attack", video=v, start_frame=0)  # distinct EventType object
+    labels = Labels(videos=[v], event_types=[canonical], events=[e])
+    assert len(labels.event_types) == 1
+    assert e.type is canonical
+
+
+def test_labels_get_events():
+    """get_events filters by video, subject, type, frame span, and predicted."""
+    from sleap_io.model.event import PredictedEvent, UserEvent
+
+    v = Video(filename="clip.mp4")
+    m1, m2 = Track(name="mouse1"), Track(name="mouse2")
+    e1 = UserEvent(type="attack", video=v, start_frame=10, end_frame=20, subject=m1)
+    e2 = UserEvent(type="attack", video=v, start_frame=30, end_frame=40, subject=m2)
+    e3 = UserEvent(type="rear", video=v, start_frame=15, subject=m1)
+    e4 = PredictedEvent(type="freeze", video=v, start_frame=12, end_frame=18)
+    labels = Labels(videos=[v], tracks=[m1, m2], events=[e1, e2, e3, e4])
+
+    assert len(labels.get_events()) == 4
+    assert set(labels.get_events(type="attack")) == {e1, e2}
+    # type accepts an EventType too (matched by name).
+    attack_type = next(et for et in labels.event_types if et.name == "attack")
+    assert set(labels.get_events(type=attack_type)) == {e1, e2}
+    assert set(labels.get_events(subject=m1)) == {e1, e3}
+    assert labels.get_events(predicted=True) == [e4]
+    assert set(labels.get_events(predicted=False)) == {e1, e2, e3}
+    assert len(labels.get_events(video=v)) == 4
+    # frame_idx matches events whose inclusive span covers the frame.
+    assert set(labels.get_events(frame_idx=15)) == {e1, e3, e4}
+    assert labels.get_events(frame_idx=35) == [e2]
+    assert labels.get_events(frame_idx=100) == []
+
+
+def test_labels_events_at():
+    """events_at returns events covering a frame, optionally by subject."""
+    from sleap_io.model.event import UserEvent
+
+    v = Video(filename="clip.mp4")
+    m1 = Track(name="mouse1")
+    e1 = UserEvent(type="attack", video=v, start_frame=10, end_frame=20, subject=m1)
+    e2 = UserEvent(type="light_on", video=v, start_frame=0, end_frame=100)
+    labels = Labels(videos=[v], tracks=[m1], events=[e1, e2])
+
+    assert set(labels.events_at(v, 15)) == {e1, e2}
+    assert labels.events_at(v, 15, subject=m1) == [e1]
+    assert labels.events_at(v, 50) == [e2]
+
+
+def test_labels_copy_events_eager():
+    """copy() deep-copies events with references remapped onto the copied catalogs."""
+    from sleap_io.model.event import PredictedEvent, UserEvent
+
+    v = Video(filename="clip.mp4")
+    m1 = Track(name="mouse1")
+    idA = Identity(name="mouseA")
+    e1 = UserEvent(type="attack", video=v, start_frame=0, end_frame=5, subject=m1)
+    e2 = PredictedEvent(
+        type="freeze",
+        video=v,
+        start_frame=1,
+        end_frame=3,
+        scores=[0.1, 0.2, 0.3],
+        subject=idA,
+    )
+    labels = Labels(videos=[v], tracks=[m1], events=[e1, e2])
+
+    lc = labels.copy()
+    assert len(lc.events) == 2
+    ce1 = lc.events[0]
+    # Independent objects.
+    assert ce1 is not e1 and ce1.video is not v
+    # References remapped onto the copied catalogs.
+    assert ce1.video is lc.videos[0]
+    assert ce1.type in lc.event_types
+    assert ce1.subject in lc.tracks
+    ce2 = lc.events[1]
+    assert ce2.subject in lc.identities
+    assert_allclose(ce2.scores, [0.1, 0.2, 0.3])
+
+
+def test_labels_merge_events():
+    """Merge concatenates events, dedupes types by name, and rebinds references."""
+    from sleap_io.model.event import PredictedEvent, UserEvent
+
+    v1 = Video(filename="clip.mp4")
+    m1a = Track(name="mouse1")
+    la = Labels(
+        videos=[v1],
+        tracks=[m1a],
+        events=[
+            UserEvent(type="attack", video=v1, start_frame=0, end_frame=5, subject=m1a)
+        ],
+    )
+    v2 = Video(filename="clip.mp4")
+    m1b = Track(name="mouse1")
+    idB = Identity(name="mouseB")
+    lb = Labels(
+        videos=[v2],
+        tracks=[m1b],
+        identities=[idB],
+        events=[
+            UserEvent(
+                type="attack", video=v2, start_frame=10, end_frame=15, subject=m1b
+            ),
+            PredictedEvent(
+                type="rear",
+                video=v2,
+                start_frame=20,
+                end_frame=22,
+                subject=idB,
+                scores=[0.1, 0.2, 0.3],
+            ),
+        ],
+    )
+
+    res = la.merge(lb, video="basename", track="name")
+    assert res.successful
+    assert len(la.events) == 3
+    # Event types deduped by name.
+    assert sorted(et.name for et in la.event_types) == ["attack", "rear"]
+    # Every merged event references la's canonical catalogs.
+    for ev in la.events:
+        assert ev.type in la.event_types
+        assert ev.video in la.videos
+    attacks = la.get_events(type="attack")
+    assert len(attacks) == 2
+    assert attacks[0].type is attacks[1].type
+    # Name-merged track: incoming "attack" subject now references la's canonical track.
+    assert all(ev.subject in la.tracks for ev in attacks)
+    # Identity participant collected into la.
+    assert any(i.name == "mouseB" for i in la.identities)
+    # Source labels not mutated.
+    assert lb.events[0].video is v2
+    assert len(lb.events) == 2
+    # Predicted event scores preserved through the merge deep-copy.
+    rear = la.get_events(type="rear")[0]
+    assert rear.is_predicted
+    assert_allclose(rear.scores, [0.1, 0.2, 0.3])

@@ -118,6 +118,26 @@ file.slp
 │   ├── owner_type               # Dataset: uint8 (0=instance, 2=centroid, 3=mask, 4=bbox, 5=roi)
 │   └── owner_id                 # Dataset: int64 (global instance_id or per-modality list index)
 │
+├── /event_types/                # Group: frame-spanning event catalog (Format 2.6+, optional)
+│   ├── name                     # Dataset: vlen utf-8 str, one per event type (catalog order)
+│   ├── description              # Dataset: vlen utf-8 str (omitted if all descriptions empty)
+│   ├── meta_owner               # Dataset: int32 event-type index (EAV metadata; all three omitted if none)
+│   ├── meta_key                 # Dataset: vlen utf-8 str metadata key
+│   └── meta_val                 # Dataset: vlen utf-8 str metadata value
+│
+├── /events/                     # Group: frame-spanning event annotations (Format 2.6+, optional)
+│   ├── video                    # Dataset: int64 video index (-1 = none)
+│   ├── start_frame / end_frame  # Dataset: int64 inclusive interval bounds
+│   ├── type                     # Dataset: int64 index into /event_types (-1 = none)
+│   ├── subject_kind/target_kind # Dataset: int8 (0=none/self, 1=track, 2=identity)
+│   ├── subject_idx/target_idx   # Dataset: int64 index into tracks or identities (-1 = none)
+│   ├── is_predicted             # Dataset: bool (user vs predicted)
+│   ├── score                    # Dataset: float64 scalar confidence, NaN=unset (omitted if none set)
+│   ├── name / source            # Dataset: vlen utf-8 str free-text
+│   ├── scores                   # Dataset: float32 flat framewise traces, chunked+gzip (CSR; omitted if none)
+│   ├── score_offsets            # Dataset: int64 (n_events+1) CSR offsets into scores
+│   └── meta_owner/meta_key/meta_val  # Dataset: per-event EAV metadata (omitted if none)
+│
 └── /video{N}/                   # Group: Per-video embedded data (one per video)
     ├── /video                   # Dataset: Embedded image data
     │   ├── @format              # Attribute: "png", "jpg", or "hdf5"
@@ -158,6 +178,8 @@ file.slp
 | `sessions_json` | `bytes[]` | JSON array of recording sessions (optional) |
 | `identity/` | group | re-ID identity catalog: `name` dataset + optional `meta_owner`/`meta_key`/`meta_val` EAV metadata + per-detection `links` (Format 2.5+, optional) |
 | `embeddings/` | group | Per-detection re-ID embeddings: `vectors` `(N, D)` + `owner_type`/`owner_id` join columns (Format 2.5+, optional) |
+| `event_types/` | group | Frame-spanning event catalog: `name` dataset + optional `description` + `meta_*` EAV metadata (Format 2.6+, optional) |
+| `events/` | group | Frame-spanning event annotations: columnar per-field datasets + ragged CSR `scores`/`score_offsets` framewise traces (Format 2.6+, optional) |
 | `provenance_json` | `bytes` | JSON object of provenance metadata (optional) |
 
 ### Provenance storage and the 64 KB metadata limit
@@ -622,6 +644,36 @@ All vectors in a file share a single dimensionality `D`; a mix of dimensionaliti
 ### Optional Group
 
 The `/embeddings` group is only written when at least one detection carries an `identity_embedding` and embedding vectors are being persisted. Passing `save_slp(labels, path, save_embedding_vectors=False)` writes the identity `links` but skips the `/embeddings` group entirely, so the (potentially large) vectors are omitted while the identity assignments are kept. On read, a missing group means no detection receives an embedding.
+
+## Events
+
+Frame-spanning [`Event`][sleap_io.Event] annotations — behavior bouts, stimulus epochs, review flags, or any labeled time range — and their [`EventType`][sleap_io.EventType] catalog are stored in the optional `/event_types` and `/events` groups (Format 2.6+). Unlike every other annotation, an event has a *temporal extent* (an inclusive `[start_frame, end_frame]` interval) and lives on [`Labels.events`][sleap_io.Labels] rather than on any [`LabeledFrame`][sleap_io.LabeledFrame]. Bumps `format_id` to `2.6`; both groups are additive, so old readers ignore them and event-free files are byte-identical.
+
+### Catalog (`/event_types`)
+
+Mirrors `/identity`: a `name` string dataset (one per type, catalog order), an optional `description` string dataset (omitted when every description is empty), and an optional `meta_owner` / `meta_key` / `meta_val` EAV metadata table (omitted when no type carries metadata). [`Labels.event_types`][sleap_io.Labels] is the catalog, auto-collected and deduped by name from `labels.events` on save.
+
+### Annotations (`/events`)
+
+A columnar struct-of-arrays (one dataset per field, like `/bboxes`); row `i` of every dataset describes event `i`:
+
+| Dataset | Dtype | Description |
+|---------|-------|-------------|
+| `video` | `int64` | Index into the videos list (`-1` = none) |
+| `start_frame` / `end_frame` | `int64` | Inclusive interval bounds (stored `int64`, read defensively) |
+| `type` | `int64` | Index into `/event_types` (`-1` = none) |
+| `subject_kind` / `target_kind` | `int8` | Participant kind: `0`=none/self, `1`=track, `2`=identity |
+| `subject_idx` / `target_idx` | `int64` | Index into tracks (kind 1) or identities (kind 2) (`-1` = none) |
+| `is_predicted` | `bool` | User vs. predicted event |
+| `score` | `float64` | Scalar event-level confidence; NaN = unset. **Omitted** when no event sets one |
+| `name` / `source` | vlen `str` | Free-text |
+| `meta_owner` / `meta_key` / `meta_val` | mixed | Per-event EAV metadata (omitted when none) |
+
+Framewise `PredictedEvent.scores` traces are variable-length, so they are stored as a **ragged CSR pair** (the same idiom as mask RLE / ROI WKB): a flat `scores` (`float32`, chunked + gzip) dataset plus an `score_offsets` (`int64`, length `n_events + 1`) dataset. Event `i`'s trace is `scores[score_offsets[i]:score_offsets[i+1]]`; an event with no trace gets a zero-length slice. Both trace datasets are omitted entirely when no event has a framewise trace. The scalar `score` and the framewise `scores` are independent — a predictor may set either, both, or neither.
+
+### Optional Groups
+
+Both groups are only written when the [`Labels`][sleap_io.Labels] object has events / event types; every column is presence-guarded so unused features cost zero bytes. On read, missing groups default to empty `events` / `event_types` lists.
 
 ## Suggestions
 

@@ -236,6 +236,49 @@ Identities persist into SLP format v2.5+ and `Instance3D` into v1.9+, so round-t
 !!! note "See also"
     [3D model](model/3d.md): `Camera`, `CameraGroup`, `RecordingSession`, `FrameGroup`, `InstanceGroup`, `Identity`, `Instance3D`.
 
+### Behavior segmentation with events (HITL)
+
+An [`Event`][sleap_io.Event] is the first frame-*spanning* annotation: a `(video, start_frame, end_frame, type)` interval for behavior bouts, stimulus epochs, review flags — anything with a temporal extent. Events live on `Labels.events` (not on a `LabeledFrame`), reference a [`Track`](model/poses.md) / [`Identity`](model/embedding.md) as `subject` / `target`, and draw their vocabulary from an [`EventType`][sleap_io.EventType] catalog. This is the data model for human-in-the-loop behavior segmentation: a model proposes `PredictedEvent`s and a human accepts/edits them as `UserEvent`s.
+
+```python title="events_hitl.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("session.slp")
+video = labels.videos[0]
+mouse1, mouse2 = labels.tracks[:2]
+
+# Define the ethogram once (a color is just conventional free-form metadata).
+attack = sio.EventType(name="attack", metadata={"color": "#e6194b"})
+
+# A model proposes bouts with framewise + scalar confidence (both optional).
+labels.events.append(
+    sio.PredictedEvent(
+        type=attack, video=video, start_frame=100, end_frame=140,   # inclusive
+        subject=mouse1, target=mouse2,                              # directed
+        scores=[0.6] * 41, score=0.74,
+    )
+)
+# A human accepts/edits it as ground truth (a bare string auto-promotes to an
+# EventType(name=...); target=None means non-directed / "self").
+labels.events.append(
+    sio.UserEvent(type="rear", video=video, start_frame=120, subject=mouse1)
+)
+
+# Query what is happening, when, and to whom.
+labels.get_events(type="attack", predicted=True)     # model proposals to review
+labels.events_at(video, 130)                         # events covering frame 130
+[e for e in labels.get_events(subject=mouse1) if e.is_directed]
+
+# Persists to SLP format 2.6+ (additive /event_types + /events groups).
+labels.save("session_scored.slp")
+scored = sio.load_slp("session_scored.slp")
+scored.events, scored.event_types
+```
+
+!!! note "See also"
+    - [Events model](model/events.md) — full API, frame convention, and SLP format details
+    - [Poses](model/poses.md) / [Embeddings](model/embedding.md) — the `Track` / `Identity` catalogs events reference
+
 ### Reading and writing GeoJSON ROIs
 
 ROIs are serializable to the `movement`-compatible GeoJSON format used by Shapely, GeoPandas, QGIS, and QuPath. Each ROI also implements the Python [`__geo_interface__`](https://gist.github.com/sgillies/2217756) protocol so it plugs straight into any `geopandas.GeoDataFrame`.

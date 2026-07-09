@@ -22,6 +22,7 @@ from attrs import define, field
 
 from sleap_io.io.utils import sanitize_filename
 from sleap_io.model.camera import RecordingSession
+from sleap_io.model.event import Event, EventType
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import (
@@ -74,6 +75,13 @@ class Labels:
         tracks: A list of `Track`s that are associated with this dataset.
         identities: A list of `Identity`s for ground-truth animal identification,
             persistent across sessions and videos.
+        event_types: A list of `EventType`s -- the catalog / controlled vocabulary
+            (the "ethogram") referenced by `events`. Name-matched across files, like
+            `tracks` / `identities`.
+        events: A list of `Event`s -- frame-spanning interval annotations (behavior
+            bouts, stimulus epochs, review flags, ...). Unlike the per-frame
+            annotations these are stored here, not on individual `LabeledFrame`s,
+            since an event may cover frames that carry no pose labels.
         suggestions: A list of `SuggestionFrame`s that are associated with this dataset.
         sessions: A list of `RecordingSession`s that are associated with this dataset.
         provenance: Dictionary of metadata about where the dataset came from.
@@ -128,6 +136,14 @@ class Labels:
     suggestions: list[SuggestionFrame] = field(factory=list)
     sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
+
+    # Frame-spanning event annotations and their catalog (controlled vocabulary).
+    # Unlike per-frame annotations these are NOT stored on `LabeledFrame`s -- an
+    # event may cover frames with no pose labels -- so they live here as top-level
+    # lists, siblings of `videos` / `tracks` / `suggestions`. Keyword-only so the
+    # positional constructor signature is unchanged.
+    event_types: list[EventType] = field(factory=list, kw_only=True)
+    events: list[Event] = field(factory=list, kw_only=True)
 
     # Static ROIs: ROIs not tied to any specific frame (e.g., arena boundaries).
     # Accepted via constructor with alias="rois" for backward compatibility.
@@ -519,6 +535,9 @@ class Labels:
         # Collect multi-view identities bound only on InstanceGroups (sessions).
         self._collect_session_identities()
 
+        # Register event catalog entries and participants referenced by events.
+        self._collect_events()
+
         for sf in self.suggestions:
             if sf.video not in self.videos:
                 self.videos.append(sf.video)
@@ -862,6 +881,24 @@ class Labels:
                     deepcopy(lf) for lf in self.labeled_frames._supplementary
                 ]
 
+            # Deep-copy the event catalog and events, remapping each event's
+            # references (video / subject / target / type) onto the copied catalog
+            # objects. A shared ``deepcopy`` memo seeded with id(old)->new for every
+            # video / track / identity / event-type makes each event's fields point
+            # at the copies, preserving the object-sharing the eager path gets for
+            # free from ``deepcopy(self)``.
+            memo: dict[int, Any] = {}
+            for old_obj, new_obj in zip(self.videos, new_videos):
+                memo[id(old_obj)] = new_obj
+            for old_obj, new_obj in zip(self.tracks, new_tracks):
+                memo[id(old_obj)] = new_obj
+            for old_obj, new_obj in zip(self.identities, new_identities):
+                memo[id(old_obj)] = new_obj
+            new_event_types = [deepcopy(et) for et in self.event_types]
+            for old_obj, new_obj in zip(self.event_types, new_event_types):
+                memo[id(old_obj)] = new_obj
+            new_events = [deepcopy(ev, memo) for ev in self.events]
+
             labels_copy = Labels(
                 labeled_frames=new_lazy_frames,
                 videos=new_videos,
@@ -871,6 +908,8 @@ class Labels:
                 suggestions=[deepcopy(s) for s in self.suggestions],
                 sessions=[deepcopy(s) for s in self.sessions],
                 provenance=dict(self.provenance),
+                event_types=new_event_types,
+                events=new_events,
                 lazy_store=new_store,
             )
         else:
@@ -960,6 +999,51 @@ class Labels:
                     identity = instance_group.identity
                     if identity is not None and identity not in self.identities:
                         self.identities.append(identity)
+
+    def _collect_events(self):
+        """Register catalog entries and participants referenced by `events`.
+
+        Sweeps ``self.events`` and ensures every referenced `EventType` is in
+        ``self.event_types`` (deduped by name, canonicalizing each event's ``type``
+        onto the first catalog entry of that name) and every `Track` / `Identity`
+        used as an event ``subject`` / ``target`` is registered in ``self.tracks`` /
+        ``self.identities``. Mirrors `_collect_annotation_tracks` /
+        `_collect_identities`: called from `update()` (build path) and again at save
+        time so post-hoc ``labels.events.append(...)`` assignments are not dropped.
+        Idempotent and a cheap no-op when there are no events.
+        """
+        self._collect_event_types()
+        for ev in self.events:
+            for participant in (ev.subject, ev.target):
+                if isinstance(participant, Track):
+                    if participant not in self.tracks:
+                        self.tracks.append(participant)
+                elif isinstance(participant, Identity):
+                    if participant not in self.identities:
+                        self.identities.append(participant)
+
+    def _collect_event_types(self):
+        """Register every event's `EventType` in ``self.event_types`` by name.
+
+        Deduplicates the catalog by `EventType.name`: the first entry seen for a
+        given name is canonical, and every subsequent event carrying a distinct
+        same-named `EventType` object (e.g. from the string auto-promotion in the
+        `Event` constructor) is rebound to that canonical entry. This keeps a clean
+        one-entry-per-name catalog while letting callers pass either shared
+        `EventType` objects or bare strings. Mutates ``self.event_types`` and, when
+        rebinding, ``event.type``.
+        """
+        by_name: dict[str, EventType] = {}
+        for et in self.event_types:
+            by_name.setdefault(et.name, et)
+        for ev in self.events:
+            et = ev.type
+            canonical = by_name.get(et.name)
+            if canonical is None:
+                self.event_types.append(et)
+                by_name[et.name] = et
+            elif canonical is not et:
+                ev.type = canonical
 
     def append(self, lf: LabeledFrame, update: bool = True):
         """Append a labeled frame to the labels.
@@ -2321,6 +2405,74 @@ class Labels:
         if predicted is not None:
             results = [li for li in results if li.is_predicted == predicted]
         return results
+
+    def get_events(
+        self,
+        video: "Video | None" = None,
+        subject: "Track | Identity | None" = None,
+        type: "EventType | str | None" = None,
+        frame_idx: int | None = None,
+        predicted: bool | None = None,
+    ) -> list[Event]:
+        """Query frame-spanning events by video, subject, type, frame, or kind.
+
+        Unlike the per-frame ``get_*`` accessors, events are frame-spanning, so the
+        ``frame_idx`` filter matches every event whose inclusive span *covers* that
+        frame (``event.contains(frame_idx)``), not events "on" a single frame.
+
+        Args:
+            video: If specified, only return events for this video. A foreign
+                `Video` instance or filename is resolved via `match_video`.
+            subject: If specified, only return events with this `Track` or
+                `Identity` as their ``subject`` (object-identity comparison).
+            type: If specified, only return events of this type. Matched by name,
+                so either an `EventType` or a bare string name works.
+            frame_idx: If specified, only return events whose span covers this
+                frame index.
+            predicted: If ``True``, only return `PredictedEvent`s. If ``False``,
+                only `UserEvent`s. If ``None`` (default), return both.
+
+        Returns:
+            A list of matching events.
+        """
+        video = self._resolve_video(video)
+        results = list(self.events)
+        if video is not None:
+            results = [ev for ev in results if ev.video is video]
+        if frame_idx is not None:
+            results = [ev for ev in results if ev.contains(frame_idx)]
+        if subject is not None:
+            results = [ev for ev in results if ev.subject is subject]
+        if type is not None:
+            type_name = type.name if isinstance(type, EventType) else type
+            results = [ev for ev in results if ev.type.name == type_name]
+        if predicted is not None:
+            results = [ev for ev in results if ev.is_predicted == predicted]
+        return results
+
+    def events_at(
+        self,
+        video: "Video",
+        frame_idx: int,
+        subject: "Track | Identity | None" = None,
+    ) -> list[Event]:
+        """Return all events covering a given frame in a video.
+
+        Convenience wrapper over `get_events` for the common "what is happening at
+        this frame?" query: returns every event whose inclusive span covers
+        ``frame_idx`` in ``video``, optionally restricted to one ``subject``.
+
+        Args:
+            video: The video to query. A foreign `Video` instance or filename is
+                resolved via `match_video`.
+            frame_idx: The frame index to look up.
+            subject: If specified, only return events with this `Track` or
+                `Identity` as their ``subject`` (object-identity comparison).
+
+        Returns:
+            A list of events covering ``frame_idx`` in ``video``.
+        """
+        return self.get_events(video=video, frame_idx=frame_idx, subject=subject)
 
     def rename_nodes(
         self,
@@ -3863,6 +4015,23 @@ class Labels:
 
                 identity_map[id(other_identity)] = matched_identity
 
+            # Step 3c: Match and merge event types (dedupe by name). Mirrors the
+            # identity merge: the same event type across files collapses to one
+            # canonical catalog entry. ``event_type_map`` (keyed by the source
+            # type's object id) reroutes each incoming event's ``type`` onto the
+            # canonical entry in Step 5b.
+            event_type_map: dict[int, EventType] = {}
+            for other_event_type in other.event_types:
+                matched_event_type = None
+                for self_event_type in self.event_types:
+                    if self_event_type.matches(other_event_type):
+                        matched_event_type = self_event_type
+                        break
+                if matched_event_type is None:
+                    self.event_types.append(other_event_type)
+                    matched_event_type = other_event_type
+                event_type_map[id(other_event_type)] = matched_event_type
+
             # Step 4: Merge frames
             total_frames = len(other.labeled_frames)
 
@@ -4017,6 +4186,28 @@ class Labels:
                         video=mapped_video, frame_idx=other_suggestion.frame_idx
                     )
                     self.suggestions.append(new_suggestion)
+
+            # Step 5b: Merge events. Each incoming event is deep-copied (so the
+            # source Labels is never mutated) with its references rerouted onto this
+            # object's merged catalogs via a shared ``deepcopy`` memo: video (through
+            # ``video_map``), subject/target ``Track``s (``track_map``) and
+            # ``Identity``s (``identity_map``), and ``type`` (``event_type_map``).
+            # Events are a flat set of intervals with no per-frame identity, so they
+            # are concatenated wholesale (no dedup). ``other``'s participants/types
+            # were registered on it at construction, so every reference is in the
+            # memo; any stragglers are swept by the ``_collect_events`` below.
+            if other.events:
+                event_memo: dict[int, Any] = {}
+                for other_video_obj, mapped in video_map.items():
+                    event_memo[id(other_video_obj)] = mapped
+                for other_track_obj, mapped in track_map.items():
+                    event_memo[id(other_track_obj)] = mapped
+                event_memo.update(identity_map)
+                event_memo.update(event_type_map)
+                for other_event in other.events:
+                    self.events.append(deepcopy(other_event, event_memo))
+                # Canonicalize any references that fell outside the memo.
+                self._collect_events()
 
             # Update merge record
             merge_record["result"] = {
