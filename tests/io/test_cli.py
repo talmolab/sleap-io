@@ -37,8 +37,9 @@ from sleap_io.io.cli import (
     cli,
 )
 from sleap_io.model.embedding import Embedding
+from sleap_io.model.event import EventType, PredictedEvent, UserEvent
 from sleap_io.model.identity import Identity
-from sleap_io.model.instance import Instance, PredictedInstance
+from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
@@ -92,6 +93,43 @@ def _make_identity_slp(path: Path, *, with_embeddings: bool = False) -> Labels:
         identities=[id_a, id_b],
     )
     save_slp(labels, str(path), save_embedding_vectors=with_embeddings)
+    return labels
+
+
+def _make_event_slp(path: Path) -> Labels:
+    """Write a minimal .slp carrying frame-spanning events + a pose instance.
+
+    One labeled frame with a single instance (so pose exporters succeed) plus a
+    directed `UserEvent` (Track subject/target), a scalar-scored `PredictedEvent`
+    (Identity subject), and an `EventType` carrying metadata.
+    """
+    skeleton = Skeleton(["head", "tail"])
+    video = Video(filename="dummy.mp4", backend_metadata={"shape": (40, 64, 64, 3)})
+    m1, m2 = Track(name="m1"), Track(name="m2")
+    id_a = Identity(name="mouseA")
+    attack = EventType(name="attack", description="one attacks", metadata={"c": "#f00"})
+    inst = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[m1, m2],
+        events=[
+            UserEvent(
+                type=attack,
+                video=video,
+                start_frame=10,
+                end_frame=20,
+                subject=m1,
+                target=m2,
+            ),
+            PredictedEvent(
+                type="rear", video=video, start_frame=5, subject=id_a, score=0.9
+            ),
+        ],
+    )
+    save_slp(labels, str(path))
     return labels
 
 
@@ -797,6 +835,90 @@ def test_show_json_identities_and_embeddings(tmp_path):
     # Lazy loading skips the embedding scan and reports null (unknown).
     lazy = _invoke_json(["show", str(slp_path), "--json", "--no-open-videos"])
     assert lazy["stats"]["n_instances_with_identity_embedding"] is None
+
+
+def test_show_json_events(tmp_path):
+    """`sio show --json` reports events and event types (parity with identities)."""
+    slp_path = tmp_path / "events.slp"
+    _make_event_slp(slp_path)
+
+    data = _invoke_json(["show", str(slp_path), "--json", "--no-open-videos"])
+    assert data["stats"]["n_events"] == 2
+    assert data["stats"]["n_event_types"] == 2
+
+    assert [et["name"] for et in data["event_types"]] == ["attack", "rear"]
+    # Non-empty description / metadata are surfaced.
+    attack_type = data["event_types"][0]
+    assert attack_type["description"] == "one attacks"
+    assert attack_type["metadata"] == {"c": "#f00"}
+
+    user_ev, pred_ev = data["events"]
+    assert user_ev == {
+        "index": 0,
+        "type": "attack",
+        "video": 0,
+        "start_frame": 10,
+        "end_frame": 20,
+        "subject": {"kind": "track", "name": "m1"},
+        "target": {"kind": "track", "name": "m2"},
+        "predicted": False,
+    }
+    assert pred_ev["predicted"] is True
+    assert pred_ev["subject"] == {"kind": "identity", "name": "mouseA"}
+    assert pred_ev["target"] is None
+    assert pred_ev["score"] == pytest.approx(0.9)
+    assert pred_ev["has_framewise_scores"] is False
+
+
+def test_show_json_events_absent(tmp_path):
+    """A pose-only file reports zero events and empty event arrays (no crash)."""
+    data = _invoke_json(
+        ["show", str(_data_path("slp/typical.slp")), "--json", "--no-open-videos"]
+    )
+    assert data["stats"]["n_events"] == 0
+    assert data["stats"]["n_event_types"] == 0
+    assert data["events"] == []
+    assert data["event_types"] == []
+
+
+def test_show_reports_events(tmp_path):
+    """`sio show` shows an events chip in the header when events are present."""
+    slp_path = tmp_path / "events.slp"
+    _make_event_slp(slp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    assert "2 events" in _strip_ansi(result.output)
+
+
+def test_convert_warns_when_dropping_events(tmp_path):
+    """Converting an event file to a non-SLP format warns that events are dropped."""
+    src = tmp_path / "events.slp"
+    _make_event_slp(src)
+    out = tmp_path / "out.csv"
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["convert", str(src), "-o", str(out), "--to", "csv"])
+    assert result.exit_code == 0, result.output
+    text = _strip_ansi(result.output)
+    assert "2 events and 2 event types will be dropped" in text
+    assert "'csv' cannot represent events" in text
+
+
+def test_convert_slp_to_slp_preserves_events_no_warning(tmp_path):
+    """SLP->SLP conversion keeps events and issues no drop warning."""
+    src = tmp_path / "events.slp"
+    _make_event_slp(src)
+    out = tmp_path / "out.slp"
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["convert", str(src), "-o", str(out), "--to", "slp"])
+    assert result.exit_code == 0, result.output
+    assert "will be dropped" not in _strip_ansi(result.output)
+    reloaded = load_slp(str(out))
+    assert len(reloaded.events) == 2
+    assert len(reloaded.event_types) == 2
 
 
 def test_show_json_embedded_pkg():
