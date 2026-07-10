@@ -930,7 +930,8 @@ def _print_header(path: Path, labels: Labels) -> None:
     n_categories = len(labels.categories)
     if n_categories > 0:
         stats_parts.append(
-            f"[bold]{n_categories}[/] categor{'ies' if n_categories != 1 else 'y'}"
+            f"[bold]{n_categories}[/] "
+            f"{'categories' if n_categories != 1 else 'category'}"
         )
 
     # Segmentation masks and ROIs - only shown when present to avoid cluttering
