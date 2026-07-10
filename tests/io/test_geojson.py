@@ -53,7 +53,7 @@ def test_roundtrip_bbox(tmp_path):
     result = loaded[0]
     assert result.bounds == pytest.approx(roi.bounds)
     assert result.name == "my_box"
-    assert result.category == "det"
+    assert result.category.name == "det"
 
 
 def test_roundtrip_polygon(tmp_path):
@@ -96,7 +96,7 @@ def test_roundtrip_point(tmp_path):
     assert loaded[0].geometry.geom_type == "Point"
     assert loaded[0].geometry.x == pytest.approx(5)
     assert loaded[0].geometry.y == pytest.approx(10)
-    assert loaded[0].category == "anchor"
+    assert loaded[0].category.name == "anchor"
 
 
 def test_roundtrip_linestring(tmp_path):
@@ -128,7 +128,7 @@ def test_roundtrip_all_metadata(tmp_path):
 
     result = loaded[0]
     assert result.name == "full_meta"
-    assert result.category == "cat1"
+    assert result.category.name == "cat1"
     assert result.source == "model_v2"
 
 
@@ -185,7 +185,7 @@ def test_missing_properties_defaults(tmp_path):
     assert len(loaded) == 1
     roi = loaded[0]
     assert roi.name == ""
-    assert roi.category == ""
+    assert roi.category is None
     assert roi.source == ""
 
 

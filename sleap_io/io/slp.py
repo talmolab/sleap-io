@@ -39,6 +39,19 @@ Format version history:
             CSR pair (scores flat float32 + score_offsets int64) for optional
             framewise PredictedEvent.scores traces. Every column is presence-guarded;
             both groups additive, read on group presence.
+    - 2.7: Added the class/category subsystem, mirroring identity. The /categories
+            group is a fully self-contained mirror of /identity: a native `name`
+            string dataset + an optional entity-attribute-value metadata table
+            (meta_owner/meta_key/meta_val) forming the category catalog, plus a
+            per-detection `links` dataset (owner_type, owner_id, category_idx,
+            category_score) joining a detection to a catalog entry. Category
+            appearance vectors live in the SAME /embeddings group as sibling
+            parallel datasets (category_vectors (M, D) + category_owner_type /
+            category_owner_id join columns), independent of the identity
+            vectors/owner_type/owner_id datasets so the two embedding kinds need
+            not share dimensionality D. Identity-only files stay byte-identical
+            (no category_* datasets, no /categories group written). All additive,
+            read on group presence.
 """
 
 from __future__ import annotations
@@ -81,6 +94,7 @@ from sleap_io.model.camera import (
     InstanceGroup,
     RecordingSession,
 )
+from sleap_io.model.category import Category
 from sleap_io.model.embedding import Embedding
 from sleap_io.model.event import Event, EventType, PredictedEvent, UserEvent
 from sleap_io.model.identity import Identity
@@ -1740,6 +1754,103 @@ def write_identities(labels_path: str, identities: list[Identity]) -> None:
             )
 
 
+def read_categories(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> list[Category]:
+    """Read the category catalog from a SLEAP labels file.
+
+    Categories are stored in the optional ``/categories`` group (SLP format 2.7+)
+    as a native ``name`` string dataset plus an optional entity-attribute-value
+    metadata table (``meta_owner`` / ``meta_key`` / ``meta_val``, omitted when no
+    category carries metadata). This is a fully self-contained mirror of the
+    ``/identity`` catalog (`read_identities`). Absent in older files, in which case
+    an empty list is returned.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from.
+
+    Returns:
+        A list of `Category` objects in catalog order.
+    """
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
+        if "categories" not in f or "name" not in f["categories"]:
+            return []
+        group = f["categories"]
+        names = [
+            n.decode() if isinstance(n, bytes) else str(n) for n in group["name"][:]
+        ]
+        metadata: list[dict[str, str]] = [{} for _ in names]
+        if "meta_owner" in group:
+            owners = group["meta_owner"][:]
+            keys = group["meta_key"][:]
+            vals = group["meta_val"][:]
+            for owner, key, val in zip(owners, keys, vals):
+                k = key.decode() if isinstance(key, bytes) else str(key)
+                v = val.decode() if isinstance(val, bytes) else str(val)
+                metadata[int(owner)][k] = v
+    return [Category(name=name, metadata=meta) for name, meta in zip(names, metadata)]
+
+
+def write_categories(labels_path: str, categories: list[Category]) -> None:
+    """Write the category catalog to a SLEAP labels file.
+
+    Creates the ``/categories`` group (SLP format 2.7+) holding a native ``name``
+    string dataset (one per category) plus, only when any category carries
+    metadata, a columnar entity-attribute-value metadata table
+    (``meta_owner`` / ``meta_key`` / ``meta_val``). A fully self-contained mirror
+    of `write_identities`. No-op if there are no categories.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        categories: A list of `Category` objects to store, in catalog order.
+    """
+    if not categories:
+        return
+
+    str_dtype = h5py.string_dtype(encoding="utf-8")
+    names = np.array([cat.name for cat in categories], dtype=object)
+
+    meta_owner: list[int] = []
+    meta_key: list[str] = []
+    meta_val: list[str] = []
+    for idx, cat in enumerate(categories):
+        for key, value in cat.metadata.items():
+            meta_owner.append(idx)
+            meta_key.append(str(key))
+            meta_val.append(str(value))
+
+    with h5py.File(labels_path, "a") as f:
+        group = f.require_group("categories")
+        group.create_dataset("name", data=names, dtype=str_dtype, maxshape=(None,))
+        if meta_owner:
+            group.create_dataset(
+                "meta_owner",
+                data=np.array(meta_owner, dtype="i4"),
+                maxshape=(None,),
+                compression="gzip",
+            )
+            group.create_dataset(
+                "meta_key",
+                data=np.array(meta_key, dtype=object),
+                dtype=str_dtype,
+                maxshape=(None,),
+                compression="gzip",
+            )
+            group.create_dataset(
+                "meta_val",
+                data=np.array(meta_val, dtype=object),
+                dtype=str_dtype,
+                maxshape=(None,),
+                compression="gzip",
+            )
+
+
 def read_event_types(
     labels_path: str, *, _hdf5_file: h5py.File | None = None
 ) -> list[EventType]:
@@ -2340,6 +2451,215 @@ def _identity_link_rows_from_store(
     return rows
 
 
+def read_category_links(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> dict[int, dict[int, tuple[int, float | None]]]:
+    """Read per-detection category links from a SLEAP labels file.
+
+    Links are stored in the optional ``/categories/links`` dataset (SLP format
+    2.7+), a structured array of ``(owner_type, owner_id, category_idx,
+    category_score)`` rows joining a detection -- identified by ``owner_type`` (one
+    of the ``OWNER_*`` codes) and ``owner_id`` -- to an index into the file's
+    category catalog. A fully self-contained mirror of `read_identity_links`.
+    ``owner_id`` is the per-owner-type positional id (e.g. the global
+    ``instance_id`` assigned by `write_lfs` for instance owners), mirroring the
+    ``/embeddings`` join. The dataset is absent in older files, in which case an
+    empty mapping is returned.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from.
+
+    Returns:
+        A dict mapping each ``owner_type`` to a ``{owner_id: (category_idx,
+        category_score)}`` mapping. ``category_score`` is ``None`` when it was not
+        recorded (stored as NaN). Empty for older files.
+    """
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
+        if "categories" not in f or "links" not in f["categories"]:
+            return {}
+        data = f["categories"]["links"][:]
+    result: dict[int, dict[int, tuple[int, float | None]]] = {}
+    for row in data:
+        owner_type = int(row["owner_type"])
+        score = float(row["category_score"])
+        result.setdefault(owner_type, {})[int(row["owner_id"])] = (
+            int(row["category_idx"]),
+            None if np.isnan(score) else score,
+        )
+    return result
+
+
+def _write_category_link_rows(
+    labels_path: str, rows: list[tuple[int, int, int, float]]
+) -> None:
+    """Write ``(owner_type, owner_id, category_idx, category_score)`` rows.
+
+    Shared dataset-writing core for the per-detection category link, mirroring
+    `_write_identity_link_rows`. The rows can be built either by iterating a
+    `Labels` (the eager path, see `write_category_links`) or from a lazy store dict
+    (the lazy save path), keeping the on-disk ``/categories/links`` layout identical
+    for both.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        rows: A list of ``(owner_type, owner_id, category_idx, category_score)``
+            tuples. ``category_score`` is a float (NaN encodes an unrecorded score).
+            An empty list is a no-op (no dataset is created).
+    """
+    if not rows:
+        return
+
+    category_link_dtype = np.dtype(
+        [
+            ("owner_type", "u1"),
+            ("owner_id", "i8"),
+            ("category_idx", "i4"),
+            ("category_score", "f4"),
+        ]
+    )
+    arr = np.array(rows, dtype=category_link_dtype)
+    with h5py.File(labels_path, "a") as f:
+        group = f.require_group("categories")
+        group.create_dataset("links", data=arr, maxshape=(None,))
+
+
+def write_category_links(labels_path: str, labels: Labels) -> None:
+    """Write per-detection category links to a SLEAP labels file.
+
+    Creates the ``/categories/links`` dataset (SLP format 2.7+) as a structured
+    array of ``(owner_type, owner_id, category_idx, category_score)`` rows for every
+    detection carrying a `Category` registered in ``labels.categories``. Instance,
+    mask, centroid, bbox, and ROI owners are written (``OWNER_*``). A fully
+    self-contained mirror of `write_identity_links`.
+
+    The instance ``owner_id`` matches the global id assigned by `write_lfs`, and the
+    mask / centroid / bbox / ROI ``owner_id`` matches the global per-modality list
+    index assigned by `write_masks` / `write_centroids` / `write_bboxes` /
+    `write_rois` (each enumeration order over frames then the modality; ROIs append
+    static ROIs after frame ROIs), so the link is resolved by joining on that id at
+    read time. Category is resolved to a catalog index by object identity (a single
+    ``id()``-keyed lookup), so the pass stays O(number of detections).
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object to store the category links for.
+    """
+    if not labels.categories:
+        return
+
+    id_to_idx = {id(cat): i for i, cat in enumerate(labels.categories)}
+    rows = []
+    instance_id = 0
+    masks: list = []
+    centroids: list = []
+    bboxes: list = []
+    rois: list = []
+    for lf in labels:
+        for inst in lf:
+            category = getattr(inst, "category", None)
+            if category is not None:
+                idx = id_to_idx.get(id(category))
+                if idx is not None:
+                    score = inst.category_score
+                    rows.append(
+                        (
+                            OWNER_INSTANCE,
+                            instance_id,
+                            idx,
+                            float("nan") if score is None else float(score),
+                        )
+                    )
+            instance_id += 1
+        masks.extend(lf.masks)
+        centroids.extend(lf.centroids)
+        bboxes.extend(lf.bboxes)
+        rois.extend(lf.rois)
+    # Static ROIs are appended after frame ROIs (matching write_labels' all_rois).
+    rois.extend(labels.static_rois)
+
+    rows.extend(_category_link_rows_for_owner(masks, id_to_idx, OWNER_MASK))
+    rows.extend(_category_link_rows_for_owner(centroids, id_to_idx, OWNER_CENTROID))
+    rows.extend(_category_link_rows_for_owner(bboxes, id_to_idx, OWNER_BBOX))
+    rows.extend(_category_link_rows_for_owner(rois, id_to_idx, OWNER_ROI))
+    _write_category_link_rows(labels_path, rows)
+
+
+def _category_link_rows_for_owner(
+    anns: list, id_to_idx: dict[int, int], owner_type: int
+) -> list[tuple[int, int, int, float]]:
+    """Build category-link rows for an ordered annotation list under one owner type.
+
+    Annotations join on their global per-modality list index (the same enumeration
+    as the modality's writer, e.g. `write_masks` / `write_centroids`), so ``anns``
+    must be supplied in that exact order. Category is resolved to a catalog index by
+    object identity. Mirrors `_identity_link_rows_for_owner`.
+
+    Args:
+        anns: The ordered global annotation list for one modality.
+        id_to_idx: Mapping from a `Category`'s object id to its catalog index.
+        owner_type: The ``OWNER_*`` code for this modality (e.g. ``OWNER_MASK``).
+
+    Returns:
+        A list of ``(owner_type, owner_id, category_idx, category_score)`` tuples.
+    """
+    rows = []
+    for owner_id, ann in enumerate(anns):
+        category = getattr(ann, "category", None)
+        if category is None:
+            continue
+        idx = id_to_idx.get(id(category))
+        if idx is None:
+            continue
+        score = ann.category_score
+        rows.append(
+            (
+                owner_type,
+                owner_id,
+                idx,
+                float("nan") if score is None else float(score),
+            )
+        )
+    return rows
+
+
+def _category_link_rows_from_store(
+    store: "LazyDataStore",
+) -> list[tuple[int, int, int, float]]:
+    """Build ``/categories/links`` rows from a lazy store without materializing.
+
+    The lazy store already holds the per-instance category links keyed by the
+    global ``instance_id`` (the same id space written by the fast path), so the
+    rows can be emitted directly as ``OWNER_INSTANCE`` owners without rebuilding
+    `Instance` objects. Rows are sorted by ``instance_id`` for deterministic
+    output. Mirrors `_identity_link_rows_from_store`.
+
+    Args:
+        store: The `LazyDataStore` backing a lazy `Labels`.
+
+    Returns:
+        A list of ``(owner_type, owner_id, category_idx, category_score)`` tuples
+        matching the format expected by `_write_category_link_rows`.
+    """
+    rows = []
+    for instance_id in sorted(store._instance_categories):
+        category_idx, score = store._instance_categories[instance_id]
+        rows.append(
+            (
+                OWNER_INSTANCE,
+                int(instance_id),
+                int(category_idx),
+                float("nan") if score is None else float(score),
+            )
+        )
+    return rows
+
+
 # Owner-type codes for the owner_type join column shared by the /embeddings group
 # and the /identity/links dataset. Both subsystems join a detection to a per-row
 # payload via an (owner_type, owner_id) pair, so they share one code set: this
@@ -2372,38 +2692,94 @@ def read_embeddings(
         mapping. Rows with an unsupported owner type are skipped with a warning.
         Empty for older files.
     """
-    supported = (OWNER_INSTANCE, OWNER_CENTROID, OWNER_MASK, OWNER_BBOX, OWNER_ROI)
-    by_owner: dict[int, dict[int, Embedding]] = {}
-
     cm = (
         nullcontext(_hdf5_file)
         if _hdf5_file is not None
         else h5py.File(labels_path, "r")
     )
     with cm as f:
-        if "embeddings" not in f:
-            return by_owner
-        group = f["embeddings"]
-        vectors = group["vectors"][:]
-        owner_type = group["owner_type"][:]
-        owner_id = group["owner_id"][:]
-        unknown_owner_types: set[int] = set()
-        for i in range(len(vectors)):
-            otype = int(owner_type[i])
-            if otype not in supported:
-                unknown_owner_types.add(otype)
-                continue
-            by_owner.setdefault(otype, {})[int(owner_id[i])] = Embedding(
-                vector=vectors[i]
-            )
-        if unknown_owner_types:
-            warnings.warn(
-                "Skipped /embeddings rows with unsupported owner_type(s) "
-                f"{sorted(unknown_owner_types)}: instance, mask, centroid, bbox, "
-                "and ROI embeddings are attached on read. These vectors were "
-                "written by a newer sleap-io and are ignored here.",
-                stacklevel=2,
-            )
+        if "embeddings" not in f or "vectors" not in f["embeddings"]:
+            return {}
+        return _read_embedding_datasets(
+            f["embeddings"], ("vectors", "owner_type", "owner_id")
+        )
+
+
+def read_category_embeddings(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> dict[int, dict[int, "Embedding"]]:
+    """Read per-detection category (classification) embeddings from a SLP file.
+
+    Category embeddings are stored in the SAME optional ``/embeddings`` group (SLP
+    format 2.7+) as sibling parallel datasets: the stacked ``category_vectors``
+    ``(M, D)`` plus the ``category_owner_type`` / ``category_owner_id`` join
+    columns. These are independent of the identity ``vectors`` datasets read by
+    `read_embeddings` (the two embedding kinds need not share dimensionality D).
+    Absent in older files (or when no category embedding was written), in which
+    case an empty mapping is returned.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from.
+
+    Returns:
+        A dict mapping each supported ``owner_type`` to a ``{owner_id: Embedding}``
+        mapping. Rows with an unsupported owner type are skipped with a warning.
+        Empty for older files.
+    """
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
+        if "embeddings" not in f or "category_vectors" not in f["embeddings"]:
+            return {}
+        return _read_embedding_datasets(
+            f["embeddings"],
+            ("category_vectors", "category_owner_type", "category_owner_id"),
+        )
+
+
+def _read_embedding_datasets(
+    group: h5py.Group, dataset_names: tuple[str, str, str]
+) -> dict[int, dict[int, "Embedding"]]:
+    """Read one ``(vectors, owner_type, owner_id)`` triple into an owner-keyed map.
+
+    Shared reader core for the identity (`read_embeddings`) and category
+    (`read_category_embeddings`) parallel dataset triples within the ``/embeddings``
+    group. Row ``i`` of all three datasets describes the same detection; the
+    returned `Embedding` vectors are views onto the one loaded vectors array.
+
+    Args:
+        group: The open ``/embeddings`` HDF5 group.
+        dataset_names: The ``(vectors, owner_type, owner_id)`` dataset names to read.
+
+    Returns:
+        A dict mapping each supported ``owner_type`` to a ``{owner_id: Embedding}``
+        mapping. Rows with an unsupported owner type are skipped with a warning.
+    """
+    supported = (OWNER_INSTANCE, OWNER_CENTROID, OWNER_MASK, OWNER_BBOX, OWNER_ROI)
+    by_owner: dict[int, dict[int, Embedding]] = {}
+    vectors_name, owner_type_name, owner_id_name = dataset_names
+    vectors = group[vectors_name][:]
+    owner_type = group[owner_type_name][:]
+    owner_id = group[owner_id_name][:]
+    unknown_owner_types: set[int] = set()
+    for i in range(len(vectors)):
+        otype = int(owner_type[i])
+        if otype not in supported:
+            unknown_owner_types.add(otype)
+            continue
+        by_owner.setdefault(otype, {})[int(owner_id[i])] = Embedding(vector=vectors[i])
+    if unknown_owner_types:
+        warnings.warn(
+            f"Skipped /embeddings '{vectors_name}' rows with unsupported "
+            f"owner_type(s) {sorted(unknown_owner_types)}: instance, mask, centroid, "
+            "bbox, and ROI embeddings are attached on read. These vectors were "
+            "written by a newer sleap-io and are ignored here.",
+            stacklevel=2,
+        )
     return by_owner
 
 
@@ -2440,6 +2816,40 @@ def _attach_identity_and_embeddings(
             ann.identity_embedding = emb
 
 
+def _attach_category_and_embeddings(
+    anns: list,
+    categories: list[Category],
+    category_map: dict[int, tuple[int, float | None]],
+    category_embedding_map: dict[int, "Embedding"],
+) -> None:
+    """Attach per-annotation category links + embedding by global-list index.
+
+    Category mirror of `_attach_identity_and_embeddings`, shared by the eager and
+    lazy read paths for any detection modality (e.g. masks, centroids). ``anns``
+    must be in the global per-modality list index order (as returned by
+    `read_masks` / `read_centroids`), which is the id space the owner rows were
+    written against.
+
+    Args:
+        anns: The ordered global annotation list for one modality.
+        categories: The category catalog (links resolve by catalog index).
+        category_map: ``{owner_id: (category_idx, category_score)}`` from
+            `read_category_links` for this modality's owner type.
+        category_embedding_map: ``{owner_id: Embedding}`` from
+            `read_category_embeddings` for this modality's owner type.
+    """
+    for owner_id, ann in enumerate(anns):
+        link = category_map.get(owner_id)
+        if link is not None:
+            category_idx, category_score = link
+            if 0 <= category_idx < len(categories):
+                ann.category = categories[category_idx]
+                ann.category_score = category_score
+        emb = category_embedding_map.get(owner_id)
+        if emb is not None:
+            ann.category_embedding = emb
+
+
 def write_embeddings(labels_path: str, labels: Labels) -> None:
     """Write per-detection re-ID embeddings to a SLEAP labels file.
 
@@ -2461,6 +2871,39 @@ def write_embeddings(labels_path: str, labels: Labels) -> None:
     """
     entries = _embedding_groups_from_labels(labels)
     _write_embedding_groups(labels_path, entries)
+
+
+# Parallel category-embedding dataset names within the shared /embeddings group
+# (SLP 2.7+). Sibling to the identity vectors/owner_type/owner_id datasets so the
+# two embedding kinds are independent and need not share dimensionality D.
+_CATEGORY_EMBEDDING_DATASETS = (
+    "category_vectors",
+    "category_owner_type",
+    "category_owner_id",
+)
+
+
+def write_category_embeddings(labels_path: str, labels: Labels) -> None:
+    """Write per-detection category (classification) embeddings to a SLP file.
+
+    Creates sibling ``category_vectors`` / ``category_owner_type`` /
+    ``category_owner_id`` datasets in the SAME ``/embeddings`` group (SLP format
+    2.7+), independent of the identity ``vectors`` datasets so the two embedding
+    kinds need not share dimensionality D. Category mirror of `write_embeddings`;
+    the owner_id join spaces match `write_lfs` / `write_masks` / `write_centroids`
+    / `write_bboxes` / `write_rois` exactly as identity does. Purely additive: a
+    file with no category embeddings never gains the ``category_*`` datasets.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object to store the category embeddings for.
+
+    Raises:
+        ValueError: If the category embedding vectors do not all share the same
+            dimensionality.
+    """
+    entries = _category_embedding_groups_from_labels(labels)
+    _write_embedding_groups(labels_path, entries, _CATEGORY_EMBEDDING_DATASETS)
 
 
 def _embedding_groups_from_labels(labels: Labels) -> list:
@@ -2503,21 +2946,70 @@ def _embedding_groups_from_labels(labels: Labels) -> list:
     return entries
 
 
-def _add_owner_embedding_groups(entries: list, anns: list, owner_type: int) -> None:
+def _category_embedding_groups_from_labels(labels: Labels) -> list:
+    """Collect per-detection category embeddings by iterating a `Labels`.
+
+    Category mirror of `_embedding_groups_from_labels`, reading the
+    ``category_embedding`` slot on each detection. Join spaces are identical
+    (per-instance global ``instance_id``; per-mask / per-centroid / per-bbox /
+    per-ROI global per-modality list index; static ROIs follow frame ROIs).
+
+    Args:
+        labels: A `Labels` object to collect detection category embeddings from.
+
+    Returns:
+        A list of ``(owner_type, owner_id, Embedding)`` tuples for the
+        ``category_*`` datasets.
+    """
+    entries: list = []
+
+    instance_id = 0
+    masks: list = []
+    centroids: list = []
+    bboxes: list = []
+    rois: list = []
+    for lf in labels:
+        for inst in lf:
+            emb = getattr(inst, "category_embedding", None)
+            if emb is not None:
+                entries.append((OWNER_INSTANCE, instance_id, emb))
+            instance_id += 1
+        masks.extend(lf.masks)
+        centroids.extend(lf.centroids)
+        bboxes.extend(lf.bboxes)
+        rois.extend(lf.rois)
+    rois.extend(labels.static_rois)
+
+    _add_owner_embedding_groups(entries, masks, OWNER_MASK, attr="category_embedding")
+    _add_owner_embedding_groups(
+        entries, centroids, OWNER_CENTROID, attr="category_embedding"
+    )
+    _add_owner_embedding_groups(entries, bboxes, OWNER_BBOX, attr="category_embedding")
+    _add_owner_embedding_groups(entries, rois, OWNER_ROI, attr="category_embedding")
+    return entries
+
+
+def _add_owner_embedding_groups(
+    entries: list, anns: list, owner_type: int, attr: str = "identity_embedding"
+) -> None:
     """Append per-annotation embedding entries to ``entries`` (shared eager/lazy).
 
     Annotations join on their global per-modality list index (the same enumeration
     as the modality's writer, e.g. `write_masks` / `write_centroids`), so ``anns``
-    must be supplied in that exact order.
+    must be supplied in that exact order. The ``attr`` parameter selects which
+    embedding slot to read (``identity_embedding`` by default, or
+    ``category_embedding`` for the parallel category vectors dataset).
 
     Args:
         entries: The ``[(owner_type, owner_id, Embedding), ...]`` accumulator to
             extend in place.
         anns: The ordered global annotation list for one modality.
         owner_type: The ``OWNER_*`` code for this modality (e.g. ``OWNER_MASK``).
+        attr: The detection attribute holding the `Embedding` to collect
+            (``identity_embedding`` or ``category_embedding``).
     """
     for owner_id, ann in enumerate(anns):
-        emb = getattr(ann, "identity_embedding", None)
+        emb = getattr(ann, attr, None)
         if emb is not None:
             entries.append((owner_type, owner_id, emb))
 
@@ -2545,7 +3037,37 @@ def _embedding_groups_from_store(store: "LazyDataStore") -> list:
     return entries
 
 
-def _write_embedding_groups(labels_path: str, entries: list) -> None:
+def _category_embedding_groups_from_store(store: "LazyDataStore") -> list:
+    """Collect per-detection category embeddings from a lazy store.
+
+    Category mirror of `_embedding_groups_from_store`, reading the store's
+    per-instance category embedding dict keyed by the global ``instance_id``.
+    Entries are sorted by ``instance_id`` for deterministic output.
+
+    Args:
+        store: The `LazyDataStore` backing a lazy `Labels`.
+
+    Returns:
+        A list of ``(owner_type, owner_id, Embedding)`` tuples for the
+        ``category_*`` datasets.
+    """
+    entries: list = []
+    for instance_id in sorted(store._instance_category_embeddings):
+        entries.append(
+            (
+                OWNER_INSTANCE,
+                int(instance_id),
+                store._instance_category_embeddings[instance_id],
+            )
+        )
+    return entries
+
+
+def _write_embedding_groups(
+    labels_path: str,
+    entries: list,
+    dataset_names: tuple[str, str, str] = ("vectors", "owner_type", "owner_id"),
+) -> None:
     """Write per-detection embeddings to the ``/embeddings`` group of a SLP file.
 
     Shared dataset-writing core for both the eager (`Labels`-driven) and lazy
@@ -2555,11 +3077,19 @@ def _write_embedding_groups(labels_path: str, entries: list) -> None:
     parallel datasets so more per-embedding attributes can be added later without
     re-laying-out ``vectors``. Purely additive: old readers ignore the group.
 
+    The ``dataset_names`` parameter selects the ``(vectors, owner_type, owner_id)``
+    dataset names within the shared ``/embeddings`` group. Identity vectors use the
+    default names; category vectors use the parallel sibling names
+    ``("category_vectors", "category_owner_type", "category_owner_id")`` (SLP 2.7+),
+    so the two embedding kinds are independent and need not share dimensionality D.
+
     Args:
         labels_path: A string path to the SLEAP labels file.
         entries: A list of ``(owner_type, owner_id, Embedding)`` tuples as produced
-            by `_embedding_groups_from_labels` or `_embedding_groups_from_store`. An
-            empty list is a no-op.
+            by `_embedding_groups_from_labels` or `_embedding_groups_from_store` (or
+            their category counterparts). An empty list is a no-op.
+        dataset_names: The ``(vectors, owner_type, owner_id)`` dataset names to
+            create within ``/embeddings``.
 
     Raises:
         ValueError: If the embedding vectors do not all share the same
@@ -2568,11 +3098,13 @@ def _write_embedding_groups(labels_path: str, entries: list) -> None:
     if not entries:
         return
 
+    vectors_name, owner_type_name, owner_id_name = dataset_names
     dims = {emb.dim for _, _, emb in entries}
     if len(dims) > 1:
         raise ValueError(
             f"Embedding vectors have inconsistent dimensions {sorted(dims)}; all "
-            "vectors must share D to store in the columnar /embeddings dataset."
+            f"vectors must share D to store in the columnar /embeddings "
+            f"'{vectors_name}' dataset."
         )
     vectors = np.stack([emb.vector for _, _, emb in entries])
     owner_type = np.array([otype for otype, _, _ in entries], dtype="u1")
@@ -2586,17 +3118,17 @@ def _write_embedding_groups(labels_path: str, entries: list) -> None:
     with h5py.File(labels_path, "a") as f:
         group = f.require_group("embeddings")
         group.create_dataset(
-            "vectors",
+            vectors_name,
             data=vectors,
             maxshape=(None, d),
             chunks=(chunk_rows, d),
             compression="gzip",
         )
         group.create_dataset(
-            "owner_type", data=owner_type, maxshape=(None,), compression="gzip"
+            owner_type_name, data=owner_type, maxshape=(None,), compression="gzip"
         )
         group.create_dataset(
-            "owner_id", data=owner_id, maxshape=(None,), compression="gzip"
+            owner_id_name, data=owner_id, maxshape=(None,), compression="gzip"
         )
 
 
@@ -3104,6 +3636,16 @@ def write_metadata(labels_path: str, labels: Labels):
                 for d in lazy_dets
             )
         )
+        has_category_data = (
+            bool(labels.categories)
+            or bool(store._instance_categories)
+            or bool(store._instance_category_embeddings)
+            or any(
+                getattr(d, "category", None) is not None
+                or getattr(d, "category_embedding", None) is not None
+                for d in lazy_dets
+            )
+        )
     else:
         dets = [
             d for lf in labels for d in (*lf.masks, *lf.centroids, *lf.bboxes, *lf.rois)
@@ -3122,6 +3664,20 @@ def write_metadata(labels_path: str, labels: Labels):
                 for d in dets
             )
         )
+        has_category_data = (
+            bool(labels.categories)
+            or any(
+                getattr(inst, "category", None) is not None
+                or getattr(inst, "category_embedding", None) is not None
+                for lf in labels
+                for inst in lf
+            )
+            or any(
+                getattr(d, "category", None) is not None
+                or getattr(d, "category_embedding", None) is not None
+                for d in dets
+            )
+        )
     if has_identity_data:
         format_id = max(format_id, 2.5)
 
@@ -3132,6 +3688,14 @@ def write_metadata(labels_path: str, labels: Labels):
     # event_types live on top-level lists (not the lazy store).
     if labels.events or labels.event_types:
         format_id = max(format_id, 2.6)
+
+    # Bump for the class/category subsystem (new in 2.7): the /categories catalog +
+    # per-detection category links, and the parallel category_* appearance datasets
+    # in /embeddings. Purely additive (each is a separate dataset/group read with a
+    # presence check), so the bump only applies when there is category data to
+    # persist (computed above alongside has_identity_data for both eager and lazy).
+    if has_category_data:
+        format_id = max(format_id, 2.7)
 
     with h5py.File(labels_path, "a") as f:
         # Bump for chunked label image format (new in 2.2)
@@ -4253,6 +4817,9 @@ def _read_labels_lazy_from_open_file(
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
     tracks = read_tracks(labels_path, _hdf5_file=f)
     identities = read_identities(labels_path, _hdf5_file=f)
+    # Class/category catalog (SLP 2.7+). Self-contained mirror of /identity; a
+    # top-level list read eagerly like identities.
+    categories = read_categories(labels_path, _hdf5_file=f)
     # Frame-spanning events + catalog (SLP 2.6+). Top-level lists (not the lazy
     # store), read eagerly like tracks/identities/suggestions.
     event_types = read_event_types(labels_path, _hdf5_file=f)
@@ -4268,6 +4835,13 @@ def _read_labels_lazy_from_open_file(
     centroid_identity_map = identity_links.get(OWNER_CENTROID, {})
     bbox_identity_map = identity_links.get(OWNER_BBOX, {})
     roi_identity_map = identity_links.get(OWNER_ROI, {})
+    # Category links (SLP 2.7+): same owner-keyed split as identity links.
+    category_links = read_category_links(labels_path, _hdf5_file=f)
+    instance_categories = category_links.get(OWNER_INSTANCE, {})
+    mask_category_map = category_links.get(OWNER_MASK, {})
+    centroid_category_map = category_links.get(OWNER_CENTROID, {})
+    bbox_category_map = category_links.get(OWNER_BBOX, {})
+    roi_category_map = category_links.get(OWNER_ROI, {})
     # Embeddings: per-instance embeddings ride on the lazy store; mask/centroid/
     # bbox/ROI embeddings attach to those (eagerly-read) annotations below.
     embeddings_by_owner = read_embeddings(labels_path, _hdf5_file=f)
@@ -4276,6 +4850,15 @@ def _read_labels_lazy_from_open_file(
     centroid_embedding_map = embeddings_by_owner.get(OWNER_CENTROID, {})
     bbox_embedding_map = embeddings_by_owner.get(OWNER_BBOX, {})
     roi_embedding_map = embeddings_by_owner.get(OWNER_ROI, {})
+    # Category embeddings (SLP 2.7+): parallel category_* datasets in /embeddings.
+    category_embeddings_by_owner = read_category_embeddings(labels_path, _hdf5_file=f)
+    instance_category_embeddings = category_embeddings_by_owner.get(OWNER_INSTANCE, {})
+    mask_category_embedding_map = category_embeddings_by_owner.get(OWNER_MASK, {})
+    centroid_category_embedding_map = category_embeddings_by_owner.get(
+        OWNER_CENTROID, {}
+    )
+    bbox_category_embedding_map = category_embeddings_by_owner.get(OWNER_BBOX, {})
+    roi_category_embedding_map = category_embeddings_by_owner.get(OWNER_ROI, {})
     suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
     metadata = read_metadata(labels_path, _hdf5_file=f)
     provenance = read_provenance(labels_path, metadata, _hdf5_file=f)
@@ -4303,6 +4886,9 @@ def _read_labels_lazy_from_open_file(
         identities=identities,
         instance_identities=instance_identities,
         instance_embeddings=instance_embeddings,
+        categories=categories,
+        instance_categories=instance_categories,
+        instance_category_embeddings=instance_category_embeddings,
     )
 
     # Create LazyFrameList
@@ -4318,12 +4904,24 @@ def _read_labels_lazy_from_open_file(
         roi_identity_map,
         roi_embedding_map,
     )
+    _attach_category_and_embeddings(
+        [r for r, _v, _f in roi_tuples],
+        categories,
+        roi_category_map,
+        roi_category_embedding_map,
+    )
     mask_tuples = read_masks(labels_path, videos, tracks, _hdf5_file=f)
     _attach_identity_and_embeddings(
         [m for m, _v, _f in mask_tuples],
         identities,
         mask_identity_map,
         mask_embedding_map,
+    )
+    _attach_category_and_embeddings(
+        [m for m, _v, _f in mask_tuples],
+        categories,
+        mask_category_map,
+        mask_category_embedding_map,
     )
     bbox_tuples = read_bboxes(labels_path, videos, tracks, _hdf5_file=f)
     _attach_identity_and_embeddings(
@@ -4332,12 +4930,24 @@ def _read_labels_lazy_from_open_file(
         bbox_identity_map,
         bbox_embedding_map,
     )
+    _attach_category_and_embeddings(
+        [b for b, _v, _f in bbox_tuples],
+        categories,
+        bbox_category_map,
+        bbox_category_embedding_map,
+    )
     centroid_tuples = read_centroids(labels_path, videos, tracks, _hdf5_file=f)
     _attach_identity_and_embeddings(
         [c for c, _v, _f in centroid_tuples],
         identities,
         centroid_identity_map,
         centroid_embedding_map,
+    )
+    _attach_category_and_embeddings(
+        [c for c, _v, _f in centroid_tuples],
+        categories,
+        centroid_category_map,
+        centroid_category_embedding_map,
     )
     li_tuples, li_file = read_label_images(
         labels_path,
@@ -4420,6 +5030,7 @@ def _read_labels_lazy_from_open_file(
         skeletons=skeletons,
         tracks=tracks,
         identities=identities,
+        categories=categories,
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
@@ -4658,7 +5269,7 @@ def write_rois(
             )
         )
 
-        categories.append(roi.category)
+        categories.append(roi.category.name if roi.category else "")
         names.append(roi.name)
         sources.append(roi.source)
 
@@ -4945,7 +5556,7 @@ def write_bboxes(
             bbox.tracking_score if bbox.tracking_score is not None else float("nan")
         )
 
-        categories.append(bbox.category)
+        categories.append(bbox.category.name if bbox.category else "")
         names.append(bbox.name)
         sources.append(bbox.source)
 
@@ -5150,7 +5761,7 @@ def write_centroids(
             else float("nan")
         )
 
-        categories.append(centroid.category)
+        categories.append(centroid.category.name if centroid.category else "")
         names.append(centroid.name)
         sources.append(centroid.source)
 
@@ -5498,7 +6109,7 @@ def write_masks(
             )
         )
 
-        categories.append(mask.category)
+        categories.append(mask.category.name if mask.category else "")
         names.append(mask.name)
         sources.append(mask.source)
 
@@ -7116,6 +7727,9 @@ def _read_labels_from_open_file(
         )
 
     identities = read_identities(labels_path, _hdf5_file=f)
+    # Class/category catalog (SLP 2.7+). Self-contained mirror of /identity; a
+    # top-level list read eagerly like identities.
+    categories = read_categories(labels_path, _hdf5_file=f)
     # Frame-spanning events + catalog (SLP 2.6+). Top-level lists, read eagerly like
     # tracks/identities/suggestions; absent groups yield empty lists.
     event_types = read_event_types(labels_path, _hdf5_file=f)
@@ -7137,6 +7751,19 @@ def _read_labels_from_open_file(
             instances[inst_id].identity = identities[identity_idx]
             instances[inst_id].identity_score = identity_score
 
+    # Attach category links (SLP format 2.7+). Self-contained mirror of the identity
+    # links above; absent /categories group -> empty mappings and a no-op.
+    category_links = read_category_links(labels_path, _hdf5_file=f)
+    instance_category_map = category_links.get(OWNER_INSTANCE, {})
+    mask_category_map = category_links.get(OWNER_MASK, {})
+    centroid_category_map = category_links.get(OWNER_CENTROID, {})
+    bbox_category_map = category_links.get(OWNER_BBOX, {})
+    roi_category_map = category_links.get(OWNER_ROI, {})
+    for inst_id, (category_idx, category_score) in instance_category_map.items():
+        if 0 <= inst_id < len(instances) and 0 <= category_idx < len(categories):
+            instances[inst_id].category = categories[category_idx]
+            instances[inst_id].category_score = category_score
+
     # Attach appearance / re-ID embeddings (SLP format 2.5+). Additive: absent
     # /embeddings group -> empty mappings and a no-op. Mask/centroid/bbox/ROI
     # embeddings are attached after their respective read_* calls.
@@ -7148,6 +7775,19 @@ def _read_labels_from_open_file(
     centroid_embedding_map = embeddings_by_owner.get(OWNER_CENTROID, {})
     bbox_embedding_map = embeddings_by_owner.get(OWNER_BBOX, {})
     roi_embedding_map = embeddings_by_owner.get(OWNER_ROI, {})
+
+    # Attach category embeddings (SLP format 2.7+): parallel category_* datasets in
+    # /embeddings. Absent -> empty mappings and a no-op.
+    category_embeddings_by_owner = read_category_embeddings(labels_path, _hdf5_file=f)
+    for inst_id, emb in category_embeddings_by_owner.get(OWNER_INSTANCE, {}).items():
+        if 0 <= inst_id < len(instances):
+            instances[inst_id].category_embedding = emb
+    mask_category_embedding_map = category_embeddings_by_owner.get(OWNER_MASK, {})
+    centroid_category_embedding_map = category_embeddings_by_owner.get(
+        OWNER_CENTROID, {}
+    )
+    bbox_category_embedding_map = category_embeddings_by_owner.get(OWNER_BBOX, {})
+    roi_category_embedding_map = category_embeddings_by_owner.get(OWNER_ROI, {})
 
     sessions = read_sessions(
         labels_path, videos, labeled_frames, identities=identities, _hdf5_file=f
@@ -7161,6 +7801,12 @@ def _read_labels_from_open_file(
         roi_identity_map,
         roi_embedding_map,
     )
+    _attach_category_and_embeddings(
+        [r for r, _v, _f in roi_tuples],
+        categories,
+        roi_category_map,
+        roi_category_embedding_map,
+    )
     mask_tuples = read_masks(labels_path, videos, tracks, instances, _hdf5_file=f)
     # Attach per-mask identity links + embeddings (SLP format 2.5+/2.6+). Masks
     # are returned in global mask-list index order, the same id space written by
@@ -7171,6 +7817,12 @@ def _read_labels_from_open_file(
         mask_identity_map,
         mask_embedding_map,
     )
+    _attach_category_and_embeddings(
+        [m for m, _v, _f in mask_tuples],
+        categories,
+        mask_category_map,
+        mask_category_embedding_map,
+    )
     bbox_tuples = read_bboxes(labels_path, videos, tracks, instances, _hdf5_file=f)
     # Attach per-bbox identity links + embeddings (global bbox-list index).
     _attach_identity_and_embeddings(
@@ -7178,6 +7830,12 @@ def _read_labels_from_open_file(
         identities,
         bbox_identity_map,
         bbox_embedding_map,
+    )
+    _attach_category_and_embeddings(
+        [b for b, _v, _f in bbox_tuples],
+        categories,
+        bbox_category_map,
+        bbox_category_embedding_map,
     )
     centroid_tuples = read_centroids(
         labels_path, videos, tracks, instances, _hdf5_file=f
@@ -7188,6 +7846,12 @@ def _read_labels_from_open_file(
         identities,
         centroid_identity_map,
         centroid_embedding_map,
+    )
+    _attach_category_and_embeddings(
+        [c for c, _v, _f in centroid_tuples],
+        categories,
+        centroid_category_map,
+        centroid_category_embedding_map,
     )
     li_tuples, _li_file = read_label_images(
         labels_path,
@@ -7267,6 +7931,7 @@ def _read_labels_from_open_file(
         skeletons=skeletons,
         tracks=tracks,
         identities=identities,
+        categories=categories,
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
@@ -7363,9 +8028,12 @@ _KNOWN_TOPLEVEL_HDF5_NAMES = frozenset(
         "sessions_json",
         # Re-ID identity subsystem groups (SLP 2.5+): /identity holds the catalog
         # (name + EAV metadata) and per-detection links; /embeddings holds the
-        # columnar appearance vectors.
+        # columnar appearance vectors. Class/category subsystem (SLP 2.7+):
+        # /categories mirrors /identity (catalog + links); category appearance
+        # vectors are parallel datasets inside the same /embeddings group.
         "identity",
         "embeddings",
+        "categories",
         # Frame-spanning event subsystem groups (SLP 2.6+): /event_types holds the
         # catalog (name + optional description + EAV metadata); /events holds the
         # columnar interval annotations plus the ragged CSR framewise scores.
@@ -7594,6 +8262,24 @@ def _write_labels_lazy(
     )
     identity_rows.extend(_identity_link_rows_for_owner(lazy_rois, id_to_idx, OWNER_ROI))
     _write_identity_link_rows(labels_path, identity_rows)
+    # Class/category catalog + per-detection category links (SLP 2.7+). Self-
+    # contained mirror of the identity block above, driven by the store dicts.
+    write_categories(labels_path, lazy_store.categories)
+    cat_id_to_idx = {id(cat): i for i, cat in enumerate(lazy_store.categories)}
+    category_rows = _category_link_rows_from_store(lazy_store)
+    category_rows.extend(
+        _category_link_rows_for_owner(lazy_masks, cat_id_to_idx, OWNER_MASK)
+    )
+    category_rows.extend(
+        _category_link_rows_for_owner(lazy_centroids, cat_id_to_idx, OWNER_CENTROID)
+    )
+    category_rows.extend(
+        _category_link_rows_for_owner(lazy_bboxes, cat_id_to_idx, OWNER_BBOX)
+    )
+    category_rows.extend(
+        _category_link_rows_for_owner(lazy_rois, cat_id_to_idx, OWNER_ROI)
+    )
+    _write_category_link_rows(labels_path, category_rows)
     # Identity links always persist; the appearance vectors are gated by
     # save_embedding_vectors (mirrors the eager path).
     if save_embedding_vectors:
@@ -7603,6 +8289,35 @@ def _write_labels_lazy(
         _add_owner_embedding_groups(embedding_entries, lazy_bboxes, OWNER_BBOX)
         _add_owner_embedding_groups(embedding_entries, lazy_rois, OWNER_ROI)
         _write_embedding_groups(labels_path, embedding_entries)
+        # Category appearance vectors: parallel category_* datasets in /embeddings.
+        category_embedding_entries = _category_embedding_groups_from_store(lazy_store)
+        _add_owner_embedding_groups(
+            category_embedding_entries,
+            lazy_masks,
+            OWNER_MASK,
+            attr="category_embedding",
+        )
+        _add_owner_embedding_groups(
+            category_embedding_entries,
+            lazy_centroids,
+            OWNER_CENTROID,
+            attr="category_embedding",
+        )
+        _add_owner_embedding_groups(
+            category_embedding_entries,
+            lazy_bboxes,
+            OWNER_BBOX,
+            attr="category_embedding",
+        )
+        _add_owner_embedding_groups(
+            category_embedding_entries,
+            lazy_rois,
+            OWNER_ROI,
+            attr="category_embedding",
+        )
+        _write_embedding_groups(
+            labels_path, category_embedding_entries, _CATEGORY_EMBEDDING_DATASETS
+        )
     # Frame-spanning events + their catalog (SLP 2.6+). Events live on top-level
     # lists, so the writers are identical to the eager path.
     write_event_types(labels_path, labels.event_types)
@@ -7899,6 +8614,13 @@ def write_labels(
     labels._collect_identities()
     write_identities(labels_path, labels.identities)
     write_identity_links(labels_path, labels)
+    # Auto-collect any detection category not yet registered in the catalog
+    # (object-identity deduped), mirroring _collect_identities, then persist the
+    # /categories catalog + per-detection links (SLP 2.7+). Additive: omitted
+    # entirely when there are no categories (files stay byte-identical).
+    labels._collect_categories()
+    write_categories(labels_path, labels.categories)
+    write_category_links(labels_path, labels)
     # Frame-spanning events + their catalog (SLP 2.6+). Additive groups; omitted
     # entirely when there are no events / event types (files stay byte-identical).
     write_event_types(labels_path, labels.event_types)
@@ -7914,6 +8636,8 @@ def write_labels(
     # save_embedding_vectors so a producer can keep them in memory but off disk.
     if save_embedding_vectors:
         write_embeddings(labels_path, labels)
+        # Category appearance vectors: parallel category_* datasets in /embeddings.
+        write_category_embeddings(labels_path, labels)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     write_sessions(
         labels_path,

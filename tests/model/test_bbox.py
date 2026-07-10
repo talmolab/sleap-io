@@ -44,7 +44,7 @@ def test_bbox_basic():
     assert bbox.angle == 0.0
     assert bbox.track is None
     assert bbox.instance is None
-    assert bbox.category == ""
+    assert bbox.category is None
     assert bbox.name == ""
     assert bbox.source == ""
 
@@ -74,7 +74,7 @@ def test_bbox_from_xyxy_swapped_raises():
 
 def test_bbox_from_xyxy_with_kwargs():
     bbox = UserBoundingBox.from_xyxy(10, 20, 110, 100, category="mouse")
-    assert bbox.category == "mouse"
+    assert bbox.category.name == "mouse"
 
 
 def test_bbox_from_xywh():
@@ -245,7 +245,7 @@ def test_bbox_to_roi():
     )
     roi = bbox.to_roi()
     assert roi.name == "box1"
-    assert roi.category == "mouse"
+    assert roi.category.name == "mouse"
     assert roi.source == "manual"
     assert roi.area == pytest.approx(200.0)
     assert roi.bounds == pytest.approx((40.0, 45.0, 60.0, 55.0))
@@ -269,7 +269,7 @@ def test_bbox_to_roi_preserves_metadata():
     )
     roi = bbox.to_roi()
     assert roi.name == "b1"
-    assert roi.category == "mouse"
+    assert roi.category.name == "mouse"
 
 
 def test_bbox_to_roi_preserves_tracking_score():
@@ -378,7 +378,7 @@ def test_bbox_to_centroid_propagates_metadata():
     assert centroid.identity is ident
     assert centroid.identity_score == pytest.approx(0.8)
     assert centroid.instance is inst
-    assert centroid.category == "mouse"
+    assert centroid.category.name == "mouse"
     assert centroid.name == "b1"
     assert centroid.source == "manual"
 
@@ -507,7 +507,7 @@ def test_bbox_pad_preserves_angle_and_metadata():
     assert padded.identity is ident
     assert padded.identity_score == pytest.approx(0.8)
     assert padded.instance is inst
-    assert padded.category == "mouse"
+    assert padded.category.name == "mouse"
     assert padded.name == "b1"
     assert padded.source == "manual"
 

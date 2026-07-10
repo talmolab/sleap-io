@@ -613,6 +613,40 @@ def _compute_identity_coloring(
     return identity_indices, len(catalog)
 
 
+def _compute_category_coloring(
+    instances: Iterable,
+    catalog: list | None,
+) -> tuple[list[int], int]:
+    """Compute per-instance category indices for the ``category`` color scheme.
+
+    Mirrors ``_compute_identity_coloring``. Each instance is mapped to a stable
+    index in the category catalog (the ``Labels.categories`` order when available,
+    otherwise discovered from the instances in encounter order). Instances without a
+    category map to index 0. Coloring is by palette index, exactly like the
+    ``identity`` scheme.
+
+    Args:
+        instances: Instances to color (order matches the rendered points).
+        catalog: Optional starting category catalog (e.g. ``labels.categories``).
+
+    Returns:
+        Tuple of ``(category_indices, n_categories)``.
+    """
+    catalog = list(catalog) if catalog else []
+    idmap = {id(cat): i for i, cat in enumerate(catalog)}
+    category_indices: list[int] = []
+    for inst in instances:
+        cat = getattr(inst, "category", None)
+        if cat is None:
+            category_indices.append(0)
+            continue
+        if id(cat) not in idmap:
+            idmap[id(cat)] = len(catalog)
+            catalog.append(cat)
+        category_indices.append(idmap[id(cat)])
+    return category_indices, len(catalog)
+
+
 def render_frame(
     frame: np.ndarray,
     instances_points: list[np.ndarray],
@@ -635,6 +669,9 @@ def render_frame(
     # Identity info for identity coloring
     identity_indices: list[int] | None = None,
     n_identities: int = 0,
+    # Category info for category coloring
+    category_indices: list[int] | None = None,
+    n_categories: int = 0,
     # Callbacks
     pre_render_callback: Callable[[RenderContext], None] | None = None,
     post_render_callback: Callable[[RenderContext], None] | None = None,
@@ -655,7 +692,8 @@ def render_frame(
         instances_points: List of (n_nodes, 2) arrays of keypoint coordinates.
         edge_inds: List of (src_idx, dst_idx) tuples for skeleton edges.
         node_names: List of node name strings.
-        color_by: Color scheme - 'track', 'instance', 'node', or 'identity'.
+        color_by: Color scheme - 'track', 'instance', 'node', 'identity', or
+            'category'.
         palette: Color palette name.
         marker_shape: Node marker shape.
         marker_size: Node marker radius in pixels.
@@ -669,6 +707,9 @@ def render_frame(
         identity_indices: Global identity index for each instance (for identity
             coloring; a palette index into ``Labels.identities`` order).
         n_identities: Total number of identities (for identity coloring).
+        category_indices: Global category index for each instance (for category
+            coloring; a palette index into ``Labels.categories`` order).
+        n_categories: Total number of categories (for category coloring).
         pre_render_callback: Called before poses are drawn.
         post_render_callback: Called after poses are drawn.
         per_instance_callback: Called after each instance is drawn.
@@ -713,6 +754,8 @@ def render_frame(
         palette=palette,
         identity_indices=identity_indices,
         n_identities=n_identities,
+        category_indices=category_indices,
+        n_categories=n_categories,
     )
 
     # Get drawing function for marker shape
@@ -933,8 +976,8 @@ def render_image(
               ``(0.25, 0.25, 0.75, 0.75)`` crops the center 50% of the frame.
               Detection is type-based: all values must be ``float`` and in range.
             - ``None``: No cropping (default).
-        color_by: Color scheme - 'track', 'instance', 'node', 'identity', or
-            'auto'.
+        color_by: Color scheme - 'track', 'instance', 'node', 'identity',
+            'category', or 'auto'.
         palette: Color palette name.
         marker_shape: Node marker shape.
         marker_size: Node marker radius in pixels.
@@ -1423,6 +1466,14 @@ def render_image(
         catalog = source.identities if isinstance(source, Labels) else None
         identity_indices, n_identities = _compute_identity_coloring(instances, catalog)
 
+    # Compute per-instance category indices when the resolved scheme is
+    # "category", mirroring the identity plumbing.
+    category_indices = None
+    n_categories = 0
+    if resolved_scheme == "category":
+        catalog = source.categories if isinstance(source, Labels) else None
+        category_indices, n_categories = _compute_category_coloring(instances, catalog)
+
     # Render
     rendered = render_frame(
         frame=render_image_data,
@@ -1442,6 +1493,8 @@ def render_image(
         n_tracks=n_tracks,
         identity_indices=identity_indices,
         n_identities=n_identities,
+        category_indices=category_indices,
+        n_categories=n_categories,
         pre_render_callback=pre_render_callback,
         post_render_callback=post_render_callback,
         per_instance_callback=per_instance_callback,
@@ -1555,8 +1608,8 @@ def render_video(
             - ``None``: No cropping (default).
         preset: Quality preset ('preview'=0.25x, 'draft'=0.5x, 'final'=1.0x).
         scale: Scale factor (overrides preset if both provided).
-        color_by: Color scheme - 'track', 'instance', 'node', 'identity', or
-            'auto'.
+        color_by: Color scheme - 'track', 'instance', 'node', 'identity',
+            'category', or 'auto'.
         palette: Color palette name.
         marker_shape: Node marker shape.
         marker_size: Node marker radius in pixels.
@@ -2002,6 +2055,12 @@ def render_video(
     if resolved_scheme == "identity":
         _identity_catalog = list(labels.identities) if labels is not None else []
 
+    # Category catalog for stable category coloring across frames (mirrors the
+    # identity index map). Only built when coloring by category.
+    _category_catalog: list | None = None
+    if resolved_scheme == "category":
+        _category_catalog = list(labels.categories) if labels is not None else []
+
     # Track-keyed palette for overlay (mask/ROI/bbox) coloring under
     # color_by="track", matching centroids/poses/trails (same `palette`).
     _overlay_palette_by_track: list[tuple[int, int, int]] = []
@@ -2182,6 +2241,9 @@ def render_video(
                     n_identities=(
                         len(_identity_catalog) if _identity_catalog is not None else 0
                     ),
+                    n_categories=(
+                        len(_category_catalog) if _category_catalog is not None else 0
+                    ),
                     pre_render_callback=pre_render_callback,
                     post_render_callback=post_render_callback,
                     per_instance_callback=None,
@@ -2214,6 +2276,14 @@ def render_video(
             if resolved_scheme == "identity":
                 identity_indices, n_identities = _compute_identity_coloring(
                     instances, _identity_catalog
+                )
+
+            # Get category indices when coloring by category
+            category_indices = None
+            n_categories = 0
+            if resolved_scheme == "category":
+                category_indices, n_categories = _compute_category_coloring(
+                    instances, _category_catalog
                 )
 
             # Build instance metadata
@@ -2287,6 +2357,8 @@ def render_video(
                 n_tracks=n_tracks,
                 identity_indices=identity_indices,
                 n_identities=n_identities,
+                category_indices=category_indices,
+                n_categories=n_categories,
                 pre_render_callback=pre_render_callback,
                 post_render_callback=post_render_callback,
                 per_instance_callback=per_instance_callback,

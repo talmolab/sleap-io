@@ -3,12 +3,16 @@
 import numpy as np
 
 import sleap_io as sio
+from sleap_io.model.category import Category
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.matching import (
+    NAME_CATEGORY_MATCHER,
     NAME_IDENTITY_MATCHER,
+    CategoryMatcher,
+    CategoryMatchMethod,
     ConflictResolution,
     ErrorMode,
     FrameStrategy,
@@ -238,6 +242,39 @@ class TestIdentityMatcher:
     def test_prebuilt_matchers(self):
         """Test the module-level pre-built identity matchers."""
         assert NAME_IDENTITY_MATCHER.method == IdentityMatchMethod.NAME
+
+
+class TestCategoryMatcher:
+    """Test category matching functionality (mirror of identity matching)."""
+
+    def test_name_match_default(self):
+        """Test that the default method matches by name."""
+        cat1 = Category(name="female_fly")
+        cat2 = Category(name="female_fly")  # Same name, different object
+        cat3 = Category(name="male_fly")
+
+        matcher = CategoryMatcher()
+        assert matcher.method == CategoryMatchMethod.NAME
+        assert matcher.match(cat1, cat2)  # Same name
+        assert not matcher.match(cat1, cat3)  # Different names
+
+    def test_identity_match(self):
+        """Test category matching by Python object identity."""
+        cat1 = Category(name="female_fly")
+        cat2 = Category(name="female_fly")  # same name, diff object
+
+        matcher = CategoryMatcher(method=CategoryMatchMethod.IDENTITY)
+        assert not matcher.match(cat1, cat2)  # Different objects
+        assert matcher.match(cat1, cat1)  # Same object
+
+    def test_string_method_coercion(self):
+        """Test that a string method is coerced to the enum."""
+        matcher = CategoryMatcher(method="name")
+        assert matcher.method == CategoryMatchMethod.NAME
+
+    def test_prebuilt_matchers(self):
+        """Test the module-level pre-built category matchers."""
+        assert NAME_CATEGORY_MATCHER.method == CategoryMatchMethod.NAME
 
 
 class TestVideoMatcher:

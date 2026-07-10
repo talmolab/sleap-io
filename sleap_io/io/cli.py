@@ -926,6 +926,13 @@ def _print_header(path: Path, labels: Labels) -> None:
             f"[bold]{n_identities}[/] identit{'ies' if n_identities != 1 else 'y'}"
         )
 
+    # Global categories - only shown when present (pose-only files have none).
+    n_categories = len(labels.categories)
+    if n_categories > 0:
+        stats_parts.append(
+            f"[bold]{n_categories}[/] categor{'ies' if n_categories != 1 else 'y'}"
+        )
+
     # Segmentation masks and ROIs - only shown when present to avoid cluttering
     # pose-only files.
     n_masks = len(labels.masks)
@@ -1659,8 +1666,9 @@ def _print_tracks_summary(labels: Labels) -> None:
 def _print_embeddings_summary(labels: Labels) -> None:
     """Print a per-detection re-ID embedding summary (inline).
 
-    Reports the number of instances carrying an ``identity_embedding``. Skipped for
-    lazy labels, since scanning instances would force a full materialization.
+    Reports the number of instances carrying an ``identity_embedding`` and/or a
+    ``category_embedding``. Skipped for lazy labels, since scanning instances would
+    force a full materialization.
     """
     # Iterating instances on lazy labels would force materialization; only
     # summarize embeddings when the labeled frames are readily available.
@@ -1673,14 +1681,28 @@ def _print_embeddings_summary(labels: Labels) -> None:
         for inst in lf.instances
         if inst.identity_embedding is not None
     )
-    if n_with_embeddings == 0:
+    n_with_category_embeddings = sum(
+        1
+        for lf in labels.labeled_frames
+        for inst in lf.instances
+        if inst.category_embedding is not None
+    )
+    if n_with_embeddings == 0 and n_with_category_embeddings == 0:
         return
 
     console.print()
-    console.print(
-        f"[bold]Embeddings[/] ({n_with_embeddings} instance"
-        f"{'s' if n_with_embeddings != 1 else ''} with an identity embedding)"
-    )
+    console.print("[bold]Embeddings[/]")
+    if n_with_embeddings > 0:
+        console.print(
+            f"  {n_with_embeddings} instance"
+            f"{'s' if n_with_embeddings != 1 else ''} with an identity embedding"
+        )
+    if n_with_category_embeddings > 0:
+        console.print(
+            f"  {n_with_category_embeddings} instance"
+            f"{'s' if n_with_category_embeddings != 1 else ''} "
+            f"with a category embedding"
+        )
 
 
 def _print_tracks_details(labels: Labels) -> None:
@@ -2100,7 +2122,7 @@ def _build_labels_json(
 
     Returns:
         JSON-serializable dict with file info, stats, skeletons, videos,
-        tracks, identities, and provenance.
+        tracks, identities, categories, and provenance.
     """
     file_size = path.stat().st_size if path.exists() else None
     is_pkg = _is_pkg_slp(path)
@@ -2121,6 +2143,18 @@ def _build_labels_json(
             if inst.identity_embedding is not None
         )
 
+    # Scanning instances for category embeddings would likewise force
+    # materialization of lazy labels; report null (unknown) in that case.
+    if labels.is_lazy:
+        n_with_category_embeddings = None
+    else:
+        n_with_category_embeddings = sum(
+            1
+            for lf in labels.labeled_frames
+            for inst in lf.instances
+            if inst.category_embedding is not None
+        )
+
     # Map each video to its catalog index (by object identity) so events can cite
     # their video by index without an O(n) list search per event.
     video_idx = {id(v): i for i, v in enumerate(labels.videos)}
@@ -2139,11 +2173,13 @@ def _build_labels_json(
             "n_skeletons": len(labels.skeletons),
             "n_tracks": len(labels.tracks),
             "n_identities": len(labels.identities),
+            "n_categories": len(labels.categories),
             "n_masks": len(labels.masks),
             "n_rois": len(labels.rois),
             "n_events": len(labels.events),
             "n_event_types": len(labels.event_types),
             "n_instances_with_identity_embedding": n_with_embeddings,
+            "n_instances_with_category_embedding": n_with_category_embeddings,
         },
         "skeletons": [
             _build_skeleton_dict(sk, i) for i, sk in enumerate(labels.skeletons)
@@ -2159,6 +2195,9 @@ def _build_labels_json(
         "identities": [
             {"index": i, "name": ident.name}
             for i, ident in enumerate(labels.identities)
+        ],
+        "categories": [
+            {"index": i, "name": cat.name} for i, cat in enumerate(labels.categories)
         ],
         "event_types": [
             _build_event_type_dict(et, i) for i, et in enumerate(labels.event_types)
@@ -3475,6 +3514,13 @@ def unsplit(
     help="Identity matching method for deduping the identity catalog.",
 )
 @click.option(
+    "--category",
+    type=click.Choice(["name", "identity"]),
+    default="name",
+    show_default=True,
+    help="Category matching method for deduping the category catalog.",
+)
+@click.option(
     "--frame",
     type=click.Choice(
         [
@@ -3515,6 +3561,7 @@ def merge(
     video: str,
     track: str,
     identity: str,
+    category: str,
     frame: str,
     instance: str,
     embed: str | None,
@@ -3567,6 +3614,10 @@ def merge(
       • name: Match identities by name [default]
       • identity: Match identities by object identity
 
+    [dim]Category:[/] How to dedupe the global category catalog
+      • name: Match categories by name [default]
+      • identity: Match categories by object identity
+
     [dim]Examples:[/]
 
         $ sio merge project.slp predictions.slp -o merged.slp
@@ -3612,9 +3663,10 @@ def merge(
 
     click.echo(f"  {initial_frames} frames, {initial_videos} videos")
 
-    # Select how the global identity catalog is deduped during merge ("uuid" or
-    # "name"), forwarded to Labels.merge() as the identity matcher method.
-    merge_identity_kwargs: dict = {"identity": identity}
+    # Select how the global identity and category catalogs are deduped during
+    # merge ("name" or "identity"), forwarded to Labels.merge() as the identity
+    # and category matcher methods.
+    merge_identity_kwargs: dict = {"identity": identity, "category": category}
 
     # Merge remaining files
     for input_file in expanded_files[1:]:
@@ -4072,10 +4124,11 @@ def filenames(
 # Appearance options
 @click.option(
     "--color-by",
-    type=click.Choice(["auto", "track", "instance", "node", "identity"]),
+    type=click.Choice(["auto", "track", "instance", "node", "identity", "category"]),
     default="auto",
     show_default=True,
-    help="Color scheme: auto (smart default), track, instance, node, or identity.",
+    help="Color scheme: auto (smart default), track, instance, node, identity, "
+    "or category.",
 )
 @click.option(
     "--palette",

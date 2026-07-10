@@ -7,6 +7,7 @@ import numpy as np
 from attrs import define, field
 from attrs.validators import instance_of
 
+from sleap_io.model.category import Category
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, Instance3D
 from sleap_io.model.labeled_frame import LabeledFrame
@@ -455,6 +456,8 @@ class InstanceGroup:
         points: Optional 3D points for the `InstanceGroup`. Delegates to
             `instance_3d.points` if present.
         identity: Optional `Identity` for this group (which animal).
+        category: Optional `Category` for this group (which class). Mirrors
+            `identity` but groups by class rather than individual.
         metadata: Dictionary of metadata.
     """
 
@@ -466,6 +469,7 @@ class InstanceGroup:
     )
     _instance_3d: "Instance3D | None" = field(default=None)
     identity: "Identity | None" = field(default=None)
+    category: "Category | None" = field(default=None)
     metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @property
@@ -538,6 +542,8 @@ class InstanceGroup:
         parts = [f"InstanceGroup(n_cameras={n_cams}, has_3d={has_3d}"]
         if self.identity is not None:
             parts.append(f', identity="{self.identity.name}"')
+        if self.category is not None:
+            parts.append(f', category="{self.category.name}"')
         parts.append(")")
         return "".join(parts)
 

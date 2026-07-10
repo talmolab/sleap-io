@@ -15,11 +15,14 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
+from sleap_io.model.category import to_category
+
 if TYPE_CHECKING:
     from shapely.geometry import Polygon
     from shapely.geometry.base import BaseGeometry
 
     from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.category import Category
     from sleap_io.model.centroid import Centroid
     from sleap_io.model.embedding import Embedding
     from sleap_io.model.identity import Identity
@@ -56,7 +59,9 @@ class ROI:
     Attributes:
         geometry: A Shapely geometry object (e.g., `Polygon`, `box`, `Point`).
         name: Optional human-readable name for this ROI.
-        category: Optional category label (e.g., class name for detection).
+        category: Optional `Category` (class label, e.g. class name for
+            detection) for this ROI. Promoted from the legacy free-form string;
+            ``None`` if unset. Mirrors `Instance.category`.
         source: Optional string indicating the source of this annotation.
         video: Optional `Video` this ROI is associated with. Used for static ROIs
             that are not tied to any specific frame.
@@ -74,6 +79,10 @@ class ROI:
             SLP format (v1.6+) via instance index.
         identity_embedding: Optional `Embedding` describing this detection's
             appearance for re-identification. ``None`` by default.
+        category_score: Score associated with the `category` assignment (e.g. the
+            classifier confidence). ``None`` if unassigned or assigned manually.
+        category_embedding: Optional `Embedding` describing this detection's
+            appearance for classification. ``None`` by default.
 
     Notes:
         ROIs use identity-based equality (two ROI objects are only equal if they
@@ -94,7 +103,7 @@ class ROI:
             )
 
     name: str = attrs.field(default="")
-    category: str = attrs.field(default="")
+    category: "Category | None" = attrs.field(default=None, converter=to_category)
     source: str = attrs.field(default="")
     video: "Video | None" = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
@@ -103,6 +112,8 @@ class ROI:
     identity_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
     identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
+    category_score: float | None = attrs.field(default=None)
+    category_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
 
     # Private: deferred instance index for lazy loading. When ROIs are read
     # from a file without materialized instances (e.g., lazy mode), this stores
@@ -299,7 +310,7 @@ class ROI:
             "geometry": mapping(self.geometry),
             "properties": {
                 "name": self.name,
-                "category": self.category,
+                "category": self.category.name if self.category is not None else "",
                 "source": self.source,
             },
         }
@@ -329,6 +340,8 @@ class ROI:
         kwargs = dict(
             name=self.name,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,
@@ -389,6 +402,8 @@ class ROI:
             identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             name=self.name,
             source=self.source,
         )
@@ -452,6 +467,8 @@ class ROI:
             identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             name=self.name,
             source=self.source,
         )
@@ -482,6 +499,8 @@ class ROI:
                     geometry=geom,
                     name=self.name,
                     category=self.category,
+                    category_score=self.category_score,
+                    category_embedding=self.category_embedding,
                     source=self.source,
                     video=self.video,
                     track=self.track,

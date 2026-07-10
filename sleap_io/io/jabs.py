@@ -372,7 +372,11 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
 
     # Extract static objects from ROIs
     for roi in all_labels.rois:
-        if roi.category in ("arena", "anchor") and roi.source == "jabs":
+        if (
+            roi.category is not None
+            and roi.category.name in ("arena", "anchor")
+            and roi.source == "jabs"
+        ):
             coords = _roi_to_static_object_coords(roi)
             if coords is not None:
                 static_objects[roi.name] = coords

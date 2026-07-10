@@ -22,6 +22,7 @@ from attrs import define, field
 
 from sleap_io.io.utils import sanitize_filename
 from sleap_io.model.camera import RecordingSession
+from sleap_io.model.category import Category
 from sleap_io.model.event import Event, EventType
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance, Track
@@ -42,6 +43,7 @@ if TYPE_CHECKING:
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.matching import (
+        CategoryMatcher,
         IdentityMatcher,
         InstanceMatcher,
         MatchResult,
@@ -75,6 +77,9 @@ class Labels:
         tracks: A list of `Track`s that are associated with this dataset.
         identities: A list of `Identity`s for ground-truth animal identification,
             persistent across sessions and videos.
+        categories: A list of `Category`s grouping detections by class/type (e.g.
+            `female_fly`, `fur_shaved`). Name-matched across files, like
+            `tracks` / `identities`.
         event_types: A list of `EventType`s -- the catalog / controlled vocabulary
             (the "ethogram") referenced by `events`. Name-matched across files, like
             `tracks` / `identities`.
@@ -144,6 +149,11 @@ class Labels:
     # positional constructor signature is unchanged.
     event_types: list[EventType] = field(factory=list, kw_only=True)
     events: list[Event] = field(factory=list, kw_only=True)
+
+    # Global `Category` catalog grouping detections by class/type (e.g.
+    # `female_fly`, `fur_shaved`). Keyword-only so the positional constructor
+    # signature is unchanged (mirrors `identities`, kept out of the positional block).
+    categories: list[Category] = field(factory=list, kw_only=True)
 
     # Static ROIs: ROIs not tied to any specific frame (e.g., arena boundaries).
     # Accepted via constructor with alias="rois" for backward compatibility.
@@ -528,12 +538,17 @@ class Labels:
                 if inst.identity is not None and inst.identity not in self.identities:
                     self.identities.append(inst.identity)
 
+                if inst.category is not None and inst.category not in self.categories:
+                    self.categories.append(inst.category)
+
             # Collect tracks and identities from nested annotations
             self._collect_annotation_tracks(lf)
             self._collect_annotation_identities(lf)
+            self._collect_annotation_categories(lf)
 
         # Collect multi-view identities bound only on InstanceGroups (sessions).
         self._collect_session_identities()
+        self._collect_session_categories()
 
         # Register event catalog entries and participants referenced by events.
         self._collect_events()
@@ -863,12 +878,20 @@ class Labels:
             # deep-copying preserves index alignment while keeping the catalog
             # independent.
             new_identities = [deepcopy(i) for i in self.identities]
+            # Categories are a name-matched catalog like identities; deep-copy to
+            # keep the copied catalog independent. Not event participants, so they
+            # are NOT seeded into the event memo below.
+            new_categories = [deepcopy(c) for c in self.categories]
 
             # Update store references
             new_store.videos = new_videos
             new_store.skeletons = new_skeletons
             new_store.tracks = new_tracks
             new_store.identities = new_identities
+            # Categories are index-referenced by the store's per-instance maps (like
+            # identities), so point the store at the copied catalog to keep
+            # materialized detections referencing the independent copies.
+            new_store.categories = new_categories
 
             # Annotations are stored on the lazy store's per-frame dicts
             # and will be attached to frames when they are materialized.
@@ -910,6 +933,7 @@ class Labels:
                 provenance=dict(self.provenance),
                 event_types=new_event_types,
                 events=new_events,
+                categories=new_categories,
                 lazy_store=new_store,
             )
         else:
@@ -956,6 +980,19 @@ class Labels:
             if ann.identity is not None and ann.identity not in self.identities:
                 self.identities.append(ann.identity)
 
+    def _collect_annotation_categories(self, lf: LabeledFrame):
+        """Collect categories from non-instance annotations on a frame.
+
+        Mirrors `_collect_annotation_identities` for the global `Category` catalog.
+        `SegmentationMask`, `Centroid`, `BoundingBox`, and `ROI` carry a `category`;
+        deduped by object identity (``not in``), matching the instance-category
+        collection in update/append/extend. Static ROIs (not frame-bound) are swept
+        by the save-time `_collect_categories`.
+        """
+        for ann in (*lf.masks, *lf.centroids, *lf.bboxes, *lf.rois):
+            if ann.category is not None and ann.category not in self.categories:
+                self.categories.append(ann.category)
+
     def _collect_identities(self):
         """Register every detection's `Identity` in the catalog.
 
@@ -982,6 +1019,30 @@ class Labels:
             register(roi.identity)
         self._collect_session_identities()
 
+    def _collect_categories(self):
+        """Register every detection's `Category` in the catalog.
+
+        Save-time sweep mirroring `_collect_identities`: an ``id()``-keyed set for
+        O(number of detections) dedup, sweeping instances + (masks, centroids,
+        bboxes, rois) + static ROIs, then session categories. Mutates
+        ``self.categories`` (eager labels only).
+        """
+        seen: set[int] = {id(cat) for cat in self.categories}
+
+        def register(category: "Category | None") -> None:
+            if category is not None and id(category) not in seen:
+                seen.add(id(category))
+                self.categories.append(category)
+
+        for lf in self.labeled_frames:
+            for inst in lf:
+                register(inst.category)
+            for ann in (*lf.masks, *lf.centroids, *lf.bboxes, *lf.rois):
+                register(ann.category)
+        for roi in self.static_rois:
+            register(roi.category)
+        self._collect_session_categories()
+
     def _collect_session_identities(self):
         """Collect multi-view identities bound only on `InstanceGroup`s.
 
@@ -999,6 +1060,24 @@ class Labels:
                     identity = instance_group.identity
                     if identity is not None and identity not in self.identities:
                         self.identities.append(identity)
+
+    def _collect_session_categories(self):
+        """Collect multi-view categories bound only on `InstanceGroup`s.
+
+        A multi-view category may be attached to an `InstanceGroup`
+        (``session.frame_groups[*].instance_groups[*].category``) without ever
+        appearing on a per-instance ``Instance.category``. Those categories would
+        otherwise be dropped on save, so collect them into ``self.categories``.
+
+        Deduped by object identity (``not in``), mirroring
+        `_collect_session_identities`. Cheap no-op for labels without sessions.
+        """
+        for session in self.sessions:
+            for frame_group in session.frame_groups.values():
+                for instance_group in frame_group.instance_groups:
+                    category = instance_group.category
+                    if category is not None and category not in self.categories:
+                        self.categories.append(category)
 
     def _collect_events(self):
         """Register catalog entries and participants referenced by `events`.
@@ -1083,9 +1162,14 @@ class Labels:
                 if inst.identity is not None and inst.identity not in self.identities:
                     self.identities.append(inst.identity)
 
+                if inst.category is not None and inst.category not in self.categories:
+                    self.categories.append(inst.category)
+
             self._collect_annotation_tracks(lf)
             self._collect_annotation_identities(lf)
+            self._collect_annotation_categories(lf)
             self._collect_session_identities()
+            self._collect_session_categories()
 
     def extend(self, lfs: list[LabeledFrame], update: bool = True):
         """Append labeled frames to the labels.
@@ -1119,10 +1203,18 @@ class Labels:
                     ):
                         self.identities.append(inst.identity)
 
+                    if (
+                        inst.category is not None
+                        and inst.category not in self.categories
+                    ):
+                        self.categories.append(inst.category)
+
                 self._collect_annotation_tracks(lf)
                 self._collect_annotation_identities(lf)
+                self._collect_annotation_categories(lf)
 
             self._collect_session_identities()
+            self._collect_session_categories()
 
     def _append_indexed(self, lf: LabeledFrame, update: bool = True) -> None:
         """Append a labeled frame while keeping the frame index warm.
@@ -2140,7 +2232,11 @@ class Labels:
         else:
             results = list(self.rois)
         if category is not None:
-            results = [r for r in results if r.category == category]
+            results = [
+                r
+                for r in results
+                if r.category is not None and r.category.name == category
+            ]
         if track is not None:
             results = [r for r in results if r.track is track]
         if instance is not None:
@@ -2201,7 +2297,11 @@ class Labels:
         else:
             results = list(self.masks)
         if category is not None:
-            results = [r for r in results if r.category == category]
+            results = [
+                r
+                for r in results
+                if r.category is not None and r.category.name == category
+            ]
         if track is not None:
             results = [r for r in results if r.track is track]
         if instance is not None:
@@ -2267,7 +2367,11 @@ class Labels:
         else:
             results = list(self.bboxes)
         if category is not None:
-            results = [b for b in results if b.category == category]
+            results = [
+                b
+                for b in results
+                if b.category is not None and b.category.name == category
+            ]
         if track is not None:
             results = [b for b in results if b.track is track]
         if instance is not None:
@@ -2332,7 +2436,11 @@ class Labels:
         else:
             results = list(self.centroids)
         if category is not None:
-            results = [c for c in results if c.category == category]
+            results = [
+                c
+                for c in results
+                if c.category is not None and c.category.name == category
+            ]
         if track is not None:
             results = [c for c in results if c.track is track]
         if instance is not None:
@@ -3674,6 +3782,7 @@ class Labels:
         video: "str | VideoMatcher | None" = None,
         track: "str | TrackMatcher | None" = None,
         identity: "str | IdentityMatcher | None" = None,
+        category: "str | CategoryMatcher | None" = None,
         frame: str = "auto",
         instance: "str | InstanceMatcher | None" = None,
         validate: bool = True,
@@ -3705,6 +3814,12 @@ class Labels:
                 dedupes the identity catalog by `name` so the same animal across
                 files collapses to one canonical `Identity`. Pass an
                 `IdentityMatcher` with method "identity" to dedupe by object
+                identity instead.
+            category: Global `Category` catalog matching method. Can be a string
+                ("name") or a CategoryMatcher object. Default is "name", which
+                dedupes the category catalog by `name` so the same class across
+                files collapses to one canonical `Category`. Pass a
+                `CategoryMatcher` with method "identity" to dedupe by object
                 identity instead.
             frame: Frame merge strategy. One of "auto", "keep_original",
                 "keep_new", "keep_both", "update_tracks", "replace_predictions".
@@ -3775,7 +3890,9 @@ class Labels:
 
         import sleap_io
         from sleap_io.model.matching import (
+            NAME_CATEGORY_MATCHER,
             NAME_IDENTITY_MATCHER,
+            CategoryMatcher,
             ConflictResolution,
             ErrorMode,
             IdentityMatcher,
@@ -4052,6 +4169,32 @@ class Labels:
 
                 identity_map[id(other_identity)] = matched_identity
 
+            # Step 3b-cat: Match and merge categories (dedupe by name). Mirrors the
+            # identity merge: the same class across files maps to a single canonical
+            # catalog object. ``category_map`` (keyed by the source category's object
+            # id, since `Category` is ``eq=False``) is threaded into ``_map_instance``
+            # so per-instance categories point at the deduped catalog entry.
+            if isinstance(category, CategoryMatcher):
+                category_matcher = category
+            elif isinstance(category, str):
+                category_matcher = CategoryMatcher(method=category)
+            else:
+                category_matcher = NAME_CATEGORY_MATCHER
+            category_map: dict[int, Category] = {}
+            for other_category in other.categories:
+                matched_category = None
+                for self_category in self.categories:
+                    if category_matcher.match(self_category, other_category):
+                        matched_category = self_category
+                        break
+
+                if matched_category is None:
+                    # Add new category if no match.
+                    self.categories.append(other_category)
+                    matched_category = other_category
+
+                category_map[id(other_category)] = matched_category
+
             # Step 3c: Match and merge event types (dedupe by name). Mirrors the
             # identity merge: the same event type across files collapses to one
             # canonical catalog entry. ``event_type_map`` (keyed by the source
@@ -4111,6 +4254,7 @@ class Labels:
                             skeleton_map,
                             track_map,
                             identity_map=identity_map,
+                            category_map=category_map,
                             memo=instance_memo,
                         )
                         new_frame.instances.append(new_inst)
@@ -4151,6 +4295,7 @@ class Labels:
                                 skeleton_map,
                                 track_map,
                                 identity_map=identity_map,
+                                category_map=category_map,
                                 memo=instance_memo,
                             )
                             remapped_instances.append(remapped_inst)
@@ -4442,6 +4587,7 @@ class Labels:
         skeleton_map: dict[Skeleton, Skeleton],
         track_map: dict[Track, Track],
         identity_map: dict[int, Identity] | None = None,
+        category_map: dict[int, Category] | None = None,
         memo: dict[int, Instance | PredictedInstance] | None = None,
     ) -> Instance | PredictedInstance:
         """Map an instance to use mapped skeleton, track, and identity.
@@ -4455,6 +4601,12 @@ class Labels:
                 provided, the instance's identity is resolved through this map so
                 that the same animal across files points at a single catalog object.
                 The instance's ``identity_score`` and ``identity_embedding`` are
+                always copied.
+            category_map: Optional mapping from the source `Category`'s object id to
+                the canonical (deduped) `Category` in the merged catalog. When
+                provided, the instance's category is resolved through this map so
+                that the same class across files points at a single catalog object.
+                The instance's ``category_score`` and ``category_embedding`` are
                 always copied.
             memo: Optional mapping from the id of the source instance to the new
                 instance, mutated in place. Used to repair ``from_predicted``
@@ -4486,6 +4638,15 @@ class Labels:
             if (instance.identity is not None and identity_map)
             else instance.identity
         )
+        # Resolve the category through the catalog dedup map (keyed by the source
+        # category's object id, since `Category` is ``eq=False``) so the same class
+        # across merged files maps to one canonical Category. Falls back to the
+        # instance's own category when no map/category is present.
+        mapped_category = (
+            category_map.get(id(instance.category), instance.category)
+            if (instance.category is not None and category_map)
+            else instance.category
+        )
 
         # Reorder points by node name when the source order differs from the mapped
         # skeleton's order, otherwise the per-node coordinates/scores would be carried
@@ -4513,6 +4674,9 @@ class Labels:
                 identity=mapped_identity,
                 identity_score=instance.identity_score,
                 identity_embedding=instance.identity_embedding,
+                category=mapped_category,
+                category_score=instance.category_score,
+                category_embedding=instance.category_embedding,
             )
         else:
             new_instance = Instance(
@@ -4524,6 +4688,9 @@ class Labels:
                 identity=mapped_identity,
                 identity_score=instance.identity_score,
                 identity_embedding=instance.identity_embedding,
+                category=mapped_category,
+                category_score=instance.category_score,
+                category_embedding=instance.category_embedding,
             )
         if memo is not None:
             memo[id(instance)] = new_instance

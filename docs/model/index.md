@@ -79,6 +79,9 @@ classDiagram
         +Identity identity
         +float identity_score
         +Embedding identity_embedding
+        +Category category
+        +float category_score
+        +Embedding category_embedding
     }
     class PredictedInstance:::poses {
         +float score
@@ -135,6 +138,10 @@ classDiagram
         +Identity identity
     }
     class Identity:::threed {
+        +str name
+        +dict~str,str~ metadata
+    }
+    class Category:::labels {
         +str name
         +dict~str,str~ metadata
     }
@@ -233,6 +240,8 @@ classDiagram
     Instance3D --> Skeleton : uses
     Instance3D <|-- PredictedInstance3D
     Labels --> Identity
+    Labels --> Category
+    Instance --> Category
 
     Centroid <|-- UserCentroid
     Centroid <|-- PredictedCentroid
@@ -282,6 +291,7 @@ classDiagram
 | [`FrameGroup`](3d.md) | [3D](3d.md) | Matched labeled frames across views at one time point |
 | [`InstanceGroup`](3d.md) | [3D](3d.md) | Same animal matched across cameras, with optional 3D points |
 | [`Identity`](3d.md#identity) | [3D](3d.md) | Cross-session persistent animal identity (distinct from per-video `Track`) |
+| [`Category`](category.md) | [Categories](category.md) | Class/type a detection belongs to (e.g. `female_fly`), assigned by classification or re-ID |
 | [`Instance3D`](3d.md#instance3d) | [3D](3d.md) | Structured triangulated 3D keypoint storage |
 | [`PredictedInstance3D`](3d.md#instance3d) | [3D](3d.md) | Model-predicted 3D keypoints with per-point scores |
 | [`Centroid`](centroids.md) | [Centroids](centroids.md) | Abstract base centroid point annotation |

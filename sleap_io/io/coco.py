@@ -962,7 +962,7 @@ def convert_labels(
     for lf in labels.labeled_frames:
         for roi in lf.rois:
             # Get or create category
-            cat_name = roi.category if roi.category else "object"
+            cat_name = roi.category.name if roi.category else "object"
             if cat_name not in category_name_to_id:
                 category = {
                     "id": category_id_counter,
@@ -1015,7 +1015,7 @@ def convert_labels(
 
         # Export masks as COCO RLE annotations
         for seg_mask in lf.masks:
-            cat_name = seg_mask.category if seg_mask.category else "object"
+            cat_name = seg_mask.category.name if seg_mask.category else "object"
             if cat_name not in category_name_to_id:
                 category = {
                     "id": category_id_counter,
@@ -1070,7 +1070,7 @@ def convert_labels(
         for bbox_obj in lf.bboxes:
             if bbox_obj.instance is not None:
                 continue
-            cat_name = bbox_obj.category if bbox_obj.category else "object"
+            cat_name = bbox_obj.category.name if bbox_obj.category else "object"
             if cat_name not in category_name_to_id:
                 category = {
                     "id": category_id_counter,

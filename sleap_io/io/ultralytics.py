@@ -528,7 +528,7 @@ def _build_class_names_from_rois(rois: list[ROI]) -> dict[int, str]:
     Returns:
         A dictionary mapping integer class IDs to category name strings.
     """
-    categories = sorted({roi.category for roi in rois if roi.category})
+    categories = sorted({roi.category.name for roi in rois if roi.category})
     if not categories:
         return {0: "object"}
     return {i: name for i, name in enumerate(categories)}
@@ -543,7 +543,7 @@ def _build_class_names_from_bboxes(bboxes: list[BoundingBox]) -> dict[int, str]:
     Returns:
         A dictionary mapping integer class IDs to category name strings.
     """
-    categories = sorted({bbox.category for bbox in bboxes if bbox.category})
+    categories = sorted({bbox.category.name for bbox in bboxes if bbox.category})
     if not categories:
         return {0: "object"}
     return {i: name for i, name in enumerate(categories)}
@@ -1067,7 +1067,7 @@ def write_roi_label_file(
 
     with open(label_path, "w") as f:
         for roi in exploded_rois:
-            class_id = name_to_id.get(roi.category, 0)
+            class_id = name_to_id.get(roi.category.name, 0) if roi.category else 0
 
             if not roi.is_bbox:
                 # Write segmentation polygon
@@ -1125,7 +1125,7 @@ def write_bbox_label_file(
 
     with open(label_path, "w") as f:
         for bbox in bboxes:
-            class_id = name_to_id.get(bbox.category, 0)
+            class_id = name_to_id.get(bbox.category.name, 0) if bbox.category else 0
 
             # Normalize center coordinates and dimensions
             x_center_norm = bbox.x_center / width_px

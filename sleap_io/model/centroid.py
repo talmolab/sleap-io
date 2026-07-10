@@ -20,8 +20,11 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
+from sleap_io.model.category import to_category
+
 if TYPE_CHECKING:
     from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.category import Category
     from sleap_io.model.embedding import Embedding
     from sleap_io.model.identity import Identity
     from sleap_io.model.instance import Instance, PredictedInstance, Track
@@ -117,12 +120,18 @@ class Centroid:
             Kept separate from `tracking_score` (short-term tracklet vs long-term
             identity).
         instance: Optional linked pose instance.
-        category: Class label (e.g., ``"lysosome"``, ``"cell"``).
+        category: Optional `Category` (class label, e.g. ``"lysosome"``,
+            ``"cell"``) for this centroid. Promoted from the legacy free-form
+            string; ``None`` if unset. Mirrors `Instance.category`.
         name: Human-readable name (e.g., ``"ID43008"``).
         source: How the centroid was computed (e.g., ``"center_of_mass"``,
             ``"trackmate"``).
         identity_embedding: Optional `Embedding` describing this detection's
             appearance for re-identification. ``None`` by default.
+        category_score: Score associated with the `category` assignment (e.g. the
+            classifier confidence). ``None`` if unassigned or assigned manually.
+        category_embedding: Optional `Embedding` describing this detection's
+            appearance for classification. ``None`` by default.
 
     Notes:
         Centroids use identity-based equality (two Centroid objects are only
@@ -140,10 +149,12 @@ class Centroid:
     identity: "Identity | None" = attrs.field(default=None)
     identity_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
-    category: str = attrs.field(default="")
+    category: "Category | None" = attrs.field(default=None, converter=to_category)
     name: str = attrs.field(default="")
     source: str = attrs.field(default="")
     identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
+    category_score: float | None = attrs.field(default=None)
+    category_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
 
     # Private: deferred instance index for lazy loading.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
@@ -219,6 +230,9 @@ class Centroid:
                 identity=self.identity,
                 identity_score=self.identity_score,
                 identity_embedding=self.identity_embedding,
+                category=self.category,
+                category_score=self.category_score,
+                category_embedding=self.category_embedding,
             )
         else:
             return Instance.from_numpy(
@@ -229,6 +243,9 @@ class Centroid:
                 identity=self.identity,
                 identity_score=self.identity_score,
                 identity_embedding=self.identity_embedding,
+                category=self.category,
+                category_score=self.category_score,
+                category_embedding=self.category_embedding,
             )
 
     def to_instance(
@@ -376,6 +393,9 @@ class Centroid:
             identity=instance.identity,
             identity_score=instance.identity_score,
             identity_embedding=instance.identity_embedding,
+            category=instance.category,
+            category_score=instance.category_score,
+            category_embedding=instance.category_embedding,
             instance=instance,
             source=source,
         )
@@ -496,6 +516,8 @@ class Centroid:
             identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             name=self.name,
             source=self.source,
         )
@@ -544,6 +566,8 @@ class Centroid:
             identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             name=self.name,
             source=self.source,
         )
@@ -597,6 +621,8 @@ class Centroid:
                 identity_embedding=self.identity_embedding,
                 instance=self.instance,
                 category=self.category,
+                category_score=self.category_score,
+                category_embedding=self.category_embedding,
                 name=self.name,
                 source=self.source,
             )

@@ -35,7 +35,7 @@ def test_user_centroid_basic():
     assert c.track is None
     assert c.tracking_score is None
     assert c.instance is None
-    assert c.category == ""
+    assert c.category is None
     assert c.name == ""
     assert c.source == ""
     assert not c.is_predicted
@@ -56,7 +56,7 @@ def test_user_centroid_all_fields():
     assert c.z == 3.0
     assert c.track is track
     assert c.tracking_score == 0.8
-    assert c.category == "cell"
+    assert c.category.name == "cell"
     assert c.name == "c1"
     assert c.source == "center_of_mass"
 
@@ -495,7 +495,7 @@ def test_from_pose_kwargs_passthrough():
     skel = Skeleton(["a"])
     inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skel)
     c = Centroid.from_pose(inst, category="cell", name="c7")
-    assert c.category == "cell"
+    assert c.category.name == "cell"
     assert c.name == "c7"
 
 
@@ -626,7 +626,7 @@ def test_to_roi_basic():
     cx, cy = roi.geometry.centroid.x, roi.geometry.centroid.y
     assert cx == pytest.approx(10.0, abs=1e-6)
     assert cy == pytest.approx(20.0, abs=1e-6)
-    assert roi.category == "cell"
+    assert roi.category.name == "cell"
 
 
 def test_to_roi_predicted():
@@ -705,7 +705,7 @@ def test_to_mask_metadata_propagated():
     c = UserCentroid(x=10.0, y=10.0, track=track, category="cell", name="c1")
     mask = c.to_mask(height=20, width=20, radius=3.0)
     assert mask.track is track
-    assert mask.category == "cell"
+    assert mask.category.name == "cell"
     assert mask.name == "c1"
 
 

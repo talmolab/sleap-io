@@ -113,10 +113,21 @@ file.slp
 │   └── links                    # Dataset: structured (owner_type, owner_id, identity_idx, identity_score)
 │                                 #   one row per detection that has an identity
 │
+├── /categories/                 # Group: class/category catalog (Format 2.7+, optional)
+│   ├── name                     # Dataset: vlen utf-8 str, one per category (catalog order)
+│   ├── meta_owner               # Dataset: int32 category index (EAV metadata; all three omitted if none)
+│   ├── meta_key                 # Dataset: vlen utf-8 str metadata key
+│   ├── meta_val                 # Dataset: vlen utf-8 str metadata value
+│   └── links                    # Dataset: structured (owner_type, owner_id, category_idx, category_score)
+│                                 #   one row per detection that has a category
+│
 ├── /embeddings/                 # Group: per-detection re-ID embeddings (Format 2.5+, optional)
 │   ├── vectors                  # Dataset: float (N, D), chunked + gzip (all rows share D)
 │   ├── owner_type               # Dataset: uint8 (0=instance, 2=centroid, 3=mask, 4=bbox, 5=roi)
-│   └── owner_id                 # Dataset: int64 (global instance_id or per-modality list index)
+│   ├── owner_id                 # Dataset: int64 (global instance_id or per-modality list index)
+│   ├── category_vectors         # Dataset: float (M, D'), parallel category embeddings (Format 2.7+, optional)
+│   ├── category_owner_type      # Dataset: uint8 category-embedding join (Format 2.7+, optional)
+│   └── category_owner_id        # Dataset: int64 category-embedding join (Format 2.7+, optional)
 │
 ├── /event_types/                # Group: frame-spanning event catalog (Format 2.6+, optional)
 │   ├── name                     # Dataset: vlen utf-8 str, one per event type (catalog order)
@@ -177,7 +188,8 @@ file.slp
 | `suggestions_json` | `bytes[]` | JSON array of suggested frames (optional) |
 | `sessions_json` | `bytes[]` | JSON array of recording sessions (optional) |
 | `identity/` | group | re-ID identity catalog: `name` dataset + optional `meta_owner`/`meta_key`/`meta_val` EAV metadata + per-detection `links` (Format 2.5+, optional) |
-| `embeddings/` | group | Per-detection re-ID embeddings: `vectors` `(N, D)` + `owner_type`/`owner_id` join columns (Format 2.5+, optional) |
+| `categories/` | group | class/category catalog: `name` dataset + optional `meta_owner`/`meta_key`/`meta_val` EAV metadata + per-detection `links` (Format 2.7+, optional) |
+| `embeddings/` | group | Per-detection re-ID embeddings: `vectors` `(N, D)` + `owner_type`/`owner_id` join columns; plus optional parallel `category_vectors` `(M, D')` + `category_owner_type`/`category_owner_id` for category embeddings (Format 2.5+; category datasets 2.7+, optional) |
 | `event_types/` | group | Frame-spanning event catalog: `name` dataset + optional `description` + `meta_*` EAV metadata (Format 2.6+, optional) |
 | `events/` | group | Frame-spanning event annotations: columnar per-field datasets + ragged CSR `scores`/`score_offsets` framewise traces (Format 2.6+, optional) |
 | `provenance_json` | `bytes` | JSON object of provenance metadata (optional) |
@@ -627,6 +639,52 @@ The index corresponds to the position in `/identity/name`.
 
 The `/identity` group is only written when the [`Labels`][sleap_io.Labels] object contains identities. On read, a missing group defaults to an empty catalog.
 
+## Categories
+
+[`Category`][sleap_io.Category] objects name the **class** a detection belongs to (e.g. `"female_fly"`, `"fur_shaved"`), assigned by classification or re-ID. A `Category` has exactly two fields: a human-readable `name` (a `string`, not required to be unique) and a free-form `metadata` mapping of string keys to string values. Categories are matched by `name` by default (see [`Category.matches`][sleap_io.Category.matches]), so two detections labeled `"female_fly"` refer to the same class across separately loaded files and merges.
+
+[`Labels.categories`][sleap_io.Labels] is the catalog of these objects — a list, like [`Labels.identities`][sleap_io.Labels] — auto-collected in first-seen order from the detections and instance groups on save. The `/categories` group is a **fully self-contained mirror of `/identity`** (its own catalog, EAV metadata, and per-detection `links`), introduced at **Format 2.7** (additive; older readers ignore it and category-free files are byte-identical).
+
+!!! note "Legacy `category` string"
+    Older files stored a free-form class label on ROI / bounding-box / centroid / mask annotations (the `roi_categories` / `mask_categories` / bbox / centroid `category` datasets). Those remain unchanged; the new `/categories` catalog is the first-class promotion of that concept and is written separately. See [Categories](../model/category.md).
+
+### Catalog (`/categories/name`)
+
+The `name` dataset holds one variable-length UTF-8 string per category, in catalog order:
+
+```python
+f["/categories/name"][:]  # ["female_fly", "male_fly"]
+```
+
+### Metadata (`/categories/meta_owner`, `/categories/meta_key`, `/categories/meta_val`)
+
+Free-form per-category metadata is stored as an entity-attribute-value (EAV) table, exactly like `/identity`: three parallel datasets with one row per `(category, key, value)` triple.
+
+| Dataset | Type | Description |
+|---------|------|-------------|
+| `meta_owner` | `int32` | Index of the owning category in `/categories/name` |
+| `meta_key` | vlen `str` | Metadata key |
+| `meta_val` | vlen `str` | Metadata value |
+
+All three datasets are omitted entirely when no category carries any metadata.
+
+### Per-Detection Linking (`/categories/links`)
+
+Per-detection category assignments are stored in the `/categories/links` structured dataset, with one row per detection that carries a category. Each row joins a detection — identified by an `owner_type`/`owner_id` pair (the same join scheme as `/identity/links` and `/embeddings`) — to an entry in the category catalog:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `owner_type` | `uint8` | Detection modality code (shared `OWNER_*` codes: `0`=instance, `2`=centroid, `3`=mask, `4`=bbox, `5`=roi) |
+| `owner_id` | `int64` | Per-owner-type positional id (same enumeration as `/identity/links`: global instance id for instance owners, or global per-modality list index for centroid / mask / bbox / ROI owners; static ROIs follow frame ROIs) |
+| `category_idx` | `int32` | Index into `/categories/name` |
+| `category_score` | `float32` | Category-assignment score (NaN if unrecorded) |
+
+This is additive: old readers ignore the group, and detections without a category simply have no row. Each detection also carries a single `category_embedding` slot; those vectors, when present, live alongside identity vectors in the `/embeddings` group as parallel `category_*` datasets — see [Embeddings](#embeddings).
+
+### Optional Group
+
+The `/categories` group is only written when the [`Labels`][sleap_io.Labels] object contains categories. On read, a missing group defaults to an empty catalog.
+
 ## Embeddings
 
 Per-detection appearance / re-identification [`Embedding`][sleap_io.Embedding] vectors are stored in the optional `/embeddings` group (Format 2.5+). An `Embedding` is a bare value object wrapping a single 1-D feature `vector` of shape `(D,)` (its `dim` property returns `D`); each detection — an instance, [`Centroid`][sleap_io.Centroid], [`BoundingBox`][sleap_io.BoundingBox], [`SegmentationMask`][sleap_io.SegmentationMask], or [`ROI`][sleap_io.ROI] — carries at most one, in its `identity_embedding` slot.
@@ -639,11 +697,23 @@ The group is a single columnar struct-of-arrays. Row `i` of all three datasets d
 | `owner_type` | `(N,)` | `uint8` | Detection modality code (shared `OWNER_*` codes: `0`=instance, `2`=centroid, `3`=mask, `4`=bbox, `5`=roi) |
 | `owner_id` | `(N,)` | `int64` | Per-owner-type positional id: the global instance id for instance owners, or the global per-modality list index for centroid / mask / bbox / ROI owners (matching `write_lfs` / `write_masks` / `write_centroids` / `write_bboxes` / `write_rois`; static ROIs follow frame ROIs) |
 
-All vectors in a file share a single dimensionality `D`; a mix of dimensionalities is rejected at write time. The `owner_type`/`owner_id` join is identical to the one used by `/identity/links`, so a detection's identity link and its embedding are matched by the same pair.
+All identity vectors in a file share a single dimensionality `D`; a mix of dimensionalities is rejected at write time. The `owner_type`/`owner_id` join is identical to the one used by `/identity/links`, so a detection's identity link and its embedding are matched by the same pair.
+
+### Category embeddings (parallel datasets, Format 2.7+)
+
+Each detection can also carry a `category_embedding` (the appearance vector its class was predicted from). These are stored in the **same `/embeddings` group** as a set of **parallel, independent datasets**, added at Format 2.7:
+
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `category_vectors` | `(M, D')` | float | Stacked category embedding vectors, chunked + gzip-compressed |
+| `category_owner_type` | `(M,)` | `uint8` | Detection modality code (same shared `OWNER_*` codes) |
+| `category_owner_id` | `(M,)` | `int64` | Same per-owner-type positional id join as the identity columns |
+
+Category vectors are kept **independent** of the identity `vectors`/`owner_type`/`owner_id` datasets rather than sharing one table, so the two embedding kinds need **not** share dimensionality (`D` may differ from `D'`). A file with only identity embeddings has no `category_*` datasets and stays byte-identical to a pre-2.7 file. On read, absent `category_*` datasets simply mean no detection receives a category embedding.
 
 ### Optional Group
 
-The `/embeddings` group is only written when at least one detection carries an `identity_embedding` and embedding vectors are being persisted. Passing `save_slp(labels, path, save_embedding_vectors=False)` writes the identity `links` but skips the `/embeddings` group entirely, so the (potentially large) vectors are omitted while the identity assignments are kept. On read, a missing group means no detection receives an embedding.
+The `/embeddings` group is only written when at least one detection carries an `identity_embedding` or a `category_embedding` and embedding vectors are being persisted. Passing `save_slp(labels, path, save_embedding_vectors=False)` writes the identity and category `links` but skips the `/embeddings` group entirely, so the (potentially large) vectors are omitted while the identity/category assignments are kept. On read, a missing group means no detection receives an embedding.
 
 ## Events
 
@@ -1497,7 +1567,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Triggered automatically when any mask records a `from_predicted` link; otherwise the format stays at whatever other state drives `format_id`
 - Backward compatible: the column is always written but reads are gated on its presence, so files written before 2.4 (which lack the column) load `from_predicted` as `None`
 
-### Format 2.5 (Current)
+### Format 2.5
 
 **Re-ID identity subsystem: identity catalog, per-detection links, and appearance embeddings.**
 
@@ -1508,6 +1578,27 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - New optional `/embeddings` group holding per-detection appearance / re-ID vectors as a single columnar struct-of-arrays: `vectors` `(N, D)` float (chunked so whole rows stay within a chunk, gzip-compressed; all vectors share one `D`) plus the `owner_type`/`owner_id` join columns (see [Embeddings](#embeddings)). Persists the single `identity_embedding` slot on each instance, `SegmentationMask`, `Centroid`, `BoundingBox`, or `ROI`; large float vectors live in gzipped numeric datasets, never in JSON
 - Triggered automatically when any detection carries an [`Identity`][sleap_io.Identity] or an embedding; identity- and embedding-free files stay at `format_id <= 2.4`. Pass `save_slp(..., save_embedding_vectors=False)` to write the identity `links` but skip the (large) `/embeddings` group
 - Backward compatible: reads are gated on group presence, so older readers ignore both groups
+
+### Format 2.6
+
+**Frame-spanning events: event catalog and interval annotations.**
+
+- New optional `/event_types` group (a `name` string dataset + optional `description` + `meta_*` EAV metadata) and `/events` group (a columnar struct-of-arrays plus a ragged CSR `scores`/`score_offsets` pair for optional framewise `PredictedEvent.scores`) — see [Events](#events)
+- An [`Event`][sleap_io.Event] has a *temporal extent* (an inclusive `[start_frame, end_frame]` interval) and lives on [`Labels.events`][sleap_io.Labels] rather than a `LabeledFrame`; participants are stored as `(kind, idx)` pairs referencing tracks or identities
+- Triggered automatically when the file has any events / event types; event-free files stay at `format_id <= 2.5`
+- Backward compatible: reads are gated on group presence, so older readers ignore both groups
+
+### Format 2.7 (Current)
+
+**Class/category subsystem: category catalog, per-detection links, and category appearance embeddings.**
+
+- New optional `/categories` group (see [Categories](#categories)), a fully self-contained mirror of `/identity`:
+    - `name` — one variable-length UTF-8 string per [`Category`][sleap_io.Category], in catalog order
+    - `meta_owner` / `meta_key` / `meta_val` — an entity-attribute-value table of per-category `metadata`, all three omitted when no category carries metadata
+    - `links` — a structured dataset (`owner_type`, `owner_id`, `category_idx`, `category_score`) with one row per detection that carries a category, using the same shared `OWNER_*` join codes as `/identity/links`
+- Category appearance vectors (the `category_embedding` slot on each instance, `SegmentationMask`, `Centroid`, `BoundingBox`, or `ROI`) live in the **same `/embeddings` group** as **parallel, independent** datasets — `category_vectors` `(M, D')` plus `category_owner_type` / `category_owner_id` — kept separate from the identity `vectors` datasets so the two embedding kinds need not share dimensionality (see [Embeddings](#category-embeddings-parallel-datasets-format-27))
+- Triggered automatically when any detection carries a [`Category`][sleap_io.Category] or a category embedding; category-free files stay at `format_id <= 2.6`. Pass `save_slp(..., save_embedding_vectors=False)` to write the category `links` but skip the (large) category vectors
+- Backward compatible and byte-identical for unused features: the `/categories` group and the `category_*` embedding datasets are only written when present, so identity-only files stay unchanged
 
 ## Browser-side compatibility (h5wasm / sleap-io.js)
 

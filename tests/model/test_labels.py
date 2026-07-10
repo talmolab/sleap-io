@@ -6563,9 +6563,9 @@ def test_labels_copy_preserves_rois_and_masks(slp_minimal, tmp_path):
     labels_copy = lazy_labels.copy()
 
     assert len(labels_copy.rois) == 1
-    assert labels_copy.rois[0].category == "test"
+    assert labels_copy.rois[0].category.name == "test"
     assert len(labels_copy.masks) == 1
-    assert labels_copy.masks[0].category == "fg"
+    assert labels_copy.masks[0].category.name == "fg"
 
     # Verify independence (properties return new lists)
     assert len(lazy_labels.rois) == 1

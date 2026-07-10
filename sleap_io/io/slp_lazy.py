@@ -15,6 +15,7 @@ import attrs
 import numpy as np
 
 if TYPE_CHECKING:
+    from sleap_io.model.category import Category
     from sleap_io.model.identity import Identity
     from sleap_io.model.instance import Instance, PredictedInstance, Track
     from sleap_io.model.labeled_frame import LabeledFrame
@@ -95,6 +96,19 @@ class LazyDataStore:
         factory=dict, repr=False, alias="instance_embeddings"
     )
 
+    # Global category catalog and per-instance category links (format 2.7+).
+    # ``categories`` are canonical objects shared with Labels.categories;
+    # ``_instance_categories`` maps global instance_id -> (category_idx, score).
+    categories: list["Category"] = attrs.field(factory=list, repr=False)
+    _instance_categories: dict = attrs.field(
+        factory=dict, repr=False, alias="instance_categories"
+    )
+    # Per-instance category (classification) embeddings (format 2.7+):
+    # instance_id -> Embedding.
+    _instance_category_embeddings: dict = attrs.field(
+        factory=dict, repr=False, alias="instance_category_embeddings"
+    )
+
     def __attrs_post_init__(self) -> None:
         """Validate index bounds on construction."""
         self.validate()
@@ -173,6 +187,9 @@ class LazyDataStore:
             identities=self.identities,  # Share references (canonical objects)
             instance_identities=dict(self._instance_identities),
             instance_embeddings=dict(self._instance_embeddings),
+            categories=self.categories,  # Share references (canonical objects)
+            instance_categories=dict(self._instance_categories),
+            instance_category_embeddings=dict(self._instance_category_embeddings),
             format_id=self.format_id,
             source_path=self._source_path,
             negative_frames=self._negative_frames.copy(),
@@ -322,6 +339,21 @@ class LazyDataStore:
         # immutable.
         identity_embedding = self._instance_embeddings.get(instance_id)
 
+        # Resolve the optional per-instance global category (format 2.7+). Joined on
+        # the global instance_id, mirroring identity; absent for older files.
+        category = None
+        category_score = None
+        if self._instance_categories:
+            entry = self._instance_categories.get(instance_id)
+            if entry is not None:
+                category_idx, cat_score = entry
+                if 0 <= category_idx < len(self.categories):
+                    category = self.categories[category_idx]
+                    category_score = cat_score
+
+        # Resolve the optional per-instance classification embedding (format 2.7+).
+        category_embedding = self._instance_category_embeddings.get(instance_id)
+
         if instance_type == InstanceType.USER:
             pts_data = self.points_data[point_id_start:point_id_end]
             points_array = self._make_points_array(pts_data, skeleton)
@@ -336,6 +368,9 @@ class LazyDataStore:
                 identity=identity,
                 identity_score=identity_score,
                 identity_embedding=identity_embedding,
+                category=category,
+                category_score=category_score,
+                category_embedding=category_embedding,
             )
         else:  # PREDICTED
             pts_data = self.pred_points_data[point_id_start:point_id_end]
@@ -352,6 +387,9 @@ class LazyDataStore:
                 identity=identity,
                 identity_score=identity_score,
                 identity_embedding=identity_embedding,
+                category=category,
+                category_score=category_score,
+                category_embedding=category_embedding,
             )
 
     def _make_points_array(

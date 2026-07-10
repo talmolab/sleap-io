@@ -507,7 +507,7 @@ class LabelImage:
             data[mask.data] = label_id
             objects[label_id] = LabelImage.Info(
                 track=mask.track,
-                category=mask.category,
+                category=mask.category.name if mask.category else "",
                 name=mask.name,
                 instance=mask.instance,
             )
