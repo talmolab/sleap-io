@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from sleap_io.model.event import Event, EventType
+    from sleap_io.model.identity import Identity
     from sleap_io.model.label_image import LabelImage
 
 import numpy as np
@@ -32,7 +34,8 @@ from rich.table import Table
 from sleap_io.io import main as io_main
 from sleap_io.io._remote import _is_url, _redact_url
 from sleap_io.io.video_reading import HDF5Video
-from sleap_io.model.instance import Instance, PredictedInstance
+from sleap_io.model.event import PredictedEvent
+from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
@@ -932,6 +935,11 @@ def _print_header(path: Path, labels: Labels) -> None:
     n_rois = len(labels.rois)
     if n_rois > 0:
         stats_parts.append(f"[bold]{n_rois}[/] ROI{'s' if n_rois != 1 else ''}")
+
+    # Frame-spanning events - only shown when present (pose-only files have none).
+    n_events = len(labels.events)
+    if n_events > 0:
+        stats_parts.append(f"[bold]{n_events}[/] event{'s' if n_events != 1 else ''}")
 
     header_lines.append("")
     header_lines.append(" | ".join(stats_parts))
@@ -2040,6 +2048,42 @@ def _print_frames_summary(labels: Labels) -> None:
         )
 
 
+def _build_event_type_dict(et: "EventType", index: int) -> dict:
+    """Build a JSON-serializable summary of an event type for ``show --json``."""
+    d: dict[str, Any] = {"index": index, "name": et.name}
+    if et.description:
+        d["description"] = et.description
+    if et.metadata:
+        d["metadata"] = dict(et.metadata)
+    return d
+
+
+def _event_participant_json(participant: "Track | Identity | None") -> dict | None:
+    """Represent an event subject/target (`Track` / `Identity` / None) for JSON."""
+    if participant is None:
+        return None
+    kind = "track" if isinstance(participant, Track) else "identity"
+    return {"kind": kind, "name": participant.name}
+
+
+def _build_event_dict(ev: "Event", index: int, video_idx: dict[int, int]) -> dict:
+    """Build a JSON-serializable summary of a single event for ``show --json``."""
+    d: dict[str, Any] = {
+        "index": index,
+        "type": ev.type.name if ev.type is not None else None,
+        "video": video_idx.get(id(ev.video)),
+        "start_frame": ev.start_frame,
+        "end_frame": ev.end_frame,
+        "subject": _event_participant_json(ev.subject),
+        "target": _event_participant_json(ev.target),
+        "predicted": ev.is_predicted,
+    }
+    if isinstance(ev, PredictedEvent):
+        d["score"] = ev.score
+        d["has_framewise_scores"] = ev.scores is not None
+    return d
+
+
 def _build_labels_json(
     path: Path,
     labels: Labels,
@@ -2077,6 +2121,10 @@ def _build_labels_json(
             if inst.identity_embedding is not None
         )
 
+    # Map each video to its catalog index (by object identity) so events can cite
+    # their video by index without an O(n) list search per event.
+    video_idx = {id(v): i for i, v in enumerate(labels.videos)}
+
     payload: dict[str, Any] = {
         "path": str(path.resolve()),
         "name": path.name,
@@ -2093,6 +2141,8 @@ def _build_labels_json(
             "n_identities": len(labels.identities),
             "n_masks": len(labels.masks),
             "n_rois": len(labels.rois),
+            "n_events": len(labels.events),
+            "n_event_types": len(labels.event_types),
             "n_instances_with_identity_embedding": n_with_embeddings,
         },
         "skeletons": [
@@ -2109,6 +2159,12 @@ def _build_labels_json(
         "identities": [
             {"index": i, "name": ident.name}
             for i, ident in enumerate(labels.identities)
+        ],
+        "event_types": [
+            _build_event_type_dict(et, i) for i, et in enumerate(labels.event_types)
+        ],
+        "events": [
+            _build_event_dict(ev, i, video_idx) for i, ev in enumerate(labels.events)
         ],
         "provenance": dict(labels.provenance),
     }
@@ -2672,6 +2728,18 @@ def convert(
     # Prepare output directory for ultralytics
     if resolved_output_format == "ultralytics":
         output_path.mkdir(parents=True, exist_ok=True)
+
+    # Warn when frame-spanning events would be silently dropped: only SLP persists
+    # events / event types, so any other target discards them.
+    if resolved_output_format != "slp" and (labels.events or labels.event_types):
+        n_ev = len(labels.events)
+        n_et = len(labels.event_types)
+        click.echo(
+            f"Warning: {n_ev} event{'s' if n_ev != 1 else ''} and "
+            f"{n_et} event type{'s' if n_et != 1 else ''} will be dropped "
+            f"('{resolved_output_format}' cannot represent events).",
+            err=True,
+        )
 
     # Save the output file
     try:

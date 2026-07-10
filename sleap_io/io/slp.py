@@ -29,6 +29,16 @@ Format version history:
             owner_type/owner_id join columns; vectors chunked so whole rows stay
             within a chunk). The owner_type column reuses the shared OWNER_* codes
             across both. All additive, read on group presence.
+    - 2.6: Added frame-spanning events. The /event_types group holds the event
+            catalog (a native `name` string dataset + an optional `description`
+            dataset + an optional entity-attribute-value metadata table:
+            meta_owner/meta_key/meta_val), mirroring /identity. The /events group
+            holds the interval annotations as a columnar struct-of-arrays (video,
+            start_frame/end_frame inclusive int64, type, subject/target kind+idx,
+            is_predicted, score, name, source, per-event EAV metadata) plus a ragged
+            CSR pair (scores flat float32 + score_offsets int64) for optional
+            framewise PredictedEvent.scores traces. Every column is presence-guarded;
+            both groups additive, read on group presence.
 """
 
 from __future__ import annotations
@@ -72,6 +82,7 @@ from sleap_io.model.camera import (
     RecordingSession,
 )
 from sleap_io.model.embedding import Embedding
+from sleap_io.model.event import Event, EventType, PredictedEvent, UserEvent
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import (
     Instance,
@@ -1729,6 +1740,400 @@ def write_identities(labels_path: str, identities: list[Identity]) -> None:
             )
 
 
+def read_event_types(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> list[EventType]:
+    """Read the event-type catalog from a SLEAP labels file.
+
+    Event types are stored in the optional ``/event_types`` group (SLP format 2.6+)
+    as a native ``name`` string dataset plus an optional ``description`` string
+    dataset (omitted when every type's description is empty) and an optional
+    entity-attribute-value metadata table (``meta_owner`` / ``meta_key`` /
+    ``meta_val``, omitted when no type carries metadata). Absent in older files, in
+    which case an empty list is returned. Mirrors `read_identities`.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from.
+
+    Returns:
+        A list of `EventType` objects in catalog order.
+    """
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
+        if "event_types" not in f or "name" not in f["event_types"]:
+            return []
+        group = f["event_types"]
+        names = [
+            n.decode() if isinstance(n, bytes) else str(n) for n in group["name"][:]
+        ]
+        if "description" in group:
+            descriptions = [
+                d.decode() if isinstance(d, bytes) else str(d)
+                for d in group["description"][:]
+            ]
+        else:
+            descriptions = ["" for _ in names]
+        metadata: list[dict[str, str]] = [{} for _ in names]
+        if "meta_owner" in group:
+            owners = group["meta_owner"][:]
+            keys = group["meta_key"][:]
+            vals = group["meta_val"][:]
+            for owner, key, val in zip(owners, keys, vals):
+                k = key.decode() if isinstance(key, bytes) else str(key)
+                v = val.decode() if isinstance(val, bytes) else str(val)
+                metadata[int(owner)][k] = v
+    return [
+        EventType(name=name, description=desc, metadata=meta)
+        for name, desc, meta in zip(names, descriptions, metadata)
+    ]
+
+
+def write_event_types(labels_path: str, event_types: list[EventType]) -> None:
+    """Write the event-type catalog to a SLEAP labels file.
+
+    Creates the ``/event_types`` group (SLP format 2.6+) holding a native ``name``
+    string dataset (one per event type), plus a ``description`` string dataset only
+    when any type has a non-empty description, plus -- only when any type carries
+    metadata -- a columnar entity-attribute-value metadata table (``meta_owner`` /
+    ``meta_key`` / ``meta_val``). No-op if there are no event types. Mirrors
+    `write_identities`.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        event_types: A list of `EventType` objects to store, in catalog order.
+    """
+    if not event_types:
+        return
+
+    str_dtype = h5py.string_dtype(encoding="utf-8")
+    names = np.array([et.name for et in event_types], dtype=object)
+    has_description = any(et.description for et in event_types)
+
+    meta_owner: list[int] = []
+    meta_key: list[str] = []
+    meta_val: list[str] = []
+    for idx, et in enumerate(event_types):
+        for key, value in et.metadata.items():
+            meta_owner.append(idx)
+            meta_key.append(str(key))
+            meta_val.append(str(value))
+
+    with h5py.File(labels_path, "a") as f:
+        group = f.require_group("event_types")
+        group.create_dataset("name", data=names, dtype=str_dtype, maxshape=(None,))
+        if has_description:
+            descriptions = np.array(
+                [et.description for et in event_types], dtype=object
+            )
+            group.create_dataset(
+                "description",
+                data=descriptions,
+                dtype=str_dtype,
+                maxshape=(None,),
+            )
+        if meta_owner:
+            group.create_dataset(
+                "meta_owner",
+                data=np.array(meta_owner, dtype="i4"),
+                maxshape=(None,),
+                compression="gzip",
+            )
+            group.create_dataset(
+                "meta_key",
+                data=np.array(meta_key, dtype=object),
+                dtype=str_dtype,
+                maxshape=(None,),
+                compression="gzip",
+            )
+            group.create_dataset(
+                "meta_val",
+                data=np.array(meta_val, dtype=object),
+                dtype=str_dtype,
+                maxshape=(None,),
+                compression="gzip",
+            )
+
+
+def read_events(
+    labels_path: str,
+    videos: list[Video],
+    event_types: list[EventType],
+    tracks: list[Track],
+    identities: list[Identity],
+    *,
+    _hdf5_file: h5py.File | None = None,
+) -> list[Event]:
+    """Read frame-spanning event annotations from a SLEAP labels file.
+
+    Events are stored in the optional ``/events`` group (SLP format 2.6+) as a
+    columnar struct-of-arrays (one dataset per column, mirroring ``/bboxes``) plus a
+    ragged CSR pair for the optional framewise `PredictedEvent.scores` traces (a flat
+    ``scores`` float32 dataset + an ``score_offsets`` int64 dataset of length
+    ``n_events + 1``; row ``i``'s trace is ``scores[off[i]:off[i+1]]``, a zero-length
+    slice meaning no trace). Absent in older files, in which case an empty list is
+    returned.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        videos: List of `Video` objects for relinking (indexed by the ``video``
+            column; ``-1`` means none).
+        event_types: List of `EventType` objects for relinking (indexed by the
+            ``type`` column; ``-1`` means none).
+        tracks: List of `Track` objects for relinking subject/target participants of
+            kind ``1``.
+        identities: List of `Identity` objects for relinking subject/target
+            participants of kind ``2``.
+        _hdf5_file: An already-open `h5py.File` handle to read from.
+
+    Returns:
+        A list of `Event` objects (``UserEvent`` / ``PredictedEvent``) in stored
+        order. Empty if no events are stored.
+    """
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
+        if "events" not in f:
+            return []
+        grp = f["events"]
+        video_arr = grp["video"][:]
+        start_arr = grp["start_frame"][:]
+        end_arr = grp["end_frame"][:]
+        type_arr = grp["type"][:]
+        subject_kind_arr = grp["subject_kind"][:]
+        target_kind_arr = grp["target_kind"][:]
+        subject_idx_arr = grp["subject_idx"][:]
+        target_idx_arr = grp["target_idx"][:]
+        is_predicted_arr = grp["is_predicted"][:]
+        score_arr = grp["score"][:] if "score" in grp else None
+        name_arr = grp["name"][:]
+        source_arr = grp["source"][:]
+        scores_flat = grp["scores"][:] if "scores" in grp else None
+        score_offsets = grp["score_offsets"][:] if "score_offsets" in grp else None
+
+        n = len(video_arr)
+        # Reconstruct per-event metadata from the optional EAV table.
+        metadata: list[dict[str, str]] = [{} for _ in range(n)]
+        if "meta_owner" in grp:
+            owners = grp["meta_owner"][:]
+            keys = grp["meta_key"][:]
+            vals = grp["meta_val"][:]
+            for owner, key, val in zip(owners, keys, vals):
+                k = key.decode() if isinstance(key, bytes) else str(key)
+                v = val.decode() if isinstance(val, bytes) else str(val)
+                metadata[int(owner)][k] = v
+
+    def _participant(kind: int, idx: int):
+        if kind == 1 and 0 <= idx < len(tracks):
+            return tracks[idx]
+        if kind == 2 and 0 <= idx < len(identities):
+            return identities[idx]
+        return None
+
+    events: list[Event] = []
+    for i in range(n):
+        video_idx = int(video_arr[i])
+        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
+
+        type_idx = int(type_arr[i])
+        if 0 <= type_idx < len(event_types):
+            event_type = event_types[type_idx]
+        else:
+            # Defensive: an event with no catalog entry (should not happen, since
+            # the catalog is auto-collected on save). Fall back to an empty type so
+            # the (required) ``Event.type`` validator still passes.
+            event_type = EventType(name="")
+
+        subject = _participant(int(subject_kind_arr[i]), int(subject_idx_arr[i]))
+        target = _participant(int(target_kind_arr[i]), int(target_idx_arr[i]))
+
+        nm = name_arr[i]
+        name = nm.decode() if isinstance(nm, bytes) else str(nm)
+        src = source_arr[i]
+        source = src.decode() if isinstance(src, bytes) else str(src)
+
+        kwargs = dict(
+            type=event_type,
+            video=video,
+            start_frame=int(start_arr[i]),
+            end_frame=int(end_arr[i]),
+            subject=subject,
+            target=target,
+            name=name,
+            source=source,
+            metadata=metadata[i],
+        )
+
+        if bool(is_predicted_arr[i]):
+            scores = None
+            if scores_flat is not None and score_offsets is not None:
+                lo = int(score_offsets[i])
+                hi = int(score_offsets[i + 1])
+                if hi > lo:
+                    scores = np.asarray(scores_flat[lo:hi], dtype=np.float32)
+            score = None
+            if score_arr is not None:
+                s = float(score_arr[i])
+                if not np.isnan(s):
+                    score = s
+            events.append(PredictedEvent(scores=scores, score=score, **kwargs))
+        else:
+            events.append(UserEvent(**kwargs))
+
+    return events
+
+
+def write_events(
+    labels_path: str,
+    events: list[Event],
+    videos: list[Video],
+    event_types: list[EventType],
+    tracks: list[Track],
+    identities: list[Identity],
+) -> None:
+    """Write frame-spanning event annotations to a SLEAP labels file.
+
+    Creates the ``/events`` group (SLP format 2.6+) as a columnar struct-of-arrays
+    (one dataset per column, built vectorized in a single pass, mirroring
+    `write_bboxes`) plus, only when at least one event carries a framewise
+    `PredictedEvent.scores` trace, a ragged CSR pair (a flat float32 ``scores``
+    dataset + an int64 ``score_offsets`` dataset of length ``n_events + 1``). All
+    columns are presence-guarded so unused features cost zero bytes: the scalar
+    ``score`` column is omitted when no event sets a scalar score, both trace
+    datasets are omitted when no event has a framewise trace, and the whole group is
+    omitted (this function returns early) when there are no events.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        events: A list of `Event` objects to write.
+        videos: List of `Video` objects for index mapping.
+        event_types: List of `EventType` objects for index mapping (the ``type``
+            column).
+        tracks: List of `Track` objects for subject/target index mapping (kind 1).
+        identities: List of `Identity` objects for subject/target index mapping
+            (kind 2).
+    """
+    if not events:
+        return
+
+    n = len(events)
+    video_id = {id(v): i for i, v in enumerate(videos)}
+    type_id = {id(et): i for i, et in enumerate(event_types)}
+    track_id = {id(t): i for i, t in enumerate(tracks)}
+    identity_id = {id(idn): i for i, idn in enumerate(identities)}
+
+    def _kind_idx(participant) -> tuple[int, int]:
+        if isinstance(participant, Track):
+            return 1, track_id.get(id(participant), -1)
+        if isinstance(participant, Identity):
+            return 2, identity_id.get(id(participant), -1)
+        return 0, -1
+
+    video_arr = np.empty(n, dtype=np.int64)
+    start_arr = np.empty(n, dtype=np.int64)
+    end_arr = np.empty(n, dtype=np.int64)
+    type_arr = np.empty(n, dtype=np.int64)
+    subject_kind_arr = np.zeros(n, dtype=np.int8)
+    target_kind_arr = np.zeros(n, dtype=np.int8)
+    subject_idx_arr = np.full(n, -1, dtype=np.int64)
+    target_idx_arr = np.full(n, -1, dtype=np.int64)
+    is_predicted_arr = np.zeros(n, dtype=bool)
+    score_arr = np.full(n, np.nan, dtype=np.float64)
+    names: list[str] = []
+    sources: list[str] = []
+
+    score_chunks: list[np.ndarray] = []
+    score_lengths = np.zeros(n, dtype=np.int64)
+
+    meta_owner: list[int] = []
+    meta_key: list[str] = []
+    meta_val: list[str] = []
+
+    any_scalar_score = False
+    for i, ev in enumerate(events):
+        video_arr[i] = video_id.get(id(ev.video), -1)
+        start_arr[i] = ev.start_frame
+        end_arr[i] = ev.end_frame
+        type_arr[i] = type_id.get(id(ev.type), -1) if ev.type is not None else -1
+
+        subject_kind_arr[i], subject_idx_arr[i] = _kind_idx(ev.subject)
+        target_kind_arr[i], target_idx_arr[i] = _kind_idx(ev.target)
+
+        is_predicted = isinstance(ev, PredictedEvent)
+        is_predicted_arr[i] = is_predicted
+        if is_predicted and ev.score is not None:
+            score_arr[i] = ev.score
+            any_scalar_score = True
+        if is_predicted and ev.scores is not None:
+            trace = np.asarray(ev.scores, dtype=np.float32)
+            score_chunks.append(trace)
+            score_lengths[i] = trace.shape[0]
+
+        names.append(ev.name)
+        sources.append(ev.source)
+        for key, value in ev.metadata.items():
+            meta_owner.append(i)
+            meta_key.append(str(key))
+            meta_val.append(str(value))
+
+    str_dt = h5py.special_dtype(vlen=str)
+    with h5py.File(labels_path, "a") as f:
+        grp = f.create_group("events")
+        grp.create_dataset("video", data=video_arr)
+        grp.create_dataset("start_frame", data=start_arr)
+        grp.create_dataset("end_frame", data=end_arr)
+        grp.create_dataset("type", data=type_arr)
+        grp.create_dataset("subject_kind", data=subject_kind_arr)
+        grp.create_dataset("target_kind", data=target_kind_arr)
+        grp.create_dataset("subject_idx", data=subject_idx_arr)
+        grp.create_dataset("target_idx", data=target_idx_arr)
+        grp.create_dataset("is_predicted", data=is_predicted_arr)
+        grp.create_dataset("name", data=names, dtype=str_dt)
+        grp.create_dataset("source", data=sources, dtype=str_dt)
+        # Presence-guarded: scalar scores only when at least one event sets one.
+        if any_scalar_score:
+            grp.create_dataset("score", data=score_arr)
+        # Presence-guarded ragged CSR: framewise traces only when at least one
+        # event has one. score_offsets = cumsum of per-event trace lengths.
+        if score_chunks:
+            scores_flat = np.concatenate(score_chunks)
+            score_offsets = np.zeros(n + 1, dtype=np.int64)
+            np.cumsum(score_lengths, out=score_offsets[1:])
+            grp.create_dataset(
+                "scores",
+                data=scores_flat,
+                dtype=np.float32,
+                chunks=True,
+                compression="gzip",
+                compression_opts=1,
+            )
+            grp.create_dataset("score_offsets", data=score_offsets)
+        # Presence-guarded EAV metadata table.
+        if meta_owner:
+            grp.create_dataset(
+                "meta_owner", data=np.array(meta_owner, dtype="i4"), compression="gzip"
+            )
+            grp.create_dataset(
+                "meta_key",
+                data=np.array(meta_key, dtype=object),
+                dtype=str_dt,
+                compression="gzip",
+            )
+            grp.create_dataset(
+                "meta_val",
+                data=np.array(meta_val, dtype=object),
+                dtype=str_dt,
+                compression="gzip",
+            )
+
+
 def read_identity_links(
     labels_path: str, *, _hdf5_file: h5py.File | None = None
 ) -> dict[int, dict[int, tuple[int, float | None]]]:
@@ -2719,6 +3124,14 @@ def write_metadata(labels_path: str, labels: Labels):
         )
     if has_identity_data:
         format_id = max(format_id, 2.5)
+
+    # Bump for frame-spanning events (new in 2.6): the /event_types catalog and the
+    # columnar /events group (+ ragged CSR framewise scores). Purely additive (each
+    # is a separate group read with a presence check), so the bump only applies when
+    # there is event data to persist. Works for lazy Labels too, since events and
+    # event_types live on top-level lists (not the lazy store).
+    if labels.events or labels.event_types:
+        format_id = max(format_id, 2.6)
 
     with h5py.File(labels_path, "a") as f:
         # Bump for chunked label image format (new in 2.2)
@@ -3840,6 +4253,12 @@ def _read_labels_lazy_from_open_file(
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
     tracks = read_tracks(labels_path, _hdf5_file=f)
     identities = read_identities(labels_path, _hdf5_file=f)
+    # Frame-spanning events + catalog (SLP 2.6+). Top-level lists (not the lazy
+    # store), read eagerly like tracks/identities/suggestions.
+    event_types = read_event_types(labels_path, _hdf5_file=f)
+    events = read_events(
+        labels_path, videos, event_types, tracks, identities, _hdf5_file=f
+    )
     # Identity links: instance owners ride on the lazy store (keyed by global
     # instance_id) and attach at materialization time; mask owners attach eagerly
     # to the masks read below.
@@ -4004,6 +4423,8 @@ def _read_labels_lazy_from_open_file(
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
+        event_types=event_types,
+        events=events,
         lazy_store=lazy_store,
     )
 
@@ -6695,6 +7116,12 @@ def _read_labels_from_open_file(
         )
 
     identities = read_identities(labels_path, _hdf5_file=f)
+    # Frame-spanning events + catalog (SLP 2.6+). Top-level lists, read eagerly like
+    # tracks/identities/suggestions; absent groups yield empty lists.
+    event_types = read_event_types(labels_path, _hdf5_file=f)
+    events = read_events(
+        labels_path, videos, event_types, tracks, identities, _hdf5_file=f
+    )
     # Attach identity links (SLP format 2.5+). Additive: when the dataset is absent
     # (older files) these are empty mappings and a no-op. The global instances list
     # is ordered by instance_id, so it indexes directly; mask owners are attached
@@ -6843,6 +7270,8 @@ def _read_labels_from_open_file(
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
+        event_types=event_types,
+        events=events,
         rois=undist_rois,
     )
     labels.provenance["filename"] = labels_path
@@ -6937,6 +7366,11 @@ _KNOWN_TOPLEVEL_HDF5_NAMES = frozenset(
         # columnar appearance vectors.
         "identity",
         "embeddings",
+        # Frame-spanning event subsystem groups (SLP 2.6+): /event_types holds the
+        # catalog (name + optional description + EAV metadata); /events holds the
+        # columnar interval annotations plus the ragged CSR framewise scores.
+        "event_types",
+        "events",
         "provenance_json",
         "frames",
         "instances",
@@ -7107,6 +7541,12 @@ def _write_labels_lazy(
     else:
         reference_mode = VideoReferenceMode.EMBED
 
+    # Collect event catalog + participants (including each event's own video)
+    # before write_videos / write_tracks so event videos/tracks/identities land in
+    # the written catalogs (events live on top-level lists, not the lazy store, so
+    # this is identical to the eager path).
+    labels._collect_events()
+
     # Write videos metadata (uses labels.videos which may have been modified)
     write_videos(
         labels_path,
@@ -7163,6 +7603,17 @@ def _write_labels_lazy(
         _add_owner_embedding_groups(embedding_entries, lazy_bboxes, OWNER_BBOX)
         _add_owner_embedding_groups(embedding_entries, lazy_rois, OWNER_ROI)
         _write_embedding_groups(labels_path, embedding_entries)
+    # Frame-spanning events + their catalog (SLP 2.6+). Events live on top-level
+    # lists, so the writers are identical to the eager path.
+    write_event_types(labels_path, labels.event_types)
+    write_events(
+        labels_path,
+        labels.events,
+        labels.videos,
+        labels.event_types,
+        labels.tracks,
+        labels.identities,
+    )
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     # For sessions, pass empty list since we don't have materialized frames
     # (consistent with lazy load behavior)
@@ -7398,6 +7849,14 @@ def write_labels(
                 (video_map.get(video, video), frame_idx) for video, frame_idx in embed
             ]
 
+    # Auto-collect event catalog entries + participants (event types into
+    # labels.event_types, subject/target tracks/identities into labels.tracks/
+    # labels.identities, and the event's own video into labels.videos) BEFORE the
+    # original-videos snapshot and embedding, so an event-only video is embedded and
+    # remapped like any other and every event reference is persisted (a post-hoc
+    # `labels.events.append(...)` is not dropped). Mutates labels (eager path).
+    labels._collect_events()
+
     # Store original videos before embedding modifies them
     # We need to make a copy of the actual video objects, not just the list
     original_videos = [v for v in labels.videos] if embed else None
@@ -7440,6 +7899,17 @@ def write_labels(
     labels._collect_identities()
     write_identities(labels_path, labels.identities)
     write_identity_links(labels_path, labels)
+    # Frame-spanning events + their catalog (SLP 2.6+). Additive groups; omitted
+    # entirely when there are no events / event types (files stay byte-identical).
+    write_event_types(labels_path, labels.event_types)
+    write_events(
+        labels_path,
+        labels.events,
+        labels.videos,
+        labels.event_types,
+        labels.tracks,
+        labels.identities,
+    )
     # Identity links always persist; the (large) appearance vectors are gated by
     # save_embedding_vectors so a producer can keep them in memory but off disk.
     if save_embedding_vectors:

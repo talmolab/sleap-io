@@ -77,6 +77,8 @@ from sleap_io.io.slp import (
     read_bboxes,
     read_centroids,
     read_embeddings,
+    read_event_types,
+    read_events,
     read_identities,
     read_identity_links,
     read_instances,
@@ -100,6 +102,8 @@ from sleap_io.io.slp import (
     video_to_dict,
     write_bboxes,
     write_centroids,
+    write_event_types,
+    write_events,
     write_identities,
     write_labels,
     write_lfs,
@@ -120,6 +124,7 @@ from sleap_io.io.video_reading import (
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.embedding import Embedding
+from sleap_io.model.event import EventType, PredictedEvent, UserEvent
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance3D, PredictedInstance3D
 from sleap_io.model.label_image import LabelImage, PredictedLabelImage, UserLabelImage
@@ -10378,3 +10383,425 @@ def test_save_prefer_metadata_grayscale_flip_consistent(tmp_path, small_robot_pa
     # The flip survives and shape/grayscale agree off metadata.
     assert rec_video.backend_metadata["shape"][-1] == 1
     assert rec_video.grayscale is True
+
+
+# --- Frame-spanning events (SLP 2.6+) --------------------------------------
+
+
+def _event_labels():
+    """Build a Labels exercising every event feature for round-trip tests."""
+    video = Video(filename="clip.mp4")
+    m1, m2 = Track(name="mouse1"), Track(name="mouse2")
+    idA = Identity(name="mouseA")
+    attack = EventType(
+        name="attack",
+        description="one mouse attacks another",
+        metadata={"color": "#e6194b"},
+    )
+    events = [
+        UserEvent(
+            type=attack,
+            video=video,
+            start_frame=10,
+            end_frame=20,
+            subject=m1,
+            target=m2,
+            name="bout1",
+            source="hand",
+            metadata={"scorer": "alice"},
+        ),
+        UserEvent(type="rear", video=video, start_frame=15, subject=m1),
+        PredictedEvent(
+            type="freeze",
+            video=video,
+            start_frame=5,
+            end_frame=9,
+            scores=[0.1, 0.2, 0.3, 0.4, 0.5],
+            score=0.7,
+            subject=idA,
+        ),
+        PredictedEvent(
+            type="freeze", video=video, start_frame=30, end_frame=32, score=0.9
+        ),
+        UserEvent(type="light_on", video=video, start_frame=0, end_frame=100),
+    ]
+    return Labels(videos=[video], tracks=[m1, m2], events=events)
+
+
+def test_slp_event_roundtrip(tmp_path):
+    """Events + their catalog round-trip through SLP with all fields intact."""
+    labels = _event_labels()
+    path = tmp_path / "events.slp"
+    save_slp(labels, path)
+
+    loaded = load_slp(path)
+    assert len(loaded.events) == 5
+    assert sorted(et.name for et in loaded.event_types) == [
+        "attack",
+        "freeze",
+        "light_on",
+        "rear",
+    ]
+    by_type = {}
+    for ev in loaded.events:
+        by_type.setdefault(ev.type.name, []).append(ev)
+
+    a = by_type["attack"][0]
+    assert (a.start_frame, a.end_frame) == (10, 20)
+    assert a.subject.name == "mouse1" and a.target.name == "mouse2"
+    assert a.subject in loaded.tracks and a.target in loaded.tracks
+    assert a.name == "bout1" and a.source == "hand"
+    assert a.metadata == {"scorer": "alice"}
+    assert not a.is_predicted
+    # EventType description + metadata round-trip via /event_types.
+    assert a.type.description == "one mouse attacks another"
+    assert a.type.metadata == {"color": "#e6194b"}
+    # Catalog entry is shared (canonicalized), not duplicated.
+    assert a.type in loaded.event_types
+
+    r = by_type["rear"][0]
+    assert r.is_instantaneous and r.start_frame == 15 and r.subject.name == "mouse1"
+
+    lo = by_type["light_on"][0]
+    assert lo.subject is None and lo.target is None
+    assert (lo.start_frame, lo.end_frame) == (0, 100)
+    assert lo.video in loaded.videos
+
+
+def test_slp_event_predicted_scores(tmp_path):
+    """Framewise scores (float32 CSR) and the scalar score round-trip independently."""
+    labels = _event_labels()
+    path = tmp_path / "events.slp"
+    save_slp(labels, path)
+    loaded = load_slp(path)
+
+    freezes = [ev for ev in loaded.events if ev.type.name == "freeze"]
+    with_trace = [ev for ev in freezes if ev.scores is not None]
+    scalar_only = [ev for ev in freezes if ev.scores is None]
+    assert len(with_trace) == 1 and len(scalar_only) == 1
+
+    ft = with_trace[0]
+    assert ft.is_predicted and ft.scores.dtype == np.float32
+    np.testing.assert_allclose(ft.scores, [0.1, 0.2, 0.3, 0.4, 0.5])
+    assert ft.score == pytest.approx(0.7)
+    assert ft.subject.name == "mouseA" and ft.subject in loaded.identities
+
+    assert scalar_only[0].score == pytest.approx(0.9)
+    assert scalar_only[0].scores is None
+
+
+def test_slp_event_format_version(tmp_path):
+    """Events bump the SLP format_id to 2.6."""
+    labels = _event_labels()
+    path = tmp_path / "events.slp"
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        assert float(f["metadata"].attrs["format_id"]) == pytest.approx(2.6)
+
+
+def test_slp_event_no_events_omits_groups(tmp_path):
+    """A Labels with no events writes neither group and stays below format 2.6."""
+    labels = Labels(videos=[Video(filename="clip.mp4")])
+    path = tmp_path / "noev.slp"
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        assert "events" not in f and "event_types" not in f
+        assert float(f["metadata"].attrs["format_id"]) < 2.6
+    loaded = load_slp(path)
+    assert loaded.events == [] and loaded.event_types == []
+
+
+def test_slp_event_user_only_presence_guards(tmp_path):
+    """User-only events omit the score column and both framewise-trace datasets."""
+    video = Video(filename="clip.mp4")
+    labels = Labels(
+        videos=[video],
+        events=[UserEvent(type="rear", video=video, start_frame=1, end_frame=3)],
+    )
+    path = tmp_path / "useronly.slp"
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        keys = set(f["events"].keys())
+        assert "score" not in keys
+        assert "scores" not in keys and "score_offsets" not in keys
+        assert "meta_owner" not in keys  # no per-event metadata
+    loaded = load_slp(path)
+    assert len(loaded.events) == 1 and not loaded.events[0].is_predicted
+
+
+def test_slp_event_scalar_score_only(tmp_path):
+    """A predicted event with a scalar score but no trace omits the trace datasets."""
+    video = Video(filename="clip.mp4")
+    labels = Labels(
+        videos=[video],
+        events=[
+            PredictedEvent(type="x", video=video, start_frame=0, end_frame=4, score=0.5)
+        ],
+    )
+    path = tmp_path / "scalar.slp"
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        keys = set(f["events"].keys())
+        assert "score" in keys
+        assert "scores" not in keys and "score_offsets" not in keys
+    loaded = load_slp(path)
+    assert loaded.events[0].score == pytest.approx(0.5)
+    assert loaded.events[0].scores is None
+
+
+def test_slp_event_type_description_omitted_when_empty(tmp_path):
+    """The /event_types description dataset is omitted when no type describes itself."""
+    video = Video(filename="clip.mp4")
+    labels = Labels(
+        videos=[video],
+        events=[UserEvent(type="rear", video=video, start_frame=0)],
+    )
+    path = tmp_path / "nodesc.slp"
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        assert "description" not in f["event_types"]
+    loaded = load_slp(path)
+    assert loaded.event_types[0].description == ""
+
+
+def test_slp_event_large_frame_indices(tmp_path):
+    """int64-range frame indices survive the round-trip (data reaches frame 587,937)."""
+    video = Video(filename="clip.mp4")
+    labels = Labels(
+        videos=[video],
+        events=[
+            UserEvent(type="x", video=video, start_frame=587_000, end_frame=587_937)
+        ],
+    )
+    path = tmp_path / "big.slp"
+    save_slp(labels, path)
+    loaded = load_slp(path)
+    ev = loaded.events[0]
+    assert ev.start_frame == 587_000 and ev.end_frame == 587_937
+    assert ev.n_frames == 938
+
+
+def test_slp_event_lazy_roundtrip(tmp_path):
+    """Events round-trip through the lazy read/write fast path."""
+    labels = _event_labels()
+    path = tmp_path / "events.slp"
+    save_slp(labels, path)
+
+    lazy = load_slp(path, lazy=True)
+    assert lazy.is_lazy
+    assert len(lazy.events) == 5
+    assert sorted(et.name for et in lazy.event_types) == [
+        "attack",
+        "freeze",
+        "light_on",
+        "rear",
+    ]
+
+    path2 = tmp_path / "events_lazy.slp"
+    save_slp(lazy, path2)
+    reloaded = load_slp(path2)
+    assert len(reloaded.events) == 5
+    ft = [
+        ev
+        for ev in reloaded.events
+        if ev.type.name == "freeze" and ev.scores is not None
+    ]
+    assert len(ft) == 1
+    np.testing.assert_allclose(ft[0].scores, [0.1, 0.2, 0.3, 0.4, 0.5])
+
+
+def test_slp_event_lazy_copy_preserves_events(tmp_path):
+    """Copying a lazy Labels deep-copies events with references remapped."""
+    labels = _event_labels()
+    path = tmp_path / "events.slp"
+    save_slp(labels, path)
+    lazy = load_slp(path, lazy=True)
+
+    lc = lazy.copy()
+    assert len(lc.events) == 5
+    for ev in lc.events:
+        assert ev.type in lc.event_types
+        assert ev.video in lc.videos
+        if ev.subject is not None:
+            assert ev.subject in lc.tracks or ev.subject in lc.identities
+
+
+def test_slp_event_backward_compat(slp_typical):
+    """An SLP written before format 2.6 loads with empty event lists."""
+    loaded = load_slp(slp_typical)
+    assert loaded.events == []
+    assert loaded.event_types == []
+
+
+def test_read_events_type_index_none_fallback(tmp_path):
+    """Serialize an event whose type is not in the catalog.
+
+    The type resolves to ``-1`` and reads back as a blank ``EventType`` (the
+    documented ``-1 = none`` value).
+    """
+    video = Video(filename="clip.mp4")
+    orphan_type = EventType(name="orphan")
+    ev = UserEvent(type=orphan_type, video=video, start_frame=0, end_frame=2)
+    path = tmp_path / "orphan.slp"
+    # Write with an EMPTY event_types list so the type resolves to index -1.
+    write_events(str(path), [ev], [video], [], [], [])
+    loaded = read_events(str(path), [video], [], [], [])
+    assert len(loaded) == 1
+    assert isinstance(loaded[0].type, EventType)
+    assert loaded[0].type.name == ""
+
+
+def test_write_read_event_types_direct(tmp_path):
+    """write_event_types / read_event_types round-trip the catalog directly."""
+    path = tmp_path / "cat.slp"
+    types = [
+        EventType(name="attack", description="d", metadata={"color": "#fff"}),
+        EventType(name="rear"),
+    ]
+    write_event_types(str(path), types)
+    loaded = read_event_types(str(path))
+    assert [et.name for et in loaded] == ["attack", "rear"]
+    assert loaded[0].description == "d" and loaded[0].metadata == {"color": "#fff"}
+    assert loaded[1].description == "" and loaded[1].metadata == {}
+
+
+def test_write_events_empty_is_noop(tmp_path):
+    """write_events / write_event_types are no-ops on empty input."""
+    path = tmp_path / "empty.slp"
+    # Seed a file so the append-mode writers have something to open.
+    write_event_types(str(path), [EventType(name="x")])
+    write_events(str(path), [], [], [], [], [])
+    with h5py.File(path, "r") as f:
+        assert "events" not in f
+    assert read_events(str(path), [], [], [], []) == []
+
+
+def test_read_event_types_absent(tmp_path):
+    """read_event_types / read_events return empty lists when the groups are absent."""
+    video = Video(filename="clip.mp4")
+    labels = Labels(videos=[video])
+    path = tmp_path / "plain.slp"
+    save_slp(labels, path)
+    assert read_event_types(str(path)) == []
+    assert read_events(str(path), [video], [], [], []) == []
+
+
+def test_slp_event_predicted_trace_without_scalar_score(tmp_path):
+    """A predicted event with a framewise trace but no scalar score round-trips.
+
+    The scalar ``score`` column is omitted and reads back as ``None``.
+    """
+    video = Video(filename="clip.mp4")
+    labels = Labels(
+        videos=[video],
+        events=[
+            PredictedEvent(
+                type="freeze",
+                video=video,
+                start_frame=0,
+                end_frame=2,
+                scores=[0.1, 0.2, 0.3],
+            )
+        ],
+    )
+    path = tmp_path / "traceonly.slp"
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        assert "score" not in f["events"]  # no scalar score anywhere
+        assert "scores" in f["events"]  # framewise trace present
+    loaded = load_slp(path)
+    ev = loaded.events[0]
+    assert ev.is_predicted and ev.score is None
+    np.testing.assert_allclose(ev.scores, [0.1, 0.2, 0.3])
+
+
+def test_slp_event_mixed_scalar_score(tmp_path):
+    """Unset scalar scores are stored as NaN and read back as ``None``.
+
+    Exercises the mixed case where some predicted events set a scalar score and
+    others do not.
+    """
+    video = Video(filename="clip.mp4")
+    labels = Labels(
+        videos=[video],
+        events=[
+            PredictedEvent(
+                type="a", video=video, start_frame=0, end_frame=1, score=0.5
+            ),
+            PredictedEvent(
+                type="b",
+                video=video,
+                start_frame=2,
+                end_frame=4,
+                scores=[0.1, 0.2, 0.3],
+            ),
+        ],
+    )
+    path = tmp_path / "mixed.slp"
+    save_slp(labels, path)
+    with h5py.File(path, "r") as f:
+        assert "score" in f["events"]  # at least one scalar score -> column present
+    loaded = load_slp(path)
+    by_type = {ev.type.name: ev for ev in loaded.events}
+    assert by_type["a"].score == pytest.approx(0.5) and by_type["a"].scores is None
+    assert by_type["b"].score is None
+    np.testing.assert_allclose(by_type["b"].scores, [0.1, 0.2, 0.3])
+
+
+def test_slp_event_only_video_roundtrip(tmp_path):
+    """A video referenced only by an event is persisted, not dropped to None."""
+    video = Video(filename="clip.mp4")
+    labels = Labels(
+        events=[UserEvent(type="stim", video=video, start_frame=5, end_frame=9)]
+    )
+    # Collected into the catalog at construction (not on any frame/suggestion).
+    assert video in labels.videos
+    path = tmp_path / "eventvid.slp"
+    save_slp(labels, path)
+    loaded = load_slp(path)
+    assert loaded.events[0].video is not None
+    assert loaded.events[0].video in loaded.videos
+
+
+def test_slp_event_only_video_roundtrip_lazy(tmp_path):
+    """An event-only video appended to a lazy Labels survives the lazy save path."""
+    base = Labels(videos=[Video(filename="base.mp4")])
+    path = tmp_path / "base.slp"
+    save_slp(base, path)
+
+    lazy = load_slp(path, lazy=True)
+    extra = Video(filename="extra.mp4")
+    lazy.events.append(UserEvent(type="x", video=extra, start_frame=0, end_frame=2))
+    path2 = tmp_path / "with_event.slp"
+    save_slp(lazy, path2)
+
+    loaded = load_slp(path2)
+    assert len(loaded.events) == 1
+    ev = loaded.events[0]
+    assert ev.video is not None and ev.video in loaded.videos
+    assert str(ev.video.filename).endswith("extra.mp4")
+
+
+def test_slp_event_video_survives_embed(tmp_path):
+    """event.video is remapped to the embedded video on save_slp(embed=True).
+
+    ``embed_videos`` swaps each source video for a new embedded one via
+    ``Labels.replace_videos``; without remapping ``event.video`` there, the event's
+    video would strand and serialize to the ``-1`` sentinel (silent data loss).
+    """
+    video = Video.from_filename("tests/data/videos/small_robot_3_frame.mp4")
+    lf = LabeledFrame(video=video, frame_idx=0)
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        events=[UserEvent(type="attack", video=video, start_frame=0, end_frame=0)],
+    )
+    out = tmp_path / "embedded.pkg.slp"
+    save_slp(labels, out, embed=True)
+
+    loaded = load_slp(out)
+    assert len(loaded.events) == 1
+    ev = loaded.events[0]
+    # The video reference survives and points at the (embedded) catalog video.
+    assert ev.video is not None
+    assert ev.video in loaded.videos
