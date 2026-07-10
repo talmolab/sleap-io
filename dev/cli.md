@@ -419,8 +419,9 @@ sio show labels.slp --json
 
 Emits a single machine-readable JSON document on stdout, designed for scripting
 and for LLM agents inspecting SLP files. JSON mode always includes all details
-(full skeleton definitions, per-video info, tracks, identities, frame-spanning
-events, and provenance), so the individual detail flags are not needed:
+(full skeleton definitions, per-video info, tracks, identities, categories,
+frame-spanning events, and provenance), so the individual detail flags are not
+needed:
 
 ```json
 {
@@ -437,11 +438,13 @@ events, and provenance), so the individual detail flags are not needed:
     "n_skeletons": 1,
     "n_tracks": 0,
     "n_identities": 0,
+    "n_categories": 0,
     "n_masks": 0,
     "n_rois": 0,
     "n_events": 0,
     "n_event_types": 0,
-    "n_instances_with_identity_embedding": null
+    "n_instances_with_identity_embedding": null,
+    "n_instances_with_category_embedding": null
   },
   "skeletons": [
     {
@@ -466,6 +469,7 @@ events, and provenance), so the individual detail flags are not needed:
   ],
   "tracks": [],
   "identities": [],
+  "categories": [],
   "event_types": [],
   "events": [],
   "provenance": {}
@@ -491,9 +495,13 @@ Notes:
 
 - Output is strict JSON: NaN/Infinity are converted to `null`, so it parses
   with any standard JSON library (`sio show x.slp --json | jq .stats`).
-- `stats.n_instances_with_identity_embedding` is `null` when lazy loading is
+- `stats.n_instances_with_identity_embedding` and
+  `stats.n_instances_with_category_embedding` are `null` when lazy loading is
   active (counting would require materializing all frames); pass `--no-lazy`
-  to compute it.
+  to compute them.
+- [Categories](model/category.md) are reported alongside identities:
+  `stats.n_categories` counts the catalog and each `categories` entry is
+  `{"index", "name"}` (parallel to `identities`).
 - Embedded package details (`embedded`, `shape`, `embedded_frames`) require
   open video backends; pass `--open-videos` to populate them.
 - Frame-spanning [events](model/events.md) are reported when present. Each
@@ -1171,6 +1179,8 @@ Merged 2 files:
 | `--skeleton` | `structure` | Skeleton matching method |
 | `--video` | `auto` | Video matching method |
 | `--track` | `identity` | Track matching method |
+| `--identity` | `name` | Global identity catalog dedup method (`name`, `identity`) |
+| `--category` | `name` | Global category catalog dedup method (`name`, `identity`) |
 | `--frame` | `auto` | Frame merge strategy |
 | `--instance` | `spatial` | Instance matching method |
 | `--embed` | (none) | Embed frames in output (`user`, `all`, `suggestions`, `source`) |
@@ -1260,6 +1270,25 @@ For frame strategies that pair instances (`auto`, `update_tracks`), how to match
 ```bash
 # Use IoU for instance matching
 sio merge base.slp other.slp -o merged.slp --instance iou
+```
+
+#### Catalog Deduplication (`--identity`, `--category`)
+
+How to dedupe the global [identity](model/3d.md#identity) and
+[category](model/category.md) catalogs when combining files. Both default to
+`name` (the key that survives serialization and cross-file merges):
+
+| Method | Behavior |
+|--------|----------|
+| `name` | Merge catalog entries with identical `name` into one (default) |
+| `identity` | Match only by Python object identity (keep same-named entries from different files distinct) |
+
+```bash
+# Merge two classified files, collapsing same-named categories into one catalog
+sio merge a.slp b.slp -o merged.slp --category name
+
+# Keep every file's identities distinct (no name-based dedup)
+sio merge a.slp b.slp -o merged.slp --identity identity
 ```
 
 ### Common Scenarios
@@ -1980,7 +2009,7 @@ sio render --images frames/ --overlay masks.tif -o output.mp4
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--color-by` | auto | Color scheme: `auto`, `track`, `instance`, `node` |
+| `--color-by` | auto | Color scheme: `auto`, `track`, `instance`, `node`, `identity`, `category` |
 | `--palette` | standard | Color palette (standard, tableau10, distinct, glasbey, rainbow, etc.) |
 | `--marker-shape` | circle | Node marker: `circle`, `square`, `diamond`, `triangle`, `cross` |
 | `--marker-size` | 4.0 | Node marker radius in pixels |
@@ -1988,6 +2017,19 @@ sio render --images frames/ --overlay masks.tif -o output.mp4
 | `--alpha` | 1.0 | Pose overlay transparency (0.0-1.0) |
 | `--no-nodes` | false | Hide node markers |
 | `--no-edges` | false | Hide skeleton edges |
+
+!!! tip "Coloring by identity or category"
+    `--color-by identity` colors each detection by its global
+    [`Identity`](model/3d.md#identity), and `--color-by category` colors it by its
+    [`Category`](model/category.md) — each gets one palette color per its index in
+    `Labels.identities` / `Labels.categories` order (the same plumbing as
+    `--color-by track`). Detections with no identity/category fall back to the first
+    palette color. Both are explicit-only (never chosen by `auto`).
+
+    ```bash
+    # Color instances by their classified category (e.g. female_fly vs male_fly)
+    sio render classified.slp --color-by category -o by_category.mp4
+    ```
 
 #### Overlay Options
 

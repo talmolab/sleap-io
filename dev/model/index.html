@@ -1004,6 +1004,34 @@
   
   
     <li class="md-nav__item">
+      <a href="category/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Categories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="events/" class="md-nav__link">
         
   
@@ -2569,6 +2597,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference/sleap_io/model/category/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    category
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../reference/sleap_io/model/centroid/" class="md-nav__link">
         
   
@@ -3582,6 +3638,9 @@ Static, video-level ROIs (with no frame association) live separately on
         +Identity identity
         +float identity_score
         +Embedding identity_embedding
+        +Category category
+        +float category_score
+        +Embedding category_embedding
     }
     class PredictedInstance:::poses {
         +float score
@@ -3638,6 +3697,10 @@ Static, video-level ROIs (with no frame association) live separately on
         +Identity identity
     }
     class Identity:::threed {
+        +str name
+        +dict~str,str~ metadata
+    }
+    class Category:::labels {
         +str name
         +dict~str,str~ metadata
     }
@@ -3736,6 +3799,8 @@ Static, video-level ROIs (with no frame association) live separately on
     Instance3D --&gt; Skeleton : uses
     Instance3D &lt;|-- PredictedInstance3D
     Labels --&gt; Identity
+    Labels --&gt; Category
+    Instance --&gt; Category
 
     Centroid &lt;|-- UserCentroid
     Centroid &lt;|-- PredictedCentroid
@@ -3860,6 +3925,11 @@ Static, video-level ROIs (with no frame association) live separately on
 <td><a href="3d/#identity"><code>Identity</code></a></td>
 <td><a href="3d/">3D</a></td>
 <td>Cross-session persistent animal identity (distinct from per-video <code>Track</code>)</td>
+</tr>
+<tr>
+<td><a href="category/"><code>Category</code></a></td>
+<td><a href="category/">Categories</a></td>
+<td>Class/type a detection belongs to (e.g. <code>female_fly</code>), assigned by classification or re-ID</td>
 </tr>
 <tr>
 <td><a href="3d/#instance3d"><code>Instance3D</code></a></td>
