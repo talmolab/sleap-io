@@ -18,7 +18,10 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
+from sleap_io.model.category import to_category
+
 if TYPE_CHECKING:
+    from sleap_io.model.category import Category
     from sleap_io.model.centroid import Centroid
     from sleap_io.model.embedding import Embedding
     from sleap_io.model.identity import Identity
@@ -51,11 +54,17 @@ class BoundingBox:
             Kept separate from `tracking_score` (short-term tracklet vs long-term
             identity).
         instance: Optional linked pose instance.
-        category: Class label (e.g., "mouse", "fly").
+        category: Optional `Category` (class label, e.g. ``"mouse"``, ``"fly"``)
+            for this box. Promoted from the legacy free-form string; ``None`` if
+            unset. Mirrors `Instance.category`.
         name: Human-readable name.
         source: Annotation source identifier.
         identity_embedding: Optional `Embedding` describing this detection's
             appearance for re-identification. ``None`` by default.
+        category_score: Score associated with the `category` assignment (e.g. the
+            classifier confidence). ``None`` if unassigned or assigned manually.
+        category_embedding: Optional `Embedding` describing this detection's
+            appearance for classification. ``None`` by default.
 
     Notes:
         Bounding boxes use identity-based equality (two BoundingBox objects are
@@ -75,10 +84,12 @@ class BoundingBox:
     identity: "Identity | None" = attrs.field(default=None)
     identity_score: float | None = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
-    category: str = attrs.field(default="")
+    category: "Category | None" = attrs.field(default=None, converter=to_category)
     name: str = attrs.field(default="")
     source: str = attrs.field(default="")
     identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
+    category_score: float | None = attrs.field(default=None)
+    category_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
 
     # Private: deferred instance index for lazy loading.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
@@ -295,6 +306,8 @@ class BoundingBox:
             geometry=geom,
             name=self.name,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,
@@ -360,6 +373,8 @@ class BoundingBox:
             identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             name=self.name,
             source=self.source,
         )
@@ -400,6 +415,8 @@ class BoundingBox:
             identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             name=self.name,
             source=self.source,
         )

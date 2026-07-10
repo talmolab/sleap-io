@@ -1344,12 +1344,12 @@ def test_ultralytics_detection_read_write_roundtrip(tmp_path):
 
     # Check first bbox (cat)
     bbox0 = labels.bboxes[0]
-    assert bbox0.category == "cat"
+    assert bbox0.category.name == "cat"
     assert isinstance(bbox0, UserBoundingBox)
 
     # Check second bbox (dog)
     bbox1 = labels.bboxes[1]
-    assert bbox1.category == "dog"
+    assert bbox1.category.name == "dog"
 
     # Verify both bboxes have valid areas
     for bbox in labels.bboxes:
@@ -1388,12 +1388,12 @@ def test_ultralytics_detection_with_confidence(tmp_path):
     # Check types and categories
     bbox0 = labels.bboxes[0]
     assert isinstance(bbox0, PredictedBoundingBox)
-    assert bbox0.category == "cat"
+    assert bbox0.category.name == "cat"
     assert bbox0.score == pytest.approx(0.95)
 
     bbox1 = labels.bboxes[1]
     assert isinstance(bbox1, PredictedBoundingBox)
-    assert bbox1.category == "dog"
+    assert bbox1.category.name == "dog"
     assert bbox1.score == pytest.approx(0.85)
 
 
@@ -1414,7 +1414,7 @@ def test_ultralytics_segmentation_read_write_roundtrip(tmp_path):
     assert len(bboxes) == 0
     roi = rois[0]
     assert not roi.is_bbox
-    assert roi.category == "animal"
+    assert roi.category.name == "animal"
     assert roi.area > 0
 
     # Verify polygon vertices
@@ -1536,12 +1536,12 @@ def test_write_bbox_label_file(tmp_path):
     assert len(bboxes_read) == 2
 
     assert isinstance(bboxes_read[0], UserBoundingBox)
-    assert bboxes_read[0].category == "cat"
+    assert bboxes_read[0].category.name == "cat"
     assert abs(bboxes_read[0].x_center - 100.0) < 1e-3
     assert abs(bboxes_read[0].y_center - 50.0) < 1e-3
 
     assert isinstance(bboxes_read[1], PredictedBoundingBox)
-    assert bboxes_read[1].category == "dog"
+    assert bboxes_read[1].category.name == "dog"
     assert bboxes_read[1].score == pytest.approx(0.9, abs=1e-4)
     assert abs(bboxes_read[1].x_center - 50.0) < 1e-3
     assert abs(bboxes_read[1].y_center - 25.0) < 1e-3
@@ -1676,7 +1676,7 @@ def test_write_bbox_label_file_predicted_score(tmp_path):
 
     assert isinstance(bboxes_read[0], PredictedBoundingBox)
     assert bboxes_read[0].score == pytest.approx(0.85, abs=1e-4)
-    assert bboxes_read[0].category == "cat"
+    assert bboxes_read[0].category.name == "cat"
 
     assert isinstance(bboxes_read[1], UserBoundingBox)
-    assert bboxes_read[1].category == "dog"
+    assert bboxes_read[1].category.name == "dog"

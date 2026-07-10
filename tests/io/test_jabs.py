@@ -133,7 +133,7 @@ def test_read_labels_static_objects_as_rois(jabs_real_data_v5):
     assert len(labels.rois) == 1
     roi = labels.rois[0]
     assert roi.name == "corners"
-    assert roi.category == "arena"
+    assert roi.category.name == "arena"
     assert roi.source == "jabs"
     assert roi.video == labels.videos[0]  # Static ROI keeps video reference
 
@@ -186,7 +186,7 @@ def test_static_object_to_roi_single_point():
     roi = _static_object_to_roi("lixit", coords, video)
 
     assert roi.name == "lixit"
-    assert roi.category == "anchor"
+    assert roi.category.name == "anchor"
     assert isinstance(roi.geometry, Point)
     assert roi.geometry.x == 100.0
     assert roi.geometry.y == 200.0

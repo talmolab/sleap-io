@@ -166,7 +166,7 @@ PaletteName = Literal[
 ]
 
 # Type alias for color schemes
-ColorScheme = Literal["track", "instance", "node", "identity", "auto"]
+ColorScheme = Literal["track", "instance", "node", "identity", "category", "auto"]
 
 
 def get_palette(name: PaletteName | str, n_colors: int) -> list[tuple[int, int, int]]:
@@ -416,6 +416,8 @@ def build_color_map(
     palette: PaletteName | str = "standard",
     identity_indices: list[int] | None = None,
     n_identities: int = 0,
+    category_indices: list[int] | None = None,
+    n_categories: int = 0,
 ) -> dict[str, list[tuple[int, int, int]]]:
     """Build color mapping based on scheme.
 
@@ -429,6 +431,9 @@ def build_color_map(
         identity_indices: Global identity index for each instance (for identity
             coloring; a palette index into ``Labels.identities`` order).
         n_identities: Total number of identities (for identity coloring).
+        category_indices: Global category index for each instance (for category
+            coloring; a palette index into ``Labels.categories`` order).
+        n_categories: Total number of categories (for category coloring).
 
     Returns:
         Dictionary with 'instance_colors' and/or 'node_colors' lists.
@@ -458,6 +463,21 @@ def build_color_map(
         if identity_indices is not None:
             instance_colors = [
                 palette_colors[idx % len(palette_colors)] for idx in identity_indices
+            ]
+        else:
+            instance_colors = palette_colors[:n_instances]
+
+        colors["instance_colors"] = instance_colors
+
+    elif scheme == "category":
+        # Colors based on global category. Mirrors the identity scheme: one palette
+        # color per category index (in ``Labels.categories`` order).
+        n = max(n_categories, n_instances) if n_categories > 0 else n_instances
+        palette_colors = get_palette(palette, max(n, 1))
+
+        if category_indices is not None:
+            instance_colors = [
+                palette_colors[idx % len(palette_colors)] for idx in category_indices
             ]
         else:
             instance_colors = palette_colors[:n_instances]

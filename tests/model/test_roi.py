@@ -94,7 +94,7 @@ def test_roi_from_polygon_with_kwargs():
     coords = [(0, 0), (10, 0), (10, 10), (0, 10)]
     roi = UserROI.from_polygon(coords, name="test", category="cat1")
     assert roi.name == "test"
-    assert roi.category == "cat1"
+    assert roi.category.name == "cat1"
 
 
 def test_roi_video():
@@ -140,7 +140,7 @@ def test_roi_to_mask():
     assert mask.height == 20
     assert mask.width == 20
     assert mask.name == "test_roi"
-    assert mask.category == "cat"
+    assert mask.category.name == "cat"
     assert mask.area > 0
 
     # Check that the mask data has foreground pixels in the right region
@@ -158,7 +158,7 @@ def test_predicted_roi_to_mask_is_predicted():
 
     assert isinstance(mask, PredictedSegmentationMask)
     assert mask.score == pytest.approx(0.8)
-    assert mask.category == "cat"
+    assert mask.category.name == "cat"
     assert mask.area > 0
 
     # A user ROI still produces a user mask (no score field).
@@ -292,7 +292,7 @@ def test_roi_from_multi_polygon_with_kwargs():
     polygons = [[(0, 0), (5, 0), (5, 5), (0, 5)]]
     roi = UserROI.from_multi_polygon(polygons, name="multi", category="test")
     assert roi.name == "multi"
-    assert roi.category == "test"
+    assert roi.category.name == "test"
 
 
 def test_roi_explode_multi_polygon():
@@ -307,7 +307,7 @@ def test_roi_explode_multi_polygon():
     for part in parts:
         assert isinstance(part.geometry, Polygon)
         assert part.name == "test"
-        assert part.category == "cat"
+        assert part.category.name == "cat"
     assert parts[0].area == pytest.approx(100.0)
     assert parts[1].area == pytest.approx(100.0)
 
@@ -391,7 +391,7 @@ def test_predicted_roi():
     roi = PredictedROI(geometry=box(0, 0, 5, 5), score=0.75, category="arena")
     assert roi.score == 0.75
     assert roi.is_predicted
-    assert roi.category == "arena"
+    assert roi.category.name == "arena"
 
 
 def test_roi_from_bbox_deprecation():
@@ -499,7 +499,7 @@ def test_roi_to_centroid_predicted_carries_score_and_metadata():
     assert c.identity is ident
     assert c.identity_score == pytest.approx(0.4)
     assert c.instance is inst
-    assert c.category == "mouse"
+    assert c.category.name == "mouse"
     assert c.name == "m7"
     assert c.source == "manual"
 
@@ -586,7 +586,7 @@ def test_roi_to_bbox_predicted_carries_score_and_metadata():
     assert b.score == pytest.approx(0.6)
     assert b.track is track
     assert b.tracking_score == pytest.approx(0.9)
-    assert b.category == "fly"
+    assert b.category.name == "fly"
     assert b.name == "f1"
     assert b.source == "net"
 

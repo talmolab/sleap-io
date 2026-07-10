@@ -30,6 +30,8 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
+from sleap_io.model.category import to_category
+
 if TYPE_CHECKING:
     if sys.version_info >= (3, 11):
         from typing import Self
@@ -37,6 +39,7 @@ if TYPE_CHECKING:
         from typing_extensions import Self
 
     from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.category import Category
     from sleap_io.model.centroid import Centroid
     from sleap_io.model.embedding import Embedding
     from sleap_io.model.identity import Identity
@@ -125,7 +128,9 @@ class SegmentationMask:
         height: Height of the mask in pixels.
         width: Width of the mask in pixels.
         name: Optional human-readable name for this mask.
-        category: Optional category label (e.g., class name for detection).
+        category: Optional `Category` (class label, e.g. class name for
+            detection) for this mask. Promoted from the legacy free-form string;
+            ``None`` if unset. Mirrors `Instance.category`.
         source: Optional string indicating the source of this annotation.
         track: Optional `Track` this mask is associated with.
         tracking_score: Confidence of the track identity assignment. ``None``
@@ -146,6 +151,10 @@ class SegmentationMask:
         offset: Origin ``(x, y)`` of the mask in image pixel coordinates.
         identity_embedding: Optional `Embedding` describing this detection's
             appearance for re-identification. ``None`` by default.
+        category_score: Score associated with the `category` assignment (e.g. the
+            classifier confidence). ``None`` if unassigned or assigned manually.
+        category_embedding: Optional `Embedding` describing this detection's
+            appearance for classification. ``None`` by default.
 
     Notes:
         Masks use identity-based equality (two mask objects are only equal if they
@@ -159,7 +168,7 @@ class SegmentationMask:
     height: int = attrs.field()
     width: int = attrs.field()
     name: str = attrs.field(default="")
-    category: str = attrs.field(default="")
+    category: "Category | None" = attrs.field(default=None, converter=to_category)
     source: str = attrs.field(default="")
     track: "Track | None" = attrs.field(default=None)
     tracking_score: float | None = attrs.field(default=None)
@@ -170,6 +179,8 @@ class SegmentationMask:
     scale: tuple[float, float] = attrs.field(default=(1.0, 1.0))
     offset: tuple[float, float] = attrs.field(default=(0.0, 0.0))
     identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
+    category_score: float | None = attrs.field(default=None)
+    category_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
 
     def __attrs_post_init__(self):
         """Validate that this class is not instantiated directly."""
@@ -219,6 +230,8 @@ class SegmentationMask:
         kwargs: dict = dict(
             name=self.name,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,
@@ -407,6 +420,8 @@ class SegmentationMask:
             identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             name=self.name,
             source=self.source,
         )
@@ -471,6 +486,8 @@ class SegmentationMask:
             identity_embedding=self.identity_embedding,
             instance=self.instance,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             name=self.name,
             source=self.source,
         )
@@ -536,6 +553,8 @@ class SegmentationMask:
             geometry=geometry,
             name=self.name,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,
@@ -633,6 +652,8 @@ class PredictedSegmentationMask(SegmentationMask):
             width=self.width,
             name=self.name,
             category=self.category,
+            category_score=self.category_score,
+            category_embedding=self.category_embedding,
             source=self.source,
             track=self.track,
             tracking_score=self.tracking_score,

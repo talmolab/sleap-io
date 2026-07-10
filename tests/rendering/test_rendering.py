@@ -126,6 +126,37 @@ class TestColors:
         assert "node_colors" in colors
         assert len(colors["node_colors"]) == 5
 
+        # Identity scheme
+        colors = build_color_map(
+            scheme="identity",
+            n_instances=2,
+            n_nodes=5,
+            n_tracks=0,
+            identity_indices=[0, 1],
+            n_identities=2,
+        )
+        assert "instance_colors" in colors
+        assert len(colors["instance_colors"]) == 2
+
+        # Category scheme (mirrors identity)
+        colors = build_color_map(
+            scheme="category",
+            n_instances=2,
+            n_nodes=5,
+            n_tracks=0,
+            category_indices=[0, 1],
+            n_categories=2,
+        )
+        assert "instance_colors" in colors
+        assert len(colors["instance_colors"]) == 2
+
+        # Category scheme without indices falls back to instance ordering
+        colors = build_color_map(
+            scheme="category", n_instances=3, n_nodes=5, n_tracks=0
+        )
+        assert "instance_colors" in colors
+        assert len(colors["instance_colors"]) == 3
+
     def test_resolve_color_rgb_int_tuple(self):
         """Test resolve_color with RGB int tuple."""
         from sleap_io.rendering.colors import resolve_color
@@ -5526,3 +5557,118 @@ class TestRenderVideoTrails:
         )
         assert len(frames) == 4
         assert all(f.ndim == 3 for f in frames)
+
+
+# ============================================================================
+# Category coloring tests (mirror of the identity color scheme)
+# ============================================================================
+
+
+def _make_category_labels(n_frames: int = 2):
+    """Build a Labels with two categories assigned across two instances/frame."""
+    skeleton = sio.Skeleton(["a", "b"])
+    cat_a = sio.Category(name="female_fly")
+    cat_b = sio.Category(name="male_fly")
+    video = sio.Video(filename="cat.mp4", open_backend=False)
+    video.backend_metadata["shape"] = (n_frames, 100, 100, 3)
+    lfs = []
+    for fi in range(n_frames):
+        inst_a = sio.Instance.from_numpy(
+            np.array([[20.0, 20.0], [40.0, 40.0]]), skeleton=skeleton, category=cat_a
+        )
+        inst_b = sio.Instance.from_numpy(
+            np.array([[60.0, 60.0], [80.0, 80.0]]), skeleton=skeleton, category=cat_b
+        )
+        lfs.append(
+            sio.LabeledFrame(video=video, frame_idx=fi, instances=[inst_a, inst_b])
+        )
+    return sio.Labels(
+        labeled_frames=lfs,
+        videos=[video],
+        skeletons=[skeleton],
+        categories=[cat_a, cat_b],
+    )
+
+
+def test_compute_category_coloring():
+    """`_compute_category_coloring` maps instances to catalog indices."""
+    from sleap_io.rendering.core import _compute_category_coloring
+
+    cat_a = sio.Category(name="female_fly")
+    cat_b = sio.Category(name="male_fly")
+    skeleton = sio.Skeleton(["a"])
+    inst_a = sio.Instance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skeleton, category=cat_a
+    )
+    inst_b = sio.Instance.from_numpy(
+        np.array([[3.0, 4.0]]), skeleton=skeleton, category=cat_b
+    )
+    inst_none = sio.Instance.from_numpy(np.array([[5.0, 6.0]]), skeleton=skeleton)
+
+    indices, n = _compute_category_coloring([inst_a, inst_b, inst_none], [cat_a, cat_b])
+    assert indices == [0, 1, 0]  # category-less instance maps to index 0
+    assert n == 2
+
+
+def test_compute_category_coloring_discovers_uncataloged():
+    """Categories not in the catalog are discovered in encounter order."""
+    from sleap_io.rendering.core import _compute_category_coloring
+
+    cat_a = sio.Category(name="female_fly")
+    skeleton = sio.Skeleton(["a"])
+    inst_a = sio.Instance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skeleton, category=cat_a
+    )
+    # Empty starting catalog -> discovered at index 0, catalog grows to 1.
+    indices, n = _compute_category_coloring([inst_a], None)
+    assert indices == [0]
+    assert n == 1
+
+
+def test_render_image_color_by_category():
+    """`render_image(color_by="category")` renders on a Labels source."""
+    labels = _make_category_labels(n_frames=1)
+    rendered = render_image(labels[0], background="black", color_by="category")
+    assert rendered.ndim == 3
+
+
+def test_render_video_color_by_category():
+    """`render_video(color_by="category")` colors instances by category."""
+    labels = _make_category_labels(n_frames=2)
+    frames = render_video(
+        labels,
+        background="black",
+        color_by="category",
+        show_progress=False,
+    )
+    assert len(frames) == 2
+    assert all(f.ndim == 3 for f in frames)
+
+
+def test_render_video_color_by_category_includes_unlabeled():
+    """color_by="category" with an empty frame exercises the no-instances branch."""
+    skeleton = sio.Skeleton(["a", "b"])
+    cat_a = sio.Category(name="female_fly")
+    video = sio.Video(filename="cat.mp4", open_backend=False)
+    video.backend_metadata["shape"] = (3, 100, 100, 3)
+    inst = sio.Instance.from_numpy(
+        np.array([[20.0, 20.0], [40.0, 40.0]]), skeleton=skeleton, category=cat_a
+    )
+    # Frame 0 has an instance; frames 1-2 are empty (no-instances render branch).
+    lfs = [sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])]
+    labels = sio.Labels(
+        labeled_frames=lfs,
+        videos=[video],
+        skeletons=[skeleton],
+        categories=[cat_a],
+    )
+    frames = render_video(
+        labels,
+        background="black",
+        color_by="category",
+        include_unlabeled=True,
+        start=0,
+        end=3,
+        show_progress=False,
+    )
+    assert len(frames) == 3

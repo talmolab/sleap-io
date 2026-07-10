@@ -370,13 +370,13 @@ def test_to_masks():
     # First mask (label 1)
     np.testing.assert_array_equal(masks[0].data, [[True, False], [False, False]])
     assert masks[0].track is t1
-    assert masks[0].category == "neuron"
+    assert masks[0].category.name == "neuron"
     assert masks[0].name == "cell_1"
     assert masks[0].source == "test_source"
     # Second mask (label 2)
     np.testing.assert_array_equal(masks[1].data, [[False, False], [False, True]])
     assert masks[1].track is t2
-    assert masks[1].category == "glia"
+    assert masks[1].category.name == "glia"
 
 
 def test_to_masks_from_masks_roundtrip():
@@ -1473,7 +1473,7 @@ def test_to_bboxes_metadata():
     bboxes = li.to_bboxes()
     bb = bboxes[0]
     assert bb.track is track
-    assert bb.category == "cell"
+    assert bb.category.name == "cell"
     assert bb.name == "obj1"
     assert bb.source == "cellpose"
 

@@ -167,7 +167,7 @@ def test_segmentation_mask_to_polygon():
     roi = mask.to_polygon()
 
     assert roi.name == "test_mask"
-    assert roi.category == "cat"
+    assert roi.category.name == "cat"
     assert roi.geometry.area > 0
 
 
@@ -214,7 +214,7 @@ def test_user_segmentation_mask():
     data[2:5, 3:7] = True
     mask = UserSegmentationMask.from_numpy(data, name="cell", category="neuron")
     assert mask.name == "cell"
-    assert mask.category == "neuron"
+    assert mask.category.name == "neuron"
     assert mask.area == 12
     assert not mask.is_predicted
 
@@ -325,7 +325,7 @@ def test_segmentation_mask_resampled():
     assert resampled.scale == (1.0, 1.0)
     assert resampled.offset == (0.0, 0.0)
     assert resampled.name == "cell"
-    assert resampled.category == "neuron"
+    assert resampled.category.name == "neuron"
     assert resampled.has_spatial_transform is False
     assert resampled.data.any()
     assert isinstance(resampled, UserSegmentationMask)
@@ -494,7 +494,7 @@ def test_to_bbox_metadata():
     )
     bb = mask.to_bbox()
     assert bb.track is track
-    assert bb.category == "cell"
+    assert bb.category.name == "cell"
     assert bb.name == "obj1"
     assert bb.source == "manual"
 
@@ -564,7 +564,7 @@ def test_to_user_metadata():
     user = pred.to_user()
     assert user.track is track
     assert user.tracking_score == pytest.approx(0.7)
-    assert user.category == "cell"
+    assert user.category.name == "cell"
     assert user.name == "obj1"
     assert user.source == "model"
 
@@ -912,7 +912,7 @@ def test_to_centroid_propagates_metadata():
     assert c.tracking_score == pytest.approx(0.6)
     assert c.identity is ident
     assert c.identity_score == pytest.approx(0.8)
-    assert c.category == "cell"
+    assert c.category.name == "cell"
     assert c.name == "obj1"
     assert c.source == "manual"
 
@@ -1000,7 +1000,7 @@ def test_to_polygon_propagates_metadata():
     assert roi.tracking_score == pytest.approx(0.6)
     assert roi.identity is ident
     assert roi.identity_score == pytest.approx(0.8)
-    assert roi.category == "cell"
+    assert roi.category.name == "cell"
     assert roi.name == "obj1"
     assert roi.source == "manual"
 

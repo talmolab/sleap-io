@@ -36,6 +36,7 @@ from sleap_io.io.cli import (
     _run_subprocess_with_progress,
     cli,
 )
+from sleap_io.model.category import Category
 from sleap_io.model.embedding import Embedding
 from sleap_io.model.event import EventType, PredictedEvent, UserEvent
 from sleap_io.model.identity import Identity
@@ -91,6 +92,36 @@ def _make_identity_slp(path: Path, *, with_embeddings: bool = False) -> Labels:
         videos=[video],
         skeletons=[skeleton],
         identities=[id_a, id_b],
+    )
+    save_slp(labels, str(path), save_embedding_vectors=with_embeddings)
+    return labels
+
+
+def _make_category_slp(path: Path, *, with_embeddings: bool = False) -> Labels:
+    """Write a minimal 2-instance .slp carrying global categories.
+
+    Builds one labeled frame with two instances assigned to two `Category`
+    objects. When ``with_embeddings`` is set, the first instance also carries a
+    per-instance ``category_embedding``.
+    """
+    skeleton = Skeleton(["head", "tail"])
+    cat_a = Category(name="female_fly")
+    cat_b = Category(name="male_fly")
+    video = Video(filename="dummy.mp4", backend_metadata={"shape": (1, 64, 64, 3)})
+    inst_a = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton, category=cat_a
+    )
+    inst_b = Instance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skeleton, category=cat_b
+    )
+    if with_embeddings:
+        inst_a.category_embedding = Embedding(vector=np.ones(8, dtype="float32"))
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst_a, inst_b])
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        categories=[cat_a, cat_b],
     )
     save_slp(labels, str(path), save_embedding_vectors=with_embeddings)
     return labels
@@ -236,7 +267,8 @@ def test_show_reports_embeddings(tmp_path):
     )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
-    assert "Embeddings (1 instance with an identity embedding)" in out
+    assert "Embeddings" in out
+    assert "1 instance with an identity embedding" in out
 
 
 def test_show_embeddings_skipped_when_absent(tmp_path):
@@ -251,6 +283,34 @@ def test_show_embeddings_skipped_when_absent(tmp_path):
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "Embeddings" not in out
+
+
+def test_show_reports_categories(tmp_path):
+    """`sio show` reports the global category count in the header stats."""
+    slp_path = tmp_path / "cats.slp"
+    _make_category_slp(slp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "2 categories" in out
+
+
+def test_show_reports_category_embeddings(tmp_path):
+    """`sio show --no-lazy` summarizes per-instance category embeddings."""
+    slp_path = tmp_path / "cats_emb.slp"
+    _make_category_slp(slp_path, with_embeddings=True)
+
+    runner = CliRunner()
+    # Embedding scan is skipped for lazy labels, so request eager loading.
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--no-lazy", "--no-open-videos"]
+    )
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Embeddings" in out
+    assert "1 instance with a category embedding" in out
 
 
 def test_show_lf_zero_details():
@@ -835,6 +895,23 @@ def test_show_json_identities_and_embeddings(tmp_path):
     # Lazy loading skips the embedding scan and reports null (unknown).
     lazy = _invoke_json(["show", str(slp_path), "--json", "--no-open-videos"])
     assert lazy["stats"]["n_instances_with_identity_embedding"] is None
+
+
+def test_show_json_categories_and_embeddings(tmp_path):
+    """JSON output reports categories and the embedding count (eager only)."""
+    slp_path = tmp_path / "cats_emb.slp"
+    _make_category_slp(slp_path, with_embeddings=True)
+
+    data = _invoke_json(
+        ["show", str(slp_path), "--json", "--no-lazy", "--no-open-videos"]
+    )
+    assert data["stats"]["n_categories"] == 2
+    assert data["stats"]["n_instances_with_category_embedding"] == 1
+    assert [c["name"] for c in data["categories"]] == ["female_fly", "male_fly"]
+
+    # Lazy loading skips the embedding scan and reports null (unknown).
+    lazy = _invoke_json(["show", str(slp_path), "--json", "--no-open-videos"])
+    assert lazy["stats"]["n_instances_with_category_embedding"] is None
 
 
 def test_show_json_events(tmp_path):
@@ -4706,6 +4783,93 @@ def test_merge_help_lists_identity():
     assert "--identity" in _strip_ansi(result.output)
 
 
+@pytest.mark.parametrize("method", ["name", "identity"])
+def test_merge_category_option_accepted(method, tmp_path):
+    """`sio merge --category {name,identity}` is accepted and runs."""
+    a = tmp_path / "a.slp"
+    b = tmp_path / "b.slp"
+    _make_category_slp(a)
+    _make_category_slp(b)
+
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            str(a),
+            str(b),
+            "-o",
+            str(merged_path),
+            "--category",
+            method,
+            "--frame",
+            "keep_both",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Merged 2 files:" in output
+    assert merged_path.exists()
+
+
+def test_merge_category_name_dedupes_catalog(tmp_path):
+    """`sio merge --category name` dedupes same-named categories across files."""
+    a = tmp_path / "a.slp"
+    b = tmp_path / "b.slp"
+    _make_category_slp(a)
+    _make_category_slp(b)
+
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            str(a),
+            str(b),
+            "-o",
+            str(merged_path),
+            "--category",
+            "name",
+            "--frame",
+            "keep_both",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    # Both files carry the same two category names; name-dedup keeps exactly two.
+    merged = load_slp(str(merged_path))
+    assert sorted(c.name for c in merged.categories) == ["female_fly", "male_fly"]
+
+
+def test_merge_category_invalid_choice(tmp_path, slp_typical):
+    """An unsupported --category value is rejected by Click."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            slp_typical,
+            slp_typical,
+            "-o",
+            str(merged_path),
+            "--category",
+            "bogus",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "category" in _strip_ansi(result.output).lower()
+
+
+def test_merge_help_lists_category():
+    """`sio merge --help` documents the --category option."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["merge", "--help"])
+    assert result.exit_code == 0
+    assert "--category" in _strip_ansi(result.output)
+
+
 def test_merge_frame_strategies(tmp_path, slp_typical):
     """Test different frame strategies."""
     runner = CliRunner()
@@ -5541,6 +5705,46 @@ def test_render_color_by_identity_help_choice():
     result = runner.invoke(cli, ["render", "--help"])
     assert result.exit_code == 0
     assert "identity" in _strip_ansi(result.output)
+
+
+def test_render_color_by_category(tmp_path):
+    """`sio render --color-by category` is accepted and renders an image.
+
+    Each category is colored by its index in ``Labels.categories`` via the
+    palette (mirroring ``color_by="identity"``).
+    """
+    slp_path = tmp_path / "cats.slp"
+    _make_category_slp(slp_path)
+
+    output_path = tmp_path / "frame.png"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            str(slp_path),
+            "--lf",
+            "0",
+            "--background",
+            "black",
+            "--color-by",
+            "category",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+    assert output_path.exists()
+
+
+def test_render_color_by_category_help_choice():
+    """`sio render --help` lists category as a --color-by choice."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["render", "--help"])
+    assert result.exit_code == 0
+    assert "category" in _strip_ansi(result.output)
 
 
 def test_render_crop_pixel(centered_pair, tmp_path):

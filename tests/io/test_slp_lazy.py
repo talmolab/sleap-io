@@ -1759,6 +1759,151 @@ def test_lazy_embeddings_round_trip(tmp_path):
     )
 
 
+def test_lazy_per_instance_category_round_trip(tmp_path):
+    """Per-instance categories materialize + copy correctly via the lazy loader."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    cat_a = sio.Category(name="female_fly", metadata={"cohort": "1"})
+    cat_b = sio.Category(name="male_fly")
+    insts = [
+        Instance.from_numpy(
+            np.array([[0, 1], [2, 3]]), skel, category=cat_a, category_score=0.95
+        ),
+        PredictedInstance.from_numpy(
+            np.array([[4, 5], [6, 7]]), skel, score=0.8, category=cat_b
+        ),
+        Instance.from_numpy(np.array([[8, 9], [10, 11]]), skel),  # no category
+    ]
+    labels = sio.Labels([LabeledFrame(video=video, frame_idx=0, instances=insts)])
+    labels.update()
+
+    path = str(tmp_path / "lazy_categories.slp")
+    sio.save_slp(labels, path)
+
+    lazy = sio.load_slp(path, lazy=True)
+    assert lazy.is_lazy
+    assert {c.name for c in lazy.categories} == {"female_fly", "male_fly"}
+
+    li = list(lazy[0].instances)
+    assert li[0].category is not None
+    assert li[0].category.name == "female_fly"
+    assert li[0].category.metadata == {"cohort": "1"}
+    assert li[0].category_score == pytest.approx(0.95)
+    assert li[1].category is not None
+    assert li[1].category.name == "male_fly"
+    assert li[1].category_score is None
+    assert li[2].category is None
+
+    # The materialized category is the canonical catalog object.
+    assert li[0].category in lazy.categories
+
+    # Lazy store copy preserves category wiring, the catalog, and consistency.
+    copied = lazy.copy()
+    cli = list(copied[0].instances)
+    assert cli[0].category is not None
+    assert cli[0].category.name == "female_fly"
+    assert {c.name for c in copied.categories} == {"female_fly", "male_fly"}
+    assert cli[0].category in copied.categories  # materialized inst -> catalog
+    assert copied.categories[0] is not lazy.categories[0]  # independent copy
+
+
+def test_lazy_category_embeddings_round_trip(tmp_path):
+    """Per-instance category embeddings materialize via the lazy loader."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    i0 = Instance.from_numpy(
+        np.array([[0, 1], [2, 3]]),
+        skel,
+        category="female_fly",
+        category_embedding=sio.Embedding(np.arange(64, dtype=np.float32)),
+    )
+    i1 = Instance.from_numpy(np.array([[8, 9], [0, 1]]), skel)  # no embedding
+
+    labels = sio.Labels([LabeledFrame(video=video, frame_idx=0, instances=[i0, i1])])
+    labels.update()
+
+    path = str(tmp_path / "lazy_category_embeddings.slp")
+    sio.save_slp(labels, path, save_embedding_vectors=True)
+
+    lazy = sio.load_slp(path, lazy=True)
+    assert lazy.is_lazy
+    li = list(lazy[0].instances)
+    assert li[0].category_embedding is not None
+    assert li[0].category_embedding.dim == 64
+    np.testing.assert_array_equal(
+        li[0].category_embedding.vector, np.arange(64, dtype=np.float32)
+    )
+    assert li[1].category_embedding is None
+
+    # Lazy store copy preserves category embeddings.
+    cli = list(lazy.copy()[0].instances)
+    assert cli[0].category_embedding.dim == 64
+    np.testing.assert_array_equal(
+        cli[0].category_embedding.vector, np.arange(64, dtype=np.float32)
+    )
+
+
+def test_lazy_save_persists_categories_and_embeddings(tmp_path):
+    """Lazy save must persist categories + per-instance links + embeddings.
+
+    Category mirror of ``test_lazy_save_persists_identities_and_embeddings``:
+    ``load_slp(p, lazy=True).save(p2)`` must round-trip the /categories catalog,
+    the per-detection links, and the parallel category_* embedding datasets.
+    """
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    cat_a = sio.Category(name="female_fly", metadata={"cohort": "1"})
+    cat_b = sio.Category(name="male_fly")
+
+    i0 = Instance.from_numpy(
+        np.array([[0, 1], [2, 3]]),
+        skel,
+        category=cat_a,
+        category_score=0.95,
+        category_embedding=sio.Embedding(np.arange(64, dtype=np.float32)),
+    )
+    i1 = PredictedInstance.from_numpy(
+        np.array([[4, 5], [6, 7]]), skel, score=0.8, category=cat_b
+    )
+    i2 = Instance.from_numpy(np.array([[8, 9], [10, 11]]), skel)  # no category
+
+    labels = sio.Labels(
+        [LabeledFrame(video=video, frame_idx=0, instances=[i0, i1, i2])]
+    )
+    labels.update()
+
+    a = str(tmp_path / "a.slp")
+    sio.save_slp(labels, a, save_embedding_vectors=True)
+    lazy = sio.load_slp(a, lazy=True)
+    assert lazy.is_lazy
+
+    b = str(tmp_path / "b.slp")
+    sio.save_slp(lazy, b, save_embedding_vectors=True)
+    assert lazy.is_lazy  # fast path must not have materialized
+
+    with h5py.File(b, "r") as f:
+        assert f["metadata"].attrs["format_id"] == 2.7
+        assert "name" in f["categories"]
+        assert "links" in f["categories"]
+        assert "meta_owner" in f["categories"]  # cat_a carries metadata
+        emb = f["embeddings"]
+        for ds in ("category_vectors", "category_owner_type", "category_owner_id"):
+            assert emb[ds].compression == "gzip"
+
+    reb = sio.load_slp(b)
+    assert {c.name for c in reb.categories} == {"female_fly", "male_fly"}
+    rli = list(reb[0].instances)
+    assert rli[0].category.name == "female_fly"
+    assert rli[0].category.metadata == {"cohort": "1"}
+    assert rli[0].category_score == pytest.approx(0.95)
+    np.testing.assert_array_equal(
+        rli[0].category_embedding.vector, np.arange(64, dtype=np.float32)
+    )
+    assert rli[1].category.name == "male_fly"
+    assert rli[2].category is None
+
+
 def test_lazy_save_persists_identities_and_embeddings(tmp_path):
     """Lazy save must persist identities + per-instance links + embeddings.
 

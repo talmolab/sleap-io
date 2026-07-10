@@ -18,6 +18,7 @@ from PIL import Image
 from sleap_io import (
     Camera,
     CameraGroup,
+    Category,
     FrameGroup,
     Instance,
     InstanceGroup,
@@ -75,6 +76,9 @@ from sleap_io.io.slp import (
     prepare_frames_to_embed,
     process_and_embed_frames,
     read_bboxes,
+    read_categories,
+    read_category_embeddings,
+    read_category_links,
     read_centroids,
     read_embeddings,
     read_event_types,
@@ -101,6 +105,7 @@ from sleap_io.io.slp import (
     session_to_dict,
     video_to_dict,
     write_bboxes,
+    write_categories,
     write_centroids,
     write_event_types,
     write_events,
@@ -808,7 +813,7 @@ def test_lazy_write_preserves_static_roi_video(tmp_path):
     assert len(reread.static_rois) == 1
     assert reread.static_rois[0].video is not None
     assert reread.static_rois[0].video.filename == "v.mp4"
-    assert reread.static_rois[0].category == "arena"
+    assert reread.static_rois[0].category.name == "arena"
 
 
 def test_lazy_write_static_roi_without_video(tmp_path):
@@ -826,7 +831,7 @@ def test_lazy_write_static_roi_without_video(tmp_path):
     save_file(lazy, p2)
 
     reread = load_slp(p2)
-    by_category = {r.category: r for r in reread.static_rois}
+    by_category = {r.category.name: r for r in reread.static_rois}
     assert by_category["anchored"].video is reread.videos[0]
     assert by_category["orphan"].video is None
 
@@ -849,7 +854,7 @@ def test_lazy_write_preserves_static_roi_video_multi(tmp_path):
 
     reread = load_slp(p2)
     assert len(reread.static_rois) == 2
-    by_category = {r.category: r for r in reread.static_rois}
+    by_category = {r.category.name: r for r in reread.static_rois}
     assert by_category["arena_b"].video is reread.videos[1]
     assert by_category["arena_b"].video.filename == "b.mp4"
     assert by_category["arena_c"].video is reread.videos[2]
@@ -1616,6 +1621,241 @@ def test_roi_identity_and_embedding_round_trip(tmp_path):
     assert lr.identity is not None and lr.identity.name == "arena_A"
     assert lr.identity_score == pytest.approx(0.6)
     np.testing.assert_array_equal(lr.identity_embedding.vector, np.ones(3))
+
+
+def test_category_catalog_round_trip(tmp_path):
+    """Test the /categories catalog round-trips like /identity (name + metadata)."""
+    labels_path = str(tmp_path / "test.slp")
+
+    categories = [
+        Category(name="female_fly", metadata={"color": "#ff0000"}),
+        Category(name="male_fly"),
+        Category(name="fur_shaved", metadata={"color": "#00ff00", "cohort": "3"}),
+    ]
+
+    with h5py.File(labels_path, "w"):
+        pass  # Create empty file
+
+    write_categories(labels_path, categories)
+    loaded = read_categories(labels_path)
+
+    assert len(loaded) == 3
+    assert loaded[0].name == "female_fly"
+    assert loaded[0].metadata == {"color": "#ff0000"}
+    assert loaded[1].name == "male_fly"
+    assert loaded[1].metadata == {}  # no metadata stays empty
+    assert loaded[2].name == "fur_shaved"
+    assert loaded[2].metadata == {"color": "#00ff00", "cohort": "3"}
+
+
+def test_category_empty_round_trip(tmp_path):
+    """Test that an empty categories list doesn't create a dataset."""
+    labels_path = str(tmp_path / "test.slp")
+    with h5py.File(labels_path, "w"):
+        pass
+
+    write_categories(labels_path, [])
+    assert read_categories(labels_path) == []
+
+
+def test_per_instance_category_round_trip(tmp_path):
+    """Per-instance category links + the catalog round-trip through SLP (2.7)."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    cat_a = Category(name="female_fly", metadata={"cohort": "1"})
+    cat_b = Category(name="male_fly")
+    insts = [
+        Instance.from_numpy(
+            np.array([[0, 1], [2, 3]]), skel, category=cat_a, category_score=0.95
+        ),
+        PredictedInstance.from_numpy(
+            np.array([[4, 5], [6, 7]]), skel, score=0.8, category=cat_b
+        ),
+        Instance.from_numpy(np.array([[8, 9], [10, 11]]), skel),  # no category
+    ]
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=insts)])
+    labels.update()
+
+    path = str(tmp_path / "categories.slp")
+    save_slp(labels, path)
+
+    # Format bumped to 2.7 and the /categories group + links dataset are present.
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] == 2.7
+        assert "links" in f["categories"]
+        links = f["categories"]["links"][:]
+        assert "owner_type" in links.dtype.names
+        assert set(links["owner_type"].tolist()) == {OWNER_INSTANCE}
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)
+    assert li[0].category is not None
+    assert li[0].category.name == "female_fly"
+    assert li[0].category.metadata == {"cohort": "1"}
+    assert li[0].category_score == pytest.approx(0.95)
+    assert li[1].category is not None
+    assert li[1].category.name == "male_fly"
+    assert li[1].category_score is None  # not recorded -> None
+    assert li[2].category is None
+    # The two distinct loaded categories are shared with the catalog.
+    assert {c.name for c in loaded.categories} == {"female_fly", "male_fly"}
+    assert li[0].category is loaded.categories[loaded.categories.index(li[0].category)]
+
+
+def test_category_embedding_round_trip(tmp_path):
+    """Per-detection category embeddings round-trip via the parallel datasets."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    i0 = Instance.from_numpy(
+        np.array([[0, 1], [2, 3]]),
+        skel,
+        category="female_fly",
+        category_embedding=Embedding(np.arange(32, dtype=np.float64)),
+    )
+    i1 = PredictedInstance.from_numpy(
+        np.array([[4, 5], [6, 7]]),
+        skel,
+        score=0.8,
+        category="male_fly",
+        category_embedding=Embedding(np.full(32, 2.0, dtype=np.float64)),
+    )
+    i2 = Instance.from_numpy(np.array([[8, 9], [0, 1]]), skel)  # no embedding
+
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[i0, i1, i2])])
+    labels.update()
+
+    path = str(tmp_path / "category_embeddings.slp")
+    save_slp(labels, path, save_embedding_vectors=True)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] == 2.7
+        # Category vectors live in the shared /embeddings group as parallel datasets.
+        assert set(f["embeddings"].keys()) == {
+            "category_vectors",
+            "category_owner_type",
+            "category_owner_id",
+        }
+        assert f["embeddings/category_vectors"].shape == (2, 32)
+        assert f["embeddings/category_vectors"].dtype == np.float64  # dtype preserved
+        assert set(f["embeddings/category_owner_type"][:].tolist()) == {OWNER_INSTANCE}
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)
+    assert li[0].category_embedding.dim == 32
+    assert li[0].category_embedding.vector.dtype == np.float64
+    np.testing.assert_array_equal(li[0].category_embedding.vector, np.arange(32))
+    np.testing.assert_array_equal(li[1].category_embedding.vector, np.full(32, 2.0))
+    # Sparse: instances without a category embedding stay None.
+    assert li[2].category_embedding is None
+
+
+def test_save_embedding_vectors_default_skips_category_embeddings(tmp_path):
+    """Default save_embedding_vectors=False drops category vectors, keeps links."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(
+        np.array([[0, 1], [2, 3]]),
+        skel,
+        category="female_fly",
+        category_score=0.7,
+        category_embedding=Embedding(np.arange(16, dtype=np.float32)),
+    )
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+
+    path = str(tmp_path / "no_cat_emb.slp")
+    save_slp(labels, path)  # default save_embedding_vectors=False
+
+    with h5py.File(path, "r") as f:
+        assert "embeddings" not in f  # no vectors written at all
+        assert "links" in f["categories"]  # category link still persisted
+
+    # Vectors remain in memory on the original object (not mutated by save).
+    assert list(labels[0].instances)[0].category_embedding is not None
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)[0]
+    assert li.category is not None and li.category.name == "female_fly"
+    assert li.category_score == pytest.approx(0.7)
+    assert li.category_embedding is None  # not persisted
+
+
+def test_identity_and_category_embeddings_different_dims_round_trip(tmp_path):
+    """Identity + category embeddings with DIFFERENT dims both survive.
+
+    Validates the parallel-datasets design: category vectors live in sibling
+    datasets independent of identity vectors, so the two need not share D.
+    """
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(
+        np.array([[0, 1], [2, 3]]),
+        skel,
+        identity=Identity(name="mouse_A"),
+        identity_embedding=Embedding(np.ones(128, dtype=np.float32)),
+        category="female_fly",
+        category_embedding=Embedding(np.arange(64, dtype=np.float32)),
+    )
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    labels.update()
+
+    path = str(tmp_path / "mixed_dims.slp")
+    save_slp(labels, path, save_embedding_vectors=True)
+
+    with h5py.File(path, "r") as f:
+        assert f["embeddings/vectors"].shape == (1, 128)
+        assert f["embeddings/category_vectors"].shape == (1, 64)
+
+    loaded = load_slp(path)
+    li = list(loaded[0].instances)[0]
+    assert li.identity_embedding.dim == 128
+    assert li.category_embedding.dim == 64
+    np.testing.assert_array_equal(li.identity_embedding.vector, np.ones(128))
+    np.testing.assert_array_equal(li.category_embedding.vector, np.arange(64))
+
+
+def test_no_category_keeps_low_format_and_no_group(tmp_path):
+    """Category-free labels stay additive (no /categories group, no 2.7 bump)."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[Instance.from_numpy(np.array([[0, 1], [2, 3]]), skel)],
+            )
+        ]
+    )
+    path = str(tmp_path / "no_category.slp")
+    save_slp(labels, path)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 2.7
+        assert "categories" not in f
+
+    loaded = load_slp(path)
+    assert loaded.categories == []
+    assert list(loaded[0].instances)[0].category is None
+
+
+def test_pre_2_7_fixture_loads_with_empty_categories(slp_minimal):
+    """An existing pre-2.7 fixture (no categories) loads unchanged, categories []."""
+    with h5py.File(slp_minimal, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 2.7
+        assert "categories" not in f
+
+    loaded = load_slp(slp_minimal)
+    assert loaded.categories == []
+    for lf in loaded:
+        for inst in lf.instances:
+            assert inst.category is None
+            assert inst.category_score is None
+            assert inst.category_embedding is None
+    # The category read helpers are no-ops on a pre-2.7 file.
+    assert read_categories(slp_minimal) == []
+    assert read_category_links(slp_minimal) == {}
+    assert read_category_embeddings(slp_minimal) == {}
 
 
 def test_make_frame_group_and_frame_group_to_dict(
@@ -5010,9 +5250,9 @@ def test_slp_roi_roundtrip(tmp_path):
     path = str(tmp_path / "test_rois.slp")
     save_slp(labels, path)
 
-    # Verify format_id is 1.5
+    # Verify format_id bumped to 2.7 (ROIs carry a `Category`, i.e. category data).
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
-    assert format_id == 1.5
+    assert format_id == 2.7
 
     loaded = load_slp(path)
 
@@ -5020,7 +5260,7 @@ def test_slp_roi_roundtrip(tmp_path):
     assert len(loaded.rois) == 2
     roi_names = {r.name for r in loaded.rois}
     assert "bbox1" in roi_names
-    triangle = [r for r in loaded.rois if r.category == "arena"][0]
+    triangle = [r for r in loaded.rois if r.category.name == "arena"][0]
     assert triangle.track is loaded.tracks[0]
 
 
@@ -5111,14 +5351,14 @@ def test_slp_roi_wkb_roundtrip_geometry_types(tmp_path):
             category="multi",
         ),
     ]
-    original_wkb = {r.category: r.geometry.wkb for r in rois}
+    original_wkb = {r.category.name: r.geometry.wkb for r in rois}
 
     path = str(tmp_path / "roi_geom_types.slp")
     save_slp(Labels(videos=[video], skeletons=[skeleton], rois=rois), path)
     loaded = load_slp(path, open_videos=False)
 
     assert len(loaded.rois) == 3
-    by_cat = {r.category: r for r in loaded.rois}
+    by_cat = {r.category.name: r for r in loaded.rois}
     assert isinstance(by_cat["pred"], PredictedROI)
     assert by_cat["pred"].score == pytest.approx(0.85, abs=1e-5)
     assert isinstance(by_cat["user"], UserROI)
@@ -5178,7 +5418,7 @@ def test_slp_mask_roundtrip(tmp_path):
     assert m.height == 20
     assert m.width == 30
     assert m.name == "seg1"
-    assert m.category == "foreground"
+    assert m.category.name == "foreground"
 
     # Check mask data roundtrips correctly
     np.testing.assert_array_equal(m.data, mask_data)
@@ -5577,7 +5817,7 @@ def test_slp_bbox_roundtrip(tmp_path):
     assert b1.height == pytest.approx(80.0)
     assert b1.angle == pytest.approx(0.0)
     assert b1.name == "bbox1"
-    assert b1.category == "mouse"
+    assert b1.category.name == "mouse"
     assert b1.source == "manual"
     assert b1.track is None
 
@@ -5589,7 +5829,7 @@ def test_slp_bbox_roundtrip(tmp_path):
     assert b2.height == pytest.approx(30.0)
     assert b2.angle == pytest.approx(0.5)
     assert b2.name == "bbox2"
-    assert b2.category == "fly"
+    assert b2.category.name == "fly"
     assert b2.track is loaded.tracks[0]
 
     # Verify low-level read_bboxes works directly
@@ -5644,7 +5884,7 @@ def test_slp_predicted_bbox_roundtrip(tmp_path):
     b_user = loaded.bboxes[0]
     assert isinstance(b_user, UserBoundingBox)
     assert not isinstance(b_user, PredictedBoundingBox)
-    assert b_user.category == "cat"
+    assert b_user.category.name == "cat"
 
     b_pred = loaded.bboxes[1]
     assert isinstance(b_pred, PredictedBoundingBox)
@@ -5652,7 +5892,7 @@ def test_slp_predicted_bbox_roundtrip(tmp_path):
     assert b_pred.y_center == pytest.approx(200.0)
     assert b_pred.width == pytest.approx(50.0)
     assert b_pred.height == pytest.approx(60.0)
-    assert b_pred.category == "dog"
+    assert b_pred.category.name == "dog"
     assert b_pred.score == pytest.approx(0.95, abs=1e-5)
 
 
@@ -5743,7 +5983,7 @@ def test_slp_bbox_lazy_roundtrip(tmp_path):
 
     b2 = reloaded.bboxes[1]
     assert isinstance(b2, PredictedBoundingBox)
-    assert b2.category == "fly"
+    assert b2.category.name == "fly"
     assert b2.score == pytest.approx(0.85, abs=1e-5)
 
 
@@ -7361,7 +7601,7 @@ def test_slp_mask_instance_roundtrip(tmp_path):
     assert len(loaded.masks) == 1
     rm = loaded.masks[0]
     assert rm.instance is not None
-    assert rm.category == "cell"
+    assert rm.category.name == "cell"
     assert isinstance(rm, UserSegmentationMask)
 
 
@@ -7392,12 +7632,13 @@ def test_slp_predicted_mask_roundtrip(tmp_path):
     rm = loaded.masks[0]
     assert isinstance(rm, PredictedSegmentationMask)
     assert rm.score == pytest.approx(0.95, abs=1e-5)
-    assert rm.category == "cell"
+    assert rm.category.name == "cell"
     np.testing.assert_array_equal(rm.data, np.ones((5, 5), dtype=bool))
 
-    # Verify format_id bumped to 1.9
+    # Verify format_id bumped to 2.7: the mask carries a `Category` ("cell"), which
+    # is category data, so the class/category subsystem bump applies.
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
-    assert format_id == 1.9
+    assert format_id == 2.7
 
 
 def test_slp_mask_from_predicted_persisted(tmp_path):
@@ -8137,7 +8378,7 @@ def test_slp_predicted_roi_roundtrip(tmp_path):
     rr = loaded.rois[0]
     assert isinstance(rr, PredictedROI)
     assert rr.score == pytest.approx(0.85, abs=1e-5)
-    assert rr.category == "arena"
+    assert rr.category.name == "arena"
 
 
 def test_slp_user_roi_roundtrip(tmp_path):
@@ -8258,7 +8499,7 @@ def test_slp_backward_compat_no_predicted_fields(tmp_path):
     rm = loaded.masks[0]
     # Pre-v1.9 files should read as UserSegmentationMask (default, not Predicted)
     assert type(rm) is UserSegmentationMask
-    assert rm.category == "cell"
+    assert rm.category.name == "cell"
     np.testing.assert_array_equal(rm.data, np.ones((5, 5), dtype=bool))
 
 
@@ -8311,17 +8552,17 @@ def test_slp_all_annotations_roundtrip(labels_all_annotations, tmp_path):
     # --- Metadata: name, category, source preserved ---
     for orig, reloaded in zip(labels.masks, loaded.masks):
         assert reloaded.name == orig.name
-        assert reloaded.category == orig.category
+        assert reloaded.category.name == orig.category.name
         assert reloaded.source == orig.source
 
     for orig, reloaded in zip(labels.rois, loaded.rois):
         assert reloaded.name == orig.name
-        assert reloaded.category == orig.category
+        assert reloaded.category.name == orig.category.name
         assert reloaded.source == orig.source
 
     for orig, reloaded in zip(labels.bboxes, loaded.bboxes):
         assert reloaded.name == orig.name
-        assert reloaded.category == orig.category
+        assert reloaded.category.name == orig.category.name
         assert reloaded.source == orig.source
 
     for orig, reloaded in zip(labels.label_images, loaded.label_images):
@@ -8430,7 +8671,7 @@ def test_slp_backward_compat_roi_json_attrs(tmp_path):
     roi = loaded.rois[0]
     # No is_predicted column → defaults to UserROI
     assert type(roi) is UserROI
-    assert roi.category == "arena"
+    assert roi.category.name == "arena"
     assert roi.name == "test_roi"
     assert roi.source == "manual"
     assert roi.geometry.bounds == circle.bounds
@@ -9400,7 +9641,7 @@ def test_slp_centroid_roundtrip(tmp_path):
     assert lc1.track is loaded.tracks[0]
     assert lc1.tracking_score == pytest.approx(0.8)
     assert lc1.name == "c1"
-    assert lc1.category == "cell"
+    assert lc1.category.name == "cell"
     assert lc1.source == "center_of_mass"
 
     lc2 = loaded.centroids[1]
@@ -9411,7 +9652,7 @@ def test_slp_centroid_roundtrip(tmp_path):
     assert lc2.score == pytest.approx(0.95)
     assert lc2.tracking_score is None
     assert lc2.name == "c2"
-    assert lc2.category == "lysosome"
+    assert lc2.category.name == "lysosome"
     assert lc2.source == "trackmate"
 
 

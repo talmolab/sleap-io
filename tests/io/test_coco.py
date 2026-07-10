@@ -1921,7 +1921,7 @@ class TestCOCOROIMaskIO:
         # (annotation 3) both become masks; no ROIs.
         assert len(labels.rois) == 0
         assert len(labels.masks) == 2
-        masks_by_cat = {m.category: m for m in labels.masks}
+        masks_by_cat = {m.category.name: m for m in labels.masks}
         # Polygon annotation -> mask rasterized at the image resolution.
         plant_mask = masks_by_cat["plant"]
         assert plant_mask.height == 100
@@ -1934,7 +1934,7 @@ class TestCOCOROIMaskIO:
 
         # Bbox-only annotation -> BoundingBox (annotation 1)
         assert len(labels.bboxes) == 1
-        assert labels.bboxes[0].category == "animal"
+        assert labels.bboxes[0].category.name == "animal"
         x, y, w, h = labels.bboxes[0].xywh
         assert x == pytest.approx(10.0)
         assert y == pytest.approx(20.0)
@@ -1947,9 +1947,9 @@ class TestCOCOROIMaskIO:
             json_path, dataset_root=tmp_path, segmentation_format="roi"
         )
         assert len(labels_roi.rois) == 1
-        assert labels_roi.rois[0].category == "plant"
+        assert labels_roi.rois[0].category.name == "plant"
         assert len(labels_roi.masks) == 1
-        assert labels_roi.masks[0].category == "animal"
+        assert labels_roi.masks[0].category.name == "animal"
         assert len(labels_roi.bboxes) == 1
 
     def test_coco_category_preservation(self, tmp_path):
@@ -2106,7 +2106,7 @@ class TestCOCOROIMaskIO:
 
         assert len(labels.masks) == 1
         mask = labels.masks[0]
-        assert mask.category == "cell"
+        assert mask.category.name == "cell"
         assert mask.height == 5
         assert mask.width == 5
 
@@ -2150,7 +2150,7 @@ class TestCOCOROIMaskIO:
         assert len(labels.bboxes) == 1
         bbox = labels.bboxes[0]
         assert isinstance(bbox, UserBoundingBox)
-        assert bbox.category == "animal"
+        assert bbox.category.name == "animal"
         x, y, w, h = bbox.xywh
         assert x == pytest.approx(10.0)
         assert y == pytest.approx(20.0)
@@ -2190,7 +2190,7 @@ class TestCOCOROIMaskIO:
         assert len(labels.masks) == 1
         mask = labels.masks[0]
         assert isinstance(mask, UserSegmentationMask)
-        assert mask.category == "obj"
+        assert mask.category.name == "obj"
         assert mask.height == 100
         assert mask.width == 100
         # Mask bbox (in image coords) matches the polygon extent within a pixel.
@@ -2207,7 +2207,7 @@ class TestCOCOROIMaskIO:
         assert len(labels_roi.masks) == 0
         assert len(labels_roi.rois) == 1
         roi = labels_roi.rois[0]
-        assert roi.category == "obj"
+        assert roi.category.name == "obj"
         minx, miny, maxx, maxy = roi.bounds
         assert minx == pytest.approx(10.0)
         assert miny == pytest.approx(10.0)
@@ -2251,7 +2251,7 @@ class TestCOCOROIMaskIO:
         assert len(labels.bboxes) == 1
         bbox = labels.bboxes[0]
         assert isinstance(bbox, UserBoundingBox)
-        assert bbox.category == "animal"
+        assert bbox.category.name == "animal"
         x, y, w, h = bbox.xywh
         assert x == pytest.approx(2.0)
         assert y == pytest.approx(2.0)
@@ -2350,7 +2350,7 @@ def test_read_labels_keypoints_and_segmentation(tmp_path):
     assert len(labels.masks) == 1
     mask = labels.masks[0]
     assert isinstance(mask, UserSegmentationMask)
-    assert mask.category == "animal"
+    assert mask.category.name == "animal"
     assert mask.instance is instance
     assert mask.height == 100
     assert mask.width == 100
@@ -2365,7 +2365,7 @@ def test_read_labels_keypoints_and_segmentation(tmp_path):
     bbox = labels.bboxes[0]
     assert isinstance(bbox, UserBoundingBox)
     assert bbox.instance is instance
-    assert bbox.category == "animal"
+    assert bbox.category.name == "animal"
     bx, by, bw, bh = bbox.xywh
     assert bx == pytest.approx(10.0)
     assert by == pytest.approx(10.0)
@@ -2422,7 +2422,7 @@ def test_read_labels_keypoints_and_rle_segmentation(tmp_path):
     assert len(labels.masks) == 1
     mask = labels.masks[0]
     assert isinstance(mask, UserSegmentationMask)
-    assert mask.category == "animal"
+    assert mask.category.name == "animal"
     assert mask.height == 5
     assert mask.width == 5
     # Mask should be linked to the instance
@@ -2466,7 +2466,7 @@ def test_coco_polygon_mask_falls_back_to_roi_without_dims(tmp_path):
     labels = coco.read_labels(json_path, dataset_root=tmp_path)
     assert len(labels.masks) == 0
     assert len(labels.rois) == 1
-    assert labels.rois[0].category == "obj"
+    assert labels.rois[0].category.name == "obj"
 
 
 def test_coco_multipolygon_annotation_single_mask(tmp_path):
@@ -2561,7 +2561,7 @@ def test_coco_segmentation_load_file_and_slp_roundtrip(tmp_path):
     assert sum(len(lf.masks) for lf in labels.labeled_frames) == 1
     mask = labels.masks[0]
     assert isinstance(mask, UserSegmentationMask)
-    assert mask.category == "critter"
+    assert mask.category.name == "critter"
 
     # Round-trip through .slp preserves the mask, category, and area.
     slp_path = tmp_path / "seg.slp"
@@ -2569,7 +2569,7 @@ def test_coco_segmentation_load_file_and_slp_roundtrip(tmp_path):
     reloaded = sio.load_file(str(slp_path))
     rmasks = [m for lf in reloaded.labeled_frames for m in lf.masks]
     assert len(rmasks) == 1
-    assert rmasks[0].category == "critter"
+    assert rmasks[0].category.name == "critter"
     assert rmasks[0].area == mask.area
 
 
@@ -2654,16 +2654,16 @@ def test_coco_category_as_track(tmp_path):
     # Every mask's track name equals its category.
     for m in labels.masks:
         assert m.track is not None
-        assert m.track.name == m.category
+        assert m.track.name == m.category.name
     # The bbox-only annotation also gets its category track.
     assert len(labels.bboxes) == 1
     assert labels.bboxes[0].track is not None
-    assert labels.bboxes[0].track.name == labels.bboxes[0].category == "b"
+    assert labels.bboxes[0].track.name == labels.bboxes[0].category.name == "b"
     # The bbox and the masks of category "b" share the same Track object.
-    b_mask = next(m for m in labels.masks if m.category == "b")
+    b_mask = next(m for m in labels.masks if m.category.name == "b")
     assert labels.bboxes[0].track is b_mask.track
     # The two "a" masks (different frames) share the same Track object.
-    a_masks = [m for m in labels.masks if m.category == "a"]
+    a_masks = [m for m in labels.masks if m.category.name == "a"]
     assert len(a_masks) == 2
     assert a_masks[0].track is a_masks[1].track
 
@@ -2674,7 +2674,7 @@ def test_coco_category_as_track(tmp_path):
     assert {t.name for t in reloaded.tracks} == {"a", "b"}
     for m in reloaded.masks:
         assert m.track is not None
-        assert m.track.name == m.category
+        assert m.track.name == m.category.name
 
     # roi mode also assigns category tracks to the vector ROIs.
     roi_labels = coco.read_labels(
@@ -2686,7 +2686,7 @@ def test_coco_category_as_track(tmp_path):
     assert {t.name for t in roi_labels.tracks} == {"a", "b"}
     for r in roi_labels.rois:
         assert r.track is not None
-        assert r.track.name == r.category
+        assert r.track.name == r.category.name
 
     # Default (category_as_track=False) leaves masks and bboxes untracked.
     untracked = coco.read_labels(json_path, dataset_root=tmp_path)
@@ -2737,7 +2737,7 @@ def test_coco_detection_reads_as_bbox(tmp_path):
 
     for bbox in labels.bboxes:
         assert isinstance(bbox, UserBoundingBox)
-        assert bbox.category == "person"
+        assert bbox.category.name == "person"
 
     # Check first bbox coordinates
     x, y, w, h = labels.bboxes[0].xywh
@@ -2983,7 +2983,7 @@ def test_coco_mixed_bbox_and_instances(tmp_path):
     bbox = labels.bboxes[0]
     assert isinstance(bbox, UserBoundingBox)
     assert bbox.instance is instance
-    assert bbox.category == "animal"
+    assert bbox.category.name == "animal"
 
     x, y, w, h = bbox.xywh
     assert x == pytest.approx(20.0)

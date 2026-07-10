@@ -9,6 +9,7 @@ Key features:
 - Instance matching: spatial proximity, track identity, and bounding box IoU
 - Track matching: by name or object identity
 - Identity matching: by name or object identity
+- Category matching: by name or object identity
 - Video matching: path, basename, content, and auto matching
 
 Video matching supports path-based, filename-based, content-based, and
@@ -23,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 import attrs
 import numpy as np
 
+from sleap_io.model.category import Category
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
@@ -82,6 +84,19 @@ class IdentityMatchMethod(str, Enum):
         NAME: Match identities by their `name` attribute, which survives
             serialization and cross-file merges (default).
         IDENTITY: Match identities by Python object identity (same object).
+    """
+
+    NAME = "name"
+    IDENTITY = "identity"
+
+
+class CategoryMatchMethod(str, Enum):
+    """Methods for matching categories.
+
+    Attributes:
+        NAME: Match categories by their `name` attribute, which survives
+            serialization and cross-file merges (default).
+        IDENTITY: Match categories by Python object identity (same object).
     """
 
     NAME = "name"
@@ -908,6 +923,27 @@ class IdentityMatcher:
 
 
 @attrs.define
+class CategoryMatcher:
+    """Matcher for comparing and matching categories.
+
+    Attributes:
+        method: The matching method to use. Can be a CategoryMatchMethod enum
+            value or a string that will be converted to the enum. Default is
+            NAME (matches by the category `name`, which survives serialization
+            and cross-file merges).
+    """
+
+    method: CategoryMatchMethod | str = attrs.field(
+        default=CategoryMatchMethod.NAME,
+        converter=lambda x: CategoryMatchMethod(x) if isinstance(x, str) else x,
+    )
+
+    def match(self, category1: Category, category2: Category) -> bool:
+        """Check if two categories match according to the configured method."""
+        return category1.matches(category2, method=self.method.value)
+
+
+@attrs.define
 class VideoMatcher:
     """Matcher for comparing and matching videos.
 
@@ -1272,6 +1308,8 @@ NAME_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.NAME)
 IDENTITY_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.IDENTITY)
 
 NAME_IDENTITY_MATCHER = IdentityMatcher(method=IdentityMatchMethod.NAME)
+
+NAME_CATEGORY_MATCHER = CategoryMatcher(method=CategoryMatchMethod.NAME)
 
 AUTO_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.AUTO)
 PATH_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
