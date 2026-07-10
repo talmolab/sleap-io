@@ -9370,3 +9370,19 @@ def test_labels_merge_events_does_not_mutate_clean_source():
         src.events[0].video,
         src.events[0].type,
     ) == before
+
+
+def test_labels_event_types_dedup_pre_supplied_duplicates():
+    """Duplicate-named event_types passed directly collapse to one canonical entry."""
+    v = Video(filename="clip.mp4")
+    d1 = EventType(name="groom", description="first")
+    d2 = EventType(name="groom", description="second")
+    labels = Labels(
+        videos=[v],
+        event_types=[d1, d2],
+        events=[UserEvent(type=d1, video=v, start_frame=0, end_frame=1)],
+    )
+    # Both same-named entries collapse to the first-seen one.
+    assert [et.name for et in labels.event_types] == ["groom"]
+    assert labels.event_types[0] is d1
+    assert labels.events[0].type is d1

@@ -1031,12 +1031,13 @@ class Labels:
         """Register every event's `EventType` in ``self.event_types`` by name.
 
         Deduplicates the catalog by `EventType.name`: the first entry seen for a
-        given name is canonical, and every subsequent event carrying a distinct
-        same-named `EventType` object (e.g. from the string auto-promotion in the
-        `Event` constructor) is rebound to that canonical entry. This keeps a clean
-        one-entry-per-name catalog while letting callers pass either shared
-        `EventType` objects or bare strings. Mutates ``self.event_types`` and, when
-        rebinding, ``event.type``.
+        given name is canonical, and every subsequent same-named `EventType` object
+        -- whether discovered from an event's ``type`` (e.g. the string auto-promotion
+        in the `Event` constructor) or passed directly in ``event_types=`` -- is
+        collapsed onto that canonical entry, with each event's ``type`` rebound to it.
+        This keeps a clean one-entry-per-name catalog while letting callers pass
+        either shared `EventType` objects or bare strings. Mutates ``self.event_types``
+        and, when rebinding, ``event.type``.
         """
         by_name: dict[str, EventType] = {}
         for et in self.event_types:
@@ -1045,10 +1046,14 @@ class Labels:
             et = ev.type
             canonical = by_name.get(et.name)
             if canonical is None:
-                self.event_types.append(et)
                 by_name[et.name] = et
             elif canonical is not et:
                 ev.type = canonical
+        # Rebuild the catalog from the name-deduped map. This preserves first-seen
+        # order while collapsing every duplicate-named entry -- both event-discovered
+        # ones and any duplicates passed directly in ``event_types=`` -- onto a single
+        # canonical entry per name, matching the name-dedup the merge path performs.
+        self.event_types[:] = list(by_name.values())
 
     def append(self, lf: LabeledFrame, update: bool = True):
         """Append a labeled frame to the labels.
