@@ -183,8 +183,11 @@ like tracks are collected from instances:
 `EventType` or a bare name), `frame_idx` (events whose span *covers* that frame), and
 `predicted`. [`events_at`][sleap_io.Labels.events_at] is the shorthand for "what is
 happening at this frame?". `copy()` and `merge()` carry events across too: merging
-concatenates events, dedupes the catalog by name, and rebinds each event's
-video / subject / target / type onto the merged catalogs.
+rebinds each event's video / subject / target / type onto the merged catalogs and
+dedupes the catalog by name. Events themselves are deduped by identity —
+`(video, start_frame, end_frame, type name, subject, target, predicted?)` — so
+re-merging the same source is idempotent (confidence scores are not part of the
+identity, so an exact re-merge keeps the first copy).
 
 ## SLP persistence
 

@@ -3731,6 +3731,15 @@ class Labels:
             This method modifies the Labels object in place. The merge is designed to
             handle common workflows like merging predictions back into a project.
 
+            Frame-spanning events (``other.events``) are carried across too, with each
+            event's video / subject / target / type rerouted onto this object's merged
+            catalogs. Events are deduped by identity -- ``(video, start_frame,
+            end_frame, type name, subject, target, predicted?)`` -- so re-merging the
+            same source is idempotent (confidence scores are not part of the identity).
+            As a side effect, ``other``'s own event catalogs are normalized first (a
+            no-op unless events were appended to ``other`` post-hoc without an
+            intervening ``update()``).
+
             Provenance tracking: Each merge operation appends a record to
             ``self.provenance["merge_history"]`` containing:
 
@@ -3743,6 +3752,19 @@ class Labels:
             - ``result``: Merge statistics (frames_merged, instances_added, conflicts)
         """
         self._check_not_lazy("merge")
+
+        # Normalize the source's own event catalogs before building the merge maps.
+        # ``_collect_events`` registers each event's video / subject / target / type
+        # into ``other``'s videos / tracks / identities / event_types. It is a no-op
+        # when ``other`` was built via the constructor, loaded, or saved (all of which
+        # already collect), and only completes catalogs for a ``Labels`` that had
+        # events appended post-hoc without an intervening ``update()``. Doing it here
+        # means event-referenced videos/tracks/identities flow through the same
+        # matchers as everything else (Steps 2/3/3b), so they dedupe onto ``self``'s
+        # equivalents instead of landing as orphan duplicate catalog entries bound to
+        # the wrong object.
+        other._collect_events()
+
         from datetime import datetime
         from pathlib import Path
 
@@ -4197,15 +4219,20 @@ class Labels:
                     )
                     self.suggestions.append(new_suggestion)
 
-            # Step 5b: Merge events. Each incoming event is deep-copied (so the
-            # source Labels is never mutated) with its references rerouted onto this
-            # object's merged catalogs via a shared ``deepcopy`` memo: video (through
-            # ``video_map``), subject/target ``Track``s (``track_map``) and
-            # ``Identity``s (``identity_map``), and ``type`` (``event_type_map``).
-            # Events are a flat set of intervals with no per-frame identity, so they
-            # are concatenated wholesale (no dedup). ``other``'s participants/types
-            # were registered on it at construction, so every reference is in the
-            # memo; any stragglers are swept by the ``_collect_events`` below.
+            # Step 5b: Merge events. Each incoming event is deep-copied with its
+            # references rerouted onto this object's merged catalogs via a shared
+            # ``deepcopy`` memo: video (through ``video_map``), subject/target
+            # ``Track``s (``track_map``) and ``Identity``s (``identity_map``), and
+            # ``type`` (``event_type_map``). ``other._collect_events()`` at the top of
+            # merge guarantees every event reference is in ``other``'s catalogs and so
+            # in the memo, remapped onto ``self``'s canonical objects.
+            #
+            # Events have no per-frame slot to merge into, but they do carry a natural
+            # identity -- (video, start_frame, end_frame, type name, subject, target,
+            # predicted?) -- so the merge is idempotent: an incoming event whose
+            # identity already exists on ``self`` is skipped (mirroring the
+            # SuggestionFrame dedup in Step 5). Confidence scores are deliberately not
+            # part of the identity, so an exact re-merge keeps the first copy.
             if other.events:
                 event_memo: dict[int, Any] = {}
                 for other_video_obj, mapped in video_map.items():
@@ -4214,8 +4241,28 @@ class Labels:
                     event_memo[id(other_track_obj)] = mapped
                 event_memo.update(identity_map)
                 event_memo.update(event_type_map)
+
+                def _event_identity(ev: Event) -> tuple:
+                    # Keyed on the remapped (canonical) video/participant objects, so
+                    # object identity is a valid comparison across self + incoming.
+                    return (
+                        id(ev.video),
+                        ev.start_frame,
+                        ev.end_frame,
+                        ev.type.name if ev.type is not None else None,
+                        id(ev.subject),
+                        id(ev.target),
+                        ev.is_predicted,
+                    )
+
+                existing_keys = {_event_identity(ev) for ev in self.events}
                 for other_event in other.events:
-                    self.events.append(deepcopy(other_event, event_memo))
+                    new_event = deepcopy(other_event, event_memo)
+                    key = _event_identity(new_event)
+                    if key in existing_keys:
+                        continue
+                    existing_keys.add(key)
+                    self.events.append(new_event)
                 # Canonicalize any references that fell outside the memo.
                 self._collect_events()
 

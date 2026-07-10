@@ -13,16 +13,19 @@ from shapely.geometry import box
 import sleap_io
 from sleap_io import (
     Embedding,
+    EventType,
     FrameGroup,
     Identity,
     Instance,
     InstanceGroup,
     LabeledFrame,
+    PredictedEvent,
     PredictedInstance,
     RecordingSession,
     Skeleton,
     SuggestionFrame,
     Track,
+    UserEvent,
     Video,
     load_slp,
     save_slp,
@@ -9076,8 +9079,6 @@ def test_labels_convert_lazy_read_only_allowed(slp_typical):
 
 def test_labels_events_collection():
     """Constructing Labels collects event types (name-dedup) and participants."""
-    from sleap_io.model.event import EventType, PredictedEvent, UserEvent
-
     v = Video(filename="clip.mp4")
     m1, m2 = Track(name="mouse1"), Track(name="mouse2")
     idA = Identity(name="mouseA")
@@ -9100,8 +9101,6 @@ def test_labels_events_collection():
 
 def test_labels_events_collection_preserves_existing_catalog():
     """A pre-supplied event_types entry is the canonical one events bind to."""
-    from sleap_io.model.event import EventType, UserEvent
-
     v = Video(filename="clip.mp4")
     canonical = EventType(name="attack", description="canonical")
     e = UserEvent(type="attack", video=v, start_frame=0)  # distinct EventType object
@@ -9112,8 +9111,6 @@ def test_labels_events_collection_preserves_existing_catalog():
 
 def test_labels_get_events():
     """get_events filters by video, subject, type, frame span, and predicted."""
-    from sleap_io.model.event import PredictedEvent, UserEvent
-
     v = Video(filename="clip.mp4")
     m1, m2 = Track(name="mouse1"), Track(name="mouse2")
     e1 = UserEvent(type="attack", video=v, start_frame=10, end_frame=20, subject=m1)
@@ -9139,8 +9136,6 @@ def test_labels_get_events():
 
 def test_labels_events_at():
     """events_at returns events covering a frame, optionally by subject."""
-    from sleap_io.model.event import UserEvent
-
     v = Video(filename="clip.mp4")
     m1 = Track(name="mouse1")
     e1 = UserEvent(type="attack", video=v, start_frame=10, end_frame=20, subject=m1)
@@ -9154,8 +9149,6 @@ def test_labels_events_at():
 
 def test_labels_copy_events_eager():
     """copy() deep-copies events with references remapped onto the copied catalogs."""
-    from sleap_io.model.event import PredictedEvent, UserEvent
-
     v = Video(filename="clip.mp4")
     m1 = Track(name="mouse1")
     idA = Identity(name="mouseA")
@@ -9186,8 +9179,6 @@ def test_labels_copy_events_eager():
 
 def test_labels_merge_events():
     """Merge concatenates events, dedupes types by name, and rebinds references."""
-    from sleap_io.model.event import PredictedEvent, UserEvent
-
     v1 = Video(filename="clip.mp4")
     m1a = Track(name="mouse1")
     la = Labels(
@@ -9246,8 +9237,6 @@ def test_labels_merge_events():
 
 def test_labels_collect_event_video():
     """Constructing Labels collects an event's video into labels.videos."""
-    from sleap_io.model.event import UserEvent
-
     v = Video(filename="clip.mp4")
     # Video is referenced only by an event (no labeled frame / suggestion / videos=).
     labels = Labels(
@@ -9258,8 +9247,6 @@ def test_labels_collect_event_video():
 
 def test_labels_replace_videos_remaps_events():
     """replace_videos remaps event.video references onto the new videos."""
-    from sleap_io.model.event import UserEvent
-
     old = Video(filename="old.mp4")
     new = Video(filename="new.mp4")
     labels = Labels(
@@ -9273,8 +9260,6 @@ def test_labels_replace_videos_remaps_events():
 
 def test_labels_merge_event_only_video():
     """Merging a Labels whose event references an event-only video keeps the video."""
-    from sleap_io.model.event import UserEvent
-
     la = Labels(videos=[Video(filename="a.mp4")])
     vb = Video(filename="b.mp4")
     lb = Labels(events=[UserEvent(type="x", video=vb, start_frame=0, end_frame=2)])
@@ -9283,3 +9268,105 @@ def test_labels_merge_event_only_video():
     ev = la.events[0]
     assert ev.video is not None
     assert ev.video in la.videos
+
+
+def test_labels_merge_events_idempotent():
+    """Re-merging the same source is idempotent: identical events are not duplicated."""
+
+    def make():
+        v = Video(filename="clip.mp4")
+        m = Track(name="m1")
+        return Labels(
+            videos=[v],
+            tracks=[m],
+            events=[
+                UserEvent(type="attack", video=v, start_frame=0, end_frame=5, subject=m)
+            ],
+        )
+
+    la = make()
+    for _ in range(3):
+        la.merge(make(), video="basename", track="name")
+    # The same (video, span, type, subject, target, predicted?) event collapses.
+    assert len(la.events) == 1
+    assert len(la.event_types) == 1
+    assert len(la.videos) == 1
+    assert len(la.tracks) == 1
+
+
+def test_labels_merge_events_distinct_not_deduped():
+    """A genuinely different event still merges alongside an existing one."""
+    v1 = Video(filename="clip.mp4")
+    la = Labels(
+        videos=[v1],
+        events=[UserEvent(type="attack", video=v1, start_frame=0, end_frame=5)],
+    )
+    v2 = Video(filename="clip.mp4")
+    lb = Labels(
+        videos=[v2],
+        events=[UserEvent(type="attack", video=v2, start_frame=10, end_frame=15)],
+    )
+    la.merge(lb, video="basename")
+    # Same type/video but a different span -> a distinct event, kept.
+    assert len(la.events) == 2
+    assert len(la.event_types) == 1
+    assert {(e.start_frame, e.end_frame) for e in la.events} == {(0, 5), (10, 15)}
+
+
+def test_labels_merge_events_user_vs_predicted_not_deduped():
+    """A user and a predicted event with the same span are distinct identities."""
+    v1 = Video(filename="clip.mp4")
+    la = Labels(
+        videos=[v1],
+        events=[UserEvent(type="attack", video=v1, start_frame=0, end_frame=5)],
+    )
+    v2 = Video(filename="clip.mp4")
+    lb = Labels(
+        videos=[v2],
+        events=[PredictedEvent(type="attack", video=v2, start_frame=0, end_frame=5)],
+    )
+    la.merge(lb, video="basename")
+    assert len(la.events) == 2
+    assert {e.is_predicted for e in la.events} == {False, True}
+
+
+def test_labels_merge_events_post_hoc_participants_not_duplicated():
+    """Events appended post-hoc (no update) route participants through the matchers.
+
+    ``merge`` normalizes ``other``'s event catalogs first, so an event's video and
+    subject dedupe onto ``self``'s equivalents instead of landing as orphan copies.
+    """
+    vA = Video(filename="shared.mp4")
+    tA = Track(name="mouse1")
+    la = Labels(videos=[vA], tracks=[tA])
+
+    lb = Labels()  # empty; event appended WITHOUT update()/save()
+    vB = Video(filename="shared.mp4")
+    tB = Track(name="mouse1")
+    lb.events.append(
+        UserEvent(type="attack", video=vB, start_frame=0, end_frame=3, subject=tB)
+    )
+
+    la.merge(lb, video="basename", track="name")
+    assert len(la.videos) == 1  # not duplicated to two "shared.mp4"
+    assert len(la.tracks) == 1
+    ev = la.events[0]
+    assert ev.video is la.videos[0]
+    assert ev.subject is la.tracks[0]
+
+
+def test_labels_merge_events_does_not_mutate_clean_source():
+    """A source normalized at construction is not mutated by merge."""
+    v = Video(filename="clip.mp4")
+    src = Labels(
+        videos=[v],
+        events=[UserEvent(type="attack", video=v, start_frame=0, end_frame=5)],
+    )
+    before = (len(src.events), len(src.videos), src.events[0].video, src.events[0].type)
+    Labels().merge(src, video="basename")
+    assert (
+        len(src.events),
+        len(src.videos),
+        src.events[0].video,
+        src.events[0].type,
+    ) == before
