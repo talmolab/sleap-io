@@ -419,8 +419,8 @@ sio show labels.slp --json
 
 Emits a single machine-readable JSON document on stdout, designed for scripting
 and for LLM agents inspecting SLP files. JSON mode always includes all details
-(full skeleton definitions, per-video info, tracks, identities, and provenance),
-so the individual detail flags are not needed:
+(full skeleton definitions, per-video info, tracks, identities, frame-spanning
+events, and provenance), so the individual detail flags are not needed:
 
 ```json
 {
@@ -439,6 +439,8 @@ so the individual detail flags are not needed:
     "n_identities": 0,
     "n_masks": 0,
     "n_rois": 0,
+    "n_events": 0,
+    "n_event_types": 0,
     "n_instances_with_identity_embedding": null
   },
   "skeletons": [
@@ -464,6 +466,8 @@ so the individual detail flags are not needed:
   ],
   "tracks": [],
   "identities": [],
+  "event_types": [],
+  "events": [],
   "provenance": {}
 }
 ```
@@ -492,6 +496,12 @@ Notes:
   to compute it.
 - Embedded package details (`embedded`, `shape`, `embedded_frames`) require
   open video backends; pass `--open-videos` to populate them.
+- Frame-spanning [events](model/events.md) are reported when present. Each
+  `event_types` entry is `{"index", "name"}` (plus `"description"` / `"metadata"`
+  when set); each `events` entry is `{"index", "type", "video", "start_frame",
+  "end_frame", "subject", "target", "predicted"}`, where `subject` / `target` are
+  `null` or `{"kind": "track"|"identity", "name": ...}`, and predicted events add
+  `"score"` and `"has_framewise_scores"`.
 
 ### Standalone Video Files
 
@@ -573,6 +583,12 @@ sio convert spots.csv -o labels.slp --from trackmate
 **Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `dlc_project`, `csv`, `trackmate`, `ultralytics`, `leap`
 
 **Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`, `analysis_h5`
+
+!!! note "Events are SLP-only"
+    Frame-spanning [events](model/events.md) and their event-type catalog are
+    only representable in the `slp` format. Converting an event-bearing file to any
+    other output format drops them, and `sio convert` prints a warning (to stderr)
+    saying how many events and event types were discarded.
 
 ### Format Detection
 
