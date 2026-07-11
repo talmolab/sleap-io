@@ -165,7 +165,7 @@ def save_slp(
     embed_inplace: bool = False,
     verbose: bool = True,
     plugin: str | None = None,
-    progress_callback: Callable[[int, int], bool] | None = None,
+    progress_callback: Callable[[int, int, str], bool] | None = None,
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
     save_embedding_vectors: bool = False,
@@ -201,10 +201,12 @@ def save_slp(
             or "imageio". If None, uses the global default from
             `get_default_image_plugin()`. If no global default is set, auto-detects
             based on available packages (opencv preferred, then imageio).
-        progress_callback: Optional callback function called during frame embedding
-            with `(current, total)` arguments. If it returns `False`, the operation
-            is cancelled and `ExportCancelled` is raised. When provided, tqdm
-            progress bar is disabled in favor of the callback.
+        progress_callback: Optional callback function called during embedding with
+            `(current, total, phase)` arguments, where ``phase`` is ``"embed"`` or
+            ``"write"``. If it returns `False`, the operation is cancelled and
+            `ExportCancelled` is raised. When provided, tqdm progress bars are
+            disabled in favor of the callback. The ``phase`` argument is a breaking
+            change from the previous ``(current, total)`` signature.
         prefer_metadata: If `True` (the default), serialize each uncropped video's
             shape/grayscale/fps from its `backend_metadata` when recorded there
             instead of querying the live backend. For an open `MediaVideo` this
@@ -1640,7 +1642,7 @@ def save_file(
     filename: str | Path,
     format: str | None = None,
     verbose: bool = True,
-    progress_callback: Callable[[int, int], bool] | None = None,
+    progress_callback: Callable[[int, int, str], bool] | None = None,
     **kwargs,
 ):
     """Save a file based on the extension.
@@ -1654,8 +1656,11 @@ def save_file(
         verbose: If `True` (the default), display a progress bar when embedding frames
             (only applies to the SLP format).
         progress_callback: Optional callback function called during frame embedding
-            (SLP format only) with `(current, total)` arguments. If it returns `False`,
-            the operation is cancelled and `ExportCancelled` is raised.
+            (SLP format only) with `(current, total, phase)` arguments, where
+            ``phase`` is ``"embed"`` or ``"write"``. If it returns `False`, the
+            operation is cancelled and `ExportCancelled` is raised. The ``phase``
+            argument is a breaking change from the previous ``(current, total)``
+            signature.
         **kwargs: Additional arguments passed to the format-specific saving function:
             - For "slp" format: embed (bool | str | list[tuple[Video, int]] |
               None): Frames

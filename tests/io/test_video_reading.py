@@ -503,6 +503,30 @@ def test_imagevideo(centered_pair_frame_paths):
     assert backend.shape == (1, 384, 384, 1)
 
 
+def test_imagevideo_get_frame_raw_bytes(tmp_path, centered_pair_frame_paths):
+    """ImageVideo.get_frame_raw_bytes returns source bytes for JPEG/PNG, else None."""
+    import cv2
+
+    # JPEG source: returns the exact file bytes.
+    backend = ImageVideo(centered_pair_frame_paths)
+    raw = backend.get_frame_raw_bytes(0)
+    assert raw is not None
+    assert raw.dtype == np.dtype("int8")
+    assert raw.tobytes() == Path(centered_pair_frame_paths[0]).read_bytes()
+
+    # Unsupported (non-PNG/JPEG) format returns None -> caller re-encodes instead.
+    bmp = tmp_path / "frame.bmp"
+    cv2.imwrite(str(bmp), np.zeros((8, 8, 3), dtype=np.uint8))
+    assert ImageVideo([str(bmp)]).get_frame_raw_bytes(0) is None
+
+    # Unreadable file returns None (does not raise).
+    missing = tmp_path / "gone.jpg"
+    cv2.imwrite(str(missing), np.zeros((8, 8, 3), dtype=np.uint8))
+    backend_missing = ImageVideo([str(missing)])
+    missing.unlink()
+    assert backend_missing.get_frame_raw_bytes(0) is None
+
+
 def test_opencv_bgr_to_rgb_conversion(tmp_path):
     """Test that OpenCV backend correctly converts BGR to RGB."""
     try:

@@ -2491,12 +2491,161 @@ def test_fast_path_progress_callback_cancellation(tmpdir, slp_minimal_pkg):
     save_path = str(tmpdir / "cancelled.pkg.slp")
 
     # Cancel immediately
-    def cancel_immediately(current, total):
+    def cancel_immediately(current, total, phase):
         return False
 
     with pytest.raises(ExportCancelled, match="Export cancelled by user"):
         write_labels(
             save_path, labels, embed="user", progress_callback=cancel_immediately
+        )
+
+
+def test_embed_imagevideo_byte_copy(tmp_path, centered_pair_frame_paths):
+    """Embedding an ImageVideo copies the source bytes verbatim (no re-encode).
+
+    The source files are JPEG, so the frames are byte-copied into the package with
+    the source format (jpg) rather than being decoded and re-encoded to the default
+    PNG. This is lossless (identical bytes) and avoids gzip on already-compressed
+    data.
+    """
+    video = Video.from_filename(centered_pair_frame_paths)
+    skel = Skeleton(["a"])
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=i,
+                instances=[Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skel)],
+            )
+            for i in range(len(centered_pair_frame_paths))
+        ]
+    )
+
+    out = tmp_path / "imgvid.pkg.slp"
+    labels.save(
+        str(out), embed=[(video, i) for i in range(len(centered_pair_frame_paths))]
+    )
+
+    with h5py.File(out, "r") as f:
+        ds = f["video0/video"]
+        # Stored as the source (jpg) format, not the default png.
+        assert ds.attrs["format"] == "jpg"
+        assert ds.attrs["channel_order"] == "RGB"
+        # Already-compressed bytes: no gzip, contiguous storage (no chunk thrash).
+        assert ds.compression is None
+        assert ds.chunks is None
+        # Row 0 (trailing zero padding stripped) is byte-identical to the source.
+        row = ds[0]
+        nz = np.where(row != 0)[0]
+        row = row[: nz[-1] + 1] if len(nz) else row
+        src = np.frombuffer(
+            Path(centered_pair_frame_paths[0]).read_bytes(), dtype="int8"
+        )
+        assert np.array_equal(row.astype("int8"), src)
+
+    # Round-trip is lossless: reloaded pixels match the original decode exactly.
+    reloaded = read_labels(str(out))
+    assert reloaded.videos[0].backend.image_format == "jpg"
+    assert np.array_equal(video[0], reloaded.videos[0][0])
+
+
+def test_embed_encoded_no_gzip(tmp_path, slp_real_data):
+    """Encoded (PNG) embedded frames are stored uncompressed, not gzip-chunked.
+
+    gzip only squeezed the fixed-length zero padding while forcing chunked storage
+    whose row-by-row writes thrashed the chunk cache (the historic slow embed). PNG
+    bytes are already compressed, so the dataset is now contiguous/uncompressed.
+    """
+    base_labels = read_labels(slp_real_data)
+    out = tmp_path / "encoded.pkg.slp"
+    base_labels.save(str(out), embed="user")
+
+    with h5py.File(out, "r") as f:
+        ds = f["video0/video"]
+        assert ds.attrs["format"] == "png"  # MediaVideo source -> decode + re-encode
+        assert ds.compression is None
+        assert ds.chunks is None
+
+
+def test_embed_source_metadata_dataset_backend_reads(
+    tmp_path, centered_pair_frame_paths
+):
+    """HDF5Video opens a package whose source_video metadata was spilled to a dataset.
+
+    Oversized source metadata (e.g. an image sequence with thousands of filenames)
+    is written to a ``source_video/json`` *dataset* instead of the 64 KB-limited
+    attribute. The backend must read whichever form is present; otherwise the backend
+    fails to open, ``Video.backend`` is ``None``, and frames cannot be read.
+    """
+    video = Video.from_filename(centered_pair_frame_paths)
+    skel = Skeleton(["a"])
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skel)],
+            )
+        ]
+    )
+    out = tmp_path / "spill.pkg.slp"
+    labels.save(str(out), embed=[(video, 0)])
+
+    # Simulate the oversized-metadata spill: move the source_video json from the
+    # attribute into a dataset (what _write_source_video_json does when >64 KB).
+    with h5py.File(out, "a") as f:
+        grp = f["video0/source_video"]
+        blob = grp.attrs["json"]
+        del grp.attrs["json"]
+        grp.create_dataset("json", data=np.bytes_(blob))
+
+    reloaded = read_labels(str(out))
+    # Reading a frame forces the HDF5Video backend to open (__attrs_post_init__),
+    # which previously raised KeyError on the missing attribute.
+    frame = reloaded.videos[0][0]
+    assert frame.shape == video[0].shape
+    assert reloaded.videos[0].source_video is not None
+
+
+def test_embed_imagevideo_progress_cancellation(tmp_path, centered_pair_frame_paths):
+    """Cancelling via the callback works on the ImageVideo byte-copy path."""
+    video = Video.from_filename(centered_pair_frame_paths)
+    skel = Skeleton(["a"])
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=i,
+                instances=[Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skel)],
+            )
+            for i in range(3)
+        ]
+    )
+
+    def cancel_after_first(current, total, phase):
+        return current < 1  # Cancel on the first embed callback.
+
+    with pytest.raises(ExportCancelled, match="Export cancelled by user"):
+        labels.save(
+            str(tmp_path / "cancel.pkg.slp"),
+            embed=[(video, i) for i in range(3)],
+            progress_callback=cancel_after_first,
+        )
+
+
+def test_progress_callback_cancellation_write_phase(tmp_path, slp_real_data):
+    """Returning False during the write phase cancels the export."""
+    base_labels = read_labels(slp_real_data)
+
+    def cancel_on_write(current, total, phase):
+        return phase != "write"  # Allow embed phase, cancel at first write.
+
+    with pytest.raises(ExportCancelled, match="Export cancelled by user"):
+        write_labels(
+            str(tmp_path / "cancel_write.pkg.slp"),
+            base_labels,
+            embed="user",
+            progress_callback=cancel_on_write,
         )
 
 
@@ -4740,26 +4889,32 @@ def test_load_slp_sparse_video_ids_with_fallback(tmp_path, small_robot_video):
 
 
 def test_progress_callback_receives_correct_values(tmp_path, slp_real_data):
-    """Test that progress_callback receives correct (current, total) values."""
+    """Test that progress_callback receives correct (current, total, phase) values."""
     base_labels = read_labels(slp_real_data)
     labels_path = str(tmp_path / "labels.pkg.slp")
 
     # Track all progress updates
     progress_updates = []
 
-    def track_progress(current, total):
-        progress_updates.append((current, total))
+    def track_progress(current, total, phase):
+        progress_updates.append((current, total, phase))
         return True  # Continue
 
     write_labels(
         labels_path, base_labels, embed="user", progress_callback=track_progress
     )
 
-    # Should have received updates for each frame
-    assert len(progress_updates) == 5  # user_labeled_frames count
+    # Embedding is reported in two phases: "embed" (encode/copy) then "write".
+    embed_updates = [(c, t) for c, t, p in progress_updates if p == "embed"]
+    write_updates = [(c, t) for c, t, p in progress_updates if p == "write"]
+    assert len(embed_updates) == 5  # user_labeled_frames count
+    assert len(write_updates) == 5
 
-    # Check that current values are 1-indexed and sequential
-    for i, (current, total) in enumerate(progress_updates):
+    # Each phase is 1-indexed and sequential, totaling the frame count.
+    for i, (current, total) in enumerate(embed_updates):
+        assert current == i + 1, f"Current should be {i + 1}, got {current}"
+        assert total == 5, f"Total should be 5, got {total}"
+    for i, (current, total) in enumerate(write_updates):
         assert current == i + 1, f"Current should be {i + 1}, got {current}"
         assert total == 5, f"Total should be 5, got {total}"
 
@@ -4770,7 +4925,7 @@ def test_progress_callback_cancellation(tmp_path, slp_real_data):
     labels_path = str(tmp_path / "labels.pkg.slp")
 
     # Cancel after the second frame
-    def cancel_after_two(current, total):
+    def cancel_after_two(current, total, phase):
         return current < 2  # Return False after 2nd frame
 
     with pytest.raises(ExportCancelled, match="Export cancelled by user"):
@@ -4784,7 +4939,7 @@ def test_progress_callback_disables_tqdm(tmp_path, slp_real_data, capsys):
     base_labels = read_labels(slp_real_data)
     labels_path = str(tmp_path / "labels.pkg.slp")
 
-    def noop_callback(current, total):
+    def noop_callback(current, total, phase):
         return True
 
     # With callback, even with verbose=True, no tqdm output should appear
@@ -4799,6 +4954,7 @@ def test_progress_callback_disables_tqdm(tmp_path, slp_real_data, capsys):
     # tqdm outputs to stderr by default
     captured = capsys.readouterr()
     assert "Embedding frames" not in captured.err
+    assert "Writing frames" not in captured.err
 
 
 def test_progress_callback_with_save_slp(tmp_path, slp_real_data):
@@ -4808,14 +4964,15 @@ def test_progress_callback_with_save_slp(tmp_path, slp_real_data):
 
     progress_updates = []
 
-    def track_progress(current, total):
-        progress_updates.append((current, total))
+    def track_progress(current, total, phase):
+        progress_updates.append((current, total, phase))
         return True
 
     save_slp(base_labels, labels_path, embed="user", progress_callback=track_progress)
 
-    assert len(progress_updates) == 5
-    assert progress_updates[-1] == (5, 5)
+    # 5 embed-phase + 5 write-phase updates; the last update ends the write phase.
+    assert len(progress_updates) == 10
+    assert progress_updates[-1] == (5, 5, "write")
 
 
 def test_progress_callback_with_save_file(tmp_path, slp_real_data):
@@ -4825,14 +4982,14 @@ def test_progress_callback_with_save_file(tmp_path, slp_real_data):
 
     progress_updates = []
 
-    def track_progress(current, total):
-        progress_updates.append((current, total))
+    def track_progress(current, total, phase):
+        progress_updates.append((current, total, phase))
         return True
 
     save_file(base_labels, labels_path, embed="user", progress_callback=track_progress)
 
-    assert len(progress_updates) == 5
-    assert progress_updates[-1] == (5, 5)
+    assert len(progress_updates) == 10
+    assert progress_updates[-1] == (5, 5, "write")
 
 
 def test_progress_callback_none_uses_tqdm(tmp_path, slp_real_data, capsys):
@@ -4842,9 +4999,10 @@ def test_progress_callback_none_uses_tqdm(tmp_path, slp_real_data, capsys):
 
     write_labels(labels_path, base_labels, embed="user", verbose=True)
 
-    # tqdm outputs to stderr
+    # tqdm outputs to stderr -- both the embed and write phases show a bar.
     captured = capsys.readouterr()
     assert "Embedding frames" in captured.err
+    assert "Writing frames" in captured.err
 
 
 def test_embed_inplace_false_preserves_original(tmp_path, slp_real_data):
