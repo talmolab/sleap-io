@@ -166,9 +166,22 @@ file.slp
 
 !!! note "Source video metadata over 64 KB"
     Source video metadata is normally stored in the `source_video/@json`
-    attribute. If it would exceed HDF5's 64 KB attribute limit (e.g. a very large
-    `backend_metadata`), it is written to a `source_video/json` *dataset* instead
-    and a warning is emitted; readers prefer the dataset when present.
+    attribute. If it would exceed HDF5's 64 KB attribute limit (e.g. an image
+    sequence with many thousands of filenames), it is written to a
+    `source_video/json` *dataset* instead and a warning is emitted; readers prefer
+    the dataset when present.
+
+!!! note "Embedded image storage and format"
+    For encoded formats (`png`/`jpg`), the `/video` dataset is stored
+    **uncompressed and contiguous**: the bytes are already entropy-coded, so gzip
+    gained almost nothing while its chunked storage made row-by-row writes
+    pathologically slow. Only the raw-array `hdf5` format is gzip-compressed.
+
+    When the source is an image sequence (`ImageVideo`) of PNG/JPEG files, the
+    original file bytes are **copied verbatim** — no decode/re-encode cycle — and
+    the stored `@format` follows the *source* (e.g. `jpg`) rather than the requested
+    default. This is faster, lossless (no added JPEG artifacts), and typically much
+    smaller than re-encoding to PNG.
 
 ### Core Datasets
 
