@@ -1367,9 +1367,22 @@ class HDF5Video(VideoBackend):
                     self.source_inds = frame_numbers
 
                 if "source_video" in ds.parent:
-                    self.source_filename = json.loads(
-                        ds.parent["source_video"].attrs["json"]
-                    )["backend"]["filename"]
+                    source_grp = ds.parent["source_video"]
+                    # Source metadata is normally in the "json" attribute, but
+                    # oversized metadata (e.g. an image-sequence source with many
+                    # thousands of filenames, exceeding HDF5's 64 KB attribute limit)
+                    # is stored in a "json" *dataset* instead (see
+                    # ``slp._write_source_video_json``). Read whichever is present so
+                    # such packages remain openable -- otherwise the backend fails to
+                    # open, ``Video.backend`` is left ``None``, and embedded frames
+                    # cannot be read.
+                    if "json" in source_grp:
+                        source_json = source_grp["json"][()]
+                    else:
+                        source_json = source_grp.attrs["json"]
+                    self.source_filename = json.loads(source_json)["backend"][
+                        "filename"
+                    ]
 
                 # Read FPS from attributes if present
                 if "fps" in ds.attrs:
@@ -1919,6 +1932,42 @@ class ImageVideo(VideoBackend):
     def num_frames(self) -> int:
         """Number of frames in the video."""
         return len(self.filename)
+
+    def get_frame_raw_bytes(self, frame_idx: int) -> np.ndarray | None:
+        """Return the raw encoded bytes of the source image file for a frame.
+
+        Reads the on-disk image file verbatim (no decode/re-encode), enabling a
+        direct byte-for-byte embed of already-compressed sources. This avoids both
+        the cost of a decode/re-encode cycle and any additional compression
+        artifacts (important for lossy JPEG sources).
+
+        Only PNG/JPEG sources are supported here -- these are already entropy-coded
+        and are decodable by the embedded-image reader (`HDF5Video.decode_embedded`).
+        Other extensions (e.g. TIFF/BMP) return `None` so the caller falls back to
+        decoding and re-encoding to the requested format.
+
+        Args:
+            frame_idx: Index of the frame to read.
+
+        Returns:
+            The raw file bytes as an `int8` numpy vector, or `None` if the source
+            file is not a directly-storable compressed image (PNG/JPEG) or cannot
+            be read.
+
+        Notes:
+            Bytes copied this way decode back to RGB (matching `_read_frame`), so
+            the embedded dataset should record `channel_order="RGB"`.
+        """
+        filename = self.filename[frame_idx]
+        ext = Path(filename).suffix.lower().lstrip(".")
+        if ext not in ("png", "jpg", "jpeg"):
+            return None
+        try:
+            with open(filename, "rb") as f:
+                data = f.read()
+        except OSError:
+            return None
+        return np.frombuffer(data, dtype="int8")
 
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.

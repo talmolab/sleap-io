@@ -918,6 +918,41 @@ def can_use_fast_path(video: Video, frame_idx: int, target_format: str) -> bool:
     return True
 
 
+def _resolve_embed_format(video: Video, requested_format: str) -> str:
+    """Determine the on-disk image format to store a video's embedded frames in.
+
+    For an `ImageVideo` whose source files are already-compressed PNG/JPEG, the
+    frames are byte-copied verbatim into the package (see
+    `process_and_embed_frames`), so the stored format follows the *source* rather
+    than `requested_format` -- re-encoding an already-compressed image would only
+    inflate size (PNG) or add artifacts (JPEG) for no benefit. All other sources
+    use `requested_format` (their frames are decoded and re-encoded).
+
+    Args:
+        video: The source `Video` whose frames will be embedded.
+        requested_format: The format requested by the caller ("png", "jpg", or
+            "hdf5").
+
+    Returns:
+        The image format string to store for this video's frames. This is the
+        normalized source extension ("png" or "jpg") for a byte-copyable
+        `ImageVideo`, otherwise `requested_format`.
+    """
+    from sleap_io.io.video_reading import ImageVideo
+
+    if requested_format == "hdf5":
+        return "hdf5"
+    backend = video.backend
+    if isinstance(backend, ImageVideo):
+        fnames = backend.filename
+        first = fnames[0] if isinstance(fnames, list) and fnames else fnames
+        if isinstance(first, (str, Path)):
+            ext = Path(first).suffix.lower().lstrip(".")
+            if ext in ("png", "jpg", "jpeg"):
+                return "jpg" if ext == "jpeg" else ext
+    return requested_format
+
+
 def process_and_embed_frames(
     labels_path: str,
     frames_metadata: list[dict],
@@ -925,7 +960,7 @@ def process_and_embed_frames(
     fixed_length: bool = True,
     verbose: bool = True,
     plugin: str | None = None,
-    progress_callback: Callable[[int, int], bool] | None = None,
+    progress_callback: Callable[[int, int, str], bool] | None = None,
 ) -> dict[Video, Video]:
     """Process and embed frames into a SLEAP labels file.
 
@@ -946,11 +981,17 @@ def process_and_embed_frames(
         plugin: Image plugin to use for encoding. One of "opencv" or "imageio".
             If None, uses the global default from `get_default_image_plugin()`.
             If no global default is set, auto-detects based on available packages.
-        progress_callback: Optional callback function called during frame embedding
-            with `(current, total)` arguments (1-based current frame index and total
-            frame count). If it returns `False`, the operation is cancelled and
-            `ExportCancelled` is raised. When provided, tqdm progress bar is disabled
-            in favor of the callback.
+        progress_callback: Optional callback function called during embedding with
+            `(current, total, phase)` arguments (1-based current index and total
+            count for the phase). ``phase`` is ``"embed"`` while frames are loaded/
+            encoded/byte-copied into memory and ``"write"`` while the accumulated
+            bytes are written to the HDF5 file. If it returns `False`, the operation
+            is cancelled and `ExportCancelled` is raised. When provided, tqdm progress
+            bars are disabled in favor of the callback.
+
+            .. note::
+                The ``phase`` argument (and the separate ``"write"`` phase) is a
+                breaking change from the previous ``(current, total)`` signature.
 
     Returns:
         A dictionary mapping original Video objects to their embedded versions.
@@ -959,7 +1000,11 @@ def process_and_embed_frames(
         ExportCancelled: If the progress_callback returns `False`.
     """
     # Determine which plugin to use for encoding
-    from sleap_io.io.video_reading import CropVideoBackend, get_default_image_plugin
+    from sleap_io.io.video_reading import (
+        CropVideoBackend,
+        ImageVideo,
+        get_default_image_plugin,
+    )
 
     if plugin is None:
         plugin = get_default_image_plugin()
@@ -968,8 +1013,18 @@ def process_and_embed_frames(
         plugin = "opencv" if "cv2" in sys.modules else "imageio"
 
     # Initialize a dictionary to store data by group
-    data_by_group = {}
+    data_by_group: dict[str, dict] = {}
     total_frames = len(frames_metadata)
+
+    # Per-video (per-group) stored format: an ImageVideo of PNG/JPEG is byte-copied
+    # verbatim so its group stores the source format; everything else re-encodes to
+    # `image_format`. Decided once up front so a group's format is stable even when a
+    # stray frame falls back to the decode path.
+    group_format: dict[str, str] = {}
+    for frame_meta in frames_metadata:
+        grp = frame_meta["group"]
+        if grp not in group_format:
+            group_format[grp] = _resolve_embed_format(frame_meta["video"], image_format)
 
     # Use tqdm only if verbose AND no callback (CLI mode)
     use_tqdm = verbose and progress_callback is None
@@ -984,6 +1039,9 @@ def process_and_embed_frames(
         frame_idx = frame_meta["frame_idx"]
         group = frame_meta["group"]
 
+        # Format this group's frames are stored in (see `_resolve_embed_format`).
+        grp_format = group_format[group]
+
         # Initialize group data structure if this is the first frame for this group
         if group not in data_by_group:
             data_by_group[group] = {
@@ -991,6 +1049,7 @@ def process_and_embed_frames(
                 "frame_inds": [],
                 "imgs_data": [],
                 "channel_order": None,  # Track channel order: "RGB" or "BGR"
+                "image_format": grp_format,
             }
 
         # Fast path: Copy raw bytes directly if formats match (avoids decode/encode)
@@ -1006,9 +1065,38 @@ def process_and_embed_frames(
 
                 # Report progress via callback
                 if progress_callback is not None:
-                    if not progress_callback(i + 1, total_frames):
+                    if not progress_callback(i + 1, total_frames, "embed"):
                         raise ExportCancelled("Export cancelled by user")
                 continue
+
+        # Fast path 2: ImageVideo byte-copy. When embedding an image sequence whose
+        # files are already PNG/JPEG, copy the encoded bytes verbatim -- no decode/
+        # re-encode. This skips a lossy re-encode (JPEG) and stores the smaller
+        # source bytes. Guard that this frame's on-disk format matches the group's
+        # stored format (grp_format, decided from the first file); a stray frame with
+        # a different extension falls through to the decode path and is re-encoded.
+        if isinstance(video.backend, ImageVideo) and grp_format != "hdf5":
+            fname = video.backend.filename[frame_idx]
+            ext = (
+                Path(fname).suffix.lower().lstrip(".")
+                if isinstance(fname, (str, Path))
+                else ""
+            )
+            frame_format = "jpg" if ext == "jpeg" else ext
+            if frame_format == grp_format:
+                raw_bytes = video.backend.get_frame_raw_bytes(frame_idx)
+                if raw_bytes is not None:
+                    data_by_group[group]["imgs_data"].append(raw_bytes)
+                    data_by_group[group]["frame_inds"].append(frame_idx)
+                    # Bytes copied from an ImageVideo decode back to RGB (see
+                    # ImageVideo.get_frame_raw_bytes / _read_frame).
+                    if data_by_group[group]["channel_order"] is None:
+                        data_by_group[group]["channel_order"] = "RGB"
+
+                    if progress_callback is not None:
+                        if not progress_callback(i + 1, total_frames, "embed"):
+                            raise ExportCancelled("Export cancelled by user")
+                    continue
 
         # Slow path: Load and encode the frame. For a virtually-cropped video,
         # embed the UNCROPPED source frame; the crop is preserved separately in
@@ -1030,21 +1118,21 @@ def process_and_embed_frames(
                 f"{len(video)} frames."
             ) from e
 
-        # Encode the frame
-        if image_format == "hdf5":
+        # Encode the frame to this group's format.
+        if grp_format == "hdf5":
             img_data = frame
             channel_order = "RGB"  # HDF5 format stores as-is (RGB)
         else:
             if plugin == "opencv":
-                img_data = np.squeeze(
-                    cv2.imencode("." + image_format, frame)[1]
-                ).astype("int8")
+                img_data = np.squeeze(cv2.imencode("." + grp_format, frame)[1]).astype(
+                    "int8"
+                )
                 channel_order = "BGR"  # OpenCV encodes in BGR
             else:  # imageio
                 if frame.shape[-1] == 1:
                     frame = frame.squeeze(axis=-1)
                 img_data = np.frombuffer(
-                    iio.imwrite("<bytes>", frame, extension="." + image_format),
+                    iio.imwrite("<bytes>", frame, extension="." + grp_format),
                     dtype="int8",
                 )
                 channel_order = "RGB"  # imageio encodes in RGB
@@ -1059,23 +1147,53 @@ def process_and_embed_frames(
 
         # Report progress via callback
         if progress_callback is not None:
-            if not progress_callback(i + 1, total_frames):
+            if not progress_callback(i + 1, total_frames, "embed"):
                 raise ExportCancelled("Export cancelled by user")
 
-    # Write all frame data to the HDF5 file
+    # Write all frame data to the HDF5 file.
     replaced_videos = {}
+    total_to_write = sum(len(d["imgs_data"]) for d in data_by_group.values())
+    write_bar = (
+        tqdm(total=total_to_write, desc="Writing frames", disable=not use_tqdm)
+        if use_tqdm
+        else None
+    )
+    written = 0
+
+    def _report_write(n: int) -> None:
+        """Advance the write-phase progress bar / callback by ``n`` frames."""
+        nonlocal written
+        written += n
+        if write_bar is not None:
+            write_bar.update(n)
+        if progress_callback is not None:
+            if not progress_callback(written, total_to_write, "write"):
+                raise ExportCancelled("Export cancelled by user")
+
     with h5py.File(labels_path, "a") as f:
         for group, data in data_by_group.items():
             video = data["video"]
             frame_inds = data["frame_inds"]
             imgs_data = data["imgs_data"]
+            grp_format = data["image_format"]
 
-            if image_format == "hdf5":
+            if grp_format == "hdf5":
+                # Raw pixel arrays are genuinely compressible, so keep gzip; written
+                # in one shot (not row-by-row), so no read-modify-write amplification.
                 f.create_dataset(
                     f"{group}/video", data=imgs_data, compression="gzip", chunks=True
                 )
                 ds = f[f"{group}/video"]
+                _report_write(len(imgs_data))
             else:
+                # Encoded image bytes (PNG/JPEG) are already entropy-coded: gzip gains
+                # almost nothing on the bytes themselves (it only squeezes the
+                # fixed-length zero padding) while costing significant CPU. More
+                # importantly, gzip forces CHUNKED storage, and h5py auto-chunks a tall
+                # block (~100+ rows); the row-by-row writes below then trigger repeated
+                # read-modify-recompress of each chunk plus chunk-cache thrashing --
+                # the pathology that made large embeds take tens of minutes. Storing
+                # uncompressed (contiguous) makes each row a direct offset write.
                 if fixed_length:
                     img_bytes_len = 0
                     for img in imgs_data:
@@ -1084,10 +1202,10 @@ def process_and_embed_frames(
                         f"{group}/video",
                         shape=(len(imgs_data), img_bytes_len),
                         dtype="int8",
-                        compression="gzip",
                     )
                     for i, img in enumerate(imgs_data):
                         ds[i, : len(img)] = img
+                        _report_write(1)
                 else:
                     ds = f.create_dataset(
                         f"{group}/video",
@@ -1096,9 +1214,10 @@ def process_and_embed_frames(
                     )
                     for i, img in enumerate(imgs_data):
                         ds[i] = img
+                        _report_write(1)
 
             # Store metadata
-            ds.attrs["format"] = image_format
+            ds.attrs["format"] = grp_format
             ds.attrs["channel_order"] = data["channel_order"]
             # Embedded attrs describe the UNCROPPED frame for a cropped video
             # (the embedded pixels are the full source frame).
@@ -1169,6 +1288,9 @@ def process_and_embed_frames(
 
             # Store the embedded video for return
             replaced_videos[video] = embedded_video
+
+    if write_bar is not None:
+        write_bar.close()
 
     return replaced_videos
 
@@ -1248,7 +1370,7 @@ def embed_frames(
     verbose: bool = True,
     plugin: str | None = None,
     embed_all_videos: bool = True,
-    progress_callback: Callable[[int, int], bool] | None = None,
+    progress_callback: Callable[[int, int, str], bool] | None = None,
 ):
     """Embed frames in a SLEAP labels file.
 
@@ -1266,9 +1388,12 @@ def embed_frames(
             converted to embedded references, even if they have no frames to embed.
             This ensures package files are portable. If `False`, only videos with
             frames to embed are converted.
-        progress_callback: Optional callback function called during frame embedding
-            with `(current, total)` arguments. If it returns `False`, the operation
-            is cancelled and `ExportCancelled` is raised.
+        progress_callback: Optional callback function called during embedding with
+            `(current, total, phase)` arguments, where ``phase`` is ``"embed"``
+            (frames loaded/encoded/byte-copied) or ``"write"`` (bytes flushed to the
+            HDF5 file). If it returns `False`, the operation is cancelled and
+            `ExportCancelled` is raised. The ``phase`` argument is a breaking change
+            from the previous ``(current, total)`` signature.
 
     Notes:
         This function will embed the frames in the labels file and update the `Videos`
@@ -1305,7 +1430,7 @@ def embed_videos(
     verbose: bool = True,
     plugin: str | None = None,
     embed_all_videos: bool = True,
-    progress_callback: Callable[[int, int], bool] | None = None,
+    progress_callback: Callable[[int, int, str], bool] | None = None,
 ):
     """Embed videos in a SLEAP labels file.
 
@@ -1334,9 +1459,12 @@ def embed_videos(
             converted to embedded references, even if they have no frames to embed.
             This ensures package files are portable. If `False`, only videos with
             frames to embed are converted.
-        progress_callback: Optional callback function called during frame embedding
-            with `(current, total)` arguments. If it returns `False`, the operation
-            is cancelled and `ExportCancelled` is raised.
+        progress_callback: Optional callback function called during embedding with
+            `(current, total, phase)` arguments, where ``phase`` is ``"embed"``
+            (frames loaded/encoded/byte-copied) or ``"write"`` (bytes flushed to the
+            HDF5 file). If it returns `False`, the operation is cancelled and
+            `ExportCancelled` is raised. The ``phase`` argument is a breaking change
+            from the previous ``(current, total)`` signature.
     """
     if embed is True:
         embed = "all"
@@ -8439,7 +8567,7 @@ def write_labels(
     verbose: bool = True,
     plugin: str | None = None,
     embed_all_videos: bool = True,
-    progress_callback: Callable[[int, int], bool] | None = None,
+    progress_callback: Callable[[int, int, str], bool] | None = None,
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
     save_embedding_vectors: bool = False,
@@ -8479,9 +8607,12 @@ def write_labels(
             converted to embedded references, even if they have no frames to embed.
             This ensures package files are portable. If `False`, only videos with
             frames to embed are converted.
-        progress_callback: Optional callback function called during frame embedding
-            with `(current, total)` arguments. If it returns `False`, the operation
-            is cancelled and `ExportCancelled` is raised.
+        progress_callback: Optional callback function called during embedding with
+            `(current, total, phase)` arguments, where ``phase`` is ``"embed"``
+            (frames loaded/encoded/byte-copied) or ``"write"`` (bytes flushed to the
+            HDF5 file). If it returns `False`, the operation is cancelled and
+            `ExportCancelled` is raised. The ``phase`` argument is a breaking change
+            from the previous ``(current, total)`` signature.
         prefer_metadata: If `True` (the default), serialize each uncropped video's
             shape/grayscale/fps from its `backend_metadata` when recorded there
             instead of querying the live backend, avoiding frame decoding when the
