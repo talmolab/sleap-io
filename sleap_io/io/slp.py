@@ -4882,10 +4882,11 @@ def _read_session_data(
             "instance_group_meta",
         ]
         # Read through the conversion-aware helper so the struct tables written by
-        # h5wasm (sleap-io.js) as flat 2D arrays + a ``field_names`` attribute are
-        # rebuilt as structured arrays, matching how points/instances/frames are
-        # handled. h5py-written compound datasets and the plain float points_3d
-        # matrices pass through unchanged.
+        # the coordinated sleap-io.js 2.8 port (h5wasm cannot create compound
+        # datasets, so it writes them as flat 2D arrays + a ``field_names``
+        # attribute) are rebuilt as structured arrays, matching how
+        # points/instances/frames are handled. h5py-written compound datasets and
+        # the plain float points_3d matrices pass through unchanged.
         return {
             name: (
                 _read_dataset_from_open_file(f, f"session_data/{name}")
