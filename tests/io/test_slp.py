@@ -1199,6 +1199,53 @@ def test_read_identity_links_owner_type_keyed(tmp_path):
     assert links[OWNER_INSTANCE] == {0: (0, pytest.approx(0.5))}
 
 
+def _write_flat_2d_links(path, group, cols, rows):
+    """Write a links table in the h5wasm form: flat 2D f8 + field_names attr.
+
+    Mirrors how sleap-io.js (via h5wasm, which cannot create compound datasets)
+    stores a structured table -- see `utils._read_dataset_from_open_file`.
+    """
+    with h5py.File(path, "w") as f:
+        grp = f.require_group(group)
+        ds = grp.create_dataset("links", data=np.array(rows, dtype="<f8"))
+        ds.attrs["field_names"] = json.dumps(cols)
+
+
+def test_read_identity_links_h5wasm_flat_2d(tmp_path):
+    """read_identity_links accepts a sleap-io.js flat-2D + field_names links table."""
+    path = str(tmp_path / "js_identity_links.slp")
+    _write_flat_2d_links(
+        path,
+        "identity",
+        ["owner_type", "owner_id", "identity_idx", "identity_score"],
+        [
+            [OWNER_INSTANCE, 0, 2, 0.75],
+            [OWNER_INSTANCE, 1, 1, np.nan],  # unrecorded score -> None
+            [OWNER_MASK, 5, 3, 0.5],
+        ],
+    )
+    links = read_identity_links(path)
+    assert links[OWNER_INSTANCE] == {0: (2, pytest.approx(0.75)), 1: (1, None)}
+    assert links[OWNER_MASK] == {5: (3, pytest.approx(0.5))}
+
+
+def test_read_category_links_h5wasm_flat_2d(tmp_path):
+    """read_category_links accepts a sleap-io.js flat-2D + field_names links table."""
+    path = str(tmp_path / "js_category_links.slp")
+    _write_flat_2d_links(
+        path,
+        "categories",
+        ["owner_type", "owner_id", "category_idx", "category_score"],
+        [
+            [OWNER_INSTANCE, 0, 1, np.nan],  # unrecorded score -> None
+            [OWNER_BBOX, 9, 0, 0.9],
+        ],
+    )
+    links = read_category_links(path)
+    assert links[OWNER_INSTANCE] == {0: (1, None)}
+    assert links[OWNER_BBOX] == {9: (0, pytest.approx(0.9))}
+
+
 def test_read_embeddings_skips_unknown_owner_type(tmp_path):
     """Unknown owner_type embeddings are skipped (not mis-routed) with a warning."""
     skel = Skeleton(["A", "B"])

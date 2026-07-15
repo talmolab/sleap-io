@@ -2467,7 +2467,12 @@ def read_identity_links(
     with cm as f:
         if "identity" not in f or "links" not in f["identity"]:
             return {}
-        data = f["identity"]["links"][:]
+        # Route through the conversion-aware helper so a links table written by the
+        # coordinated sleap-io.js port (h5wasm cannot create compound datasets, so
+        # it writes a flat 2D f8 array + a ``field_names`` attribute) is rebuilt as
+        # a structured array, matching /session_data and points/instances/frames.
+        # A genuine compound dataset (Python-written) passes through unchanged.
+        data = _read_dataset_from_open_file(f, "identity/links")
     result: dict[int, dict[int, tuple[int, float | None]]] = {}
     for row in data:
         owner_type = int(row["owner_type"])
@@ -2674,7 +2679,9 @@ def read_category_links(
     with cm as f:
         if "categories" not in f or "links" not in f["categories"]:
             return {}
-        data = f["categories"]["links"][:]
+        # See read_identity_links: accept the sleap-io.js flat-2D + ``field_names``
+        # form and the Python-native compound form via the shared helper.
+        data = _read_dataset_from_open_file(f, "categories/links")
     result: dict[int, dict[int, tuple[int, float | None]]] = {}
     for row in data:
         owner_type = int(row["owner_type"])
