@@ -1499,6 +1499,69 @@ Format 1.9+ stores label image string metadata as vlen HDF5 string datasets:
 
 The label image datasets are only written when the [`Labels`][sleap_io.Labels] object contains label images. On read, missing datasets default to empty lists.
 
+## Storage Representation Matrix
+
+Different data structures use different on-disk representations, chosen per subsystem (fixed-width structural rows, bulk numeric data that must stream, and open-ended metadata each get a different form). This section consolidates, for every data structure at the current format (**2.8**), its representation, the format version that introduced it, and its read/write support.
+
+### Representation kinds
+
+| Kind | Meaning |
+|---|---|
+| **compound** | A single HDF5 dataset with a compound (structured) dtype — multiple named fields per row, usually row-range–sliced by an index table. |
+| **columnar group** | An HDF5 group with one plain 1-D dataset **per field** (struct-of-arrays), all parallel-indexed. |
+| **EAV** | A columnar entity-attribute-value triple (`meta_owner` / `meta_key` / `meta_val`) encoding arbitrary per-entity `metadata` dicts. |
+| **plain matrix** | A single numeric dataset (2-D or 3-D), no named fields. |
+| **ragged CSR** | A flat concatenated values dataset sliced by an offset/index array. |
+| **string** | A variable-length UTF-8 string dataset, one string per row. |
+| **JSON** | A variable-length UTF-8 string dataset whose values are JSON documents. |
+| **attribute** | Stored as an HDF5 attribute, not a dataset. |
+
+### Write is single-method; read is broader
+
+- **Write (the default, and only, method):** the Python library writes **exactly one native representation per data structure** — there is no toggle. In particular it always writes genuine HDF5 **compound** datasets for the compound rows; it never writes the h5wasm flat-2D substitute.
+- **Read:** the **compound** readers *also* accept the flat-2D + `field_names` encoding that [sleap-io.js](https://github.com/talmolab/sleap-io.js) writes (h5wasm cannot create compound datasets), routed through `utils._read_dataset_from_open_file`. Every other kind (columnar / matrix / string / JSON) is read directly and is already h5wasm-native, so no conversion is needed. **`compound` is therefore the only kind with a browser-interop dependency** (see [Browser-side compatibility](#browser-side-compatibility-h5wasm-sleap-iojs)).
+
+### Matrix
+
+`Reads JS flat-2D` = the read path accepts the sleap-io.js flat-2D + `field_names` encoding (only meaningful, and only needed, for **compound** datasets).
+
+| Data structure | HDF5 path(s) | Representation | Ver | Reads JS flat-2D |
+|---|---|---|---|---|
+| Labeled frames / instances / 2D points | `/frames`, `/instances`, `/points`, `/pred_points` | compound | 1.0 | ✅ |
+| Negative frames | `/negative_frames` | compound | 1.x | ✅ |
+| Segmentation masks (table) | `/masks` | compound | 1.5 | ✅ |
+| Mask RLE geometry | `/mask_rle` | ragged CSR | 1.5 | ✅ |
+| ROIs (table) | `/rois` | compound | 1.5 | ✅ |
+| ROI geometry (WKB) | `/roi_wkb` | ragged CSR | 1.5 | ✅ |
+| Bounding boxes / centroids | `/bboxes`, `/centroids` | columnar group | 2.0 † | n/a |
+| Label images (table) | `/label_images`, `/label_image_objects` | compound | 1.8 | ✅ |
+| Label-image pixel maps | `/label_image_data` (T,H,W) | plain matrix | 2.2 | n/a |
+| Dense score-map index tables | `/mask_score_map_index`, `/label_image_score_map_index` | compound | 1.9 / 2.1 | ⚠️ no |
+| Dense score-map blobs | `/mask_score_maps`, `/label_image_score_maps` | ragged CSR | 1.9 | n/a |
+| Identity / category catalog names | `/identity/name`, `/categories/name` | string | 2.5 / 2.7 | n/a |
+| Identity / category / event metadata | `…/meta_owner`, `…/meta_key`, `…/meta_val` | EAV | 2.5 / 2.7 / 2.6 | n/a |
+| Per-detection identity / category **links** | `/identity/links`, `/categories/links` | compound | 2.5 / 2.7 | ✅ |
+| Re-ID / category embeddings + join cols | `/embeddings/vectors`, `owner_type`, `owner_id`, `category_*` | plain matrix | 2.5 / 2.7 | n/a |
+| Event types catalog | `/event_types/name`, `/description` | string | 2.6 | n/a |
+| Frame-spanning events | `/events/*` (video, start_frame, …) | columnar group | 2.6 | n/a |
+| Event framewise score traces | `/events/scores` + `/events/score_offsets` | ragged CSR | 2.6 | n/a |
+| **Sessions** — calibration + video map + frame-group range | `sessions_json` | JSON | **2.8** | n/a |
+| **Session frame groups / instance groups / members** | `/session_data/frame_groups`, `/instance_groups`, `/instance_group_members` | compound | **2.8** | ✅ |
+| **3D points** (row-range sliced) | `/session_data/points_3d` (N,3), `/pred_points_3d` (N,4) | plain matrix | **2.8** | n/a |
+| **Per-group session metadata** | `/session_data/frame_group_meta`, `/instance_group_meta` | JSON (per row) | **2.8** | n/a |
+| Videos / tracks / suggestions / provenance | `videos_json`, `tracks_json`, `suggestions_json`, `provenance_json` | JSON | 1.0 / 2.x | n/a |
+| Virtual video crops | `/video_crops` | JSON | 2.3 | n/a |
+| Per-detection string metadata | `/mask_*`, `/roi_*`, `/label_image_*` name/category/source | string | 1.9 | n/a |
+| Skeletons + provenance + `format_id` | `/metadata` attrs (`json`, `format_id`) | attribute | 1.0 | n/a |
+
+† Centroid presence alone does not bump `format_id` (see [Centroids](#centroids)); both `/bboxes` and `/centroids` use the same columnar-group mechanism introduced at 2.0.
+
+### Notes
+
+- **The 2.8 sessions subsystem deliberately mixes three representations** — compound (the small structural index tables), plain matrix (the bulk 3D coordinates, chunked + gzip so they stream), and per-row JSON (arbitrary group metadata) — matching each payload to the right storage (see [Sessions](#sessions)).
+- **Only `compound` has a browser-interop dependency.** Two compound tables — the dense score-map index tables (⚠️) — are read *without* the flat-2D fallback, so a sleap-io.js-written score-map file would not load through them; score maps are a rare prediction-only feature outside the currently-in-flight port.
+- **Lazy loads** copy the entire `/session_data` group + `sessions_json` verbatim on save (no re-encoding), preserving the same on-disk representation without materializing frames.
+
 ## Version History
 
 The SLP format has evolved through several versions, tracked by the `format_id` attribute in `/metadata`.
