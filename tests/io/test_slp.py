@@ -7729,6 +7729,635 @@ def test_instance_group_to_dict_warns_on_unknown_identity(camera_group_345):
     assert "identity_idx" not in result
 
 
+# -- SLP 2.8 columnar /session_data round-trip tests --
+
+
+def _make_3d_session_labels(
+    camera_group,
+    groups,
+    skeleton=None,
+    session_metadata=None,
+    videos=None,
+):
+    """Build a single-session `Labels` with one FrameGroup of the given groups.
+
+    Args:
+        camera_group: A `CameraGroup` (uses its first two cameras).
+        groups: List of dicts, each ``{"inst3d": Instance3D|None, "skeleton":
+            Skeleton, "ig_metadata": dict, "identity": Identity|None}`` describing one
+            InstanceGroup.
+        skeleton: Default skeleton for the 2D instances (per-group override via
+            ``groups[i]["skeleton"]``).
+        session_metadata: Optional session-level metadata dict.
+        videos: Optional pre-built [video1, video2]; created if omitted.
+
+    Returns:
+        A `Labels` object with one `RecordingSession`.
+    """
+    skeleton = skeleton or Skeleton(["A", "B"])
+    cam1, cam2 = camera_group.cameras[:2]
+    video1, video2 = videos or (Video(filename="c1.mp4"), Video(filename="c2.mp4"))
+
+    insts1, insts2, instance_by_camera_list = [], [], []
+    for g in groups:
+        sk = g.get("skeleton", skeleton)
+        i1 = Instance.from_numpy(np.zeros((len(sk), 2)), skeleton=sk)
+        i2 = Instance.from_numpy(np.ones((len(sk), 2)), skeleton=sk)
+        insts1.append(i1)
+        insts2.append(i2)
+        instance_by_camera_list.append({cam1: i1, cam2: i2})
+
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=insts1)
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=insts2)
+
+    instance_groups = []
+    identities = []
+    for g, ibc in zip(groups, instance_by_camera_list):
+        ig = InstanceGroup(
+            instance_by_camera=ibc,
+            instance_3d=g.get("inst3d"),
+            identity=g.get("identity"),
+            metadata=g.get("ig_metadata", {}),
+        )
+        instance_groups.append(ig)
+        if g.get("identity") is not None:
+            identities.append(g["identity"])
+
+    fg = FrameGroup(
+        frame_idx=0,
+        instance_groups=instance_groups,
+        labeled_frame_by_camera={cam1: lf1, cam2: lf2},
+        metadata=(groups[0].get("fg_metadata", {}) if groups else {}),
+    )
+    session = RecordingSession(
+        camera_group=camera_group,
+        video_by_camera={cam1: video1, cam2: video2},
+        camera_by_video={video1: cam1, video2: cam2},
+        frame_group_by_frame_idx={0: fg},
+        metadata=session_metadata or {},
+    )
+    skeletons = list(
+        {
+            id(g.get("skeleton", skeleton)): g.get("skeleton", skeleton) for g in groups
+        }.values()
+    ) or [skeleton]
+    return Labels(
+        labeled_frames=[lf1, lf2],
+        videos=[video1, video2],
+        skeletons=skeletons,
+        sessions=[session],
+        identities=identities,
+    )
+
+
+def test_slp_28_session_data_group_and_version(tmp_path, camera_group_345):
+    """A session with 3D frame groups writes /session_data and bumps to 2.8."""
+    skeleton = Skeleton(["A", "B"])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[1.0, 2, 3], [4, 5, 6]]), skeleton=skeleton
+                )
+            }
+        ],
+        skeleton=skeleton,
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] == pytest.approx(2.8)
+        assert "session_data" in f
+        grp = f["session_data"]
+        assert "frame_groups" in grp
+        assert "instance_groups" in grp
+        assert "instance_group_members" in grp
+        assert "points_3d" in grp
+        assert "pred_points_3d" not in grp  # no predicted 3D
+        # sessions_json is slim: no inline points / frame_group_dicts.
+        blob = json.loads(f["sessions_json"][0])
+        assert "frame_group_dicts" not in blob
+        assert "points" not in json.dumps(blob)
+        assert blob["fg_start"] == 0 and blob["fg_end"] == 1
+
+
+def test_slp_no_frame_groups_no_session_data_group(tmp_path, camera_group_345):
+    """A session with calibration but no frame groups stays <= 2.7, no group."""
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={},
+        camera_by_video={},
+        frame_group_by_frame_idx={},
+    )
+    labels = Labels(sessions=[session])
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 2.8
+        assert "session_data" not in f
+        assert "sessions_json" in f  # calibration still saved
+
+    loaded = read_labels(path)
+    assert len(loaded.sessions) == 1
+    assert len(loaded.sessions[0].camera_group.cameras) == len(camera_group_345.cameras)
+
+
+def test_slp_instance_3d_nan_round_trip(tmp_path, camera_group_345):
+    """NaN keypoints in 3D points survive the columnar round-trip."""
+    skeleton = Skeleton(["A", "B", "C"])
+    pts = np.array([[1.0, 2, 3], [np.nan, np.nan, np.nan], [7, 8, 9]])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [{"inst3d": Instance3D(points=pts.copy(), skeleton=skeleton)}],
+        skeleton=skeleton,
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    loaded = read_labels(path)
+    lig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    np.testing.assert_array_equal(np.isnan(lig.points), np.isnan(pts))
+    np.testing.assert_array_almost_equal(
+        lig.points[~np.isnan(pts)], pts[~np.isnan(pts)]
+    )
+
+
+def test_slp_ragged_skeletons_3d_round_trip(tmp_path, camera_group_345):
+    """Two InstanceGroups with different node counts share points_3d correctly."""
+    sk2 = Skeleton(["A", "B"])
+    sk3 = Skeleton(["A", "B", "C"])
+    pts2 = np.array([[1.0, 1, 1], [2, 2, 2]])
+    pts3 = np.array([[3.0, 3, 3], [4, 4, 4], [5, 5, 5]])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {"inst3d": Instance3D(points=pts2.copy(), skeleton=sk2), "skeleton": sk2},
+            {"inst3d": Instance3D(points=pts3.copy(), skeleton=sk3), "skeleton": sk3},
+        ],
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    loaded = read_labels(path)
+    igs = list(loaded.sessions[0].frame_groups.values())[0].instance_groups
+    np.testing.assert_array_almost_equal(igs[0].points, pts2)
+    np.testing.assert_array_almost_equal(igs[1].points, pts3)
+
+
+def test_slp_session_and_group_metadata_typed_round_trip(tmp_path, camera_group_345):
+    """Frame-group / instance-group / session metadata round-trip with types."""
+    skeleton = Skeleton(["A", "B"])
+    ig_meta = {"count": 3, "tags": ["a", "b"], "nested": {"x": 1.5}}
+    fg_meta = {"reviewed": True}
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[1.0, 2, 3], [4, 5, 6]]), skeleton=skeleton
+                ),
+                "ig_metadata": ig_meta,
+                "fg_metadata": fg_meta,
+            }
+        ],
+        skeleton=skeleton,
+        session_metadata={"rig": "A", "n_cams": 3},
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    loaded = read_labels(path)
+    session = loaded.sessions[0]
+    fg = list(session.frame_groups.values())[0]
+    assert fg.instance_groups[0].metadata == ig_meta
+    assert fg.metadata == fg_meta
+    assert session.metadata["rig"] == "A"
+    assert session.metadata["n_cams"] == 3
+
+
+def test_slp_predicted_3d_without_point_scores_downgrades(tmp_path, camera_group_345):
+    """A PredictedInstance3D lacking point_scores reconstructs as Instance3D."""
+    skeleton = Skeleton(["A", "B"])
+    pred = PredictedInstance3D(
+        points=np.array([[1.0, 2, 3], [4, 5, 6]]), skeleton=skeleton, score=0.5
+    )
+    labels = _make_3d_session_labels(
+        camera_group_345, [{"inst3d": pred}], skeleton=skeleton
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    loaded = read_labels(path)
+    lig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    assert type(lig.instance_3d) is Instance3D
+    np.testing.assert_array_almost_equal(lig.points, np.array([[1.0, 2, 3], [4, 5, 6]]))
+
+
+def test_slp_instance_3d_points_none_skipped(tmp_path, camera_group_345):
+    """An Instance3D with points=None writes/reads without 3D (no crash)."""
+    skeleton = Skeleton(["A", "B"])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [{"inst3d": Instance3D(points=None, skeleton=skeleton)}],
+        skeleton=skeleton,
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    loaded = read_labels(path)
+    lig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    assert lig.instance_3d is None
+    assert len(lig.instance_by_camera) == 2  # 2D grouping intact
+
+
+def test_slp_multiple_sessions_3d_columnar(tmp_path, camera_group_345):
+    """Two sessions each with 3D use correct global row offsets."""
+    skeleton = Skeleton(["A", "B"])
+    l1 = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[1.0, 1, 1], [2, 2, 2]]), skeleton=skeleton
+                )
+            }
+        ],
+        skeleton=skeleton,
+    )
+    # Build a second session sharing the same Labels.
+    l2 = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[3.0, 3, 3], [4, 4, 4]]), skeleton=skeleton
+                )
+            }
+        ],
+        skeleton=skeleton,
+    )
+    labels = Labels(
+        labeled_frames=l1.labeled_frames + l2.labeled_frames,
+        videos=l1.videos + l2.videos,
+        skeletons=[skeleton],
+        sessions=l1.sessions + l2.sessions,
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    loaded = read_labels(path)
+    assert len(loaded.sessions) == 2
+    ig0 = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    ig1 = list(loaded.sessions[1].frame_groups.values())[0].instance_groups[0]
+    np.testing.assert_array_almost_equal(ig0.points, np.array([[1.0, 1, 1], [2, 2, 2]]))
+    np.testing.assert_array_almost_equal(ig1.points, np.array([[3.0, 3, 3], [4, 4, 4]]))
+
+
+def test_slp_lazy_resave_preserves_3d(tmp_path, camera_group_345):
+    """Loading lazily and re-saving preserves 3D frame groups (issue #545)."""
+    skeleton = Skeleton(["A", "B"])
+    pts = np.array([[1.0, 2, 3], [4, 5, 6]])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [{"inst3d": Instance3D(points=pts.copy(), skeleton=skeleton)}],
+        skeleton=skeleton,
+    )
+    p1 = str(tmp_path / "a.slp")
+    p2 = str(tmp_path / "b.slp")
+    write_labels(p1, labels)
+
+    lazy = load_slp(p1, lazy=True, open_videos=False)
+    assert lazy.is_lazy
+    write_labels(p2, lazy)
+
+    with h5py.File(p2, "r") as f:
+        assert f["metadata"].attrs["format_id"] == pytest.approx(2.8)
+        assert "session_data" in f
+
+    reloaded = read_labels(p2)
+    lig = list(reloaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    np.testing.assert_array_almost_equal(lig.points, pts)
+
+
+def test_slp_lazy_resave_video_reorder_warns_and_drops(tmp_path, camera_group_345):
+    """Reordering videos before a lazy re-save warns and drops frame groups."""
+    skeleton = Skeleton(["A", "B"])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[1.0, 2, 3], [4, 5, 6]]), skeleton=skeleton
+                )
+            }
+        ],
+        skeleton=skeleton,
+    )
+    p1 = str(tmp_path / "a.slp")
+    p2 = str(tmp_path / "b.slp")
+    write_labels(p1, labels)
+
+    lazy = load_slp(p1, lazy=True, open_videos=False)
+    lazy.videos.reverse()  # invalidate the session video-index refs
+    with pytest.warns(UserWarning, match="Videos changed since lazy load"):
+        write_labels(p2, lazy)
+
+    with h5py.File(p2, "r") as f:
+        assert "session_data" not in f  # frame groups dropped
+
+
+def test_slp_eager_lazy_eager_round_trip(tmp_path, camera_group_345):
+    """3D survives an eager -> lazy -> eager -> read cycle."""
+    skeleton = Skeleton(["A", "B"])
+    pts = np.array([[9.0, 8, 7], [6, 5, 4]])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [{"inst3d": Instance3D(points=pts.copy(), skeleton=skeleton)}],
+        skeleton=skeleton,
+    )
+    p1, p2 = str(tmp_path / "a.slp"), str(tmp_path / "b.slp")
+    write_labels(p1, labels)
+    lazy = load_slp(p1, lazy=True, open_videos=False)
+    write_labels(p2, lazy)
+    reloaded = load_slp(p2, open_videos=False)
+    lig = list(reloaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    np.testing.assert_array_almost_equal(lig.points, pts)
+
+
+def test_slp_read_sessions_via_open_handle(tmp_path, camera_group_345):
+    """read_sessions reconstructs 3D via a threaded open handle (streaming path)."""
+    skeleton = Skeleton(["A", "B"])
+    pts = np.array([[1.0, 2, 3], [4, 5, 6]])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [{"inst3d": Instance3D(points=pts.copy(), skeleton=skeleton)}],
+        skeleton=skeleton,
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    with h5py.File(path, "r") as f:
+        sessions = read_sessions(
+            path, labels.videos, labels.labeled_frames, _hdf5_file=f
+        )
+    lig = list(sessions[0].frame_groups.values())[0].instance_groups[0]
+    np.testing.assert_array_almost_equal(lig.points, pts)
+
+
+def test_legacy_instance_group_dict_predicted_3d_round_trip(camera_group_345):
+    """Legacy inline dict serializer round-trips predicted 3D + identity (<= 2.7)."""
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras[:2]
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+    identity = Identity(name="m")
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+        instance_3d=PredictedInstance3D(
+            points=np.array([[1.0, 2, 3], [4, 5, 6]]),
+            skeleton=skeleton,
+            score=0.7,
+            point_scores=np.array([0.3, 0.4]),
+        ),
+        identity=identity,
+    )
+    lf1 = LabeledFrame(video=Video(filename="a"), frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=Video(filename="b"), frame_idx=0, instances=[inst2])
+
+    d = instance_group_to_dict(
+        instance_group=ig,
+        instance_to_lf_and_inst_idx={inst1: (0, 0), inst2: (1, 0)},
+        camera_group=camera_group_345,
+        identities=[identity],
+    )
+    # Legacy inline keys present.
+    assert d["instance_3d_score"] == 0.7
+    assert d["instance_3d_point_scores"] == [0.3, 0.4]
+    assert d["identity_idx"] == 0
+
+    out = make_instance_group(
+        d,
+        labeled_frames=[lf1, lf2],
+        camera_group=camera_group_345,
+        identities=[identity],
+    )
+    assert isinstance(out.instance_3d, PredictedInstance3D)
+    assert out.instance_3d.score == 0.7
+    np.testing.assert_array_almost_equal(out.instance_3d.point_scores, [0.3, 0.4])
+    assert out.identity is identity
+
+
+def test_slp_empty_frame_group_skipped(tmp_path, camera_group_345):
+    """A FrameGroup with no InstanceGroups is skipped on save."""
+    cam1, cam2 = camera_group_345.cameras[:2]
+    v1, v2 = Video(filename="a"), Video(filename="b")
+    lf1 = LabeledFrame(video=v1, frame_idx=0, instances=[])
+    lf2 = LabeledFrame(video=v2, frame_idx=0, instances=[])
+    empty_fg = FrameGroup(
+        frame_idx=0, instance_groups=[], labeled_frame_by_camera={cam1: lf1, cam2: lf2}
+    )
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: v1, cam2: v2},
+        camera_by_video={v1: cam1, v2: cam2},
+        frame_group_by_frame_idx={0: empty_fg},
+    )
+    labels = Labels(labeled_frames=[lf1, lf2], videos=[v1, v2], sessions=[session])
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    with h5py.File(path, "r") as f:
+        # No frame groups with content -> no columnar group, format stays <= 2.7.
+        assert "session_data" not in f
+    loaded = read_labels(path)
+    assert len(loaded.sessions[0].frame_groups) == 0
+
+
+def test_slp_columnar_identity_not_in_labels_warns(tmp_path, camera_group_345):
+    """write_sessions warns when a group identity is absent from the catalog.
+
+    Called directly (mirroring the legacy `instance_group_to_dict` warning test),
+    since `write_labels` auto-collects group identities into the catalog first.
+    """
+    skeleton = Skeleton(["A", "B"])
+    unknown = Identity(name="ghost")
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[1.0, 2, 3], [4, 5, 6]]), skeleton=skeleton
+                ),
+                "identity": unknown,
+            }
+        ],
+        skeleton=skeleton,
+    )
+    path = str(tmp_path / "t.slp")
+    with pytest.warns(UserWarning, match="not found in Labels.identities"):
+        write_sessions(
+            path,
+            labels.sessions,
+            labels.videos,
+            labels.labeled_frames,
+            identities=[Identity(name="other")],
+        )
+
+
+def test_slp_mixed_group_metadata_round_trip(tmp_path, camera_group_345):
+    """Groups with and without metadata coexist; empty ones decode to {}."""
+    skeleton = Skeleton(["A", "B"])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[1.0, 1, 1], [2, 2, 2]]), skeleton=skeleton
+                ),
+                "ig_metadata": {"tag": "a"},
+            },
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[3.0, 3, 3], [4, 4, 4]]), skeleton=skeleton
+                ),
+                # no ig_metadata
+            },
+        ],
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    loaded = read_labels(path)
+    igs = list(loaded.sessions[0].frame_groups.values())[0].instance_groups
+    assert igs[0].metadata == {"tag": "a"}
+    assert igs[1].metadata == {}
+
+
+def test_slp_lazy_resave_preserves_group_metadata(tmp_path, camera_group_345):
+    """Lazy passthrough copies the per-row metadata datasets verbatim."""
+    skeleton = Skeleton(["A", "B"])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[1.0, 2, 3], [4, 5, 6]]), skeleton=skeleton
+                ),
+                "ig_metadata": {"k": [1, 2, 3]},
+                "fg_metadata": {"reviewed": True},
+            }
+        ],
+        skeleton=skeleton,
+    )
+    p1, p2 = str(tmp_path / "a.slp"), str(tmp_path / "b.slp")
+    write_labels(p1, labels)
+    lazy = load_slp(p1, lazy=True, open_videos=False)
+    write_labels(p2, lazy)
+    reloaded = read_labels(p2)
+    fg = list(reloaded.sessions[0].frame_groups.values())[0]
+    assert fg.instance_groups[0].metadata == {"k": [1, 2, 3]}
+    assert fg.metadata == {"reviewed": True}
+
+
+def test_slp_columnar_missing_points_dataset_warns(tmp_path, camera_group_345):
+    """A file whose points_3d dataset was truncated warns and drops 3D (no crash)."""
+    skeleton = Skeleton(["A", "B"])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [
+            {
+                "inst3d": Instance3D(
+                    points=np.array([[1.0, 2, 3], [4, 5, 6]]), skeleton=skeleton
+                )
+            }
+        ],
+        skeleton=skeleton,
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+    # Simulate a truncated/corrupt file: remove the referenced points dataset.
+    with h5py.File(path, "a") as f:
+        del f["session_data"]["points_3d"]
+    with pytest.warns(UserWarning, match="referenced points dataset is missing"):
+        loaded = read_labels(path)
+    lig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    assert lig.instance_3d is None  # gracefully dropped, 2D grouping intact
+    assert len(lig.instance_by_camera) == 2
+
+
+def test_slp_legacy_inline_sessions_file_read(tmp_path, camera_group_345):
+    """A pre-2.8 file (inline sessions_json, no /session_data) still reads 3D.
+
+    Rewrites a freshly-saved file's ``sessions_json`` into the legacy inline layout
+    (via `session_to_dict`) and drops ``/session_data`` to emulate an old file, then
+    verifies `read_labels` reconstructs the 3D InstanceGroup through the backward-
+    compatible legacy path.
+    """
+    skeleton = Skeleton(["A", "B"])
+    pts = np.array([[1.0, 2, 3], [4, 5, 6]])
+    labels = _make_3d_session_labels(
+        camera_group_345,
+        [{"inst3d": Instance3D(points=pts.copy(), skeleton=skeleton)}],
+        skeleton=skeleton,
+    )
+    path = str(tmp_path / "t.slp")
+    write_labels(path, labels)
+
+    # Build the legacy inline per-session blob and swap it in; drop the 2.8 group.
+    video_to_idx = {v: i for i, v in enumerate(labels.videos)}
+    lf_to_idx = {lf: i for i, lf in enumerate(labels.labeled_frames)}
+    legacy_blob = session_to_dict(labels.sessions[0], video_to_idx, lf_to_idx)
+    with h5py.File(path, "a") as f:
+        del f["sessions_json"]
+        del f["session_data"]
+        f.create_dataset(
+            "sessions_json",
+            data=[np.bytes_(json.dumps(legacy_blob))],
+            maxshape=(None,),
+        )
+
+    loaded = read_labels(path)
+    lig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    np.testing.assert_array_almost_equal(lig.points, pts)
+
+
+def test_make_instance_group_columnar_defensive_warns(camera_group_345):
+    """Columnar reconstruction warns on missing skeleton / out-of-range identity."""
+    from sleap_io.io.slp import (
+        INSTANCE_GROUP_DTYPE,
+        INSTANCE_GROUP_MEMBER_DTYPE,
+        _make_instance_group_columnar,
+    )
+
+    empty_members = np.empty((0,), dtype=INSTANCE_GROUP_MEMBER_DTYPE)
+
+    # Out-of-range identity_idx (no members, no 3D) -> identity warning.
+    row_id = np.array(
+        [(5, np.nan, np.nan, -1, -1, 0, 0, 0)], dtype=INSTANCE_GROUP_DTYPE
+    )[0]
+    sd = {
+        "instance_group_members": empty_members,
+        "points_3d": None,
+        "pred_points_3d": None,
+        "instance_group_meta": None,
+    }
+    with pytest.warns(UserWarning, match="identity_idx 5 out of range"):
+        out = _make_instance_group_columnar(
+            row_id, sd, camera_group_345, [], [Identity(name="x")], 0
+        )
+    assert out.identity is None
+
+    # 3D ref present but no members -> no skeleton -> discard-with-warning.
+    row_sk = np.array(
+        [(-1, np.nan, np.nan, 0, 2, 0, 0, 0)], dtype=INSTANCE_GROUP_DTYPE
+    )[0]
+    sd_sk = {
+        "instance_group_members": empty_members,
+        "points_3d": np.zeros((2, 3)),
+        "pred_points_3d": None,
+        "instance_group_meta": None,
+    }
+    with pytest.warns(UserWarning, match="no skeleton available"):
+        out = _make_instance_group_columnar(
+            row_sk, sd_sk, camera_group_345, [], None, 0
+        )
+    assert out.instance_3d is None
+
+
 # -- Predicted variant round-trip tests --
 
 
