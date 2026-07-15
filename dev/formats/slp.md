@@ -32,7 +32,15 @@ file.slp
 ├── /videos_json                 # Dataset: Video metadata (variable-length bytes)
 ├── /tracks_json                 # Dataset: Track metadata (variable-length bytes)
 ├── /suggestions_json            # Dataset: Suggestions (variable-length bytes, optional)
-├── /sessions_json               # Dataset: Recording sessions (variable-length bytes, optional)
+├── /sessions_json               # Dataset: Recording sessions (calibration + video map + fg range; variable-length bytes, optional)
+├── /session_data/               # Group: columnar session frame-group data (Format 2.8+, optional)
+│   ├── frame_groups             # Dataset: struct (frame_idx, ig_start, ig_end)
+│   ├── instance_groups          # Dataset: struct (identity_idx, score, instance_3d_score, pts3d_start/end, pts3d_predicted, member_start/end)
+│   ├── instance_group_members   # Dataset: struct (camera, lf, inst) — columnarized camcorder_to_lf_and_inst_idx_map
+│   ├── points_3d                # Dataset: float64 (N, 3) triangulated Instance3D points (chunked+gzip)
+│   ├── pred_points_3d           # Dataset: float64 (N, 4) [x,y,z,score] PredictedInstance3D (chunked+gzip)
+│   ├── frame_group_meta         # Dataset: per-frame-group JSON metadata blobs (optional)
+│   └── instance_group_meta      # Dataset: per-instance-group JSON metadata blobs (optional)
 ├── /provenance_json             # Dataset: Provenance metadata (JSON bytes, optional)
 │
 ├── /frames                      # Dataset: Labeled frame metadata (structured array)
@@ -199,7 +207,8 @@ file.slp
 | `videos_json` | `bytes[]` | JSON array of video metadata |
 | `tracks_json` | `bytes[]` | JSON array of track definitions |
 | `suggestions_json` | `bytes[]` | JSON array of suggested frames (optional) |
-| `sessions_json` | `bytes[]` | JSON array of recording sessions (optional) |
+| `sessions_json` | `bytes[]` | JSON array of recording sessions: calibration + camera→video map + session metadata + (Format 2.8+) an `fg_start`/`fg_end` range into `session_data/frame_groups`; ≤2.7 files instead inline `frame_group_dicts` (optional) |
+| `session_data/` | group | Columnar session frame-group data: `frame_groups` / `instance_groups` / `instance_group_members` struct tables, `points_3d` `(N,3)` / `pred_points_3d` `(N,4)` chunked float matrices, and optional per-row `frame_group_meta` / `instance_group_meta` JSON blobs (Format 2.8+, present only when a session has frame groups) |
 | `identity/` | group | re-ID identity catalog: `name` dataset + optional `meta_owner`/`meta_key`/`meta_val` EAV metadata + per-detection `links` (Format 2.5+, optional) |
 | `categories/` | group | class/category catalog: `name` dataset + optional `meta_owner`/`meta_key`/`meta_val` EAV metadata + per-detection `links` (Format 2.7+, optional) |
 | `embeddings/` | group | Per-detection re-ID embeddings: `vectors` `(N, D)` + `owner_type`/`owner_id` join columns; plus optional parallel `category_vectors` `(M, D')` + `category_owner_type`/`category_owner_id` for category embeddings (Format 2.5+; category datasets 2.7+, optional) |
@@ -794,11 +803,13 @@ The `/suggestions_json` dataset is optional. Files without suggestions will not 
 
 ## Sessions
 
-Recording sessions store multi-camera calibration data and synchronized frame groups. Session metadata is stored in the `/sessions_json` dataset.
+Recording sessions store multi-camera calibration data and synchronized frame groups. Small, bounded session data (calibration + the camera→video map + session-level metadata) lives in the `/sessions_json` dataset; the unbounded per-frame payload (frame groups, instance groups, 3D points, and their metadata) lives in the columnar `/session_data` group (**Format 2.8+**).
 
-### JSON Structure
+Older files (**≤ 2.7**) store the *entire* session — including every frame group and its inline 3D points — as one JSON string per session inside `/sessions_json`. This did not scale: a single multi-view project could produce a hundreds-of-MB string dominated by 3D point *text*, which also exceeds the ~0.45 GB limit for reading an HDF5 variable-length string in JS/WASM consumers. Format 2.8 moves that numeric payload into typed, chunked datasets referenced by row range (mirroring how 2D `/points` are referenced from `/instances`). The reader accepts both layouts (see [Backward Compatibility](#sessions-backward-compatibility)).
 
-Each session is stored as a JSON object:
+### Slim `sessions_json` (Format 2.8+)
+
+Each session is stored as a compact JSON object holding only bounded, `O(cameras)` data plus a range into `/session_data/frame_groups`:
 
 ```json
 {
@@ -818,9 +829,42 @@ Each session is stored as a JSON object:
         "0": 0,
         "1": 1
     },
+    "fg_start": 0,
+    "fg_end": 120000
+}
+```
+
+`fg_start`/`fg_end` are a half-open range into the `/session_data/frame_groups` dataset. Session-level metadata is merged in at the top level (as before).
+
+### The `/session_data` group (Format 2.8+)
+
+All `O(frames × instances × nodes)` session data is stored columnar, so it streams and compresses like the rest of the file:
+
+| Dataset | Kind | Columns / shape |
+|---------|------|-----------------|
+| `frame_groups` | compound | `frame_idx` (i8), `ig_start` (u8), `ig_end` (u8) — range into `instance_groups` |
+| `instance_groups` | compound | `identity_idx` (i4, -1 if none), `score` (f8, NaN if none), `instance_3d_score` (f8, NaN if none), `pts3d_start`/`pts3d_end` (i8, -1 if no 3D), `pts3d_predicted` (u1), `member_start`/`member_end` (u8) — range into `instance_group_members` |
+| `instance_group_members` | compound | `camera` (u4), `lf` (i8), `inst` (u4) — the columnarized `camcorder_to_lf_and_inst_idx_map` |
+| `points_3d` | `float64 (N, 3)` | Triangulated `Instance3D` coordinates, chunked + gzip, sliced by `pts3d_start:pts3d_end` when `pts3d_predicted == 0` |
+| `pred_points_3d` | `float64 (N, 4)` | `[x, y, z, score]` for `PredictedInstance3D`, chunked + gzip, sliced when `pts3d_predicted == 1` |
+| `frame_group_meta` | `str[]` | One `json.dumps(metadata)` blob per frame group (presence-guarded; omitted when all empty) |
+| `instance_group_meta` | `str[]` | One `json.dumps(metadata)` blob per instance group (presence-guarded) |
+
+`NaN` rows in `points_3d`/`pred_points_3d` denote missing/unresolved keypoints and round-trip natively. The group (and the 2.8 version bump) is only written when a session actually has frame groups, so single-view and session-free files are byte-identical to before.
+
+### Legacy inline structure (≤ 2.7)
+
+Files written before 2.8 carry an extra `frame_group_dicts` key inside each `/sessions_json` blob and have **no** `/session_data` group:
+
+```json
+{
+    "calibration": {...},
+    "camcorder_to_video_idx_map": {...},
     "frame_group_dicts": [...]
 }
 ```
+
+Each frame-group dict nests `instance_groups`, each with `camcorder_to_lf_and_inst_idx_map` and inline 3D (`points`, `instance_3d_score`, `instance_3d_point_scores`).
 
 ### Calibration
 
@@ -856,16 +900,22 @@ Frame groups synchronize labeled frames across multiple cameras at the same time
 - Instance groups linking instances across camera views
 - References to `LabeledFrame` objects by index
 
-Instance groups may also contain 3D reconstruction data:
+Instance groups may also contain 3D reconstruction data. In Format 2.8+ this is columnar (`instance_groups.pts3d_*` → `points_3d`/`pred_points_3d`, `instance_groups.identity_idx`, `instance_group_meta`); in legacy files it is inline on each instance-group dict (`points`, `instance_3d_score`, `instance_3d_point_scores`, `identity_idx`).
 
-- `points` — triangulated 3D keypoint coordinates (list of `[x, y, z]`)
-- `instance_3d_score` — instance-level confidence score for the 3D reconstruction
-- `instance_3d_point_scores` — per-keypoint confidence scores (when using `PredictedInstance3D`)
-- `identity_idx` — index into `/identity/name` linking this group to an `Identity`
+### Sessions backward compatibility
+
+The reader dispatches on the presence of the `/session_data` group:
+
+- **`/session_data` present (Format 2.8+):** frame groups are reconstructed from the columnar tables using each session's `fg_start`/`fg_end` range.
+- **absent (≤ 2.7):** frame groups are reconstructed from the inline `frame_group_dicts` (including inline 3D `points`).
+
+Forward compatibility: a reader older than 2.8 opening a 2.8 file sees the slim `sessions_json` (calibration + video map only) and ignores `/session_data`, so it loads the session's calibration but not its frame groups/3D — data is never corrupted, only gracefully absent.
+
+Lazy loads capture the raw `sessions_json` bytes and `/session_data` arrays and copy them verbatim on save (no frame materialization), so a lazy re-save preserves frame groups and 3D losslessly as long as the video list is unchanged.
 
 ### Optional Dataset
 
-The `/sessions_json` dataset is optional. Files without multi-camera sessions will not contain this dataset.
+The `/sessions_json` dataset is optional (always written when sessions exist, even without frame groups). The `/session_data` group is only present for sessions that have frame groups (Format 2.8+). Files without multi-camera sessions contain neither.
 
 ## Instances
 
@@ -1601,7 +1651,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Triggered automatically when the file has any events / event types; event-free files stay at `format_id <= 2.5`
 - Backward compatible: reads are gated on group presence, so older readers ignore both groups
 
-### Format 2.7 (Current)
+### Format 2.7
 
 **Class/category subsystem: category catalog, per-detection links, and category appearance embeddings.**
 
@@ -1613,9 +1663,20 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Triggered automatically when any detection carries a [`Category`][sleap_io.Category] or a category embedding; category-free files stay at `format_id <= 2.6`. Pass `save_slp(..., save_embedding_vectors=False)` to write the category `links` but skip the (large) category vectors
 - Backward compatible and byte-identical for unused features: the `/categories` group and the `category_*` embedding datasets are only written when present, so identity-only files stay unchanged
 
+### Format 2.8 (Current)
+
+**Columnar RecordingSession storage: frame groups and 3D points moved out of the `sessions_json` string.**
+
+- Previously an entire [`RecordingSession`][sleap_io.RecordingSession] — every frame group with its inline 3D points — was serialized as one JSON string per session in `/sessions_json`. For real multi-view projects this string grew to hundreds of MB (dominated by 3D point *text*) and became unreadable in JS/WASM consumers past the ~0.45 GB variable-length-string limit
+- `/sessions_json` now holds only the small, bounded per-session data — calibration, `camcorder_to_video_idx_map`, session-level metadata, and an `fg_start`/`fg_end` range into `session_data/frame_groups`
+- New optional `/session_data` group (see [Sessions](#sessions)) stores the unbounded per-frame payload columnar: `frame_groups` / `instance_groups` / `instance_group_members` struct tables (the last columnarizing the old `camcorder_to_lf_and_inst_idx_map`), `points_3d` `(N, 3)` and `pred_points_3d` `(N, 4 = xyz+score)` chunked+gzip float matrices sliced by row range, plus presence-guarded per-row `frame_group_meta` / `instance_group_meta` JSON blobs. `NaN` denotes missing keypoints and round-trips natively
+- Triggered automatically only when a session has frame groups; session-free and single-view files stay at `format_id <= 2.7` and are byte-identical
+- Backward compatible: the reader dispatches on `/session_data` presence and still parses the legacy inline `frame_group_dicts` (with inline `points`) of ≤ 2.7 files. Lazy loads copy the raw `sessions_json` + `/session_data` verbatim on save, so a lazy re-save preserves frame groups and 3D losslessly (previously the lazy path dropped them)
+- Coordinated cross-port change: the [`sleap-io.js`](https://github.com/talmolab/sleap-io.js) browser port adopts the same `/session_data` layout in a companion release. Because h5wasm cannot create HDF5 compound datasets, it writes the `frame_groups` / `instance_groups` / `instance_group_members` struct tables as flat 2D arrays with a `field_names` attribute (exactly as it already does for `points` / `instances` / `frames`); the Python reader converts them on read. The `points_3d` / `pred_points_3d` float matrices are plain 2D arrays and need no conversion in either direction
+
 ## Browser-side compatibility (h5wasm / sleap-io.js)
 
-[`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so it stores the `points`, `pred_points`, `instances`, and `frames` datasets as **flat 2D arrays** with the same per-row field layout as the structured dtype. The Python reader in v0.7.0 detects this representation (via shape and dataset attributes) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without requiring a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
+[`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so it stores compound datasets — `points`, `pred_points`, `instances`, `frames`, and (Format 2.8+) the `/session_data` struct tables (`frame_groups`, `instance_groups`, `instance_group_members`) — as **flat 2D arrays** with the same per-row field layout as the structured dtype, tagged with a `field_names` attribute. The Python reader detects this representation (via shape and the `field_names` attribute) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
 
 The `/mask_rle` dataset is stored with the HDF5 gzip (deflate) filter. Readers must support deflate to read masks — this is already required for the SLP format's embedded video frames (and the v2.2 chunked `/label_image_data`), and h5wasm bundles zlib, so no additional reader capability is introduced.
 

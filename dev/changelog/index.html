@@ -384,6 +384,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v091" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v090" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -696,17 +707,6 @@
     <span class="md-ellipsis">
       
         v0.1.5
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v014" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.4
       
     </span>
   </a>
@@ -3877,6 +3877,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v091" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v090" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4195,17 +4206,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v014" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.4
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -4225,55 +4225,242 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v091"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.9.1">v0.9.1</a><a class="headerlink" href="#v091" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.9.1 Release Notes</h1>
+<h2>Summary</h2>
+<p>sleap-io v0.9.1 is a focused patch release pairing one new modeling concept with a major I/O performance fix. It adds <strong>first-class <code>Category</code></strong> — class membership as a third grouping axis alongside <code>Track</code> and <code>Identity</code> — and eliminates a <strong>tens-of-minutes silent stall</strong> when embedding image-sequence frames into a <code>.pkg.slp</code> (a real 15,000-frame project drops from <strong>~32 minutes to ~4 seconds</strong>). Two small, mechanical breaking changes ride along: <code>.category</code> on boxes/centroids/ROIs/masks is now a <code>Category</code> object rather than a bare string, and the SLP embed <code>progress_callback</code> gains a third <code>phase</code> argument.</p>
+<p>The SLP format advances <strong>2.6 → 2.7</strong> — <strong>2.7</strong> adds the <code>/categories</code> group (mirroring identity). It is additive and read-on-group-presence, so older readers ignore it and pre-2.7 files load unchanged (identity-only files stay byte-identical).</p>
+<p><strong>Highlights:</strong></p>
+<ul>
+<li><strong>First-class <code>Category</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859391927" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/542" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/542/hovercard" href="https://github.com/talmolab/sleap-io/pull/542">#542</a>)</strong> — a named catalog entry (<code>name</code> + string <code>metadata</code> + <code>matches()</code>) mirroring <code>Identity</code>, attached per detection via <code>category</code> / <code>category_score</code> / <code>category_embedding</code>, collected into <code>Labels.categories</code>, colored by <code>render --color-by category</code>, and persisted to <code>.slp</code> (format 2.7). Motivated by the move toward object detection, where the object <strong>class</strong> (COCO "category") is a first-class citizen.</li>
+<li><strong>Embedding writes are no longer slow or silent (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859775227" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/543" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/543/hovercard" href="https://github.com/talmolab/sleap-io/pull/543">#543</a>)</strong> — dropping gzip on already-compressed frame bytes turns a tens-of-minutes post-progress-bar stall into seconds; a real 15,000-frame image sequence went <strong>~32 min → ~4 s</strong> end-to-end.</li>
+<li><strong><code>ImageVideo</code> byte-copy fast path (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859775227" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/543" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/543/hovercard" href="https://github.com/talmolab/sleap-io/pull/543">#543</a>)</strong> — embedding a PNG/JPEG image sequence now copies the source bytes verbatim: <strong>lossless</strong> (no re-encode artifacts), <strong>faster</strong> (no decode/encode), and <strong>smaller</strong> (~3.9 GB → ~2.0 GB on that project).</li>
+<li><strong>Write-phase progress (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859775227" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/543" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/543/hovercard" href="https://github.com/talmolab/sleap-io/pull/543">#543</a>)</strong> — a second <code>Writing frames</code> progress bar (and a <code>"write"</code> phase for <code>progress_callback</code>) so the write phase no longer looks hung.</li>
+</ul>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.9.1 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;
+
+# Upgrade existing project dependency
+uv lock --upgrade-package sleap-io &amp;&amp; uv sync"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.9.1 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing project dependency</span>
+uv lock --upgrade-package sleap-io <span class="pl-k">&amp;&amp;</span> uv sync</pre></div>
+<p>See <a href="https://io.sleap.ai/install/" rel="nofollow">installation docs</a> for more options.</p>
+<hr>
+<h2>Breaking Changes</h2>
+<p>v0.9.1 is a patch release with two small, mechanical breaking changes.</p>
+<h3><code>.category</code> is now a <code>Category</code>, not a <code>str</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859391927" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/542" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/542/hovercard" href="https://github.com/talmolab/sleap-io/pull/542">#542</a>)</h3>
+<p>The pre-existing free-form <code>category: str</code> field on <code>BoundingBox</code>, <code>Centroid</code>, <code>ROI</code>, and <code>SegmentationMask</code> is promoted to <code>category: Category | None</code>. <strong>Construction is unchanged</strong> — a <code>str → Category</code> converter keeps existing code working — but code that <em>reads</em> <code>.category</code> as a string must now use <code>.category.name</code> (and treat <code>None</code> as unset).</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Construction is unchanged — a bare class-label string still works
+bbox = sio.UserBoundingBox(x1=0, y1=0, x2=10, y2=10, category=&quot;mouse&quot;)
+
+# Before (0.9.0): a plain string
+bbox.category            # &quot;mouse&quot;
+
+# After (0.9.1): a first-class Category (empty string -&gt; None)
+bbox.category            # Category(name=&quot;mouse&quot;)
+bbox.category.name       # &quot;mouse&quot;"><pre><span class="pl-c"># Construction is unchanged — a bare class-label string still works</span>
+<span class="pl-s1">bbox</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserBoundingBox</span>(<span class="pl-s1">x1</span><span class="pl-c1">=</span><span class="pl-c1">0</span>, <span class="pl-s1">y1</span><span class="pl-c1">=</span><span class="pl-c1">0</span>, <span class="pl-s1">x2</span><span class="pl-c1">=</span><span class="pl-c1">10</span>, <span class="pl-s1">y2</span><span class="pl-c1">=</span><span class="pl-c1">10</span>, <span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"mouse"</span>)
+
+<span class="pl-c"># Before (0.9.0): a plain string</span>
+<span class="pl-s1">bbox</span>.<span class="pl-c1">category</span>            <span class="pl-c"># "mouse"</span>
+
+<span class="pl-c"># After (0.9.1): a first-class Category (empty string -&gt; None)</span>
+<span class="pl-s1">bbox</span>.<span class="pl-c1">category</span>            <span class="pl-c"># Category(name="mouse")</span>
+<span class="pl-s1">bbox</span>.<span class="pl-c1">category</span>.<span class="pl-c1">name</span>       <span class="pl-c"># "mouse"</span></pre></div>
+<blockquote>
+<p>The on-disk SLP string format is unchanged — the bbox/centroid/<code>roi_categories</code>/<code>mask_categories</code> datasets still store the plain name string, so files round-trip identically. <code>LabelImage.Info.category</code> also remains a plain <code>str</code> (it belongs to the separate panoptic-mask subsystem and is unaffected).</p>
+</blockquote>
+<h3>SLP embed <code>progress_callback</code> gains a <code>phase</code> argument (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859775227" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/543" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/543/hovercard" href="https://github.com/talmolab/sleap-io/pull/543">#543</a>)</h3>
+<p>The embed <code>progress_callback</code> is now invoked in two phases and takes a third argument:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Before:  progress_callback(current, total) -&gt; bool
+# After:   progress_callback(current, total, phase) -&gt; bool   # phase: &quot;embed&quot; | &quot;write&quot;"><pre><span class="pl-c"># Before:  progress_callback(current, total) -&gt; bool</span>
+<span class="pl-c"># After:   progress_callback(current, total, phase) -&gt; bool   # phase: "embed" | "write"</span></pre></div>
+<p><code>"embed"</code> fires while frames are loaded/encoded/byte-copied into memory; <code>"write"</code> fires while bytes are flushed to the HDF5 file (the newly-instrumented write phase). Returning a truthy value from either phase still cancels the export.</p>
+<blockquote>
+<p>Any caller passing a 2-argument callback to <code>write_labels</code> / <code>save_slp</code> / <code>save_file</code> will break and must accept the third <code>phase</code> argument. The SLEAP GUI is the main such caller; it is version-fenced to an older sleap-io, so this is safe until that pin is bumped.</p>
+</blockquote>
+<hr>
+<h2>New Features</h2>
+<h3>First-class <code>Category</code>: class membership alongside <code>Track</code> and <code>Identity</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859391927" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/542" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/542/hovercard" href="https://github.com/talmolab/sleap-io/pull/542">#542</a>)</h3>
+<p><code>Category</code> completes a trio of grouping axes for detections. Where <code>Track</code> links the same individual <em>within</em> a video and <code>Identity</code> links the same individual <em>across</em> videos, <code>Category</code> groups individuals of the <strong>same class</strong> — the natural home for a classifier or object-detector's class label.</p>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Scope</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Track</code></td>
+<td>same individual <strong>within</strong> a video (tracking)</td>
+<td><code>track_0</code></td>
+</tr>
+<tr>
+<td><code>Identity</code></td>
+<td>same individual <strong>across</strong> videos (unique ID)</td>
+<td><code>C57BL6.cohort2.12</code></td>
+</tr>
+<tr>
+<td><strong><code>Category</code></strong></td>
+<td>individuals of the <strong>same class</strong> (classified / detected)</td>
+<td><code>female_fly</code>, <code>fur_shaved</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>Category</code> is a direct mirror of <code>Identity</code>: a named catalog entry with arbitrary string <code>metadata</code>, matched by <code>name</code> (default) or object identity. Every detection modality (<code>Instance</code>, <code>PredictedInstance</code>, <code>BoundingBox</code>, <code>Centroid</code>, <code>ROI</code>, <code>SegmentationMask</code>) gains <code>category</code>, <code>category_score</code>, and <code>category_embedding</code> slots; <code>InstanceGroup</code> gains a bare <code>category</code>. <code>Labels.categories</code> is a catalog auto-collected from the detections, exactly like <code>Labels.identities</code>.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import numpy as np
+import sleap_io as sio
+
+# The promoted free-form class-label string still works, and is now a Category
+bbox = sio.UserBoundingBox(x1=0, y1=0, x2=10, y2=10, category=&quot;mouse&quot;)
+bbox.category                    # Category(name=&quot;mouse&quot;)
+
+# Full first-class use: catalog entry + per-detection score + embedding
+fly = sio.Category(name=&quot;female_fly&quot;, metadata={&quot;sex&quot;: &quot;F&quot;})
+inst = sio.Instance.from_numpy(
+    np.array([[10.0, 20.0], [30.0, 40.0]]),
+    skeleton=skeleton,
+    category=fly,
+    category_score=0.94,
+    category_embedding=sio.Embedding(np.random.rand(128).astype(&quot;float32&quot;)),
+)
+
+labels = sio.Labels(
+    labeled_frames=[sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])]
+)
+labels.categories                # [Category(name=&quot;female_fly&quot;)]
+
+# Categories match by name, like Identity and Track
+assert fly.matches(sio.Category(name=&quot;female_fly&quot;))
+
+sio.save_slp(labels, &quot;out.slp&quot;, save_embedding_vectors=True)   # format 2.7"><pre><span class="pl-k">import</span> <span class="pl-s1">numpy</span> <span class="pl-k">as</span> <span class="pl-s1">np</span>
+<span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># The promoted free-form class-label string still works, and is now a Category</span>
+<span class="pl-s1">bbox</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">UserBoundingBox</span>(<span class="pl-s1">x1</span><span class="pl-c1">=</span><span class="pl-c1">0</span>, <span class="pl-s1">y1</span><span class="pl-c1">=</span><span class="pl-c1">0</span>, <span class="pl-s1">x2</span><span class="pl-c1">=</span><span class="pl-c1">10</span>, <span class="pl-s1">y2</span><span class="pl-c1">=</span><span class="pl-c1">10</span>, <span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"mouse"</span>)
+<span class="pl-s1">bbox</span>.<span class="pl-c1">category</span>                    <span class="pl-c"># Category(name="mouse")</span>
+
+<span class="pl-c"># Full first-class use: catalog entry + per-detection score + embedding</span>
+<span class="pl-s1">fly</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Category</span>(<span class="pl-s1">name</span><span class="pl-c1">=</span><span class="pl-s">"female_fly"</span>, <span class="pl-s1">metadata</span><span class="pl-c1">=</span>{<span class="pl-s">"sex"</span>: <span class="pl-s">"F"</span>})
+<span class="pl-s1">inst</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Instance</span>.<span class="pl-c1">from_numpy</span>(
+    <span class="pl-s1">np</span>.<span class="pl-c1">array</span>([[<span class="pl-c1">10.0</span>, <span class="pl-c1">20.0</span>], [<span class="pl-c1">30.0</span>, <span class="pl-c1">40.0</span>]]),
+    <span class="pl-s1">skeleton</span><span class="pl-c1">=</span><span class="pl-s1">skeleton</span>,
+    <span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s1">fly</span>,
+    <span class="pl-s1">category_score</span><span class="pl-c1">=</span><span class="pl-c1">0.94</span>,
+    <span class="pl-s1">category_embedding</span><span class="pl-c1">=</span><span class="pl-s1">sio</span>.<span class="pl-c1">Embedding</span>(<span class="pl-s1">np</span>.<span class="pl-c1">random</span>.<span class="pl-c1">rand</span>(<span class="pl-c1">128</span>).<span class="pl-c1">astype</span>(<span class="pl-s">"float32"</span>)),
+)
+
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Labels</span>(
+    <span class="pl-s1">labeled_frames</span><span class="pl-c1">=</span>[<span class="pl-s1">sio</span>.<span class="pl-c1">LabeledFrame</span>(<span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">0</span>, <span class="pl-s1">instances</span><span class="pl-c1">=</span>[<span class="pl-s1">inst</span>])]
+)
+<span class="pl-s1">labels</span>.<span class="pl-c1">categories</span>                <span class="pl-c"># [Category(name="female_fly")]</span>
+
+<span class="pl-c"># Categories match by name, like Identity and Track</span>
+<span class="pl-k">assert</span> <span class="pl-s1">fly</span>.<span class="pl-c1">matches</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">Category</span>(<span class="pl-s1">name</span><span class="pl-c1">=</span><span class="pl-s">"female_fly"</span>))
+
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_slp</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"out.slp"</span>, <span class="pl-s1">save_embedding_vectors</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)   <span class="pl-c"># format 2.7</span></pre></div>
+<p><strong>Persistence (SLP format 2.7).</strong> Category <em>links</em> are written to a new self-contained <code>/categories</code> group (a name catalog, an EAV metadata table, and a <code>links</code> dataset carrying <code>category_idx</code> / <code>category_score</code>), mirroring <code>/identity</code>. Category <em>embeddings</em> are stored as parallel <code>category_*</code> datasets alongside the identity vectors in <code>/embeddings</code>, so the two embedding kinds are independent and need not share dimensionality. As with identity/re-ID embeddings, appearance vectors stay off disk unless you pass <code>save_embedding_vectors=True</code> (default <code>False</code>, mirroring <code>embed</code>).</p>
+<p><strong>Tooling.</strong> <code>sio merge --category {name,identity}</code> controls how the category catalog is deduplicated on merge; <code>sio render --color-by category</code> colors renders by class; and <code>sio show</code> reports category counts (<code>--json</code> includes <code>n_categories</code>, a <code>categories[]</code> listing, and <code>n_instances_with_category_embedding</code>).</p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio render preds.slp -o out.mp4 --color-by category
+sio merge a.slp b.slp -o merged.slp --category name
+sio show preds.slp --json          # includes n_categories, categories[], ..."><pre>sio render preds.slp -o out.mp4 --color-by category
+sio merge a.slp b.slp -o merged.slp --category name
+sio show preds.slp --json          <span class="pl-c"><span class="pl-c">#</span> includes n_categories, categories[], ...</span></pre></div>
+<blockquote>
+<p>Because the class label was already a string field, every reader and writer that consumed it — the COCO, Ultralytics, and JABS readers/writers, the GeoJSON writer, <code>roi.__geo_interface__</code>, and the <code>get_*(category=...)</code> filters — now reads <code>.category.name</code>, so those formats round-trip unchanged. See <code>docs/model/category.md</code>.</p>
+</blockquote>
+<hr>
+<h2>Improvements</h2>
+<h3>Embedding writes are no longer slow or silent (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859775227" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/543" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/543/hovercard" href="https://github.com/talmolab/sleap-io/pull/543">#543</a>)</h3>
+<p>Embedding video frames into a <code>.pkg.slp</code> could spend <strong>tens of minutes silently writing to disk</strong> <em>after</em> the <code>Embedding frames</code> progress bar had already finished. The cause was gzip on encoded frames: PNG/JPEG bytes are already entropy-coded, so gzip only compressed the fixed-length zero <em>padding</em> while forcing chunked storage. <code>guess_chunk</code> then picked a tall (~100–235 row) chunk, and the row-by-row writes forced a repeated <strong>read → decompress → modify → recompress → rewrite</strong> of every chunk, compounded by the 1 MB default chunk-cache thrashing.</p>
+<p>Encoded frames are now stored <strong>uncompressed and contiguous</strong> (only the raw-array <code>hdf5</code> format still uses gzip). Measured on 15,000 frames (0.56 GB of encoded bytes):</p>
+<table>
+<thead>
+<tr>
+<th>strategy</th>
+<th>time</th>
+<th>file</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>gzip + auto-chunk (old)</td>
+<td><strong>&gt;100 s</strong></td>
+<td>0.56 GB</td>
+</tr>
+<tr>
+<td>uncompressed contiguous (new)</td>
+<td><strong>1.8 s</strong></td>
+<td>0.60 GB</td>
+</tr>
+</tbody>
+</table>
+<p>The tradeoff is that fixed-length zero padding is no longer compressed away, so files can be modestly larger when per-frame sizes vary widely; <code>fixed_length=False</code> (vlen) remains available for maximum compactness.</p>
+<h3><code>ImageVideo</code> byte-copy fast path (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859775227" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/543" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/543/hovercard" href="https://github.com/talmolab/sleap-io/pull/543">#543</a>)</h3>
+<p>When embedding an <strong>image sequence of PNG/JPEG files</strong>, the source bytes are now <strong>copied verbatim</strong> — no decode/re-encode. The embedded dataset's <code>@format</code> follows the <em>source</em> (e.g. <code>jpg</code>) with <code>@channel_order</code> <code>RGB</code>. This is <strong>lossless</strong> (byte-identical to the source, no added JPEG artifacts), <strong>faster</strong> (the "Embedding frames" phase speeds up too, since it skips decode+encode), and <strong>smaller</strong> (it stores the compact source bytes instead of a larger re-encoded PNG). On the 15,000-frame project above, the package shrank from ~3.9 GB (re-encoded PNG) to ~2.0 GB (byte-copied JPEG). <code>MediaVideo</code> (mp4) sources still decode and re-encode to PNG.</p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio embed mars_top.slp -o mars_top.pkg.slp
+# Embedding frames: 100%|██████████| 15000/15000 [00:01&lt;00:00, 12071 it/s]
+# Writing frames:   100%|██████████| 15000/15000 [00:02&lt;00:00,  5578 it/s]"><pre>sio embed mars_top.slp -o mars_top.pkg.slp
+<span class="pl-c"><span class="pl-c">#</span> Embedding frames: 100%|██████████| 15000/15000 [00:01&lt;00:00, 12071 it/s]</span>
+<span class="pl-c"><span class="pl-c">#</span> Writing frames:   100%|██████████| 15000/15000 [00:02&lt;00:00,  5578 it/s]</span></pre></div>
+<h3>Progress on the write phase (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859775227" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/543" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/543/hovercard" href="https://github.com/talmolab/sleap-io/pull/543">#543</a>)</h3>
+<p>The HDF5 write loop now reports progress: a second <code>Writing frames</code> tqdm bar on the CLI (shown after <code>Embedding frames</code>) and a <code>"write"</code> phase for <code>progress_callback</code> — so a long write no longer looks like a hang.</p>
+<hr>
+<h2>Fixes</h2>
+<h3><g-emoji class="g-emoji" alias="warning">⚠️</g-emoji> Spilled <code>source_video</code> metadata made embedded packages unreadable (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859775227" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/543" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/543/hovercard" href="https://github.com/talmolab/sleap-io/pull/543">#543</a>)</h3>
+<p><strong>Fixed:</strong> For projects whose <code>source_video</code> metadata (e.g. the filename list of a large image sequence) exceeds HDF5's 64 KB attribute limit, that metadata is spilled to a <code>source_video/json</code> <strong>dataset</strong> (since <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4759098026" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/516" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/516/hovercard" href="https://github.com/talmolab/sleap-io/issues/516">#516</a>, which only taught the <em>label loader</em> to read it). <code>HDF5Video.__attrs_post_init__</code> still read the <code>source_video/@json</code> <strong>attribute</strong> directly, so it raised <code>KeyError: can't locate attribute: 'json'</code>, left <code>Video.backend</code> as <code>None</code>, and made the embedded frames unreadable — breaking <code>sio split</code> and frame access on any such package. The backend now reads the dataset-or-attribute, mirroring the loader.</p>
+<hr>
+<h2>Documentation</h2>
+<ul>
+<li>New <code>docs/model/category.md</code> (class membership: <code>Category</code>, per-detection slots, catalog, and persistence).</li>
+<li><code>docs/formats/slp.md</code> — format-version history extended through 2.7 and the embed storage-layout change (uncompressed contiguous encoded frames, <code>ImageVideo</code> byte-copy).</li>
+<li><code>docs/cli.md</code> — <code>merge --category</code>, <code>render --color-by category</code>, and category reporting in <code>show</code> / <code>--json</code>.</li>
+</ul>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859391927" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/542" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/542/hovercard" href="https://github.com/talmolab/sleap-io/pull/542">#542</a>: feat(model,io,cli): first-class <code>Category</code> (class membership) mirroring <code>Identity</code> (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4859775227" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/543" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/543/hovercard" href="https://github.com/talmolab/sleap-io/pull/543">#543</a>: perf(io): fix slow/silent embed write; <code>ImageVideo</code> byte-copy; write-phase progress (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/talmolab/sleap-io/compare/v0.9.0...v0.9.1">v0.9.0...v0.9.1</a></p>
 <h2 id="v090"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.9.0">v0.9.0</a><a class="headerlink" href="#v090" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.9.0 Release Notes</h1>
 <h2>Summary</h2>
-<p>sleap-io v0.9.0 is a feature release that grows the annotation model in two new<br>
-directions and makes every representation freely interconvertible. It adds a<br>
-<strong>re-identification subsystem</strong> — a global <code>Identity</code> catalog plus per-detection<br>
-appearance <code>Embedding</code>s that attach to <em>every</em> detection modality and round-trip through<br>
-<code>.slp</code> — and <strong>frame-spanning <code>Event</code> annotations</strong>, the library's first annotation with<br>
-a temporal <em>extent</em> (behavior bouts, stimulus epochs, review flags) with an ethogram<br>
-catalog and inclusive frame intervals. Alongside these, <strong>unified modality<br>
-interconversion</strong> gives pose, centroid, bounding box, segmentation mask, and ROI a single<br>
-shared verb set (<code>.to_centroid()</code> / <code>.to_bbox()</code> / <code>.to_roi()</code> / <code>.to_mask()</code>, plus<br>
-<code>Centroid.to_pose()</code>) with batch <code>LabeledFrame.convert()</code> / <code>Labels.convert()</code> entry<br>
-points. It rounds out with name-based <strong>skeleton symmetry inference</strong>, a <code>sio.download()</code><br>
-primitive and <code>sio download</code> CLI, <strong>machine-readable <code>--json</code></strong> CLI inspection,<br>
-<strong>large-project save hardening</strong> (past HDF5's 64 KB per-attribute limit), an <strong>O(N) merge</strong><br>
-speedup, and <strong>pynwb 4</strong> compatibility.</p>
-<p>The SLP format advances <strong>2.4 → 2.6</strong> — <strong>2.5</strong> adds the identity/embedding groups and<br>
-<strong>2.6</strong> adds events. Both are additive and read-on-group-presence, so older readers<br>
-ignore them and new files still load everywhere.</p>
+<p>sleap-io v0.9.0 is a feature release that grows the annotation model in two new directions and makes every representation freely interconvertible. It adds a <strong>re-identification subsystem</strong> — a global <code>Identity</code> catalog plus per-detection appearance <code>Embedding</code>s that attach to <em>every</em> detection modality and round-trip through <code>.slp</code> — and <strong>frame-spanning <code>Event</code> annotations</strong>, the library's first annotation with a temporal <em>extent</em> (behavior bouts, stimulus epochs, review flags) with an ethogram catalog and inclusive frame intervals. Alongside these, <strong>unified modality interconversion</strong> gives pose, centroid, bounding box, segmentation mask, and ROI a single shared verb set (<code>.to_centroid()</code> / <code>.to_bbox()</code> / <code>.to_roi()</code> / <code>.to_mask()</code>, plus <code>Centroid.to_pose()</code>) with batch <code>LabeledFrame.convert()</code> / <code>Labels.convert()</code> entry points. It rounds out with name-based <strong>skeleton symmetry inference</strong>, a <code>sio.download()</code> primitive and <code>sio download</code> CLI, <strong>machine-readable <code>--json</code></strong> CLI inspection, <strong>large-project save hardening</strong> (past HDF5's 64 KB per-attribute limit), an <strong>O(N) merge</strong> speedup, and <strong>pynwb 4</strong> compatibility.</p>
+<p>The SLP format advances <strong>2.4 → 2.6</strong> — <strong>2.5</strong> adds the identity/embedding groups and <strong>2.6</strong> adds events. Both are additive and read-on-group-presence, so older readers ignore them and new files still load everywhere.</p>
 <p><strong>Highlights:</strong></p>
 <ul>
-<li><strong>Re-identification subsystem (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/513" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/513/hovercard" href="https://github.com/talmolab/sleap-io/pull/513">#513</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849619" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/514" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/514/hovercard" href="https://github.com/talmolab/sleap-io/pull/514">#514</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849672" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/515" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/515/hovercard" href="https://github.com/talmolab/sleap-io/pull/515">#515</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4763313567" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/527" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/527/hovercard" href="https://github.com/talmolab/sleap-io/pull/527">#527</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4813875471" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/535" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/535/hovercard" href="https://github.com/talmolab/sleap-io/pull/535">#535</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4813981153" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/536" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/536/hovercard" href="https://github.com/talmolab/sleap-io/pull/536">#536</a>)</strong> — new <code>Identity</code><br>
-(a named, cross-file ground-truth animal identity) and <code>Embedding</code> (a per-detection<br>
-appearance vector) attach to every detection via <code>identity</code> / <code>identity_score</code> /<br>
-<code>identity_embedding</code>, collect into <code>Labels.identities</code>, color renders<br>
-(<code>render --color-by identity</code>), and persist to <code>.slp</code> (format 2.5). Appearance vectors<br>
-stay off disk by default (<code>save_embedding_vectors=False</code>, mirroring <code>embed</code>).</li>
-<li><strong>Frame-spanning <code>Event</code> annotations (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4838220743" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/540" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/540/hovercard" href="https://github.com/talmolab/sleap-io/pull/540">#540</a>)</strong> — <code>EventType</code> / <code>UserEvent</code> /<br>
-<code>PredictedEvent</code> represent anything with a temporal extent over an inclusive<br>
-<code>[start_frame, end_frame]</code> interval, with optional <code>subject</code>/<code>target</code> participants<br>
-(<code>Track</code> or <code>Identity</code>) and framewise or scalar prediction confidence. Query with<br>
-<code>labels.get_events(...)</code> / <code>labels.events_at(video, frame_idx)</code>; persist to format 2.6.</li>
-<li><strong>Unified modality interconversion (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4778445103" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/531" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/531/hovercard" href="https://github.com/talmolab/sleap-io/pull/531">#531</a>)</strong> — pose ⇄ centroid ⇄ bbox ⇄ mask ⇄ ROI share<br>
-one verb set and batch <code>convert()</code> entry points, preserving track/identity/score<br>
-metadata and the User/Predicted variant throughout.</li>
-<li><strong>Infer left/right symmetries from node names (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4789141015" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/534" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/534/hovercard" href="https://github.com/talmolab/sleap-io/pull/534">#534</a>)</strong> —<br>
-<code>Skeleton.infer_symmetries_by_name()</code> suggests symmetric pairs from names like <code>eye_L</code>/<br>
-<code>eye_R</code> or <code>left_paw</code>/<code>right_paw</code> (opt-in, non-mutating).</li>
-<li><strong><code>sio.download()</code> + <code>sio download</code> CLI (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4763572689" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/528" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/528/hovercard" href="https://github.com/talmolab/sleap-io/pull/528">#528</a>)</strong> — fetch a remote file straight to disk<br>
-(http(s), cloud buckets, Google Drive) without loading it — a protocol-agnostic<br>
-curl/wget replacement with streaming, atomic writes, and skip-if-exists.</li>
-<li><strong>Machine-readable CLI inspection (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4825298337" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/538" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/538/hovercard" href="https://github.com/talmolab/sleap-io/pull/538">#538</a>)</strong> — <code>sio show --json</code> and <code>sio filenames --json</code><br>
-emit structured JSON for scripting; default human-readable output is unchanged.</li>
-<li><strong>Reliable saving for very large projects (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762740578" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/517" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/517/hovercard" href="https://github.com/talmolab/sleap-io/pull/517">#517</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762772876" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/521" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/521/hovercard" href="https://github.com/talmolab/sleap-io/pull/521">#521</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762838665" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/523" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/523/hovercard" href="https://github.com/talmolab/sleap-io/pull/523">#523</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762839539" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/524" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/524/hovercard" href="https://github.com/talmolab/sleap-io/pull/524">#524</a>)</strong> — <code>.slp</code> files no<br>
-longer fail to save (or silently drop metadata) when provenance, merge history, or<br>
-per-video source metadata exceeds HDF5's 64 KB per-attribute limit.</li>
-<li><strong>Faster merges (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4820576320" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/537" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/537/hovercard" href="https://github.com/talmolab/sleap-io/pull/537">#537</a>)</strong> — appending merges are now O(N) instead of O(N²) (a reported<br>
-~218s → ~0.75s on a 9k-frame merge into a ~95k-frame project).</li>
+<li><strong>Re-identification subsystem (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/513" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/513/hovercard" href="https://github.com/talmolab/sleap-io/pull/513">#513</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849619" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/514" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/514/hovercard" href="https://github.com/talmolab/sleap-io/pull/514">#514</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849672" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/515" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/515/hovercard" href="https://github.com/talmolab/sleap-io/pull/515">#515</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4763313567" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/527" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/527/hovercard" href="https://github.com/talmolab/sleap-io/pull/527">#527</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4813875471" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/535" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/535/hovercard" href="https://github.com/talmolab/sleap-io/pull/535">#535</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4813981153" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/536" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/536/hovercard" href="https://github.com/talmolab/sleap-io/pull/536">#536</a>)</strong> — new <code>Identity</code> (a named, cross-file ground-truth animal identity) and <code>Embedding</code> (a per-detection appearance vector) attach to every detection via <code>identity</code> / <code>identity_score</code> / <code>identity_embedding</code>, collect into <code>Labels.identities</code>, color renders (<code>render --color-by identity</code>), and persist to <code>.slp</code> (format 2.5). Appearance vectors stay off disk by default (<code>save_embedding_vectors=False</code>, mirroring <code>embed</code>).</li>
+<li><strong>Frame-spanning <code>Event</code> annotations (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4838220743" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/540" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/540/hovercard" href="https://github.com/talmolab/sleap-io/pull/540">#540</a>)</strong> — <code>EventType</code> / <code>UserEvent</code> / <code>PredictedEvent</code> represent anything with a temporal extent over an inclusive <code>[start_frame, end_frame]</code> interval, with optional <code>subject</code>/<code>target</code> participants (<code>Track</code> or <code>Identity</code>) and framewise or scalar prediction confidence. Query with <code>labels.get_events(...)</code> / <code>labels.events_at(video, frame_idx)</code>; persist to format 2.6.</li>
+<li><strong>Unified modality interconversion (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4778445103" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/531" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/531/hovercard" href="https://github.com/talmolab/sleap-io/pull/531">#531</a>)</strong> — pose ⇄ centroid ⇄ bbox ⇄ mask ⇄ ROI share one verb set and batch <code>convert()</code> entry points, preserving track/identity/score metadata and the User/Predicted variant throughout.</li>
+<li><strong>Infer left/right symmetries from node names (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4789141015" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/534" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/534/hovercard" href="https://github.com/talmolab/sleap-io/pull/534">#534</a>)</strong> — <code>Skeleton.infer_symmetries_by_name()</code> suggests symmetric pairs from names like <code>eye_L</code>/ <code>eye_R</code> or <code>left_paw</code>/<code>right_paw</code> (opt-in, non-mutating).</li>
+<li><strong><code>sio.download()</code> + <code>sio download</code> CLI (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4763572689" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/528" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/528/hovercard" href="https://github.com/talmolab/sleap-io/pull/528">#528</a>)</strong> — fetch a remote file straight to disk (http(s), cloud buckets, Google Drive) without loading it — a protocol-agnostic curl/wget replacement with streaming, atomic writes, and skip-if-exists.</li>
+<li><strong>Machine-readable CLI inspection (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4825298337" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/538" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/538/hovercard" href="https://github.com/talmolab/sleap-io/pull/538">#538</a>)</strong> — <code>sio show --json</code> and <code>sio filenames --json</code> emit structured JSON for scripting; default human-readable output is unchanged.</li>
+<li><strong>Reliable saving for very large projects (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762740578" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/517" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/517/hovercard" href="https://github.com/talmolab/sleap-io/pull/517">#517</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762772876" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/521" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/521/hovercard" href="https://github.com/talmolab/sleap-io/pull/521">#521</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762838665" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/523" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/523/hovercard" href="https://github.com/talmolab/sleap-io/pull/523">#523</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762839539" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/524" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/524/hovercard" href="https://github.com/talmolab/sleap-io/pull/524">#524</a>)</strong> — <code>.slp</code> files no longer fail to save (or silently drop metadata) when provenance, merge history, or per-video source metadata exceeds HDF5's 64 KB per-attribute limit.</li>
+<li><strong>Faster merges (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4820576320" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/537" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/537/hovercard" href="https://github.com/talmolab/sleap-io/pull/537">#537</a>)</strong> — appending merges are now O(N) instead of O(N²) (a reported ~218s → ~0.75s on a 9k-frame merge into a ~95k-frame project).</li>
 <li><strong>pynwb 4 compatibility (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4779193757" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/532" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/532/hovercard" href="https://github.com/talmolab/sleap-io/pull/532">#532</a>)</strong> — NWB export works under pynwb 4.0 (still supports &lt;4).</li>
 </ul>
 <h2>Installation / Upgrade</h2>
@@ -4309,9 +4496,7 @@ uv lock --upgrade-package sleap-io <span class="pl-k">&amp;&amp;</span> uv sync<
 <h2>Breaking Changes</h2>
 <p>v0.9.0 is overwhelmingly additive. Two small, easily-migrated changes:</p>
 <h3><code>Identity.color</code> removed — fold color into <code>metadata</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4813875471" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/535" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/535/hovercard" href="https://github.com/talmolab/sleap-io/pull/535">#535</a>)</h3>
-<p>As part of finalizing the re-ID data model, the <code>Identity</code> type's dedicated <code>color</code><br>
-field was removed in favor of its general string <code>metadata</code> map. <code>Identity.metadata</code> is<br>
-now typed <code>dict[str, str]</code> (string values, required for <code>.slp</code> persistence).</p>
+<p>As part of finalizing the re-ID data model, the <code>Identity</code> type's dedicated <code>color</code> field was removed in favor of its general string <code>metadata</code> map. <code>Identity.metadata</code> is now typed <code>dict[str, str]</code> (string values, required for <code>.slp</code> persistence).</p>
 <div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Before (0.8.0)
 ident = sio.Identity(name=&quot;mouse_A&quot;, color=&quot;#e6194b&quot;)
 
@@ -4322,14 +4507,10 @@ ident = sio.Identity(name=&quot;mouse_A&quot;, metadata={&quot;color&quot;: &quo
 <span class="pl-c"># After (0.9.0) — color lives in metadata</span>
 <span class="pl-s1">ident</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Identity</span>(<span class="pl-s1">name</span><span class="pl-c1">=</span><span class="pl-s">"mouse_A"</span>, <span class="pl-s1">metadata</span><span class="pl-c1">=</span>{<span class="pl-s">"color"</span>: <span class="pl-s">"#e6194b"</span>})</pre></div>
 <blockquote>
-<p>Only affects code that set <code>Identity(color=...)</code>. <code>Identity</code> was introduced in 0.7.0<br>
-for 3D multi-view binding and was not yet persisted, so most pipelines are unaffected.</p>
+<p>Only affects code that set <code>Identity(color=...)</code>. <code>Identity</code> was introduced in 0.7.0 for 3D multi-view binding and was not yet persisted, so most pipelines are unaffected.</p>
 </blockquote>
 <h3><code>Labels.merge()</code> bounds <code>merge_history</code> to 1000 records by default (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762772876" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/521" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/521/hovercard" href="https://github.com/talmolab/sleap-io/pull/521">#521</a>)</h3>
-<p>To keep provenance from growing without bound (and overflowing HDF5's 64 KB attribute<br>
-limit), <code>Labels.merge()</code> now caps <code>provenance["merge_history"]</code> at the most recent<br>
-<strong>1000</strong> records by default (oldest trimmed first). Only observable if you merge more<br>
-than 1000 times and inspect the full history.</p>
+<p>To keep provenance from growing without bound (and overflowing HDF5's 64 KB attribute limit), <code>Labels.merge()</code> now caps <code>provenance["merge_history"]</code> at the most recent <strong>1000</strong> records by default (oldest trimmed first). Only observable if you merge more than 1000 times and inspect the full history.</p>
 <div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Keep the complete, unbounded merge history (previous behavior)
 base.merge(other, max_merge_history=None)"><pre><span class="pl-c"># Keep the complete, unbounded merge history (previous behavior)</span>
 <span class="pl-s1">base</span>.<span class="pl-c1">merge</span>(<span class="pl-s1">other</span>, <span class="pl-s1">max_merge_history</span><span class="pl-c1">=</span><span class="pl-c1">None</span>)</pre></div>
@@ -4339,18 +4520,12 @@ base.merge(other, max_merge_history=None)"><pre><span class="pl-c"># Keep the co
 <hr>
 <h2>New Features</h2>
 <h3>Re-identification subsystem: <code>Identity</code> + <code>Embedding</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/513" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/513/hovercard" href="https://github.com/talmolab/sleap-io/pull/513">#513</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849619" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/514" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/514/hovercard" href="https://github.com/talmolab/sleap-io/pull/514">#514</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849672" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/515" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/515/hovercard" href="https://github.com/talmolab/sleap-io/pull/515">#515</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4763313567" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/527" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/527/hovercard" href="https://github.com/talmolab/sleap-io/pull/527">#527</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4813875471" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/535" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/535/hovercard" href="https://github.com/talmolab/sleap-io/pull/535">#535</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4813981153" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/536" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/536/hovercard" href="https://github.com/talmolab/sleap-io/pull/536">#536</a>)</h3>
-<p>v0.9.0 adds a re-identification (re-ID) subsystem for tracking <em>known</em> animals across<br>
-videos, sessions, and experiments. Two model concepts:</p>
+<p>v0.9.0 adds a re-identification (re-ID) subsystem for tracking <em>known</em> animals across videos, sessions, and experiments. Two model concepts:</p>
 <ul>
-<li><strong><code>Identity</code></strong> — a named, cross-file ground-truth animal identity with arbitrary string<br>
-<code>metadata</code>. Matched by <code>name</code> (default) or object identity, like <code>Track</code>.</li>
+<li><strong><code>Identity</code></strong> — a named, cross-file ground-truth animal identity with arbitrary string <code>metadata</code>. Matched by <code>name</code> (default) or object identity, like <code>Track</code>.</li>
 <li><strong><code>Embedding</code></strong> — a 1-D per-detection appearance / re-ID feature vector.</li>
 </ul>
-<p>Every detection modality (<code>Instance</code>, <code>PredictedInstance</code>, <code>Instance3D</code>,<br>
-<code>PredictedInstance3D</code>, bounding boxes, centroids, masks, ROIs, label images) gains<br>
-<code>identity</code>, <code>identity_score</code>, and <code>identity_embedding</code> slots; <code>InstanceGroup.identity</code><br>
-binds a triangulated multi-view group. <code>Labels.identities</code> is a catalog auto-collected<br>
-from the detections.</p>
+<p>Every detection modality (<code>Instance</code>, <code>PredictedInstance</code>, <code>Instance3D</code>, <code>PredictedInstance3D</code>, bounding boxes, centroids, masks, ROIs, label images) gains <code>identity</code>, <code>identity_score</code>, and <code>identity_embedding</code> slots; <code>InstanceGroup.identity</code> binds a triangulated multi-view group. <code>Labels.identities</code> is a catalog auto-collected from the detections.</p>
 <div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import numpy as np
 import sleap_io as sio
 
@@ -4380,28 +4555,12 @@ assert mouse_a.matches(sio.Identity(name=&quot;mouse_A&quot;))"><pre><span class
 
 <span class="pl-c"># Identities match by name across files</span>
 <span class="pl-k">assert</span> <span class="pl-s1">mouse_a</span>.<span class="pl-c1">matches</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">Identity</span>(<span class="pl-s1">name</span><span class="pl-c1">=</span><span class="pl-s">"mouse_A"</span>))</pre></div>
-<p><strong>Persistence (SLP format 2.5).</strong> Identity <em>links</em> are written to a new <code>/identity</code> group<br>
-and appearance <em>vectors</em> to a new <code>/embeddings</code> group. To keep large vectors off disk,<br>
-<code>save_slp</code> / <code>save_file</code> gain <code>save_embedding_vectors</code> which defaults to <strong><code>False</code></strong><br>
-(mirroring the <code>embed=False</code> default) — identity links always persist, vectors only when<br>
-you ask (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4813981153" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/536" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/536/hovercard" href="https://github.com/talmolab/sleap-io/pull/536">#536</a>):</p>
+<p><strong>Persistence (SLP format 2.5).</strong> Identity <em>links</em> are written to a new <code>/identity</code> group and appearance <em>vectors</em> to a new <code>/embeddings</code> group. To keep large vectors off disk, <code>save_slp</code> / <code>save_file</code> gain <code>save_embedding_vectors</code> which defaults to <strong><code>False</code></strong> (mirroring the <code>embed=False</code> default) — identity links always persist, vectors only when you ask (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4813981153" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/536" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/536/hovercard" href="https://github.com/talmolab/sleap-io/pull/536">#536</a>):</p>
 <div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio.save_slp(labels, &quot;out.slp&quot;, save_embedding_vectors=True)   # include vectors"><pre><span class="pl-s1">sio</span>.<span class="pl-c1">save_slp</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"out.slp"</span>, <span class="pl-s1">save_embedding_vectors</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)   <span class="pl-c"># include vectors</span></pre></div>
-<p><strong>Tooling.</strong> <code>sio merge --identity {name,identity}</code> controls how the identity catalog is<br>
-deduplicated on merge; <code>sio render --color-by identity</code> colors renders by global identity<br>
-(one palette color per entry in <code>Labels.identities</code>); and <code>sio show</code> reports identity and<br>
-embedding counts (<code>--json</code> includes <code>n_instances_with_identity_embedding</code>). See<br>
-<code>docs/model/embedding.md</code>.</p>
+<p><strong>Tooling.</strong> <code>sio merge --identity {name,identity}</code> controls how the identity catalog is deduplicated on merge; <code>sio render --color-by identity</code> colors renders by global identity (one palette color per entry in <code>Labels.identities</code>); and <code>sio show</code> reports identity and embedding counts (<code>--json</code> includes <code>n_instances_with_identity_embedding</code>). See <code>docs/model/embedding.md</code>.</p>
 <h3>Frame-spanning <code>Event</code> annotations (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4838220743" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/540" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/540/hovercard" href="https://github.com/talmolab/sleap-io/pull/540">#540</a>)</h3>
-<p>sleap-io gains its first annotation with a temporal <em>extent</em>. Unlike per-frame<br>
-annotations that live on a single <code>LabeledFrame</code>, an <code>Event</code> spans an inclusive<br>
-<code>[start_frame, end_frame]</code> interval and lives on <code>Labels.events</code>, alongside a<br>
-controlled-vocabulary catalog <code>Labels.event_types</code>. Use it for behavior bouts, stimulus<br>
-epochs, physiological events, or review flags.</p>
-<p>Four new classes are exported: <code>EventType</code> (the ethogram catalog entry), the abstract<br>
-<code>Event</code>, and its concrete <code>UserEvent</code> (ground truth) and <code>PredictedEvent</code> (adds an<br>
-optional framewise <code>scores</code> trace and a scalar <code>score</code>). Events carry optional<br>
-<code>subject</code>/<code>target</code> participants (each a <code>Track</code> or <code>Identity</code>), plus <code>name</code>, <code>source</code>,<br>
-and string <code>metadata</code>.</p>
+<p>sleap-io gains its first annotation with a temporal <em>extent</em>. Unlike per-frame annotations that live on a single <code>LabeledFrame</code>, an <code>Event</code> spans an inclusive <code>[start_frame, end_frame]</code> interval and lives on <code>Labels.events</code>, alongside a controlled-vocabulary catalog <code>Labels.event_types</code>. Use it for behavior bouts, stimulus epochs, physiological events, or review flags.</p>
+<p>Four new classes are exported: <code>EventType</code> (the ethogram catalog entry), the abstract <code>Event</code>, and its concrete <code>UserEvent</code> (ground truth) and <code>PredictedEvent</code> (adds an optional framewise <code>scores</code> trace and a scalar <code>score</code>). Events carry optional <code>subject</code>/<code>target</code> participants (each a <code>Track</code> or <code>Identity</code>), plus <code>name</code>, <code>source</code>, and string <code>metadata</code>.</p>
 <div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import numpy as np
 import sleap_io as sio
 from sleap_io.model.event import UserEvent, PredictedEvent
@@ -4447,16 +4606,12 @@ labels.save(&quot;out.slp&quot;)   # persists via SLP format 2.6"><pre><span cla
 <span class="pl-s1">labels</span>.<span class="pl-c1">get_events</span>(<span class="pl-s1">type</span><span class="pl-c1">=</span><span class="pl-s">"rear"</span>, <span class="pl-s1">predicted</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)  <span class="pl-c"># -&gt; [PredictedEvent(type="rear", ...)]</span>
 
 <span class="pl-s1">labels</span>.<span class="pl-c1">save</span>(<span class="pl-s">"out.slp"</span>)   <span class="pl-c"># persists via SLP format 2.6</span></pre></div>
-<p><code>Labels.get_events(video, subject, type, frame_idx, predicted)</code> filters the collection<br>
-(<code>frame_idx</code> matches any event whose span <em>covers</em> the frame); <code>Labels.events_at(video, frame_idx)</code> is the "what's happening now?" convenience wrapper. Events persist to a new<br>
-<code>/event_types</code> + <code>/events</code> SLP group pair (format 2.6). See <code>docs/model/events.md</code>.</p>
+<p><code>Labels.get_events(video, subject, type, frame_idx, predicted)</code> filters the collection (<code>frame_idx</code> matches any event whose span <em>covers</em> the frame); <code>Labels.events_at(video, frame_idx)</code> is the "what's happening now?" convenience wrapper. Events persist to a new <code>/event_types</code> + <code>/events</code> SLP group pair (format 2.6). See <code>docs/model/events.md</code>.</p>
 <blockquote>
-<p><strong>Scope note:</strong> events persist only in <code>.slp</code>. Converting to NWB, Label Studio, JABS,<br>
-or a DataFrame drops them — <code>sio convert</code> prints an explicit warning when it does.</p>
+<p><strong>Scope note:</strong> events persist only in <code>.slp</code>. Converting to NWB, Label Studio, JABS, or a DataFrame drops them — <code>sio convert</code> prints an explicit warning when it does.</p>
 </blockquote>
 <h3>Unified interconversion between detection modalities (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4778445103" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/531" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/531/hovercard" href="https://github.com/talmolab/sleap-io/pull/531">#531</a>)</h3>
-<p>Pose, centroid, bounding box, segmentation mask, and ROI now share one verb vocabulary,<br>
-so you can freely move between detection representations while preserving metadata.</p>
+<p>Pose, centroid, bounding box, segmentation mask, and ROI now share one verb vocabulary, so you can freely move between detection representations while preserving metadata.</p>
 <div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
 
 inst = labels[0].instances[0]
@@ -4484,23 +4639,12 @@ inst2 = centroid.to_pose()"><pre><span class="pl-k">import</span> <span class="p
 
 <span class="pl-c"># Round-trip a centroid back into a single-node pose</span>
 <span class="pl-s1">inst2</span> <span class="pl-c1">=</span> <span class="pl-s1">centroid</span>.<span class="pl-c1">to_pose</span>()</pre></div>
-<p>Each of <code>Instance</code>, <code>Centroid</code>, <code>BoundingBox</code>, <code>SegmentationMask</code>, and <code>ROI</code> gains<br>
-<code>to_centroid()</code>, <code>to_bbox()</code>, <code>to_roi()</code>, and <code>to_mask()</code> (with <code>Centroid.to_pose()</code> /<br>
-<code>from_pose()</code> closing the loop), and <code>LabeledFrame.convert(to, source, ...)</code> /<br>
-<code>Labels.convert(...)</code> reach every cell of the matrix in one call. Conversions preserve the<br>
-User/Predicted variant (carrying <code>score</code> on predicted paths) and propagate <code>track</code>,<br>
-<code>tracking_score</code>, <code>identity</code> / <code>identity_score</code> / <code>identity_embedding</code>, and an <code>instance=</code><br>
-backref. Degenerate inputs return an empty target object (check the new <code>is_empty</code><br>
-property) unless you pass <code>error_on_empty=True</code>.</p>
+<p>Each of <code>Instance</code>, <code>Centroid</code>, <code>BoundingBox</code>, <code>SegmentationMask</code>, and <code>ROI</code> gains <code>to_centroid()</code>, <code>to_bbox()</code>, <code>to_roi()</code>, and <code>to_mask()</code> (with <code>Centroid.to_pose()</code> / <code>from_pose()</code> closing the loop), and <code>LabeledFrame.convert(to, source, ...)</code> / <code>Labels.convert(...)</code> reach every cell of the matrix in one call. Conversions preserve the User/Predicted variant (carrying <code>score</code> on predicted paths) and propagate <code>track</code>, <code>tracking_score</code>, <code>identity</code> / <code>identity_score</code> / <code>identity_embedding</code>, and an <code>instance=</code> backref. Degenerate inputs return an empty target object (check the new <code>is_empty</code> property) unless you pass <code>error_on_empty=True</code>.</p>
 <blockquote>
-<p>As part of this, <code>SegmentationMask.to_polygon()</code> now returns a <code>PredictedROI</code> (with<br>
-<code>score</code>) for predicted masks instead of downcasting to <code>UserROI</code>. The old<br>
-<code>Centroid.to_instance</code> / <code>from_instance</code> names are deprecated in favor of<br>
-<code>to_pose</code> / <code>from_pose</code>.</p>
+<p>As part of this, <code>SegmentationMask.to_polygon()</code> now returns a <code>PredictedROI</code> (with <code>score</code>) for predicted masks instead of downcasting to <code>UserROI</code>. The old <code>Centroid.to_instance</code> / <code>from_instance</code> names are deprecated in favor of <code>to_pose</code> / <code>from_pose</code>.</p>
 </blockquote>
 <h3>Infer left/right symmetries from node names (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4789141015" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/534" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/534/hovercard" href="https://github.com/talmolab/sleap-io/pull/534">#534</a>)</h3>
-<p><code>Skeleton.infer_symmetries_by_name()</code> suggests symmetric node pairs from names, so flip<br>
-augmentation and QC work even for skeletons imported without symmetry metadata.</p>
+<p><code>Skeleton.infer_symmetries_by_name()</code> suggests symmetric node pairs from names, so flip augmentation and QC work even for skeletons imported without symmetry metadata.</p>
 <div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
 
 skel = sio.Skeleton([&quot;nose&quot;, &quot;eye_L&quot;, &quot;eye_R&quot;, &quot;ear_L&quot;, &quot;ear_R&quot;])
@@ -4520,13 +4664,9 @@ sio.infer_symmetry_pairs_by_name([&quot;front_left_paw&quot;, &quot;front_right_
 
 <span class="pl-c"># Name-only helper (no Skeleton needed); custom tokens supported</span>
 <span class="pl-s1">sio</span>.<span class="pl-c1">infer_symmetry_pairs_by_name</span>([<span class="pl-s">"front_left_paw"</span>, <span class="pl-s">"front_right_paw"</span>, <span class="pl-s">"tail"</span>])  <span class="pl-c"># [(0, 1)]</span></pre></div>
-<p>Recognizes <code>left</code>/<code>right</code> and <code>l</code>/<code>r</code> tokens (configurable via <code>token_pairs</code>) as whole<br>
-name segments (<code>eye_L</code>/<code>eye_R</code>, <code>left_paw</code>/<code>right_paw</code>, <code>L1</code>/<code>R1</code>), pairing only<br>
-unambiguous 1:1 stems. It is opt-in and non-mutating — you apply the suggestions with<br>
-<code>add_symmetries()</code>. Contributed by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/tom21100227/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/tom21100227">@tom21100227</a>.</p>
+<p>Recognizes <code>left</code>/<code>right</code> and <code>l</code>/<code>r</code> tokens (configurable via <code>token_pairs</code>) as whole name segments (<code>eye_L</code>/<code>eye_R</code>, <code>left_paw</code>/<code>right_paw</code>, <code>L1</code>/<code>R1</code>), pairing only unambiguous 1:1 stems. It is opt-in and non-mutating — you apply the suggestions with <code>add_symmetries()</code>. Contributed by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/tom21100227/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/tom21100227">@tom21100227</a>.</p>
 <h3><code>sio.download()</code> and <code>sio download</code> CLI (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4763572689" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/528" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/528/hovercard" href="https://github.com/talmolab/sleap-io/pull/528">#528</a>)</h3>
-<p>v0.8.0 added remote <em>reading</em>; v0.9.0 adds a primitive to fetch a remote file straight to<br>
-disk without loading it — useful for large videos or formats you load separately.</p>
+<p>v0.8.0 added remote <em>reading</em>; v0.9.0 adds a primitive to fetch a remote file straight to disk without loading it — useful for large videos or formats you load separately.</p>
 <div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
 
 sio.download(&quot;https://example.com/labels.slp&quot;)       # -&gt; ./labels.slp
@@ -4547,14 +4687,9 @@ sio download s3://bucket/run/video.mp4 data/
 sio download https://example.com/a.slp out.slp -H 'Authorization: Bearer &lt;token&gt;' -f"><pre>sio download https://example.com/labels.slp
 sio download s3://bucket/run/video.mp4 data/
 sio download https://example.com/a.slp out.slp -H <span class="pl-s"><span class="pl-pds">'</span>Authorization: Bearer &lt;token&gt;<span class="pl-pds">'</span></span> -f</pre></div>
-<p>Supports the same schemes as the loaders — http(s), cloud buckets (<code>s3</code>/<code>gs</code>/<code>gcs</code>/<code>az</code>/<br>
-<code>abfs</code>, needs the <code>[cloud]</code> extra), and Google Drive share links — with streaming to disk,<br>
-atomic writes, and idempotent skip-if-exists (<code>overwrite=True</code> to force). No new<br>
-dependencies.</p>
+<p>Supports the same schemes as the loaders — http(s), cloud buckets (<code>s3</code>/<code>gs</code>/<code>gcs</code>/<code>az</code>/ <code>abfs</code>, needs the <code>[cloud]</code> extra), and Google Drive share links — with streaming to disk, atomic writes, and idempotent skip-if-exists (<code>overwrite=True</code> to force). No new dependencies.</p>
 <h3>Machine-readable CLI inspection: <code>--json</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4825298337" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/538" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/538/hovercard" href="https://github.com/talmolab/sleap-io/pull/538">#538</a>)</h3>
-<p><code>sio show --json</code> prints a structured document (path/name/size/format, a <code>stats</code> block,<br>
-and full <code>skeletons</code>, <code>videos</code>, <code>tracks</code>, <code>identities</code>, <code>event_types</code>, <code>events</code>, and<br>
-<code>provenance</code> sections); for a standalone video it prints a video-shaped payload. <code>sio filenames --json</code> prints a per-video filename + provenance listing (inspection mode only).</p>
+<p><code>sio show --json</code> prints a structured document (path/name/size/format, a <code>stats</code> block, and full <code>skeletons</code>, <code>videos</code>, <code>tracks</code>, <code>identities</code>, <code>event_types</code>, <code>events</code>, and <code>provenance</code> sections); for a standalone video it prints a video-shaped payload. <code>sio filenames --json</code> prints a per-video filename + provenance listing (inspection mode only).</p>
 <div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio show labels.slp --json
 sio show labels.slp --json --lf 0        # add per-instance point detail for one frame
 sio show labels.slp --frames             # per-frame listing (works with or without --json)
@@ -4566,63 +4701,44 @@ sio filenames labels.slp --json</pre></div>
 <hr>
 <h2>Improvements</h2>
 <h3>Reliable saving for very large projects (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762740578" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/517" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/517/hovercard" href="https://github.com/talmolab/sleap-io/pull/517">#517</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762772876" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/521" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/521/hovercard" href="https://github.com/talmolab/sleap-io/pull/521">#521</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762838665" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/523" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/523/hovercard" href="https://github.com/talmolab/sleap-io/pull/523">#523</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762839539" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/524" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/524/hovercard" href="https://github.com/talmolab/sleap-io/pull/524">#524</a>)</h3>
-<p>Hardens <code>.slp</code> saving against HDF5's hard 64 KB per-attribute limit (issue <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4759098026" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/516" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/516/hovercard" href="https://github.com/talmolab/sleap-io/issues/516">#516</a>), which<br>
-could make large projects fail to save or silently lose metadata:</p>
+<p>Hardens <code>.slp</code> saving against HDF5's hard 64 KB per-attribute limit (issue <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4759098026" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/516" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/516/hovercard" href="https://github.com/talmolab/sleap-io/issues/516">#516</a>), which could make large projects fail to save or silently lose metadata:</p>
 <ul>
-<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762740578" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/517" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/517/hovercard" href="https://github.com/talmolab/sleap-io/pull/517">#517</a></strong> — provenance is written to a dedicated <code>/provenance_json</code> dataset instead of<br>
-the <code>metadata/json</code> attribute. <code>read_provenance</code> falls back to the legacy attribute, so<br>
-old files still load unchanged.</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762740578" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/517" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/517/hovercard" href="https://github.com/talmolab/sleap-io/pull/517">#517</a></strong> — provenance is written to a dedicated <code>/provenance_json</code> dataset instead of the <code>metadata/json</code> attribute. <code>read_provenance</code> falls back to the legacy attribute, so old files still load unchanged.</li>
 <li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762772876" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/521" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/521/hovercard" href="https://github.com/talmolab/sleap-io/pull/521">#521</a></strong> — <code>Labels.merge()</code> bounds <code>merge_history</code> (see <a href="#breaking-changes">Breaking Changes</a>).</li>
-<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762838665" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/523" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/523/hovercard" href="https://github.com/talmolab/sleap-io/pull/523">#523</a></strong> — oversized per-video <code>source_video</code> metadata spills from its attribute into a<br>
-dataset (with a warning) when it exceeds 64 KB.</li>
-<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762839539" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/524" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/524/hovercard" href="https://github.com/talmolab/sleap-io/pull/524">#524</a></strong> — a new opt-in <code>save_slp(..., preserve_unknown=True)</code> carries unrecognized<br>
-top-level HDF5 datasets/groups across a load/save cycle for forward compatibility with<br>
-newer sleap-io versions.</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762838665" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/523" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/523/hovercard" href="https://github.com/talmolab/sleap-io/pull/523">#523</a></strong> — oversized per-video <code>source_video</code> metadata spills from its attribute into a dataset (with a warning) when it exceeds 64 KB.</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4762839539" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/524" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/524/hovercard" href="https://github.com/talmolab/sleap-io/pull/524">#524</a></strong> — a new opt-in <code>save_slp(..., preserve_unknown=True)</code> carries unrecognized top-level HDF5 datasets/groups across a load/save cycle for forward compatibility with newer sleap-io versions.</li>
 </ul>
 <div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="labels = sio.load_slp(&quot;from_newer_version.slp&quot;)
 sio.save_slp(labels, &quot;out.slp&quot;, preserve_unknown=True)"><pre><span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"from_newer_version.slp"</span>)
 <span class="pl-s1">sio</span>.<span class="pl-c1">save_slp</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"out.slp"</span>, <span class="pl-s1">preserve_unknown</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)</pre></div>
 <p>These are read-backward-compatible layout changes — no SLP format-version bump.</p>
 <h3>Faster <code>Labels.merge()</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4820576320" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/537" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/537/hovercard" href="https://github.com/talmolab/sleap-io/pull/537">#537</a>)</h3>
-<p>Appending merges no longer invalidate and rebuild the frame-lookup index on every frame;<br>
-the warm index is now updated in place, turning large merges from O(N²) into O(N) (a<br>
-reported ~218s → ~0.75s for a 9,000-frame merge into a ~95k-frame project). Merged output<br>
-is byte-identical. Contributed by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/yixi0527/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/yixi0527">@yixi0527</a>.</p>
+<p>Appending merges no longer invalidate and rebuild the frame-lookup index on every frame; the warm index is now updated in place, turning large merges from O(N²) into O(N) (a reported ~218s → ~0.75s for a 9,000-frame merge into a ~95k-frame project). Merged output is byte-identical. Contributed by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/yixi0527/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/yixi0527">@yixi0527</a>.</p>
 <h3>Clearer embed errors (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4770013522" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/530" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/530/hovercard" href="https://github.com/talmolab/sleap-io/pull/530">#530</a>)</h3>
-<p>Embedding an out-of-range frame now raises an <code>IndexError</code> that names the offending video<br>
-(index, filename, and frame count) instead of reporting only the frame index — actionable<br>
-in multi-video projects. Contributed by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>.</p>
+<p>Embedding an out-of-range frame now raises an <code>IndexError</code> that names the offending video (index, filename, and frame count) instead of reporting only the frame index — actionable in multi-video projects. Contributed by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>.</p>
 <hr>
 <h2>Fixes</h2>
 <ul>
-<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4779193757" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/532" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/532/hovercard" href="https://github.com/talmolab/sleap-io/pull/532">#532</a></strong> — NWB export is compatible with pynwb 4.0, which now requires <code>num_samples</code> on<br>
-rate-based external <code>ImageSeries</code>. The writer sets it from the video frame count and<br>
-passes it only when the installed pynwb accepts it, so pynwb &lt; 4 is still supported.</li>
+<li><strong><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4779193757" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/532" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/532/hovercard" href="https://github.com/talmolab/sleap-io/pull/532">#532</a></strong> — NWB export is compatible with pynwb 4.0, which now requires <code>num_samples</code> on rate-based external <code>ImageSeries</code>. The writer sets it from the video frame count and passes it only when the installed pynwb accepts it, so pynwb &lt; 4 is still supported.</li>
 </ul>
 <hr>
 <h2>Documentation</h2>
 <ul>
-<li>New <code>docs/model/events.md</code> (frame-spanning events) and <code>docs/model/embedding.md</code><br>
-(re-ID identities and embeddings).</li>
+<li>New <code>docs/model/events.md</code> (frame-spanning events) and <code>docs/model/embedding.md</code> (re-ID identities and embeddings).</li>
 <li><code>docs/formats/slp.md</code> — format-version history extended through 2.6.</li>
-<li><code>docs/model/{poses,centroids,boxes,rois,segmentation}.md</code> — modality interconversion<br>
-verbs and examples.</li>
-<li><code>docs/cli.md</code> — <code>download</code>, <code>show --json</code> / <code>--frames</code>, <code>filenames --json</code>, and<br>
-<code>merge --identity</code>.</li>
-<li><code>docs/model/3d.md</code>, <code>docs/model/labels.md</code>, <code>docs/merging.md</code>, <code>docs/remote.md</code>,<br>
-<code>docs/examples.md</code> updated.</li>
+<li><code>docs/model/{poses,centroids,boxes,rois,segmentation}.md</code> — modality interconversion verbs and examples.</li>
+<li><code>docs/cli.md</code> — <code>download</code>, <code>show --json</code> / <code>--frames</code>, <code>filenames --json</code>, and <code>merge --identity</code>.</li>
+<li><code>docs/model/3d.md</code>, <code>docs/model/labels.md</code>, <code>docs/merging.md</code>, <code>docs/remote.md</code>, <code>docs/examples.md</code> updated.</li>
 </ul>
 <hr>
 <h2>Known Issues</h2>
 <ul>
-<li><strong>Events persist only in <code>.slp</code>.</strong> Converting to NWB, Label Studio, JABS, or a DataFrame<br>
-drops events and event types; <code>sio convert</code> warns when this happens.</li>
+<li><strong>Events persist only in <code>.slp</code>.</strong> Converting to NWB, Label Studio, JABS, or a DataFrame drops events and event types; <code>sio convert</code> warns when this happens.</li>
 </ul>
 <hr>
 <h2>Changelog</h2>
 <blockquote>
-<p>Reflects net user-facing changes; intra-cycle refactors that net to no change are<br>
-folded into their final form.</p>
+<p>Reflects net user-facing changes; intra-cycle refactors that net to no change are folded into their final form.</p>
 </blockquote>
 <ul>
 <li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4756849566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/513" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/513/hovercard" href="https://github.com/talmolab/sleap-io/pull/513">#513</a>: feat(model): global re-ID <code>Identity</code> with cross-file name matching (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
@@ -10933,35 +11049,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li><code>Labels.split</code> and <code>Labels.make_training_splits</code> by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2356036606" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/98" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/98/hovercard" href="https://github.com/talmolab/sleap-io/pull/98">#98</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.4...v0.1.5"><tt>v0.1.4...v0.1.5</tt></a></p>
-<h2 id="v014"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.4">v0.1.4</a><a class="headerlink" href="#v014" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Add support for embedding images in .pkg.slp by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2279314587" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/91" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/91/hovercard" href="https://github.com/talmolab/sleap-io/pull/91">#91</a>
-<ul>
-<li>Saving SLP files with embedded images will re-save the embedded images.</li>
-<li>Embed images into SLP files with:
-<ul>
-<li><code>labels.save("labels.pkg.slp", embed="user")</code> to embed frames with user-labeled instances (<code>Instance</code>)</li>
-<li><code>labels.save("labels.pkg.slp", embed="user+suggestion")</code> to embed frames with user-labeled instances and suggestion frames (useful for inference after training)</li>
-<li><code>labels.save("labels.pkg.slp", embed="source")</code> to restore the source video ("unembed")</li>
-</ul>
-</li>
-</ul>
-</li>
-<li>Better reprs and QOL by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2335368037" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/96" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/96/hovercard" href="https://github.com/talmolab/sleap-io/pull/96">#96</a>
-<ul>
-<li>Better <code>__repr__</code>s for <code>Skeleton</code>, <code>LabeledFrame</code>, <code>Labels</code>, <code>Instance</code>, <code>PredictedInstance</code></li>
-<li><code>Labels.append()</code> and <code>Labels.extend()</code> to add <code>LabeledFrame</code>s now will update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents.</li>
-<li><code>Labels.update()</code> to manually update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents of <code>Labels.labeled_frames</code> and <code>Labels.suggestions</code>.</li>
-<li><code>Labels.replace_filenames()</code>: multiple methods for replacing all video filenames across the project (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2242055838" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/85" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/85/hovercard" href="https://github.com/talmolab/sleap-io/issues/85">#85</a>).</li>
-<li><code>Skeleton.edge_names</code> to return list of edges as tuples of string names</li>
-<li>Added docstrings to <code>sio.load_video</code> and related high level <code>Video</code> APIs to clarify supported file formats.</li>
-<li>Syntactic sugar: try to initialize video backend with <code>Video(filename)</code> construction (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2307058508" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/94" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/94/hovercard" href="https://github.com/talmolab/sleap-io/issues/94">#94</a>)</li>
-</ul>
-</li>
-</ul>
-<p><strong>Note:</strong> This is a re-release of v0.1.3 which had a borked deployment.</p>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.2...v0.1.4"><tt>v0.1.2...v0.1.4</tt></a></p>
 
 
 
