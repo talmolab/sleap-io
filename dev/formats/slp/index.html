@@ -2587,6 +2587,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#storage-representation-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage Representation Matrix
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Storage Representation Matrix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#representation-kinds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Representation kinds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write-is-single-method-read-is-broader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Write is single-method; read is broader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#version-history" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6677,6 +6738,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#storage-representation-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage Representation Matrix
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Storage Representation Matrix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#representation-kinds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Representation kinds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write-is-single-method-read-is-broader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Write is single-method; read is broader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#version-history" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8987,6 +9109,260 @@ value for predicted masks (NaN for user masks).</p>
 </ul>
 <h3 id="optional-datasets_1">Optional Datasets<a class="headerlink" href="#optional-datasets_1" title="Permanent link">&para;</a></h3>
 <p>The label image datasets are only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels"><code>Labels</code></a> object contains label images. On read, missing datasets default to empty lists.</p>
+<h2 id="storage-representation-matrix">Storage Representation Matrix<a class="headerlink" href="#storage-representation-matrix" title="Permanent link">&para;</a></h2>
+<p>Different data structures use different on-disk representations, chosen per subsystem (fixed-width structural rows, bulk numeric data that must stream, and open-ended metadata each get a different form). This section consolidates, for every data structure at the current format (<strong>2.8</strong>), its representation, the format version that introduced it, and its read/write support.</p>
+<h3 id="representation-kinds">Representation kinds<a class="headerlink" href="#representation-kinds" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>compound</strong></td>
+<td>A single HDF5 dataset with a compound (structured) dtype — multiple named fields per row, usually row-range–sliced by an index table.</td>
+</tr>
+<tr>
+<td><strong>columnar group</strong></td>
+<td>An HDF5 group with one plain 1-D dataset <strong>per field</strong> (struct-of-arrays), all parallel-indexed.</td>
+</tr>
+<tr>
+<td><strong>EAV</strong></td>
+<td>A columnar entity-attribute-value triple (<code>meta_owner</code> / <code>meta_key</code> / <code>meta_val</code>) encoding arbitrary per-entity <code>metadata</code> dicts.</td>
+</tr>
+<tr>
+<td><strong>plain matrix</strong></td>
+<td>A single numeric dataset (2-D or 3-D), no named fields.</td>
+</tr>
+<tr>
+<td><strong>ragged CSR</strong></td>
+<td>A flat concatenated values dataset sliced by an offset/index array.</td>
+</tr>
+<tr>
+<td><strong>string</strong></td>
+<td>A variable-length UTF-8 string dataset, one string per row.</td>
+</tr>
+<tr>
+<td><strong>JSON</strong></td>
+<td>A variable-length UTF-8 string dataset whose values are JSON documents.</td>
+</tr>
+<tr>
+<td><strong>attribute</strong></td>
+<td>Stored as an HDF5 attribute, not a dataset.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="write-is-single-method-read-is-broader">Write is single-method; read is broader<a class="headerlink" href="#write-is-single-method-read-is-broader" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Write (the default, and only, method):</strong> the Python library writes <strong>exactly one native representation per data structure</strong> — there is no toggle. In particular it always writes genuine HDF5 <strong>compound</strong> datasets for the compound rows; it never writes the h5wasm flat-2D substitute.</li>
+<li><strong>Read:</strong> the <strong>compound</strong> readers <em>also</em> accept the flat-2D + <code>field_names</code> encoding that <a href="https://github.com/talmolab/sleap-io.js">sleap-io.js</a> writes (h5wasm cannot create compound datasets), routed through <code>utils._read_dataset_from_open_file</code>. Every other kind (columnar / matrix / string / JSON) is read directly and is already h5wasm-native, so no conversion is needed. <strong><code>compound</code> is therefore the only kind with a browser-interop dependency</strong> (see <a href="#browser-side-compatibility-h5wasm-sleap-iojs">Browser-side compatibility</a>).</li>
+</ul>
+<h3 id="matrix">Matrix<a class="headerlink" href="#matrix" title="Permanent link">&para;</a></h3>
+<p><code>Reads JS flat-2D</code> = the read path accepts the sleap-io.js flat-2D + <code>field_names</code> encoding (only meaningful, and only needed, for <strong>compound</strong> datasets).</p>
+<table>
+<thead>
+<tr>
+<th>Data structure</th>
+<th>HDF5 path(s)</th>
+<th>Representation</th>
+<th>Ver</th>
+<th>Reads JS flat-2D</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Labeled frames / instances / 2D points</td>
+<td><code>/frames</code>, <code>/instances</code>, <code>/points</code>, <code>/pred_points</code></td>
+<td>compound</td>
+<td>1.0</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Negative frames</td>
+<td><code>/negative_frames</code></td>
+<td>compound</td>
+<td>1.x</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Segmentation masks (table)</td>
+<td><code>/masks</code></td>
+<td>compound</td>
+<td>1.5</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Mask RLE geometry</td>
+<td><code>/mask_rle</code></td>
+<td>ragged CSR</td>
+<td>1.5</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>ROIs (table)</td>
+<td><code>/rois</code></td>
+<td>compound</td>
+<td>1.5</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>ROI geometry (WKB)</td>
+<td><code>/roi_wkb</code></td>
+<td>ragged CSR</td>
+<td>1.5</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Bounding boxes / centroids</td>
+<td><code>/bboxes</code>, <code>/centroids</code></td>
+<td>columnar group</td>
+<td>2.0 †</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Label images (table)</td>
+<td><code>/label_images</code>, <code>/label_image_objects</code></td>
+<td>compound</td>
+<td>1.8</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Label-image pixel maps</td>
+<td><code>/label_image_data</code> (T,H,W)</td>
+<td>plain matrix</td>
+<td>2.2</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Dense score-map index tables</td>
+<td><code>/mask_score_map_index</code>, <code>/label_image_score_map_index</code></td>
+<td>compound</td>
+<td>1.9 / 2.1</td>
+<td>⚠️ no</td>
+</tr>
+<tr>
+<td>Dense score-map blobs</td>
+<td><code>/mask_score_maps</code>, <code>/label_image_score_maps</code></td>
+<td>ragged CSR</td>
+<td>1.9</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Identity / category catalog names</td>
+<td><code>/identity/name</code>, <code>/categories/name</code></td>
+<td>string</td>
+<td>2.5 / 2.7</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Identity / category / event metadata</td>
+<td><code>…/meta_owner</code>, <code>…/meta_key</code>, <code>…/meta_val</code></td>
+<td>EAV</td>
+<td>2.5 / 2.7 / 2.6</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Per-detection identity / category <strong>links</strong></td>
+<td><code>/identity/links</code>, <code>/categories/links</code></td>
+<td>compound</td>
+<td>2.5 / 2.7</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Re-ID / category embeddings + join cols</td>
+<td><code>/embeddings/vectors</code>, <code>owner_type</code>, <code>owner_id</code>, <code>category_*</code></td>
+<td>plain matrix</td>
+<td>2.5 / 2.7</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Event types catalog</td>
+<td><code>/event_types/name</code>, <code>/description</code></td>
+<td>string</td>
+<td>2.6</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Frame-spanning events</td>
+<td><code>/events/*</code> (video, start_frame, …)</td>
+<td>columnar group</td>
+<td>2.6</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Event framewise score traces</td>
+<td><code>/events/scores</code> + <code>/events/score_offsets</code></td>
+<td>ragged CSR</td>
+<td>2.6</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td><strong>Sessions</strong> — calibration + video map + frame-group range</td>
+<td><code>sessions_json</code></td>
+<td>JSON</td>
+<td><strong>2.8</strong></td>
+<td>n/a</td>
+</tr>
+<tr>
+<td><strong>Session frame groups / instance groups / members</strong></td>
+<td><code>/session_data/frame_groups</code>, <code>/instance_groups</code>, <code>/instance_group_members</code></td>
+<td>compound</td>
+<td><strong>2.8</strong></td>
+<td>✅</td>
+</tr>
+<tr>
+<td><strong>3D points</strong> (row-range sliced)</td>
+<td><code>/session_data/points_3d</code> (N,3), <code>/pred_points_3d</code> (N,4)</td>
+<td>plain matrix</td>
+<td><strong>2.8</strong></td>
+<td>n/a</td>
+</tr>
+<tr>
+<td><strong>Per-group session metadata</strong></td>
+<td><code>/session_data/frame_group_meta</code>, <code>/instance_group_meta</code></td>
+<td>JSON (per row)</td>
+<td><strong>2.8</strong></td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Videos / tracks / suggestions / provenance</td>
+<td><code>videos_json</code>, <code>tracks_json</code>, <code>suggestions_json</code>, <code>provenance_json</code></td>
+<td>JSON</td>
+<td>1.0 / 2.x</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Virtual video crops</td>
+<td><code>/video_crops</code></td>
+<td>JSON</td>
+<td>2.3</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Per-detection string metadata</td>
+<td><code>/mask_*</code>, <code>/roi_*</code>, <code>/label_image_*</code> name/category/source</td>
+<td>string</td>
+<td>1.9</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Skeletons + provenance + <code>format_id</code></td>
+<td><code>/metadata</code> attrs (<code>json</code>, <code>format_id</code>)</td>
+<td>attribute</td>
+<td>1.0</td>
+<td>n/a</td>
+</tr>
+</tbody>
+</table>
+<p>† Centroid presence alone does not bump <code>format_id</code> (see <a href="#centroids">Centroids</a>); both <code>/bboxes</code> and <code>/centroids</code> use the same columnar-group mechanism introduced at 2.0.</p>
+<h3 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>The 2.8 sessions subsystem deliberately mixes three representations</strong> — compound (the small structural index tables), plain matrix (the bulk 3D coordinates, chunked + gzip so they stream), and per-row JSON (arbitrary group metadata) — matching each payload to the right storage (see <a href="#sessions">Sessions</a>).</li>
+<li><strong>Only <code>compound</code> has a browser-interop dependency.</strong> Two compound tables — the dense score-map index tables (⚠️) — are read <em>without</em> the flat-2D fallback, so a sleap-io.js-written score-map file would not load through them; score maps are a rare prediction-only feature outside the currently-in-flight port.</li>
+<li><strong>Lazy loads</strong> copy the entire <code>/session_data</code> group + <code>sessions_json</code> verbatim on save (no re-encoding), preserving the same on-disk representation without materializing frames.</li>
+</ul>
 <h2 id="version-history">Version History<a class="headerlink" href="#version-history" title="Permanent link">&para;</a></h2>
 <p>The SLP format has evolved through several versions, tracked by the <code>format_id</code> attribute in <code>/metadata</code>.</p>
 <h3 id="format-10">Format 1.0<a class="headerlink" href="#format-10" title="Permanent link">&para;</a></h3>
@@ -12829,7 +13205,7 @@ labels.materialize() first.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;vm&quot;&gt;__dict__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;mappingproxy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;({&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;__module__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;sleap_io.io.slp_lazy&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__firstlineno__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;856&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__doc__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;List-like proxy that materializes LabeledFrame objects on access.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;This provides backward compatibility for code that accesses&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.labeled_frames directly. Frames are created on-demand when&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;accessed via indexing or iteration.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;Mutations are blocked with helpful error messages suggesting to call&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.materialize() first.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__init__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f2931275b20&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__len__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__len__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f2931276020&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__getitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__getitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f2931277a60&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__iter__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__iter__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f293128df80&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__repr__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f293128e020&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;_mutation_error&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;_mutation_error&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f293128e0c0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;append&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;append&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f293128e160&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;extend&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;extend&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f293128e200&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;insert&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;insert&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f293128e2a0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__setitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__setitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f293128e340&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__delitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__delitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f293128e3e0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__static_attributes__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;_store&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;_supplementary&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;vm&quot;&gt;__dict__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;mappingproxy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;({&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;__module__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;sleap_io.io.slp_lazy&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__firstlineno__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;856&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__doc__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;List-like proxy that materializes LabeledFrame objects on access.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;This provides backward compatibility for code that accesses&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.labeled_frames directly. Frames are created on-demand when&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;accessed via indexing or iteration.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;Mutations are blocked with helpful error messages suggesting to call&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.materialize() first.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__init__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f795308f420&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__len__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__len__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f795308f880&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__getitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__getitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f79530a49a0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__iter__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__iter__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f79530a6020&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__repr__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f79530a60c0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;_mutation_error&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;_mutation_error&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f79530a6160&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;append&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;append&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f79530a6200&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;extend&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;extend&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f79530a62a0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;insert&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;insert&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f79530a6340&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__setitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__setitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f79530a63e0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__delitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__delitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f79530a6480&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__static_attributes__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;_store&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;_supplementary&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-class-attribute&quot;&gt;&lt;code&gt;class-attribute&lt;/code&gt;&lt;/small&gt;
@@ -12931,7 +13307,7 @@ labels.materialize() first.</p>
 
 
 <h5 id="sleap_io.io.slp_lazy.LazyFrameList.__dict__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__dict__</span> <span class="o">=</span> <span class="n">mappingproxy</span><span class="p">({</span><span class="s1">&#39;__module__&#39;</span><span class="p">:</span> <span class="s1">&#39;sleap_io.io.slp_lazy&#39;</span><span class="p">,</span> <span class="s1">&#39;__firstlineno__&#39;</span><span class="p">:</span> <span class="mi">856</span><span class="p">,</span> <span class="s1">&#39;__doc__&#39;</span><span class="p">:</span> <span class="s1">&#39;List-like proxy that materializes LabeledFrame objects on access.</span><span class="se">\n\n</span><span class="s1">This provides backward compatibility for code that accesses</span><span class="se">\n</span><span class="s1">labels.labeled_frames directly. Frames are created on-demand when</span><span class="se">\n</span><span class="s1">accessed via indexing or iteration.</span><span class="se">\n\n</span><span class="s1">Mutations are blocked with helpful error messages suggesting to call</span><span class="se">\n</span><span class="s1">labels.materialize() first.</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;__init__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__init__</span> <span class="n">at</span> <span class="mh">0x7f2931275b20</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__len__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__len__</span> <span class="n">at</span> <span class="mh">0x7f2931276020</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__getitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__getitem__</span> <span class="n">at</span> <span class="mh">0x7f2931277a60</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__iter__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__iter__</span> <span class="n">at</span> <span class="mh">0x7f293128df80</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__repr__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__repr__</span> <span class="n">at</span> <span class="mh">0x7f293128e020</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;_mutation_error&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">_mutation_error</span> <span class="n">at</span> <span class="mh">0x7f293128e0c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;append&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">append</span> <span class="n">at</span> <span class="mh">0x7f293128e160</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;extend&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">extend</span> <span class="n">at</span> <span class="mh">0x7f293128e200</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;insert&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">insert</span> <span class="n">at</span> <span class="mh">0x7f293128e2a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__setitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__setitem__</span> <span class="n">at</span> <span class="mh">0x7f293128e340</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__delitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__delitem__</span> <span class="n">at</span> <span class="mh">0x7f293128e3e0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__static_attributes__&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;_store&#39;</span><span class="p">,</span> <span class="s1">&#39;_supplementary&#39;</span><span class="p">),</span> <span class="s1">&#39;__dict__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__dict__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__weakref__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__weakref__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">})</span></code>
+            <code class="highlight language-python"><span class="vm">__dict__</span> <span class="o">=</span> <span class="n">mappingproxy</span><span class="p">({</span><span class="s1">&#39;__module__&#39;</span><span class="p">:</span> <span class="s1">&#39;sleap_io.io.slp_lazy&#39;</span><span class="p">,</span> <span class="s1">&#39;__firstlineno__&#39;</span><span class="p">:</span> <span class="mi">856</span><span class="p">,</span> <span class="s1">&#39;__doc__&#39;</span><span class="p">:</span> <span class="s1">&#39;List-like proxy that materializes LabeledFrame objects on access.</span><span class="se">\n\n</span><span class="s1">This provides backward compatibility for code that accesses</span><span class="se">\n</span><span class="s1">labels.labeled_frames directly. Frames are created on-demand when</span><span class="se">\n</span><span class="s1">accessed via indexing or iteration.</span><span class="se">\n\n</span><span class="s1">Mutations are blocked with helpful error messages suggesting to call</span><span class="se">\n</span><span class="s1">labels.materialize() first.</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;__init__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__init__</span> <span class="n">at</span> <span class="mh">0x7f795308f420</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__len__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__len__</span> <span class="n">at</span> <span class="mh">0x7f795308f880</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__getitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__getitem__</span> <span class="n">at</span> <span class="mh">0x7f79530a49a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__iter__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__iter__</span> <span class="n">at</span> <span class="mh">0x7f79530a6020</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__repr__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__repr__</span> <span class="n">at</span> <span class="mh">0x7f79530a60c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;_mutation_error&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">_mutation_error</span> <span class="n">at</span> <span class="mh">0x7f79530a6160</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;append&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">append</span> <span class="n">at</span> <span class="mh">0x7f79530a6200</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;extend&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">extend</span> <span class="n">at</span> <span class="mh">0x7f79530a62a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;insert&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">insert</span> <span class="n">at</span> <span class="mh">0x7f79530a6340</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__setitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__setitem__</span> <span class="n">at</span> <span class="mh">0x7f79530a63e0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__delitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__delitem__</span> <span class="n">at</span> <span class="mh">0x7f79530a6480</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__static_attributes__&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;_store&#39;</span><span class="p">,</span> <span class="s1">&#39;_supplementary&#39;</span><span class="p">),</span> <span class="s1">&#39;__dict__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__dict__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__weakref__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__weakref__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">})</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
