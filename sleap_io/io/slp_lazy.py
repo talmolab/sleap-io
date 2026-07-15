@@ -109,6 +109,24 @@ class LazyDataStore:
         factory=dict, repr=False, alias="instance_category_embeddings"
     )
 
+    # Raw RecordingSession payload for lossless lazy passthrough (format 2.8+).
+    # ``sessions_json_raw`` is the verbatim variable-length ``sessions_json`` bytes
+    # array; ``session_data`` is the dict of columnar ``/session_data`` arrays (see
+    # slp._read_session_data). Held so a lazy re-save can copy the frame-group / 3D
+    # tables verbatim without materializing frames -- the eager path drops them.
+    sessions_json_raw: "np.ndarray | None" = attrs.field(
+        default=None, repr=False, alias="sessions_json_raw"
+    )
+    session_data: "dict | None" = attrs.field(
+        default=None, repr=False, alias="session_data"
+    )
+    # Immutable snapshot of the video identity order at load time. The passthrough's
+    # sessions_json encodes video indices, so it is only safe to copy verbatim when
+    # the current video list matches this order (see slp._videos_unchanged).
+    session_video_ids: tuple = attrs.field(
+        default=(), repr=False, alias="session_video_ids"
+    )
+
     def __attrs_post_init__(self) -> None:
         """Validate index bounds on construction."""
         self.validate()

@@ -52,6 +52,25 @@ Format version history:
             not share dimensionality D. Identity-only files stay byte-identical
             (no category_* datasets, no /categories group written). All additive,
             read on group presence.
+    - 2.8: Externalized RecordingSession frame-group data out of the per-session
+            `sessions_json` string into the columnar `/session_data` group so large
+            multi-view projects scale (previously an entire session -- every frame
+            group with its inline 3D points -- was one JSON string, growing to
+            hundreds of MB and becoming unreadable in JS/WASM past the ~0.45 GB
+            vlen-string limit). `sessions_json` now holds only calibration +
+            `camcorder_to_video_idx_map` + session-level metadata + an
+            `fg_start`/`fg_end` range into `/session_data/frame_groups`. The group
+            holds: `frame_groups` (frame_idx + instance-group range), `instance_groups`
+            (identity_idx/score/instance_3d_score + points_3d range + predicted flag +
+            member range), `instance_group_members` (the columnarized
+            camcorder_to_lf_and_inst_idx_map: camera/lf/inst), `points_3d` (N,3) and
+            `pred_points_3d` (N,4 = xyz+score) as chunked+gzip float matrices sliced by
+            row range, and presence-guarded `frame_group_meta`/`instance_group_meta`
+            per-row JSON metadata blobs. The reader dispatches on `/session_data`
+            presence and still accepts pre-2.8 inline `frame_group_dicts` (with inline
+            `points`). Lazy save copies the group verbatim; only present when a session
+            has frame groups (files without stay byte-identical). Read on group
+            presence.
 """
 
 from __future__ import annotations
@@ -73,6 +92,7 @@ from tqdm import tqdm
 
 from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
 from sleap_io.io.utils import (
+    _read_dataset_from_open_file,
     is_file_accessible,
     read_hdf5_attrs,
     read_hdf5_dataset,
@@ -172,6 +192,49 @@ LI_SM_INDEX_DTYPE = np.dtype(
         ("scale_y", "f4"),
         ("offset_x", "f4"),
         ("offset_y", "f4"),
+    ]
+)
+
+
+# -- Columnar RecordingSession HDF5 dtype constants (SLP 2.8, /session_data group) ----
+# Shared by the session write/read/lazy paths. See the 2.8 format-history entry.
+
+# One row per FrameGroup (across all sessions, in emission order). ``ig_start`` /
+# ``ig_end`` are a half-open range into ``instance_groups``.
+FRAME_GROUP_DTYPE = np.dtype(
+    [
+        ("frame_idx", "i8"),
+        ("ig_start", "u8"),
+        ("ig_end", "u8"),
+    ]
+)
+
+# One row per InstanceGroup. ``identity_idx`` is -1 when unset; ``score`` and
+# ``instance_3d_score`` are NaN when unset. ``pts3d_start`` / ``pts3d_end`` are a
+# half-open range into ``points_3d`` (``pts3d_predicted`` == 0) or ``pred_points_3d``
+# (== 1), or -1 / -1 when the group has no 3D instance. ``member_start`` /
+# ``member_end`` are a half-open range into ``instance_group_members``.
+INSTANCE_GROUP_DTYPE = np.dtype(
+    [
+        ("identity_idx", "i4"),
+        ("score", "f8"),
+        ("instance_3d_score", "f8"),
+        ("pts3d_start", "i8"),
+        ("pts3d_end", "i8"),
+        ("pts3d_predicted", "u1"),
+        ("member_start", "u8"),
+        ("member_end", "u8"),
+    ]
+)
+
+# One row per (camera, instance) membership of an InstanceGroup -- the columnarized
+# ``camcorder_to_lf_and_inst_idx_map``. ``camera`` indexes CameraGroup.cameras; ``lf``
+# indexes Labels.labeled_frames; ``inst`` indexes LabeledFrame.instances.
+INSTANCE_GROUP_MEMBER_DTYPE = np.dtype(
+    [
+        ("camera", "u4"),
+        ("lf", "i8"),
+        ("inst", "u4"),
     ]
 )
 
@@ -3830,6 +3893,14 @@ def write_metadata(labels_path: str, labels: Labels):
         if "label_image_data" in f and f["label_image_data"].ndim == 3:
             format_id = max(format_id, 2.2)
 
+        # Bump for the columnar RecordingSession frame-group subsystem (new in 2.8).
+        # write_sessions runs before write_metadata in both the eager and lazy write
+        # paths, so gate on the group it just wrote (mirrors the label_image_data
+        # presence check above). Files whose sessions have no frame groups never get
+        # the group written and stay <= 2.7.
+        if "session_data" in f:
+            format_id = max(format_id, 2.8)
+
         grp = f.require_group("metadata")
         grp.attrs["format_id"] = format_id
         # Store provenance in a dedicated dataset (no 64 KB attribute limit) so an
@@ -4459,11 +4530,191 @@ def make_camera_group(calibration_dict: dict) -> CameraGroup:
     return CameraGroup(cameras=cameras, metadata=metadata)
 
 
+def _decode_meta_blob(meta_arr: np.ndarray | None, idx: int) -> dict:
+    """Decode a per-row JSON metadata blob from a vlen-string dataset.
+
+    Args:
+        meta_arr: The ``frame_group_meta`` / ``instance_group_meta`` array, or `None`
+            when the (presence-guarded) dataset was omitted.
+        idx: Row index.
+
+    Returns:
+        The decoded metadata dict (empty when absent or blank).
+    """
+    if meta_arr is None or idx >= len(meta_arr):
+        return {}
+    raw = meta_arr[idx]
+    if isinstance(raw, bytes):
+        raw = raw.decode()
+    raw = str(raw)
+    if not raw:
+        return {}
+    return json.loads(raw)
+
+
+def _make_instance_group_columnar(
+    ig_row: np.void,
+    session_data: dict,
+    camera_group: CameraGroup,
+    labeled_frames: list[LabeledFrame],
+    identities: list[Identity] | None,
+    ig_idx: int,
+) -> InstanceGroup:
+    """Reconstruct one `InstanceGroup` from the columnar `/session_data` tables.
+
+    Args:
+        ig_row: A single row of the ``instance_groups`` struct dataset.
+        session_data: The loaded ``/session_data`` arrays (see `_read_session_data`).
+        camera_group: `CameraGroup` for resolving camera indices.
+        labeled_frames: `LabeledFrame` list for resolving member instances.
+        identities: Optional identity catalog for resolving ``identity_idx``.
+        ig_idx: This instance group's global row index (for metadata lookup).
+
+    Returns:
+        The reconstructed `InstanceGroup`.
+    """
+    members = session_data["instance_group_members"]
+    m_start, m_end = int(ig_row["member_start"]), int(ig_row["member_end"])
+    instance_by_camera: dict[Camera, Instance] = {}
+    for m in range(m_start, m_end):
+        row = members[m]
+        camera = camera_group.cameras[int(row["camera"])]
+        labeled_frame = labeled_frames[int(row["lf"])]
+        instance = labeled_frame.instances[int(row["inst"])]
+        instance_by_camera[camera] = instance
+
+    score = float(ig_row["score"])
+    score = None if np.isnan(score) else score
+
+    identity = None
+    identity_idx = int(ig_row["identity_idx"])
+    if identity_idx >= 0 and identities is not None:
+        if identity_idx < len(identities):
+            identity = identities[identity_idx]
+        else:
+            warnings.warn(
+                f"identity_idx {identity_idx} out of range "
+                f"(max {len(identities) - 1}); identity set to None."
+            )
+
+    # 3D points from the points_3d / pred_points_3d row range.
+    instance_3d = None
+    pts3d_start = int(ig_row["pts3d_start"])
+    if pts3d_start >= 0:
+        pts3d_end = int(ig_row["pts3d_end"])
+        predicted = bool(ig_row["pts3d_predicted"])
+        skeleton = None
+        for inst in instance_by_camera.values():
+            skeleton = inst.skeleton
+            break
+        i3d_score = float(ig_row["instance_3d_score"])
+        i3d_score = None if np.isnan(i3d_score) else i3d_score
+        source = (
+            session_data["pred_points_3d"] if predicted else session_data["points_3d"]
+        )
+        if skeleton is None:
+            warnings.warn(
+                "3D points discarded for InstanceGroup: no skeleton available "
+                "(all camera mappings failed)."
+            )
+        elif source is None:
+            warnings.warn(
+                "3D points discarded for InstanceGroup: referenced points dataset "
+                "is missing."
+            )
+        elif predicted:
+            block = np.asarray(source[pts3d_start:pts3d_end], dtype="f8")
+            instance_3d = PredictedInstance3D(
+                points=block[:, :3],
+                skeleton=skeleton,
+                score=i3d_score,
+                point_scores=block[:, 3],
+            )
+        else:
+            instance_3d = Instance3D(
+                points=np.asarray(source[pts3d_start:pts3d_end], dtype="f8"),
+                skeleton=skeleton,
+                score=i3d_score,
+            )
+
+    return InstanceGroup(
+        instance_by_camera=instance_by_camera,
+        score=score,
+        instance_3d=instance_3d,
+        identity=identity,
+        metadata=_decode_meta_blob(session_data["instance_group_meta"], ig_idx),
+    )
+
+
+def _reconstruct_frame_groups_columnar(
+    fg_start: int,
+    fg_end: int,
+    session_data: dict,
+    camera_group: CameraGroup,
+    labeled_frames: list[LabeledFrame],
+    identities: list[Identity] | None,
+) -> dict[int, FrameGroup]:
+    """Reconstruct a session's `FrameGroup`s from the columnar `/session_data` tables.
+
+    Args:
+        fg_start: Start (inclusive) of this session's range into ``frame_groups``.
+        fg_end: End (exclusive) of the range.
+        session_data: The loaded ``/session_data`` arrays (see `_read_session_data`).
+        camera_group: `CameraGroup` for resolving camera indices.
+        labeled_frames: `LabeledFrame` list for resolving member instances.
+        identities: Optional identity catalog for resolving ``identity_idx``.
+
+    Returns:
+        Mapping of ``frame_idx`` to reconstructed `FrameGroup`.
+    """
+    frame_groups = session_data["frame_groups"]
+    instance_groups = session_data["instance_groups"]
+    frame_group_by_frame_idx: dict[int, FrameGroup] = {}
+    for fg in range(fg_start, fg_end):
+        fg_row = frame_groups[fg]
+        frame_idx = int(fg_row["frame_idx"])
+        ig_start, ig_end = int(fg_row["ig_start"]), int(fg_row["ig_end"])
+        try:
+            groups: list[InstanceGroup] = []
+            labeled_frame_by_camera: dict[Camera, LabeledFrame] = {}
+            for ig_idx in range(ig_start, ig_end):
+                group = _make_instance_group_columnar(
+                    instance_groups[ig_idx],
+                    session_data,
+                    camera_group,
+                    labeled_frames,
+                    identities,
+                    ig_idx,
+                )
+                groups.append(group)
+                # Recover the LabeledFrame-by-camera mapping from the same members.
+                m_start = int(instance_groups[ig_idx]["member_start"])
+                m_end = int(instance_groups[ig_idx]["member_end"])
+                members = session_data["instance_group_members"]
+                for m in range(m_start, m_end):
+                    row = members[m]
+                    camera = camera_group.cameras[int(row["camera"])]
+                    labeled_frame_by_camera[camera] = labeled_frames[int(row["lf"])]
+            frame_group_by_frame_idx[frame_idx] = FrameGroup(
+                frame_idx=frame_idx,
+                instance_groups=groups,
+                labeled_frame_by_camera=labeled_frame_by_camera,
+                metadata=_decode_meta_blob(session_data["frame_group_meta"], fg),
+            )
+        except (ValueError, IndexError) as e:
+            print(
+                f"Error reconstructing FrameGroup at frame {frame_idx}. "
+                f"Skipping...\n{e}"
+            )
+    return frame_group_by_frame_idx
+
+
 def make_session(
     session_dict: dict,
     videos: list[Video],
     labeled_frames: list[LabeledFrame],
     identities: list[Identity] | None = None,
+    session_data: dict | None = None,
 ) -> RecordingSession:
     """Create a `RecordingSession` from a dictionary.
 
@@ -4472,14 +4723,18 @@ def make_session(
             - "calibration": Dictionary containing calibration information for cameras.
             - "camcorder_to_video_idx_map": Dictionary mapping camera index to video
                 index.
-            - "frame_group_dicts": List of dictionaries containing `FrameGroup`
-                information. See `make_frame_group` for what each dictionary contains.
+            - Either an ``fg_start``/``fg_end`` range into the columnar
+                ``/session_data`` tables (SLP 2.8+) or a legacy ``frame_group_dicts``
+                list (<= 2.7; see `make_frame_group`).
             - Any optional keys containing metadata.
         videos: List containing `Video` objects (expected `Labels.videos`).
         labeled_frames: List containing `LabeledFrame` objects (expected
-            `Labels.labeled_frames`).
+            `Labels.labeled_frames`). When empty (e.g. the lazy read path), frame
+            groups are not reconstructed.
         identities: Optional list of `Identity` objects for resolving identity
             indices.
+        session_data: The loaded ``/session_data`` columnar arrays (see
+            `_read_session_data`) used for the SLP 2.8+ path. `None` for legacy files.
 
     Returns:
         `RecordingSession` object.
@@ -4501,25 +4756,39 @@ def make_session(
         video_by_camera[camera] = video
         camera_by_video[video] = camera
 
-    # Reconstruct all `FrameGroup` objects and add to `RecordingSession`
-    frame_group_dicts = []
-    if "frame_group_dicts" in session_dict:
-        frame_group_dicts = session_dict.pop("frame_group_dicts")
-    frame_group_by_frame_idx = {}
-    for frame_group_dict in frame_group_dicts:
-        try:
-            # Add `FrameGroup` to `RecordingSession`
-            frame_group = make_frame_group(
-                frame_group_dict=frame_group_dict,
-                labeled_frames=labeled_frames,
-                camera_group=camera_group,
-                identities=identities,
-            )
-            frame_group_by_frame_idx[frame_group.frame_idx] = frame_group
-        except ValueError as e:
-            print(
-                f"Error reconstructing FrameGroup: {frame_group_dict}. Skipping...\n{e}"
-            )
+    frame_group_by_frame_idx: dict[int, FrameGroup] = {}
+    fg_start = session_dict.pop("fg_start", None)
+    fg_end = session_dict.pop("fg_end", None)
+    if fg_start is not None and session_data is not None and labeled_frames:
+        # SLP 2.8+ columnar path.
+        frame_group_by_frame_idx = _reconstruct_frame_groups_columnar(
+            int(fg_start),
+            int(fg_end),
+            session_data,
+            camera_group,
+            labeled_frames,
+            identities,
+        )
+    elif fg_start is None and labeled_frames:
+        # Legacy (<= 2.7) inline path.
+        for frame_group_dict in session_dict.pop("frame_group_dicts", []):
+            try:
+                frame_group = make_frame_group(
+                    frame_group_dict=frame_group_dict,
+                    labeled_frames=labeled_frames,
+                    camera_group=camera_group,
+                    identities=identities,
+                )
+                frame_group_by_frame_idx[frame_group.frame_idx] = frame_group
+            except ValueError as e:
+                print(
+                    f"Error reconstructing FrameGroup: {frame_group_dict}. "
+                    f"Skipping...\n{e}"
+                )
+    else:
+        # No labeled frames materialized (e.g. lazy read): drop the frame-group
+        # scaffolding key so it does not leak into metadata, but skip reconstruction.
+        session_dict.pop("frame_group_dicts", None)
 
     session = RecordingSession(
         camera_group=camera_group,
@@ -4566,12 +4835,62 @@ def read_sessions(
     except KeyError:
         return []
     sessions = [json.loads(x) for x in sessions]
+    session_data = _read_session_data(labels_path, _hdf5_file=_hdf5_file)
     session_objects = []
     for session in sessions:
         session_objects.append(
-            make_session(session, videos, labeled_frames, identities=identities)
+            make_session(
+                session,
+                videos,
+                labeled_frames,
+                identities=identities,
+                session_data=session_data,
+            )
         )
     return session_objects
+
+
+def _read_session_data(
+    labels_path: str, *, _hdf5_file: h5py.File | None = None
+) -> dict | None:
+    """Load the columnar ``/session_data`` arrays (SLP 2.8+), or `None` if absent.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        _hdf5_file: An already-open `h5py.File` handle to read from.
+
+    Returns:
+        A dict of the (possibly-`None`, presence-guarded) member arrays keyed by
+        dataset name, or `None` when the group is absent (legacy <= 2.7 files).
+    """
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as f:
+        if "session_data" not in f:
+            return None
+        grp = f["session_data"]
+        names = [
+            "frame_groups",
+            "instance_groups",
+            "instance_group_members",
+            "points_3d",
+            "pred_points_3d",
+            "frame_group_meta",
+            "instance_group_meta",
+        ]
+        # Read through the conversion-aware helper so the struct tables written by
+        # h5wasm (sleap-io.js) as flat 2D arrays + a ``field_names`` attribute are
+        # rebuilt as structured arrays, matching how points/instances/frames are
+        # handled. h5py-written compound datasets and the plain float points_3d
+        # matrices pass through unchanged.
+        return {
+            name: (_read_dataset_from_open_file(f, f"session_data/{name}")
+                   if name in grp else None)
+            for name in names
+        }
 
 
 def instance_group_to_dict(
@@ -4833,6 +5152,77 @@ def session_to_dict(
     return session_dict
 
 
+def _session_calibration_dict(
+    session: RecordingSession, video_to_idx: dict[Video, int]
+) -> tuple[dict, dict]:
+    """Build the small calibration + camera-to-video maps for a session.
+
+    These are the O(cameras) structural pieces that remain inline in the slim
+    ``sessions_json`` blob (SLP 2.8); the O(frames) frame-group data is stored
+    columnar in ``/session_data``. Extracted from the legacy `session_to_dict` so
+    both the columnar writer and the legacy serializer share the exact same logic.
+
+    Args:
+        session: `RecordingSession` to serialize.
+        video_to_idx: Mapping of `Video` to index in `Labels.videos`.
+
+    Returns:
+        A tuple of ``(calibration_dict, camera_to_video_idx_map)``.
+    """
+    calibration_dict = camera_group_to_dict(session.camera_group)
+
+    camera_to_video_idx_map: dict[int, int] = {}
+    for cam_idx, camera in enumerate(session.camera_group.cameras):
+        # Skip if Camera is not linked to any Video.
+        if camera not in session.cameras:
+            continue
+        video = session.get_video(camera)
+        video_idx = video_to_idx.get(video, None)
+        if video_idx is not None:
+            camera_to_video_idx_map[cam_idx] = video_idx
+        else:
+            print(
+                f"Video {video} not found in `Labels.videos`. "
+                "Not saving to `RecordingSession` serialization."
+            )
+    return calibration_dict, camera_to_video_idx_map
+
+
+def _append_rows_2d(
+    grp: h5py.Group, dset: h5py.Dataset | None, name: str, block: np.ndarray
+) -> h5py.Dataset:
+    """Append rows to a resizable float64 2-D dataset, creating it on first use.
+
+    Used for the incremental per-session append of ``points_3d`` / ``pred_points_3d``
+    so the whole 3D point array is never held in memory at once (only one session's
+    worth). The dataset is chunked + gzip so multi-view projects scale and remote
+    JS/WASM consumers can range-read chunks.
+
+    Args:
+        grp: The open ``/session_data`` HDF5 group.
+        dset: The dataset handle, or `None` to create it from ``block``'s width.
+        name: Dataset name within the group.
+        block: A ``(rows, ncols)`` float64 array to append.
+
+    Returns:
+        The dataset handle (created on first call).
+    """
+    ncols = block.shape[1]
+    if dset is None:
+        dset = grp.create_dataset(
+            name,
+            shape=(0, ncols),
+            maxshape=(None, ncols),
+            dtype="f8",
+            chunks=(min(8192, max(1, len(block))), ncols),
+            compression="gzip",
+        )
+    old = dset.shape[0]
+    dset.resize(old + len(block), axis=0)
+    dset[old:] = block
+    return dset
+
+
 def write_sessions(
     labels_path: str,
     sessions: list[RecordingSession],
@@ -4840,10 +5230,21 @@ def write_sessions(
     labeled_frames: list[LabeledFrame],
     identities: list[Identity] | None = None,
 ):
-    """Write `RecordingSession` metadata to a SLEAP labels file.
+    """Write `RecordingSession` metadata to a SLEAP labels file (SLP 2.8 columnar).
 
-    Creates a new dataset "sessions_json" in the `labels_path` file to store the
-    sessions data.
+    Always creates the ``sessions_json`` dataset holding one *slim* JSON blob per
+    session: only calibration + ``camcorder_to_video_idx_map`` + session-level
+    metadata + an ``fg_start``/``fg_end`` half-open range into
+    ``/session_data/frame_groups``.
+
+    When any session has frame groups (and ``labeled_frames`` are supplied), the
+    per-frame numeric payload is written columnar into the ``/session_data`` group:
+    ``frame_groups`` / ``instance_groups`` / ``instance_group_members`` struct
+    datasets, ``points_3d`` (N,3) / ``pred_points_3d`` (N,4 = xyz+score) chunked
+    float matrices (appended one session at a time), and presence-guarded per-row
+    ``frame_group_meta`` / ``instance_group_meta`` JSON blobs. The group is omitted
+    entirely (and the format stays <= 2.7) when there are no frame groups, so files
+    without multi-view frame groups are byte-identical to before.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -4852,25 +5253,258 @@ def write_sessions(
         videos: A list of `Video` objects referenced in the `RecordingSession`s
             (expecting `Labels.videos`).
         labeled_frames: A list of `LabeledFrame` objects referenced in the
-            `RecordingSession`s (expecting `Labels.labeled_frames`).
+            `RecordingSession`s (expecting `Labels.labeled_frames`). An empty list
+            skips all frame groups (matching the historical behavior when frames are
+            not materialized).
         identities: Optional list of `Identity` objects for serializing identity
             indices.
     """
-    sessions_json = []
+    sessions_json: list[np.bytes_] = []
     if len(sessions) > 0:
         labeled_frame_to_idx = {lf: i for i, lf in enumerate(labeled_frames)}
         video_to_idx = {video: i for i, video in enumerate(videos)}
-    for session in sessions:
-        session_json = session_to_dict(
-            session=session,
-            video_to_idx=video_to_idx,
-            labeled_frame_to_idx=labeled_frame_to_idx,
-            identities=identities,
-        )
-        sessions_json.append(np.bytes_(json.dumps(session_json, separators=(",", ":"))))
+
+    # Columnar accumulators (small; O(frames*instances) of fixed-width ints/floats).
+    fg_rows: list[tuple] = []
+    ig_rows: list[tuple] = []
+    member_rows: list[tuple] = []
+    fg_meta: list[str] = []
+    ig_meta: list[str] = []
+
+    save_frame_groups = len(sessions) > 0 and len(labeled_frame_to_idx) > 0
 
     with h5py.File(labels_path, "a") as f:
+        points_dset: h5py.Dataset | None = None
+        pred_points_dset: h5py.Dataset | None = None
+        session_data_grp: h5py.Group | None = None
+        pts3d_counter = 0
+        pred_counter = 0
+
+        for session in sessions:
+            calibration_dict, camera_to_video_idx_map = _session_calibration_dict(
+                session, video_to_idx
+            )
+
+            fg_start = len(fg_rows)
+            session_pts_blocks: list[np.ndarray] = []
+            session_pred_blocks: list[np.ndarray] = []
+
+            if save_frame_groups:
+                for frame_group in session.frame_groups.values():
+                    if len(frame_group.instance_groups) == 0:
+                        continue
+
+                    instance_to_lf_and_inst_idx: dict[Instance, tuple[int, int]] = {
+                        inst: (labeled_frame_to_idx[lf], inst_idx)
+                        for lf in frame_group.labeled_frames
+                        for inst_idx, inst in enumerate(lf.instances)
+                    }
+
+                    ig_start = len(ig_rows)
+                    for ig in frame_group.instance_groups:
+                        member_start = len(member_rows)
+                        cameras = session.camera_group.cameras
+                        for cam, inst in ig.instance_by_camera.items():
+                            lf_idx, inst_idx = instance_to_lf_and_inst_idx[inst]
+                            member_rows.append((cameras.index(cam), lf_idx, inst_idx))
+                        member_end = len(member_rows)
+
+                        # Identity -> catalog index (-1 when unset / not found).
+                        identity_idx = -1
+                        if ig.identity is not None and identities is not None:
+                            try:
+                                identity_idx = identities.index(ig.identity)
+                            except ValueError:
+                                warnings.warn(
+                                    f"Identity '{ig.identity.name}' not found in "
+                                    "Labels.identities; identity dropped during save."
+                                )
+
+                        score = ig.score if ig.score is not None else np.nan
+
+                        # 3D points -> points_3d / pred_points_3d row range.
+                        pts3d_start, pts3d_end, pts3d_predicted = -1, -1, 0
+                        i3d_score = np.nan
+                        inst3d = ig.instance_3d
+                        if inst3d is not None and inst3d.points is not None:
+                            pts = np.asarray(inst3d.points, dtype="f8")
+                            is_pred = (
+                                isinstance(inst3d, PredictedInstance3D)
+                                and inst3d.point_scores is not None
+                            )
+                            if is_pred:
+                                ps = np.asarray(
+                                    inst3d.point_scores, dtype="f8"
+                                ).reshape(-1, 1)
+                                block = np.hstack([pts, ps])
+                                pts3d_start = pred_counter
+                                pred_counter += len(block)
+                                pts3d_end = pred_counter
+                                pts3d_predicted = 1
+                                session_pred_blocks.append(block)
+                            else:
+                                pts3d_start = pts3d_counter
+                                pts3d_counter += len(pts)
+                                pts3d_end = pts3d_counter
+                                session_pts_blocks.append(pts)
+                            if inst3d.score is not None:
+                                i3d_score = inst3d.score
+
+                        ig_rows.append(
+                            (
+                                identity_idx,
+                                score,
+                                i3d_score,
+                                pts3d_start,
+                                pts3d_end,
+                                pts3d_predicted,
+                                member_start,
+                                member_end,
+                            )
+                        )
+                        ig_meta.append(
+                            json.dumps(ig.metadata, separators=(",", ":"))
+                            if ig.metadata
+                            else ""
+                        )
+                    ig_end = len(ig_rows)
+
+                    fg_rows.append((int(frame_group.frame_idx), ig_start, ig_end))
+                    fg_meta.append(
+                        json.dumps(frame_group.metadata, separators=(",", ":"))
+                        if frame_group.metadata
+                        else ""
+                    )
+
+            fg_end = len(fg_rows)
+
+            # Append this session's 3D blocks (bounded to one session in memory).
+            if session_pts_blocks:
+                if session_data_grp is None:
+                    session_data_grp = f.require_group("session_data")
+                points_dset = _append_rows_2d(
+                    session_data_grp,
+                    points_dset,
+                    "points_3d",
+                    np.concatenate(session_pts_blocks),
+                )
+            if session_pred_blocks:
+                if session_data_grp is None:
+                    session_data_grp = f.require_group("session_data")
+                pred_points_dset = _append_rows_2d(
+                    session_data_grp,
+                    pred_points_dset,
+                    "pred_points_3d",
+                    np.concatenate(session_pred_blocks),
+                )
+
+            session_json = {
+                "calibration": calibration_dict,
+                "camcorder_to_video_idx_map": camera_to_video_idx_map,
+            }
+            session_json.update(session.metadata)
+            session_json["fg_start"] = fg_start
+            session_json["fg_end"] = fg_end
+            sessions_json.append(
+                np.bytes_(json.dumps(session_json, separators=(",", ":")))
+            )
+
         f.create_dataset("sessions_json", data=sessions_json, maxshape=(None,))
+
+        # Columnar frame-group tables (only when there are frame groups).
+        if fg_rows:
+            grp = f.require_group("session_data")
+            grp.create_dataset(
+                "frame_groups",
+                data=np.array(fg_rows, dtype=FRAME_GROUP_DTYPE),
+                maxshape=(None,),
+            )
+            grp.create_dataset(
+                "instance_groups",
+                data=np.array(ig_rows, dtype=INSTANCE_GROUP_DTYPE),
+                maxshape=(None,),
+            )
+            grp.create_dataset(
+                "instance_group_members",
+                data=np.array(member_rows, dtype=INSTANCE_GROUP_MEMBER_DTYPE),
+                maxshape=(None,),
+            )
+            # Per-row metadata JSON blobs, presence-guarded (omitted when all empty).
+            str_dt = h5py.special_dtype(vlen=str)
+            if any(fg_meta):
+                grp.create_dataset(
+                    "frame_group_meta", data=fg_meta, dtype=str_dt, maxshape=(None,)
+                )
+            if any(ig_meta):
+                grp.create_dataset(
+                    "instance_group_meta", data=ig_meta, dtype=str_dt, maxshape=(None,)
+                )
+
+
+def _videos_unchanged(current: list[Video], original_ids: tuple) -> bool:
+    """Whether the current video list matches the load-time identity snapshot.
+
+    The lazy ``sessions_json`` passthrough encodes video indices
+    (``camcorder_to_video_idx_map``); those indices only stay valid if the video
+    list has not been reordered/added/removed since load. The comparison is against
+    an immutable ``id()`` snapshot captured at load (``LazyDataStore``'s
+    ``session_video_ids``), so it stays correct even when the store shares the list
+    object with `Labels` (e.g. an in-place ``videos.reverse()``).
+
+    Args:
+        current: The current `Labels.videos`.
+        original_ids: The ``id()`` tuple of the video list captured at load time.
+
+    Returns:
+        `True` when passthrough of the session video refs is safe.
+    """
+    return tuple(id(v) for v in current) == tuple(original_ids)
+
+
+def write_sessions_passthrough(labels_path: str, store) -> bool:
+    """Copy a lazy store's raw RecordingSession payload verbatim (SLP 2.8+).
+
+    Writes the captured ``sessions_json`` bytes and the columnar ``/session_data``
+    arrays exactly as loaded, so lazy re-saves preserve frame groups + 3D points
+    losslessly without materializing frames (the eager lazy path drops them).
+
+    Args:
+        labels_path: A string path to the SLEAP labels file being written.
+        store: The `LazyDataStore` backing the lazy `Labels`.
+
+    Returns:
+        `True` if a passthrough was written; `False` if the store carried no
+        captured session payload (caller should fall back to `write_sessions`).
+    """
+    raw = getattr(store, "sessions_json_raw", None)
+    if raw is None:
+        return False
+    session_data = getattr(store, "session_data", None)
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset("sessions_json", data=raw, maxshape=(None,))
+        if session_data is not None:
+            grp = f.require_group("session_data")
+            for name, arr in session_data.items():
+                if arr is None:
+                    continue
+                if name in ("points_3d", "pred_points_3d"):
+                    grp.create_dataset(
+                        name,
+                        data=arr,
+                        maxshape=(None, arr.shape[1]),
+                        chunks=(min(8192, max(1, len(arr))), arr.shape[1]),
+                        compression="gzip",
+                    )
+                elif name in ("frame_group_meta", "instance_group_meta"):
+                    grp.create_dataset(
+                        name,
+                        data=arr,
+                        dtype=h5py.special_dtype(vlen=str),
+                        maxshape=(None,),
+                    )
+                else:
+                    grp.create_dataset(name, data=arr, maxshape=(None,))
+    return True
 
 
 def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
@@ -4994,13 +5628,21 @@ def _read_labels_lazy_from_open_file(
 
     # Read sessions (small, no need for lazy loading)
     # Note: sessions require labeled_frames for full linking, but for lazy loading
-    # we pass an empty list since we don't have materialized frames yet
+    # we pass an empty list since we don't have materialized frames yet (frame
+    # groups are not reconstructed). The raw sessions_json bytes + columnar
+    # /session_data arrays are captured verbatim so a lazy re-save can copy the
+    # frame-group / 3D tables losslessly without materializing frames (SLP 2.8+).
     sessions = read_sessions(
         labels_path, videos, [], identities=identities, _hdf5_file=f
     )
+    sessions_json_raw = f["sessions_json"][:] if "sessions_json" in f else None
+    session_data_raw = _read_session_data(labels_path, _hdf5_file=f)
 
     # Create LazyDataStore
     lazy_store = LazyDataStore(
+        sessions_json_raw=sessions_json_raw,
+        session_data=session_data_raw,
+        session_video_ids=tuple(id(v) for v in videos),
         frames_data=frames_data,
         instances_data=instances_data,
         pred_points_data=pred_points_data,
@@ -8154,6 +8796,11 @@ _KNOWN_TOPLEVEL_HDF5_NAMES = frozenset(
         "tracks_json",
         "suggestions_json",
         "sessions_json",
+        # Columnar RecordingSession frame-group data (SLP 2.8+): frame_groups /
+        # instance_groups / instance_group_members / points_3d / pred_points_3d +
+        # per-row metadata JSON blobs. sessions_json keeps only calibration + video
+        # map + session metadata + a range into frame_groups.
+        "session_data",
         # Re-ID identity subsystem groups (SLP 2.5+): /identity holds the catalog
         # (name + EAV metadata) and per-detection links; /embeddings holds the
         # columnar appearance vectors. Class/category subsystem (SLP 2.7+):
@@ -8458,9 +9105,23 @@ def _write_labels_lazy(
         labels.identities,
     )
     write_suggestions(labels_path, labels.suggestions, labels.videos)
-    # For sessions, pass empty list since we don't have materialized frames
-    # (consistent with lazy load behavior)
-    write_sessions(labels_path, labels.sessions, labels.videos, [])
+    # Sessions: prefer a verbatim passthrough of the raw sessions_json + columnar
+    # /session_data captured at load, so frame groups + 3D points survive a lazy
+    # re-save losslessly (frames are never materialized here). Only safe when the
+    # video list is unchanged (session refs encode video indices); otherwise fall
+    # back to regenerating the slim sessions_json without frame groups (+ warn if
+    # frame-group data would be dropped).
+    did_passthrough = False
+    if _videos_unchanged(labels.videos, lazy_store.session_video_ids):
+        did_passthrough = write_sessions_passthrough(labels_path, lazy_store)
+    if not did_passthrough:
+        if getattr(lazy_store, "session_data", None) is not None:
+            warnings.warn(
+                "Videos changed since lazy load; RecordingSession frame groups "
+                "(including 3D points) are not preserved on this save. Call "
+                "`labels.materialize()` before saving to retain them."
+            )
+        write_sessions(labels_path, labels.sessions, labels.videos, [])
     write_metadata(labels_path, labels)
 
     # Write raw arrays directly from lazy store (fast path)
