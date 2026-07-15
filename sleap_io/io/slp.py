@@ -4887,8 +4887,11 @@ def _read_session_data(
         # handled. h5py-written compound datasets and the plain float points_3d
         # matrices pass through unchanged.
         return {
-            name: (_read_dataset_from_open_file(f, f"session_data/{name}")
-                   if name in grp else None)
+            name: (
+                _read_dataset_from_open_file(f, f"session_data/{name}")
+                if name in grp
+                else None
+            )
             for name in names
         }
 
