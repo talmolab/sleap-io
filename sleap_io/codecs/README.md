@@ -124,7 +124,7 @@ df = to_dataframe(
     labels,
     format="points",
     include_user_instances=False,
-    include_predicted_instances=True
+    include_predicted_instances=True,
 )
 
 # Exclude confidence scores
@@ -203,7 +203,7 @@ labels = from_numpy(
     video=video,
     skeleton=skeleton,
     tracks=[Track("track1"), Track("track2")],
-    return_confidence=True
+    return_confidence=True,
 )
 ```
 
