@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from sleap_io.io.slp_lazy import LazyDataStore
     from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.centroid import Centroid
+    from sleap_io.model.diagnostics import Diagnostics
     from sleap_io.model.label_image import LabelImage
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.mask import SegmentationMask
@@ -1956,6 +1957,39 @@ class Labels:
         from sleap_io.rendering import render_video
 
         return render_video(self, save_path, **kwargs)
+
+    def diagnose(
+        self,
+        video: Video | str | Path | int | None = None,
+        untracked: bool | None = None,
+    ) -> "Diagnostics":
+        """Compute a quality report for these labels.
+
+        Runs a set of ground-truth-free consistency checks — track occupancy,
+        node visibility, confidence distribution, track fragmentation, teleport
+        frames, and skeleton segment stability — and interprets them as findings
+        with suggested fixes.
+
+        Args:
+            video: Video, filename, or video index to analyze. If `None` (the
+                default), uses the first video.
+            untracked: If `False`, analyze only instances with a track
+                assignment. If `True`, analyze all instances in arbitrary
+                per-frame order. If `None` (the default), use tracks when there
+                are any and fall back to untracked instances otherwise.
+
+        Returns:
+            A `Diagnostics` report. Use `Diagnostics.summary()` for a readable
+            rendering, `Diagnostics.findings` for the interpreted results, or
+            `Diagnostics.to_dict()` for a serializable form.
+
+        Example:
+            >>> labels = sio.load_slp("predictions.slp")
+            >>> print(labels.diagnose().summary())
+        """
+        from sleap_io.model.diagnostics import diagnose
+
+        return diagnose(self, video=video, untracked=untracked)
 
     def clean(
         self,

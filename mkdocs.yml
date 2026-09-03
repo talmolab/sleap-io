@@ -160,6 +160,7 @@ nav:
     - Codecs: codecs.md
     - Merging: merging.md
     - Rendering: rendering.md
+    - Diagnostics: diagnostics.md
     - Transforms: transforms.md
     - Virtual cropping: cropping.md
   - Reference:

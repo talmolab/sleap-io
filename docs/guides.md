@@ -20,6 +20,9 @@ skeleton, instance, and video matching.
 **[Rendering](rendering.md)**: Render videos and images with pose overlays,
 customizable colors, markers, presets, and motion trails.
 
+**[Diagnostics](diagnostics.md)**: Check predictions for spurious tracks,
+identity swaps, low-confidence points, and jittery keypoints.
+
 **[Transforms](transforms.md)**: Crop, scale, rotate, and pad labels and their
 videos while keeping coordinates aligned.
 
