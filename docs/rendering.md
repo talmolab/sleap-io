@@ -1,6 +1,6 @@
 # Rendering
 
-sleap-io provides high-performance pose visualization using [skia-python](https://kyamagu.github.io/skia-python/), a production-quality 2D graphics library.
+sleap-io provides high-performance pose visualization using [skia-python](https://github.com/kyamagu/skia-python), a production-quality 2D graphics library.
 
 ---
 

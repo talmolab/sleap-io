@@ -77,7 +77,7 @@ uv run ruff format --check sleap_io tests
 uv run ruff check sleap_io tests
 ```
 
-Alternatively, you can install it globally with [`pipx`](https://pypa.github.io/pipx/):
+Alternatively, you can install it globally with [`pipx`](https://pipx.pypa.io/):
 ```
 pip install pipx
 pipx ensurepath

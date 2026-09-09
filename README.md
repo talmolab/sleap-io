@@ -10,11 +10,11 @@ A standalone Python library and CLI for working with animal pose tracking data. 
 
 Complements the core [SLEAP](https://github.com/talmolab/sleap) package but does *not* include labeling, training, or inference.
 
-**[Documentation](https://io.sleap.ai)** | **[Examples](https://io.sleap.ai/examples)** | **[CLI Reference](https://io.sleap.ai/cli)**
+**[Documentation](https://io.sleap.ai)** | **[Examples](https://io.sleap.ai/latest/examples/)** | **[CLI Reference](https://io.sleap.ai/latest/cli/)**
 
 ## Features
 
-- **Multi-format I/O** -- Read and write [SLEAP](https://io.sleap.ai/formats/#sleap-native-format-slp), [NWB](https://io.sleap.ai/formats/#nwb-format-nwb), [COCO](https://io.sleap.ai/formats/#coco-format-json), [DeepLabCut](https://io.sleap.ai/formats/#deeplabcut-format-h5-csv), [Ultralytics YOLO](https://io.sleap.ai/formats/#ultralytics-yolo-format), [JABS](https://io.sleap.ai/formats/#jabs-format-h5), [Label Studio](https://io.sleap.ai/formats/#label-studio-format-json), [CSV](https://io.sleap.ai/formats/#csv-format-csv), [Analysis HDF5](https://io.sleap.ai/formats/#sleap-analysis-hdf5-format-h5), [AlphaTracker](https://io.sleap.ai/formats/#alphatracker-format), and [LEAP](https://io.sleap.ai/formats/#leap-format-mat) formats
+- **Multi-format I/O** -- Read and write [SLEAP](https://io.sleap.ai/latest/formats/#sleap-native-format-slp), [NWB](https://io.sleap.ai/latest/formats/#nwb-format-nwb), [COCO](https://io.sleap.ai/latest/formats/#coco-format-json), [DeepLabCut](https://io.sleap.ai/latest/formats/#deeplabcut-format-csv), [Ultralytics YOLO](https://io.sleap.ai/latest/formats/#ultralytics-yolo-format), [JABS](https://io.sleap.ai/latest/formats/#jabs-format-h5), [Label Studio](https://io.sleap.ai/latest/formats/#label-studio-format-json), [CSV](https://io.sleap.ai/latest/formats/#csv-format-csv), [Analysis HDF5](https://io.sleap.ai/latest/formats/#sleap-analysis-hdf5-format-h5), [AlphaTracker](https://io.sleap.ai/latest/formats/#alphatracker-format), and [LEAP](https://io.sleap.ai/latest/formats/#leap-format-mat) formats
 - **CLI tools** -- Inspect, convert, render, and transform data from the command line (`sio show`, `sio convert`, `sio render`, `sio transform`)
 - **Rendering** -- Produce publication-quality videos and images with pose overlays, customizable colors, markers, and presets
 - **Transforms** -- Crop, scale, rotate, pad, and flip videos with automatic coordinate adjustment
@@ -107,7 +107,7 @@ labels = sio.load_file("predictions.slp")
 labels.save("predictions.nwb")
 ```
 
-Format is auto-detected from the extension. See [supported formats](https://io.sleap.ai/formats/).
+Format is auto-detected from the extension. See [supported formats](https://io.sleap.ai/latest/formats/).
 
 #### Convert to NumPy arrays
 
@@ -130,7 +130,7 @@ skeleton = sio.Skeleton(
 )
 
 instance = sio.Instance.from_numpy(
-    points=np.array([[10.2, 20.4], [5.8, 15.1], [0.3, 10.6]]),
+    points_data=np.array([[10.2, 20.4], [5.8, 15.1], [0.3, 10.6]]),
     skeleton=skeleton
 )
 
@@ -165,7 +165,7 @@ labels = sio.load_file("labels.slp")
 labels.make_training_splits(n_train=0.8, n_val=0.1, n_test=0.1, save_dir="splits/", seed=42)
 ```
 
-See the **[Examples](https://io.sleap.ai/examples)** page for more recipes including NWB export, video re-encoding, skeleton replacement, path fixing, and YOLO/COCO export.
+See the **[Examples](https://io.sleap.ai/latest/examples/)** page for more recipes including NWB export, video re-encoding, skeleton replacement, path fixing, and YOLO/COCO export.
 
 ## Support
 
