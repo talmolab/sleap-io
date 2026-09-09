@@ -6411,6 +6411,44 @@ def test_labels_static_and_temporal_rois():
     assert labels.temporal_rois[0] is temporal_roi
 
 
+def test_labels_constructor_only_accepts_rois():
+    """Only ``rois=`` is an annotation constructor kwarg; the rest live on frames.
+
+    Annotations carry no ``video`` / ``frame_idx`` of their own (removed in #411 to
+    kill the metadata-sync bug in #410), so `Labels` has nothing to distribute a
+    flat list by. Pins the class docstring against re-promising the removed
+    ``centroids=`` / ``bboxes=`` / ``masks=`` / ``label_images=`` kwargs (#559).
+    """
+    for kwarg in ("centroids", "bboxes", "masks", "label_images"):
+        with pytest.raises(TypeError, match=f"unexpected keyword argument '{kwarg}'"):
+            Labels(**{kwarg: []})
+
+
+def test_labels_label_images_via_labeled_frames():
+    """The documented pattern: attach label images to frames, then pass the frames.
+
+    Mirrors the ``segmentation_to_slp`` recipe in ``docs/examples.md`` (#559).
+    """
+    video = Video(filename="microscopy.tif", open_backend=False)
+    masks = np.zeros((3, 8, 8), dtype=np.int32)
+    masks[0, 1:4, 1:4] = 1
+    masks[1, 2:5, 2:5] = 1
+    masks[2, 3:6, 3:6] = 2
+
+    label_images = PredictedLabelImage.from_stack(
+        masks, source="cellpose:nuclei", create_tracks=True, score=1.0
+    )
+    labeled_frames = [
+        LabeledFrame(video=video, frame_idx=t, label_images=[li])
+        for t, li in enumerate(label_images)
+    ]
+    labels = Labels(labeled_frames=labeled_frames, videos=[video])
+
+    assert labels.label_images == label_images
+    # Tracks are shared across frames by label ID and registered on the Labels.
+    assert sorted(track.name for track in labels.tracks) == ["1", "2"]
+
+
 def test_labels_get_rois():
     video1 = Video(filename="v1.mp4")
     video2 = Video(filename="v2.mp4")
