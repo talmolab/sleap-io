@@ -325,7 +325,7 @@ sio.save_csv(labels, "frames.csv", format="frames")
 
 ### AlphaTracker Format
 
-Load predictions from [AlphaTracker](https://github.com/yinaanyachukwu/AlphaTracker), a tracking system for socially-housed animals.
+Load predictions from [AlphaTracker](https://github.com/ZexinChen/AlphaTracker), a tracking system for socially-housed animals.
 
 ::: sleap_io.io.main.load_alphatracker
 
