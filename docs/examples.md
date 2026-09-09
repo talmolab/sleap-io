@@ -1226,12 +1226,16 @@ video = sio.load_video("microscopy.tif")  # shape: (n_frames, height, width, cha
 
 # Convert to PredictedLabelImages with shared tracks across frames
 label_images = sio.PredictedLabelImage.from_stack(
-    masks, video=video, source="cellpose:nuclei",
+    masks, source="cellpose:nuclei",
     create_tracks=True, score=1.0,
 )
 
-# Build Labels — label_images are distributed to LabeledFrames automatically
-labels = sio.Labels(label_images=label_images, videos=[video])
+# Attach each label image to its frame — annotations live on LabeledFrames
+labeled_frames = [
+    sio.LabeledFrame(video=video, frame_idx=t, label_images=[li])
+    for t, li in enumerate(label_images)
+]
+labels = sio.Labels(labeled_frames=labeled_frames, videos=[video])
 labels.save("segmentation.slp")
 ```
 
@@ -1240,10 +1244,11 @@ labels.save("segmentation.slp")
     ```python
     tracks = {1: sio.Track(name="cell_A"), 2: sio.Track(name="cell_B")}
     li = sio.PredictedLabelImage.from_numpy(
-        masks[0], video=video, frame_idx=0,
+        masks[0],
         tracks=tracks, categories={1: "neuron", 2: "glia"},
         source="cellpose:nuclei", score=1.0,
     )
+    lf = sio.LabeledFrame(video=video, frame_idx=0, label_images=[li])
     ```
 
 !!! info "How track sharing works"

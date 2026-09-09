@@ -110,7 +110,12 @@ class Labels:
             on save.
         rois: A list of `ROI` vector geometry annotations (polygons, etc.) associated
             with this dataset. Annotations are stored on individual
-            `LabeledFrame`s; this property returns a flat view across all frames.
+            `LabeledFrame`s; this property returns a flat view across all frames,
+            preceded by any `static_rois`.
+        static_rois: A list of `ROI`s that are not tied to any particular frame
+            (e.g., arena boundaries). This is the only annotation list that lives
+            on `Labels` itself, and the only one the constructor accepts, via the
+            ``rois=`` keyword argument.
         masks: A list of `SegmentationMask` raster annotations associated with this
             dataset. Stored on individual `LabeledFrame`s.
         bboxes: A list of `BoundingBox` annotations associated with this dataset.
@@ -128,9 +133,20 @@ class Labels:
         `Instance`s are added to the respective lists automatically.
 
         Annotations (centroids, bboxes, masks, label_images, rois) are stored on
-        individual `LabeledFrame` objects. The constructor accepts flat annotation
-        lists (via kwargs) and distributes them to the appropriate frames at init
-        time. The top-level properties return flattened views across all frames.
+        individual `LabeledFrame` objects, not on `Labels`. Annotations carry no
+        video/frame metadata of their own -- a frame association exists only by
+        containment -- so the constructor does **not** accept flat annotation
+        lists. Attach each annotation to its frame and pass the frames in::
+
+            lf = LabeledFrame(video=video, frame_idx=0, centroids=[centroid])
+            lf.append(label_image)  # append() dispatches on annotation type
+            labels = Labels(labeled_frames=[lf], videos=[video])
+
+        The corresponding top-level attributes are read-only properties returning
+        a flattened view across all frames.
+
+        The sole exception is ``rois=``, which sets `static_rois` -- ROIs not
+        tied to any frame. Per-frame ROIs still live on their `LabeledFrame`.
     """
 
     labeled_frames: list[LabeledFrame] = field(factory=list)
