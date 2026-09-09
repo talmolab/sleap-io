@@ -4070,7 +4070,7 @@
 </div>
 <div class="tabbed-block">
 <p>Install as a system-wide command:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 </code></pre></div>
 <p>Then use:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp
@@ -4078,12 +4078,12 @@
 </div>
 <div class="tabbed-block">
 <p>Add to your project:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># or: uv add &quot;sleap-io[all]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># or: uv add "sleap-io[all]"</span>
 </code></pre></div>
 <p>Then import:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">"labels.slp"</span><span class="p">)</span>
 </code></pre></div>
 </div>
 </div>
@@ -4101,7 +4101,7 @@
 <a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>uvx<span class="w"> </span>sleap-io<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels.nwb
 <a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
 <a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Use with all optional dependencies (requires --from for extras)</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>uvx<span class="w"> </span>--from<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w"> </span>sleap-io<span class="w"> </span>show<span class="w"> </span>labels.slp
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>uvx<span class="w"> </span>--from<span class="w"> </span><span class="s2">"sleap-io[all]"</span><span class="w"> </span>sleap-io<span class="w"> </span>show<span class="w"> </span>labels.slp
 </code></pre></div>
 <p>This is ideal for:</p>
 <ul>
@@ -4119,7 +4119,7 @@
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">ByPass</span> <span class="n">-c</span> <span class="s2">&quot;irm https://astral.sh/uv/install.ps1 | iex&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">ByPass</span> <span class="n">-c</span> <span class="s2">"irm https://astral.sh/uv/install.ps1 | iex"</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -4134,11 +4134,11 @@
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">From PyPI</label><label for="__tabbed_3_2">From source (latest)</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;git+https://github.com/talmolab/sleap-io.git@main&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">"git+https://github.com/talmolab/sleap-io.git@main"</span>
 </code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -4171,15 +4171,15 @@ video</strong> over <code>http</code>/<code>https</code> additionally needs a Py
 <div class="tabbed-set tabbed-alternate" data-tabs="4:4"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><input id="__tabbed_4_3" name="__tabbed_4" type="radio" /><input id="__tabbed_4_4" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">pip</label><label for="__tabbed_4_2">uv pip</label><label for="__tabbed_4_3">uv add (pyproject.toml)</label><label for="__tabbed_4_4">conda</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>uv<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>uv<span class="w"> </span>add<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -4197,40 +4197,40 @@ video</strong> over <code>http</code>/<code>https</code> additionally needs a Py
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p>For environments not managed by uv:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w"> </span>@<span class="w"> </span>git+https://github.com/talmolab/sleap-io.git@main
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span><span class="w"> </span>@<span class="w"> </span>git+https://github.com/talmolab/sleap-io.git@main
 </code></pre></div>
 </div>
 <div class="tabbed-block">
 <p>For quick installation into an existing virtual environment:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@main&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@main"</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
 <p>For uv-managed projects (adds to pyproject.toml and syncs):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>uv<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w"> </span>--git<span class="w"> </span>https://github.com/talmolab/sleap-io.git<span class="w"> </span>--branch<span class="w"> </span>main
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>uv<span class="w"> </span>add<span class="w"> </span><span class="s2">"sleap-io[all]"</span><span class="w"> </span>--git<span class="w"> </span>https://github.com/talmolab/sleap-io.git<span class="w"> </span>--branch<span class="w"> </span>main
 </code></pre></div>
 </div>
 </div>
 </div>
 <h4 id="quick-usage-example">Quick usage example<a class="headerlink" href="#quick-usage-example" title="Permanent link">&para;</a></h4>
 <div class="highlight"><span class="filename">quick_demo.py</span><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># /// script</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># dependencies = [&quot;sleap-io[all]&quot;]</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># dependencies = ["sleap-io[all]"]</span>
 <a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># ///</span>
 <a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>
 <a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1"># Load labels from any supported format</span>
-<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">"labels.slp"</span><span class="p">)</span>
 <a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>
 <a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Inspect the data</span>
-<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Videos: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">videos</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Labeled frames: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Skeleton: </span><span class="si">{</span><span class="n">labels</span><span class="o">.</span><span class="n">skeleton</span><span class="o">.</span><span class="n">node_names</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Videos: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">videos</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Labeled frames: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Skeleton: </span><span class="si">{</span><span class="n">labels</span><span class="o">.</span><span class="n">skeleton</span><span class="o">.</span><span class="n">node_names</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 <a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>
 <a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="c1"># Convert to numpy for analysis</span>
 <a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="n">locations</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>  <span class="c1"># shape: (frames, tracks, nodes, 2)</span>
 <a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a>
 <a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a><span class="c1"># Save to a different format</span>
-<a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;labels.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">"labels.nwb"</span><span class="p">)</span>
 </code></pre></div>
 <p>Run directly with uv (no installation needed):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>uv<span class="w"> </span>run<span class="w"> </span>quick_demo.py
@@ -4245,13 +4245,13 @@ video</strong> over <code>http</code>/<code>https</code> additionally needs a Py
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[project]</span>
 <a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">    </span><span class="s2">&quot;sleap-io[all]&gt;=0.6.0&quot;</span><span class="p">,</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">    </span><span class="s2">"sleap-io[all]&gt;=0.6.0"</span><span class="p">,</span>
 <a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="p">]</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">[project.optional-dependencies]</span>
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">pose</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;sleap-io[all]&gt;=0.6.0&quot;</span><span class="p">]</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">pose</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"sleap-io[all]&gt;=0.6.0"</span><span class="p">]</span>
 </code></pre></div>
 </div>
 </div>
@@ -4263,18 +4263,18 @@ video</strong> over <code>http</code>/<code>https</code> additionally needs a Py
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">[project]</span>
 <a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">    </span><span class="s2">&quot;sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@main&quot;</span><span class="p">,</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">    </span><span class="s2">"sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@main"</span><span class="p">,</span>
 <a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="p">]</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="k">[project]</span>
 <a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">    </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="p">,</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">    </span><span class="s2">"sleap-io[all]"</span><span class="p">,</span>
 <a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="p">]</span>
 <a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>
 <a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="k">[tool.uv.sources]</span>
-<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="n">sleap-io</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/talmolab/sleap-io.git&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">branch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;main&quot;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="n">sleap-io</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"https://github.com/talmolab/sleap-io.git"</span><span class="p">,</span><span class="w"> </span><span class="n">branch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"main"</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -4286,13 +4286,13 @@ video</strong> over <code>http</code>/<code>https</code> additionally needs a Py
 <h4 id="pinning-specific-versions">Pinning specific versions<a class="headerlink" href="#pinning-specific-versions" title="Permanent link">&para;</a></h4>
 <p>For reproducible builds, pin to a specific version or commit:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Pin to version</span>
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="s2">&quot;sleap-io[all]==0.6.0&quot;</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="s2">"sleap-io[all]==0.6.0"</span>
 <a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
 <a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># Pin to specific commit</span>
-<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="s2">&quot;sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@abc1234&quot;</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="s2">"sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@abc1234"</span>
 <a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>
 <a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="c1"># Pin to tag</span>
-<a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="s2">&quot;sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@v0.6.0&quot;</span>
+<a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="s2">"sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@v0.6.0"</span>
 </code></pre></div>
 <hr />
 <h3 id="as-a-developer-looking-to-extend-capabilities">As a developer looking to extend capabilities<a class="headerlink" href="#as-a-developer-looking-to-extend-capabilities" title="Permanent link">&para;</a></h3>
@@ -4315,7 +4315,7 @@ video</strong> over <code>http</code>/<code>https</code> additionally needs a Py
 <div class="tabbed-set tabbed-alternate" data-tabs="8:2"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">pip editable install</label><label for="__tabbed_8_2">conda + pip</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[all]&quot;</span><span class="w">   </span><span class="c1"># runtime + optional extras</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[all]"</span><span class="w">   </span><span class="c1"># runtime + optional extras</span>
 <a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>pip<span class="w"> </span>install<span class="w"> </span>--group<span class="w"> </span>dev<span class="w">   </span><span class="c1"># dev tools (pytest, ruff, mkdocs)</span>
 </code></pre></div>
 <div class="admonition note">
@@ -4410,9 +4410,9 @@ extra). Install the group separately with <code>pip install --group dev</code>.<
 install; cloud-storage URLs need the <code>cloud</code> extra and remote media video needs
 the <code>pyav</code> extra. See the <a href="../remote/">Remote loading</a> guide.</p>
 <p>Install specific extras:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[opencv]&quot;</span><span class="w">      </span><span class="c1"># Just OpenCV</span>
-<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[opencv,mat]&quot;</span><span class="w">  </span><span class="c1"># Multiple extras</span>
-<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w">         </span><span class="c1"># Everything</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[opencv]"</span><span class="w">      </span><span class="c1"># Just OpenCV</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[opencv,mat]"</span><span class="w">  </span><span class="c1"># Multiple extras</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span><span class="w">         </span><span class="c1"># Everything</span>
 </code></pre></div>
 <div class="admonition info">
 <p class="admonition-title">Default video support</p>
@@ -4421,7 +4421,7 @@ the <code>pyav</code> extra. See the <a href="../remote/">Remote loading</a> gui
 <div class="admonition warning">
 <p class="admonition-title">OpenCV dependency conflicts</p>
 <p>The <code>opencv-python</code> package can cause dependency conflicts in environments with other packages that also depend on OpenCV (e.g., some ML frameworks install <code>opencv-python-headless</code>). If you encounter conflicts, install without the <code>opencv</code> extra:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[pyav,mat]&quot;</span><span class="w">  </span><span class="c1"># Skip opencv</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[pyav,mat]"</span><span class="w">  </span><span class="c1"># Skip opencv</span>
 </code></pre></div>
 <p>The <code>pyav</code> backend provides good performance without the conflict risk.</p>
 </div>
@@ -4434,16 +4434,16 @@ the <code>pyav</code> extra. See the <a href="../remote/">Remote loading</a> gui
 <div class="tabbed-set tabbed-alternate" data-tabs="9:4"><input checked="checked" id="__tabbed_9_1" name="__tabbed_9" type="radio" /><input id="__tabbed_9_2" name="__tabbed_9" type="radio" /><input id="__tabbed_9_3" name="__tabbed_9" type="radio" /><input id="__tabbed_9_4" name="__tabbed_9" type="radio" /><div class="tabbed-labels"><label for="__tabbed_9_1">pip</label><label for="__tabbed_9_2">uv pip</label><label for="__tabbed_9_3">uv add</label><label for="__tabbed_9_4">conda</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-U<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-U<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 </code></pre></div>
 <p>The <code>-U</code> flag allows upgrades and implies <code>--refresh</code> to update cached package metadata.</p>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>uv<span class="w"> </span>add<span class="w"> </span>-U<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>uv<span class="w"> </span>add<span class="w"> </span>-U<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 </code></pre></div>
 <p>The <code>-U</code> flag upgrades the package and refreshes the lock file.</p>
 </div>
@@ -4459,7 +4459,7 @@ the <code>pyav</code> extra. See the <a href="../remote/">Remote loading</a> gui
 <a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a>uv<span class="w"> </span>sync<span class="w"> </span>--all-extras
 </code></pre></div>
 <p>Or reinstall:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span><span class="s2">&quot;sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@main&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span><span class="s2">"sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@main"</span>
 </code></pre></div>
 <hr />
 <h2 id="uninstalling">Uninstalling<a class="headerlink" href="#uninstalling" title="Permanent link">&para;</a></h2>
@@ -4493,7 +4493,7 @@ the <code>pyav</code> extra. See the <a href="../remote/">Remote loading</a> gui
 <p>Check installed backends:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>sio<span class="w"> </span>--version
 <a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="c1"># Or in Python:</span>
-<a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sleap_io; print(sleap_io.get_available_video_backends())&quot;</span>
+<a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import sleap_io; print(sleap_io.get_available_video_backends())"</span>
 </code></pre></div>
 <p>Install missing backends:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>pip<span class="w"> </span>install<span class="w"> </span>opencv-python<span class="w"> </span>av
@@ -4501,16 +4501,16 @@ the <code>pyav</code> extra. See the <a href="../remote/">Remote loading</a> gui
 <h3 id="import-errors">Import errors<a class="headerlink" href="#import-errors" title="Permanent link">&para;</a></h3>
 <p>Ensure you're in the correct environment:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>which<span class="w"> </span>python
-<a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sleap_io; print(sleap_io.__version__)&quot;</span>
+<a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import sleap_io; print(sleap_io.__version__)"</span>
 </code></pre></div>
 <h3 id="permission-issues-with-uv-tool">Permission issues with uv tool<a class="headerlink" href="#permission-issues-with-uv-tool" title="Permanent link">&para;</a></h3>
 <p>Use <code>--python</code> to specify a Python version:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.12
+<div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span><span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.12
 </code></pre></div>
 <h3 id="conflicting-dependencies">Conflicting dependencies<a class="headerlink" href="#conflicting-dependencies" title="Permanent link">&para;</a></h3>
 <p>Create a fresh environment:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>uv<span class="w"> </span>venv
-<a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 </code></pre></div>
 <hr />
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>

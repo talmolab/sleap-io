@@ -554,7 +554,14 @@ The `provenance` field tracks the origin and history of the labels file:
     ```python
     import sleap_io as sio
 
-    labels = sio.Labels(label_images=label_images)
+    # Label images live on LabeledFrames, not on Labels directly.
+    labels = sio.Labels(
+        labeled_frames=[
+            sio.LabeledFrame(video=video, frame_idx=t, label_images=[li])
+            for t, li in enumerate(label_images)
+        ],
+        videos=[video],
+    )
     labels.provenance["segmentation_model"] = "cellpose"
     labels.provenance["cellpose_model_type"] = "cyto3"
     labels.provenance["cellpose_diameter"] = 30

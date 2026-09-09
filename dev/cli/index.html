@@ -6593,7 +6593,7 @@
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>sleap-io
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Or with faster video backends (OpenCV, PyAV)</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">"sleap-io[all]"</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Now use the short command</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp
@@ -6699,7 +6699,7 @@ The <code>[all]</code> extra installs faster video backends (OpenCV, PyAV) for i
 <a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a>sio<span class="w"> </span>fix<span class="w"> </span>labels.slp<span class="w"> </span>--remove-predictions<span class="w">                    </span><span class="c1"># Also remove predictions</span>
 <a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a>sio<span class="w"> </span>fix<span class="w"> </span>labels.slp<span class="w"> </span>--remove-untracked-predictions<span class="w">          </span><span class="c1"># Surgical pred removal</span>
 <a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a>sio<span class="w"> </span>fix<span class="w"> </span>labels.slp<span class="w"> </span>--consolidate-skeletons<span class="w">                 </span><span class="c1"># Force single skeleton</span>
-<a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a>sio<span class="w"> </span>fix<span class="w"> </span>labels.slp<span class="w"> </span>--prefix<span class="w"> </span><span class="s2">&quot;C:\data&quot;</span><span class="w"> </span>/mnt/data<span class="w">            </span><span class="c1"># Fix cross-platform paths</span>
+<a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a>sio<span class="w"> </span>fix<span class="w"> </span>labels.slp<span class="w"> </span>--prefix<span class="w"> </span><span class="s2">"C:\data"</span><span class="w"> </span>/mnt/data<span class="w">            </span><span class="c1"># Fix cross-platform paths</span>
 <a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a>
 <a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a><span class="c1"># Render video with pose overlays</span>
 <a id="__codelineno-2-89" name="__codelineno-2-89" href="#__codelineno-2-89"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w">                                 </span><span class="c1"># -&gt; predictions.viz.mp4</span>
@@ -6769,7 +6769,7 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>Skeletons
 <a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>  mouse (7 nodes, 6 edges)
 <a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>  nodes = [&quot;nose&quot;, &quot;head&quot;, &quot;neck&quot;, &quot;body&quot;, &quot;tail_base&quot;, &quot;tail_mid&quot;, &quot;tail_tip&quot;]
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>  nodes = ["nose", "head", "neck", "body", "tail_base", "tail_mid", "tail_tip"]
 <a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>  edge_inds = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)]
 <a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>
 <a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>Videos (1)
@@ -6869,7 +6869,7 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Skeleton 0: fly (24 nodes, 23 edges, 10 symmetries)
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>Python code:
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  nodes = [&quot;head&quot;, &quot;neck&quot;, &quot;thorax&quot;, &quot;abdomen&quot;, ...]
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  nodes = ["head", "neck", "thorax", "abdomen", ...]
 <a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>  edge_inds = [(1, 0), (2, 1), (2, 3), ...]
 <a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
 <a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>Nodes:
@@ -6984,54 +6984,54 @@ and for LLM agents inspecting SLP files. JSON mode always includes all details
 frame-spanning events, and provenance), so the individual detail flags are not
 needed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="p">{</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/labels.slp&quot;</span><span class="p">,</span>
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;labels.slp&quot;</span><span class="p">,</span>
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span><span class="nt">&quot;size_bytes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">20120</span><span class="p">,</span>
-<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span><span class="nt">&quot;format&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;labels&quot;</span><span class="p">,</span>
-<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">  </span><span class="nt">&quot;stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">    </span><span class="nt">&quot;n_videos&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">    </span><span class="nt">&quot;n_labeled_frames&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
-<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">    </span><span class="nt">&quot;n_user_frames&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
-<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">    </span><span class="nt">&quot;n_user_instances&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2376</span><span class="p">,</span>
-<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">    </span><span class="nt">&quot;n_predicted_instances&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="w">    </span><span class="nt">&quot;n_skeletons&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="w">    </span><span class="nt">&quot;n_tracks&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="w">    </span><span class="nt">&quot;n_identities&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="w">    </span><span class="nt">&quot;n_categories&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="w">    </span><span class="nt">&quot;n_masks&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="w">    </span><span class="nt">&quot;n_rois&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="w">    </span><span class="nt">&quot;n_events&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a><span class="w">    </span><span class="nt">&quot;n_event_types&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a><span class="w">    </span><span class="nt">&quot;n_instances_with_identity_embedding&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-<a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a><span class="w">    </span><span class="nt">&quot;n_instances_with_category_embedding&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">"path"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/data/labels.slp"</span><span class="p">,</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"labels.slp"</span><span class="p">,</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span><span class="nt">"size_bytes"</span><span class="p">:</span><span class="w"> </span><span class="mi">20120</span><span class="p">,</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span><span class="nt">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"labels"</span><span class="p">,</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">  </span><span class="nt">"stats"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">    </span><span class="nt">"n_videos"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">    </span><span class="nt">"n_labeled_frames"</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">    </span><span class="nt">"n_user_frames"</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">    </span><span class="nt">"n_user_instances"</span><span class="p">:</span><span class="w"> </span><span class="mi">2376</span><span class="p">,</span>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">    </span><span class="nt">"n_predicted_instances"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="w">    </span><span class="nt">"n_skeletons"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="w">    </span><span class="nt">"n_tracks"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="w">    </span><span class="nt">"n_identities"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="w">    </span><span class="nt">"n_categories"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="w">    </span><span class="nt">"n_masks"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="w">    </span><span class="nt">"n_rois"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="w">    </span><span class="nt">"n_events"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a><span class="w">    </span><span class="nt">"n_event_types"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a><span class="w">    </span><span class="nt">"n_instances_with_identity_embedding"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a><span class="w">    </span><span class="nt">"n_instances_with_category_embedding"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
 <a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a><span class="w">  </span><span class="nt">&quot;skeletons&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a><span class="w">  </span><span class="nt">"skeletons"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
 <a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a><span class="w">    </span><span class="p">{</span>
-<a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a><span class="w">      </span><span class="nt">&quot;index&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a><span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Skeleton-0&quot;</span><span class="p">,</span>
-<a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a><span class="w">      </span><span class="nt">&quot;nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;head&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;thorax&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;abdomen&quot;</span><span class="p">],</span>
-<a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a><span class="w">      </span><span class="nt">&quot;edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;head&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;destination&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;thorax&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;indices&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">]}],</span>
-<a id="__codelineno-19-29" name="__codelineno-19-29" href="#__codelineno-19-29"></a><span class="w">      </span><span class="nt">&quot;symmetries&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
+<a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a><span class="w">      </span><span class="nt">"index"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a><span class="w">      </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Skeleton-0"</span><span class="p">,</span>
+<a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a><span class="w">      </span><span class="nt">"nodes"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"head"</span><span class="p">,</span><span class="w"> </span><span class="s2">"thorax"</span><span class="p">,</span><span class="w"> </span><span class="s2">"abdomen"</span><span class="p">],</span>
+<a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a><span class="w">      </span><span class="nt">"edges"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"head"</span><span class="p">,</span><span class="w"> </span><span class="nt">"destination"</span><span class="p">:</span><span class="w"> </span><span class="s2">"thorax"</span><span class="p">,</span><span class="w"> </span><span class="nt">"indices"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">]}],</span>
+<a id="__codelineno-19-29" name="__codelineno-19-29" href="#__codelineno-19-29"></a><span class="w">      </span><span class="nt">"symmetries"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
 <a id="__codelineno-19-30" name="__codelineno-19-30" href="#__codelineno-19-30"></a><span class="w">    </span><span class="p">}</span>
 <a id="__codelineno-19-31" name="__codelineno-19-31" href="#__codelineno-19-31"></a><span class="w">  </span><span class="p">],</span>
-<a id="__codelineno-19-32" name="__codelineno-19-32" href="#__codelineno-19-32"></a><span class="w">  </span><span class="nt">&quot;videos&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-19-32" name="__codelineno-19-32" href="#__codelineno-19-32"></a><span class="w">  </span><span class="nt">"videos"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
 <a id="__codelineno-19-33" name="__codelineno-19-33" href="#__codelineno-19-33"></a><span class="w">    </span><span class="p">{</span>
-<a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a><span class="w">      </span><span class="nt">&quot;index&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a><span class="w">      </span><span class="nt">&quot;filename&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/video.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-19-36" name="__codelineno-19-36" href="#__codelineno-19-36"></a><span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MediaVideo&quot;</span><span class="p">,</span>
-<a id="__codelineno-19-37" name="__codelineno-19-37" href="#__codelineno-19-37"></a><span class="w">      </span><span class="nt">&quot;embedded&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-19-38" name="__codelineno-19-38" href="#__codelineno-19-38"></a><span class="w">      </span><span class="nt">&quot;exists&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<a id="__codelineno-19-39" name="__codelineno-19-39" href="#__codelineno-19-39"></a><span class="w">      </span><span class="nt">&quot;shape&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;frames&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1100</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;height&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">384</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;width&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">384</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;channels&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">},</span>
-<a id="__codelineno-19-40" name="__codelineno-19-40" href="#__codelineno-19-40"></a><span class="w">      </span><span class="nt">&quot;n_labeled_frames&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
-<a id="__codelineno-19-41" name="__codelineno-19-41" href="#__codelineno-19-41"></a><span class="w">      </span><span class="nt">&quot;source_video&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a><span class="w">      </span><span class="nt">"index"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a><span class="w">      </span><span class="nt">"filename"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/data/video.mp4"</span><span class="p">,</span>
+<a id="__codelineno-19-36" name="__codelineno-19-36" href="#__codelineno-19-36"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"MediaVideo"</span><span class="p">,</span>
+<a id="__codelineno-19-37" name="__codelineno-19-37" href="#__codelineno-19-37"></a><span class="w">      </span><span class="nt">"embedded"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-19-38" name="__codelineno-19-38" href="#__codelineno-19-38"></a><span class="w">      </span><span class="nt">"exists"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-19-39" name="__codelineno-19-39" href="#__codelineno-19-39"></a><span class="w">      </span><span class="nt">"shape"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"frames"</span><span class="p">:</span><span class="w"> </span><span class="mi">1100</span><span class="p">,</span><span class="w"> </span><span class="nt">"height"</span><span class="p">:</span><span class="w"> </span><span class="mi">384</span><span class="p">,</span><span class="w"> </span><span class="nt">"width"</span><span class="p">:</span><span class="w"> </span><span class="mi">384</span><span class="p">,</span><span class="w"> </span><span class="nt">"channels"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">},</span>
+<a id="__codelineno-19-40" name="__codelineno-19-40" href="#__codelineno-19-40"></a><span class="w">      </span><span class="nt">"n_labeled_frames"</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span>
+<a id="__codelineno-19-41" name="__codelineno-19-41" href="#__codelineno-19-41"></a><span class="w">      </span><span class="nt">"source_video"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
 <a id="__codelineno-19-42" name="__codelineno-19-42" href="#__codelineno-19-42"></a><span class="w">    </span><span class="p">}</span>
 <a id="__codelineno-19-43" name="__codelineno-19-43" href="#__codelineno-19-43"></a><span class="w">  </span><span class="p">],</span>
-<a id="__codelineno-19-44" name="__codelineno-19-44" href="#__codelineno-19-44"></a><span class="w">  </span><span class="nt">&quot;tracks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
-<a id="__codelineno-19-45" name="__codelineno-19-45" href="#__codelineno-19-45"></a><span class="w">  </span><span class="nt">&quot;identities&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
-<a id="__codelineno-19-46" name="__codelineno-19-46" href="#__codelineno-19-46"></a><span class="w">  </span><span class="nt">&quot;categories&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
-<a id="__codelineno-19-47" name="__codelineno-19-47" href="#__codelineno-19-47"></a><span class="w">  </span><span class="nt">&quot;event_types&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
-<a id="__codelineno-19-48" name="__codelineno-19-48" href="#__codelineno-19-48"></a><span class="w">  </span><span class="nt">&quot;events&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
-<a id="__codelineno-19-49" name="__codelineno-19-49" href="#__codelineno-19-49"></a><span class="w">  </span><span class="nt">&quot;provenance&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
+<a id="__codelineno-19-44" name="__codelineno-19-44" href="#__codelineno-19-44"></a><span class="w">  </span><span class="nt">"tracks"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<a id="__codelineno-19-45" name="__codelineno-19-45" href="#__codelineno-19-45"></a><span class="w">  </span><span class="nt">"identities"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<a id="__codelineno-19-46" name="__codelineno-19-46" href="#__codelineno-19-46"></a><span class="w">  </span><span class="nt">"categories"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<a id="__codelineno-19-47" name="__codelineno-19-47" href="#__codelineno-19-47"></a><span class="w">  </span><span class="nt">"event_types"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<a id="__codelineno-19-48" name="__codelineno-19-48" href="#__codelineno-19-48"></a><span class="w">  </span><span class="nt">"events"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<a id="__codelineno-19-49" name="__codelineno-19-49" href="#__codelineno-19-49"></a><span class="w">  </span><span class="nt">"provenance"</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
 <a id="__codelineno-19-50" name="__codelineno-19-50" href="#__codelineno-19-50"></a><span class="p">}</span>
 </code></pre></div>
 <p>Combine with the navigation flags for deeper inspection:</p>
@@ -7603,7 +7603,7 @@ saying how many events and event types were discarded.</p>
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># MATLAB-compatible (default, matches SLEAP&#39;s export)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># MATLAB-compatible (default, matches SLEAP's export)</span>
 <a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>sio<span class="w"> </span><span class="nb">export</span><span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>analysis.h5
 <a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a>
 <a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="c1"># Python-native ordering</span>
@@ -8149,7 +8149,7 @@ share an arbitrary name (e.g. <code>track_0</code>) are no longer merged. Pass
 <div class="highlight"><pre><span></span><code><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="c1"># Merge two classified files, collapsing same-named categories into one catalog</span>
 <a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a>sio<span class="w"> </span>merge<span class="w"> </span>a.slp<span class="w"> </span>b.slp<span class="w"> </span>-o<span class="w"> </span>merged.slp<span class="w"> </span>--category<span class="w"> </span>name
 <a id="__codelineno-62-3" name="__codelineno-62-3" href="#__codelineno-62-3"></a>
-<a id="__codelineno-62-4" name="__codelineno-62-4" href="#__codelineno-62-4"></a><span class="c1"># Keep every file&#39;s identities distinct (no name-based dedup)</span>
+<a id="__codelineno-62-4" name="__codelineno-62-4" href="#__codelineno-62-4"></a><span class="c1"># Keep every file's identities distinct (no name-based dedup)</span>
 <a id="__codelineno-62-5" name="__codelineno-62-5" href="#__codelineno-62-5"></a>sio<span class="w"> </span>merge<span class="w"> </span>a.slp<span class="w"> </span>b.slp<span class="w"> </span>-o<span class="w"> </span>merged.slp<span class="w"> </span>--identity<span class="w"> </span>identity
 </code></pre></div>
 <h3 id="common-scenarios">Common Scenarios<a class="headerlink" href="#common-scenarios" title="Permanent link">&para;</a></h3>
@@ -8344,7 +8344,7 @@ share an arbitrary name (e.g. <code>track_0</code>) are no longer merged. Pass
 <p>If either requirement is not met, you'll get a helpful error message:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a># No embedded videos
 <a id="__codelineno-74-2" name="__codelineno-74-2" href="#__codelineno-74-2"></a>Error: No embedded videos found. This file does not contain embedded frames.
-<a id="__codelineno-74-3" name="__codelineno-74-3" href="#__codelineno-74-3"></a>Use &#39;sio show --video&#39; to inspect video details.
+<a id="__codelineno-74-3" name="__codelineno-74-3" href="#__codelineno-74-3"></a>Use 'sio show --video' to inspect video details.
 <a id="__codelineno-74-4" name="__codelineno-74-4" href="#__codelineno-74-4"></a>
 <a id="__codelineno-74-5" name="__codelineno-74-5" href="#__codelineno-74-5"></a># Missing source metadata (legacy files)
 <a id="__codelineno-74-6" name="__codelineno-74-6" href="#__codelineno-74-6"></a>Error: Cannot unembed: 1/1 embedded video(s) have no source video metadata.
@@ -8353,7 +8353,7 @@ share an arbitrary name (e.g. <code>track_0</code>) are no longer merged. Pass
 <a id="__codelineno-74-9" name="__codelineno-74-9" href="#__codelineno-74-9"></a>source video tracking was added.
 <a id="__codelineno-74-10" name="__codelineno-74-10" href="#__codelineno-74-10"></a>
 <a id="__codelineno-74-11" name="__codelineno-74-11" href="#__codelineno-74-11"></a>To inspect video details, run:
-<a id="__codelineno-74-12" name="__codelineno-74-12" href="#__codelineno-74-12"></a>  sio show &#39;labels.pkg.slp&#39; --video
+<a id="__codelineno-74-12" name="__codelineno-74-12" href="#__codelineno-74-12"></a>  sio show 'labels.pkg.slp' --video
 </code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Original videos don't need to exist</p>
@@ -8411,14 +8411,14 @@ share an arbitrary name (e.g. <code>track_0</code>) are no longer merged. Pass
 <div class="highlight"><pre><span></span><code><a id="__codelineno-80-1" name="__codelineno-80-1" href="#__codelineno-80-1"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels.slp<span class="w"> </span>--json
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-81-1" name="__codelineno-81-1" href="#__codelineno-81-1"></a><span class="p">{</span>
-<a id="__codelineno-81-2" name="__codelineno-81-2" href="#__codelineno-81-2"></a><span class="w">  </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/labels.slp&quot;</span><span class="p">,</span>
-<a id="__codelineno-81-3" name="__codelineno-81-3" href="#__codelineno-81-3"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;labels.slp&quot;</span><span class="p">,</span>
-<a id="__codelineno-81-4" name="__codelineno-81-4" href="#__codelineno-81-4"></a><span class="w">  </span><span class="nt">&quot;videos&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-81-2" name="__codelineno-81-2" href="#__codelineno-81-2"></a><span class="w">  </span><span class="nt">"path"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/data/labels.slp"</span><span class="p">,</span>
+<a id="__codelineno-81-3" name="__codelineno-81-3" href="#__codelineno-81-3"></a><span class="w">  </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"labels.slp"</span><span class="p">,</span>
+<a id="__codelineno-81-4" name="__codelineno-81-4" href="#__codelineno-81-4"></a><span class="w">  </span><span class="nt">"videos"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
 <a id="__codelineno-81-5" name="__codelineno-81-5" href="#__codelineno-81-5"></a><span class="w">    </span><span class="p">{</span>
-<a id="__codelineno-81-6" name="__codelineno-81-6" href="#__codelineno-81-6"></a><span class="w">      </span><span class="nt">&quot;index&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-81-7" name="__codelineno-81-7" href="#__codelineno-81-7"></a><span class="w">      </span><span class="nt">&quot;filename&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/home/user/data/video.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-81-8" name="__codelineno-81-8" href="#__codelineno-81-8"></a><span class="w">      </span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-<a id="__codelineno-81-9" name="__codelineno-81-9" href="#__codelineno-81-9"></a><span class="w">      </span><span class="nt">&quot;original&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<a id="__codelineno-81-6" name="__codelineno-81-6" href="#__codelineno-81-6"></a><span class="w">      </span><span class="nt">"index"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-81-7" name="__codelineno-81-7" href="#__codelineno-81-7"></a><span class="w">      </span><span class="nt">"filename"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/home/user/data/video.mp4"</span><span class="p">,</span>
+<a id="__codelineno-81-8" name="__codelineno-81-8" href="#__codelineno-81-8"></a><span class="w">      </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-81-9" name="__codelineno-81-9" href="#__codelineno-81-9"></a><span class="w">      </span><span class="nt">"original"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
 <a id="__codelineno-81-10" name="__codelineno-81-10" href="#__codelineno-81-10"></a><span class="w">    </span><span class="p">}</span>
 <a id="__codelineno-81-11" name="__codelineno-81-11" href="#__codelineno-81-11"></a><span class="w">  </span><span class="p">]</span>
 <a id="__codelineno-81-12" name="__codelineno-81-12" href="#__codelineno-81-12"></a><span class="p">}</span>
@@ -8526,11 +8526,11 @@ mode). <code>--json</code> is only valid in inspection mode, not with update fla
 <a id="__codelineno-84-4" name="__codelineno-84-4" href="#__codelineno-84-4"></a>
 <a id="__codelineno-84-5" name="__codelineno-84-5" href="#__codelineno-84-5"></a><span class="c1"># Cross-platform: Windows to Linux</span>
 <a id="__codelineno-84-6" name="__codelineno-84-6" href="#__codelineno-84-6"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>fixed.slp<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-84-7" name="__codelineno-84-7" href="#__codelineno-84-7"></a><span class="w">    </span>--prefix<span class="w"> </span><span class="s2">&quot;C:\Users\lab\data&quot;</span><span class="w"> </span>/mnt/data
+<a id="__codelineno-84-7" name="__codelineno-84-7" href="#__codelineno-84-7"></a><span class="w">    </span>--prefix<span class="w"> </span><span class="s2">"C:\Users\lab\data"</span><span class="w"> </span>/mnt/data
 <a id="__codelineno-84-8" name="__codelineno-84-8" href="#__codelineno-84-8"></a>
 <a id="__codelineno-84-9" name="__codelineno-84-9" href="#__codelineno-84-9"></a><span class="c1"># Cross-platform: Linux to Windows</span>
 <a id="__codelineno-84-10" name="__codelineno-84-10" href="#__codelineno-84-10"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>fixed.slp<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-84-11" name="__codelineno-84-11" href="#__codelineno-84-11"></a><span class="w">    </span>--prefix<span class="w"> </span>/mnt/data<span class="w"> </span><span class="s2">&quot;D:\project\data&quot;</span>
+<a id="__codelineno-84-11" name="__codelineno-84-11" href="#__codelineno-84-11"></a><span class="w">    </span>--prefix<span class="w"> </span>/mnt/data<span class="w"> </span><span class="s2">"D:\project\data"</span>
 <a id="__codelineno-84-12" name="__codelineno-84-12" href="#__codelineno-84-12"></a>
 <a id="__codelineno-84-13" name="__codelineno-84-13" href="#__codelineno-84-13"></a><span class="c1"># Multiple prefix replacements</span>
 <a id="__codelineno-84-14" name="__codelineno-84-14" href="#__codelineno-84-14"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>fixed.slp<span class="w"> </span><span class="se">\</span>
@@ -8559,7 +8559,7 @@ mode). <code>--json</code> is only valid in inspection mode, not with update fla
 <p><strong>Scenario: Windows to Linux server</strong></p>
 <p>Labels created on Windows need to work on a Linux cluster:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-87-1" name="__codelineno-87-1" href="#__codelineno-87-1"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels_linux.slp<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-87-2" name="__codelineno-87-2" href="#__codelineno-87-2"></a><span class="w">    </span>--prefix<span class="w"> </span><span class="s2">&quot;C:\Users\lab\experiment&quot;</span><span class="w"> </span>/home/lab/experiment
+<a id="__codelineno-87-2" name="__codelineno-87-2" href="#__codelineno-87-2"></a><span class="w">    </span>--prefix<span class="w"> </span><span class="s2">"C:\Users\lab\experiment"</span><span class="w"> </span>/home/lab/experiment
 </code></pre></div>
 <p><strong>Scenario: Image sequences</strong></p>
 <p>The command also works with image sequence videos (where <code>filename</code> is a list of image paths):</p>
@@ -8594,8 +8594,8 @@ mode). <code>--json</code> is only valid in inspection mode, not with update fla
 <a id="__codelineno-91-5" name="__codelineno-91-5" href="#__codelineno-91-5"></a>
 <a id="__codelineno-91-6" name="__codelineno-91-6" href="#__codelineno-91-6"></a>⚠ Videos: Found 2 duplicate group(s)
 <a id="__codelineno-91-7" name="__codelineno-91-7" href="#__codelineno-91-7"></a>⚠ Skeletons:
-<a id="__codelineno-91-8" name="__codelineno-91-8" href="#__codelineno-91-8"></a>  &#39;fly_13pt&#39;: 1245 user, 500 pred (most frequent)
-<a id="__codelineno-91-9" name="__codelineno-91-9" href="#__codelineno-91-9"></a>  &#39;fly_copy&#39;: 0 user, 0 pred (unused)
+<a id="__codelineno-91-8" name="__codelineno-91-8" href="#__codelineno-91-8"></a>  'fly_13pt': 1245 user, 500 pred (most frequent)
+<a id="__codelineno-91-9" name="__codelineno-91-9" href="#__codelineno-91-9"></a>  'fly_copy': 0 user, 0 pred (unused)
 <a id="__codelineno-91-10" name="__codelineno-91-10" href="#__codelineno-91-10"></a>✓ Video Color: All videos consistent
 <a id="__codelineno-91-11" name="__codelineno-91-11" href="#__codelineno-91-11"></a>ℹ Predictions: 2274 predicted instances (150 untracked)
 <a id="__codelineno-91-12" name="__codelineno-91-12" href="#__codelineno-91-12"></a>
@@ -8801,7 +8801,7 @@ mode). <code>--json</code> is only valid in inspection mode, not with update fla
 <p><strong>Scenario: Multiple skeletons with user labels</strong></p>
 <p>When a file has multiple skeletons that both have user-labeled instances, <code>sio fix</code> will warn you:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-95-1" name="__codelineno-95-1" href="#__codelineno-95-1"></a>⚠  WARNING: Multiple skeletons have user instances!
-<a id="__codelineno-95-2" name="__codelineno-95-2" href="#__codelineno-95-2"></a>    Use --consolidate-skeletons to keep &#39;fly_13pt&#39; and remove 23 instances.
+<a id="__codelineno-95-2" name="__codelineno-95-2" href="#__codelineno-95-2"></a>    Use --consolidate-skeletons to keep 'fly_13pt' and remove 23 instances.
 <a id="__codelineno-95-3" name="__codelineno-95-3" href="#__codelineno-95-3"></a>    This is irreversible - review carefully before proceeding.
 </code></pre></div>
 <p>To force consolidation (keeping the most frequently used skeleton):</p>
@@ -8813,7 +8813,7 @@ mode). <code>--json</code> is only valid in inspection mode, not with update fla
 </code></pre></div>
 <p><strong>Scenario: Cross-platform path fixing</strong></p>
 <p>Fix Windows paths for use on Linux:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-97-1" name="__codelineno-97-1" href="#__codelineno-97-1"></a>sio<span class="w"> </span>fix<span class="w"> </span>labels.slp<span class="w"> </span>--prefix<span class="w"> </span><span class="s2">&quot;C:\data\videos&quot;</span><span class="w"> </span>/mnt/data/videos
+<div class="highlight"><pre><span></span><code><a id="__codelineno-97-1" name="__codelineno-97-1" href="#__codelineno-97-1"></a>sio<span class="w"> </span>fix<span class="w"> </span>labels.slp<span class="w"> </span>--prefix<span class="w"> </span><span class="s2">"C:\data\videos"</span><span class="w"> </span>/mnt/data/videos
 </code></pre></div>
 <p><strong>Scenario: Aggressive cleanup</strong></p>
 <p>Remove everything not essential (predictions, unlabeled videos, empty instances):</p>
@@ -8881,7 +8881,7 @@ mode). <code>--json</code> is only valid in inspection mode, not with update fla
 <a id="__codelineno-103-15" name="__codelineno-103-15" href="#__codelineno-103-15"></a>
 <a id="__codelineno-103-16" name="__codelineno-103-16" href="#__codelineno-103-16"></a><span class="c1"># Render without source video (solid background)</span>
 <a id="__codelineno-103-17" name="__codelineno-103-17" href="#__codelineno-103-17"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--background<span class="w"> </span>black
-<a id="__codelineno-103-18" name="__codelineno-103-18" href="#__codelineno-103-18"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--background<span class="w"> </span><span class="s2">&quot;#333&quot;</span>
+<a id="__codelineno-103-18" name="__codelineno-103-18" href="#__codelineno-103-18"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>--background<span class="w"> </span><span class="s2">"#333"</span>
 <a id="__codelineno-103-19" name="__codelineno-103-19" href="#__codelineno-103-19"></a>
 <a id="__codelineno-103-20" name="__codelineno-103-20" href="#__codelineno-103-20"></a><span class="c1"># Segmentation predictions are drawn automatically (no --overlay needed):</span>
 <a id="__codelineno-103-21" name="__codelineno-103-21" href="#__codelineno-103-21"></a><span class="c1"># label_images take precedence, falling back to SegmentationMask annotations.</span>
@@ -10034,7 +10034,7 @@ Google Drive files are buffered in memory first and have no byte progress bar.</
 <a id="__codelineno-136-6" name="__codelineno-136-6" href="#__codelineno-136-6"></a>sio<span class="w"> </span>download<span class="w"> </span>https://example.com/a.slp<span class="w"> </span>out.slp
 <a id="__codelineno-136-7" name="__codelineno-136-7" href="#__codelineno-136-7"></a>
 <a id="__codelineno-136-8" name="__codelineno-136-8" href="#__codelineno-136-8"></a><span class="c1"># Authenticated source, forcing a fresh download</span>
-<a id="__codelineno-136-9" name="__codelineno-136-9" href="#__codelineno-136-9"></a>sio<span class="w"> </span>download<span class="w"> </span>https://example.com/a.slp<span class="w"> </span>-H<span class="w"> </span><span class="s1">&#39;Authorization: Bearer &lt;token&gt;&#39;</span><span class="w"> </span>-f
+<a id="__codelineno-136-9" name="__codelineno-136-9" href="#__codelineno-136-9"></a>sio<span class="w"> </span>download<span class="w"> </span>https://example.com/a.slp<span class="w"> </span>-H<span class="w"> </span><span class="s1">'Authorization: Bearer &lt;token&gt;'</span><span class="w"> </span>-f
 </code></pre></div>
 <p>If the destination already exists it is returned without re-downloading (pass
 <code>-f/--overwrite</code> to refetch).</p>
@@ -10136,14 +10136,14 @@ are left untouched. See the <a href="../cropping/#applying-baking-a-crop-to-disk
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-143-1" name="__codelineno-143-1" href="#__codelineno-143-1"></a><span class="c1"># Convert all SLEAP files to NWB</span>
 <a id="__codelineno-143-2" name="__codelineno-143-2" href="#__codelineno-143-2"></a><span class="k">for</span><span class="w"> </span>f<span class="w"> </span><span class="k">in</span><span class="w"> </span>*.slp<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<a id="__codelineno-143-3" name="__codelineno-143-3" href="#__codelineno-143-3"></a><span class="w">    </span>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">f</span><span class="p">%.slp</span><span class="si">}</span><span class="s2">.nwb&quot;</span>
+<a id="__codelineno-143-3" name="__codelineno-143-3" href="#__codelineno-143-3"></a><span class="w">    </span>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span><span class="s2">"</span><span class="nv">$f</span><span class="s2">"</span><span class="w"> </span>-o<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">f</span><span class="p">%.slp</span><span class="si">}</span><span class="s2">.nwb"</span>
 <a id="__codelineno-143-4" name="__codelineno-143-4" href="#__codelineno-143-4"></a><span class="k">done</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-144-1" name="__codelineno-144-1" href="#__codelineno-144-1"></a><span class="c"># Convert all SLEAP files to NWB</span>
 <a id="__codelineno-144-2" name="__codelineno-144-2" href="#__codelineno-144-2"></a><span class="nb">Get-ChildItem</span> <span class="p">*.</span><span class="n">slp</span> <span class="p">|</span> <span class="k">ForEach</span><span class="n">-Object</span> <span class="p">{</span>
-<a id="__codelineno-144-3" name="__codelineno-144-3" href="#__codelineno-144-3"></a>    <span class="n">sio</span> <span class="n">convert</span> <span class="n">-i</span> <span class="nv">$_</span><span class="p">.</span><span class="n">Name</span> <span class="n">-o</span> <span class="p">(</span><span class="nv">$_</span><span class="p">.</span><span class="n">BaseName</span> <span class="p">+</span> <span class="s2">&quot;.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-144-3" name="__codelineno-144-3" href="#__codelineno-144-3"></a>    <span class="n">sio</span> <span class="n">convert</span> <span class="n">-i</span> <span class="nv">$_</span><span class="p">.</span><span class="n">Name</span> <span class="n">-o</span> <span class="p">(</span><span class="nv">$_</span><span class="p">.</span><span class="n">BaseName</span> <span class="p">+</span> <span class="s2">".nwb"</span><span class="p">)</span>
 <a id="__codelineno-144-4" name="__codelineno-144-4" href="#__codelineno-144-4"></a><span class="p">}</span>
 </code></pre></div>
 </div>
@@ -10195,8 +10195,8 @@ are left untouched. See the <a href="../cropping/#applying-baking-a-crop-to-disk
 <p class="admonition-title">NWB training annotations</p>
 <p>The CLI uses auto-detection for NWB format. For explicit control over NWB format (e.g., <code>annotations</code> vs <code>predictions</code> vs <code>annotations_export</code> with embedded video), use the Python API:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-149-1" name="__codelineno-149-1" href="#__codelineno-149-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-149-2" name="__codelineno-149-2" href="#__codelineno-149-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-149-3" name="__codelineno-149-3" href="#__codelineno-149-3"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;training.nwb&quot;</span><span class="p">,</span> <span class="n">nwb_format</span><span class="o">=</span><span class="s2">&quot;annotations&quot;</span><span class="p">)</span>
+<a id="__codelineno-149-2" name="__codelineno-149-2" href="#__codelineno-149-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"labels.slp"</span><span class="p">)</span>
+<a id="__codelineno-149-3" name="__codelineno-149-3" href="#__codelineno-149-3"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">"training.nwb"</span><span class="p">,</span> <span class="n">nwb_format</span><span class="o">=</span><span class="s2">"annotations"</span><span class="p">)</span>
 </code></pre></div>
 <p>See <a href="../formats/nwb/">NWB Format</a> for details.</p>
 </div>
