@@ -1440,7 +1440,12 @@ class HDF5Video(VideoBackend):
             # Fall back to reading a test frame.
             return super().img_shape
 
-        return int(img_shape[0]), int(img_shape[1]), int(img_shape[2])
+        height, width, channels = (int(x) for x in img_shape)
+        if self.grayscale is True:
+            # get_frame() keeps only the first channel when grayscale is forced on,
+            # so report 1 channel to match the frames that are returned.
+            channels = 1
+        return height, width, channels
 
     def read_test_frame(self) -> np.ndarray:
         """Read a single frame from the video to test for grayscale."""
