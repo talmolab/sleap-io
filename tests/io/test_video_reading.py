@@ -1265,6 +1265,30 @@ def test_load_video_av1_random_access(av1_video_path):
         assert (frame[..., 0] > 128).sum() == pytest.approx(AV1_SQUARE_SIZE**2, rel=0.2)
 
 
+@pytest.mark.parametrize("keep_open", [True, False])
+def test_media_video_pyav_frame_threading_reads_same_frames(
+    centered_pair_low_quality_path, keep_open
+):
+    """Test frame-threaded pyav decoding returns the same frames as single-threaded."""
+    pytest.importorskip("av")
+    inds = [500, 3, 4, 5, 1099, 250, 0, 251]
+    with iio.imopen(centered_pair_low_quality_path, "r", plugin="pyav") as reader:
+        expected = np.stack([reader.read(index=i) for i in inds])
+
+    backend = MediaVideo(
+        centered_pair_low_quality_path, plugin="pyav", keep_open=keep_open
+    )
+    assert backend._imageio_read_kwargs == {"thread_type": "AUTO"}
+    assert_equal(backend._read_frames(inds), expected)
+    for i, frame in zip(inds, expected):
+        assert_equal(backend._read_frame(i), frame)
+
+    assert (
+        MediaVideo(centered_pair_low_quality_path, plugin="FFMPEG")._imageio_read_kwargs
+        == {}
+    )
+
+
 @pytest.mark.parametrize("plugin", ["opencv", "imageio"])
 def test_image_video_plugin_consistency(centered_pair_frame_paths, plugin):
     """Test ImageVideo with different plugins produces consistent output."""

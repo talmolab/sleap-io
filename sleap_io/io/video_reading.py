@@ -978,6 +978,16 @@ class MediaVideo(VideoBackend):
             )
 
     @property
+    def _imageio_read_kwargs(self) -> dict:
+        """Keyword arguments for imageio's `read` with the current plugin.
+
+        pyav otherwise decodes H.264/HEVC on a single thread (FFmpeg's slice
+        threading, which most camera streams cannot use). Frame threading reads
+        them 3-5x faster with seeks no slower. libdav1d (AV1) threads by itself.
+        """
+        return {"thread_type": "AUTO"} if self.plugin == "pyav" else {}
+
+    @property
     def reader(self) -> object:
         """Return the reader object for the video, caching if necessary."""
         if self.keep_open:
@@ -1109,10 +1119,10 @@ class MediaVideo(VideoBackend):
 
         elif self.plugin == "pyav" or self.plugin == "FFMPEG":
             if self.keep_open:
-                img = self.reader.read(index=frame_idx)
+                img = self.reader.read(index=frame_idx, **self._imageio_read_kwargs)
             else:
                 with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
-                    img = reader.read(index=frame_idx)
+                    img = reader.read(index=frame_idx, **self._imageio_read_kwargs)
             success = img is not None
 
         if not success:
@@ -1153,17 +1163,20 @@ class MediaVideo(VideoBackend):
             imgs = imgs[..., ::-1]  # BGR -> RGB
 
         elif self.plugin == "pyav" or self.plugin == "FFMPEG":
+            kwargs = self._imageio_read_kwargs
             if self.keep_open:
                 if self._open_reader is None:
                     self._open_reader = iio.imopen(
                         self.filename, "r", plugin=self.plugin
                     )
                 reader = self._open_reader
-                imgs = np.stack([reader.read(index=idx) for idx in frame_inds], axis=0)
+                imgs = np.stack(
+                    [reader.read(index=idx, **kwargs) for idx in frame_inds], axis=0
+                )
             else:
                 with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
                     imgs = np.stack(
-                        [reader.read(index=idx) for idx in frame_inds], axis=0
+                        [reader.read(index=idx, **kwargs) for idx in frame_inds], axis=0
                     )
         return imgs
 
