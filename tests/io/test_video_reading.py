@@ -13,14 +13,17 @@ from pytest_httpserver import HTTPServer
 
 import sleap_io as sio
 from sleap_io.io.video_reading import (
+    PYAV_PREFERRED_CODECS,
     CropVideoBackend,
     HDF5Video,
     ImageVideo,
     MediaVideo,
     TiffVideo,
     VideoBackend,
+    _probe_video_codec,
 )
 from sleap_io.transform.frame import crop_frame
+from tests.fixtures.videos import AV1_SQUARE_SIZE, AV1_SQUARE_STEP, AV1_VIDEO_FRAMES
 
 try:
     import cv2
@@ -1179,6 +1182,87 @@ def test_media_video_uses_global_default(centered_pair_low_quality_path):
 
     # Reset to avoid affecting other tests
     sio.set_default_video_plugin(None)
+
+
+def _square_left_edge(frame: np.ndarray) -> int:
+    """Return the x of the left edge of the bright square in an AV1 fixture frame."""
+    bright_cols = np.flatnonzero(frame[..., 0].max(axis=0) > 128)
+    return int(bright_cols[0])
+
+
+def test_probe_video_codec(av1_video_path, centered_pair_low_quality_path, tmp_path):
+    """Test reading the codec of a media file's first video stream."""
+    assert "av1" in PYAV_PREFERRED_CODECS
+    assert _probe_video_codec(av1_video_path) == "av1"
+    assert _probe_video_codec(centered_pair_low_quality_path) == "h264"
+
+    # Missing, unreadable and video-less files have no video codec.
+    assert _probe_video_codec((tmp_path / "missing.mp4").as_posix()) is None
+    not_video = tmp_path / "not_video.mp4"
+    not_video.write_bytes(b"this is not a video")
+    assert _probe_video_codec(not_video.as_posix()) is None
+
+    av = pytest.importorskip("av")
+    audio_only = tmp_path / "audio_only.mp4"
+    with av.open(audio_only.as_posix(), "w") as container:
+        stream = container.add_stream("aac", rate=8000)
+        frame = av.AudioFrame.from_ndarray(
+            np.zeros((1, 1024), dtype=np.float32), format="fltp", layout="mono"
+        )
+        frame.sample_rate = 8000
+        for packet in stream.encode(frame):
+            container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+    assert _probe_video_codec(audio_only.as_posix()) is None
+
+
+def test_media_video_av1_defaults_to_pyav(av1_video_path):
+    """Test that an AV1 video is read with pyav when no plugin is set."""
+    sio.set_default_video_plugin(None)
+    backend = MediaVideo(av1_video_path)
+    assert backend.plugin == "pyav"
+
+    frames = backend[:]
+    assert frames.shape == (AV1_VIDEO_FRAMES, 128, 128, 1)
+    for i, frame in enumerate(frames):
+        assert abs(_square_left_edge(frame) - (4 + AV1_SQUARE_STEP * i)) <= 2
+
+
+@pytest.mark.skipif(cv2 is None, reason="OpenCV is only the default when installed")
+def test_media_video_h264_still_defaults_to_opencv(centered_pair_low_quality_path):
+    """Test that the codec rule leaves non-AV1 videos on OpenCV."""
+    sio.set_default_video_plugin(None)
+    assert MediaVideo(centered_pair_low_quality_path).plugin == "opencv"
+
+
+def test_media_video_av1_explicit_plugin_wins(av1_video_path):
+    """Test that an explicit or global plugin overrides the AV1 codec rule."""
+    sio.set_default_video_plugin(None)
+    assert MediaVideo(av1_video_path, plugin="FFMPEG").plugin == "FFMPEG"
+    assert (
+        VideoBackend.from_filename(av1_video_path, plugin="FFMPEG").plugin == "FFMPEG"
+    )
+
+    sio.set_default_video_plugin("FFMPEG")
+    try:
+        assert MediaVideo(av1_video_path).plugin == "FFMPEG"
+    finally:
+        sio.set_default_video_plugin(None)
+
+
+def test_load_video_av1_random_access(av1_video_path):
+    """Test seeking around an AV1 video loaded with the default plugin."""
+    sio.set_default_video_plugin(None)
+    video = sio.load_video(av1_video_path)
+    assert video.backend.plugin == "pyav"
+    assert video.shape == (AV1_VIDEO_FRAMES, 128, 128, 1)
+
+    # Backward and forward jumps, across the keyframe at frame 8.
+    for i in (11, 3, 15, 0, 9, 7):
+        frame = video[i]
+        assert abs(_square_left_edge(frame) - (4 + AV1_SQUARE_STEP * i)) <= 2
+        assert (frame[..., 0] > 128).sum() == pytest.approx(AV1_SQUARE_SIZE**2, rel=0.2)
 
 
 @pytest.mark.parametrize("plugin", ["opencv", "imageio"])

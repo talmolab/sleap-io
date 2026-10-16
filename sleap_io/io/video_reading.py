@@ -336,6 +336,41 @@ def _is_pyav_available() -> bool:
     return importlib.util.find_spec("av") is not None  # pragma: no cover
 
 
+# Video codecs that `MediaVideo` reads with pyav instead of OpenCV when no plugin was
+# requested. OpenCV's pip wheels decode AV1 badly: the Windows wheels' bundled FFmpeg
+# uses libaom, which is 4-6x slower than the libdav1d that pyav's wheels ship (and
+# makes every seek 4-6x slower too), and the Linux wheels before opencv-python
+# 4.14.0.94 (including 5.0.0.93) have no software AV1 decoder at all.
+PYAV_PREFERRED_CODECS = frozenset({"av1"})
+
+
+def _probe_video_codec(filename: str) -> str | None:
+    """Return the codec name of the first video stream of a local media file.
+
+    Only the container header is read; no frames are decoded.
+
+    Args:
+        filename: Path to a local media video.
+
+    Returns:
+        The FFmpeg codec name (e.g. `"h264"`, `"hevc"`, `"av1"`), or None if pyav is
+        not available, the file cannot be opened, or it has no video stream.
+    """
+    # Same availability rule as `MediaVideo`'s plugin auto-detection (a module that
+    # imported at load time), so probing never imports pyav as a side effect.
+    if "av" not in sys.modules:
+        return None
+    import av
+
+    try:
+        with av.open(filename) as container:
+            if not container.streams.video:
+                return None
+            return container.streams.video[0].codec_context.codec.canonical_name
+    except (av.FFmpegError, OSError):
+        return None
+
+
 def _fps_from_av_container(filename: str) -> float | None:
     """Read the frame rate of a (possibly remote) media video via pyav.
 
@@ -879,7 +914,12 @@ class MediaVideo(VideoBackend):
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
         plugin: Video plugin to use. One of "opencv", "FFMPEG", or "pyav". If `None`,
-            will use the first available plugin in the order listed above.
+            will use the first available plugin in the order listed above, except
+            that a video whose codec is in `PYAV_PREFERRED_CODECS` (AV1) is read with
+            "pyav" whenever it is installed: OpenCV's wheels decode AV1 slowly on
+            Windows and, before opencv-python 4.14.0.94, not at all on Linux, and
+            the FFMPEG plugin is slow at random access. A plugin passed here or set
+            with `set_default_video_plugin` always wins.
     """
 
     plugin: str = attrs.field()
@@ -913,6 +953,11 @@ class MediaVideo(VideoBackend):
                 return _default_video_plugin
 
         # Auto-detect based on what's available
+        if (
+            not _remote._is_url(self.filename)
+            and _probe_video_codec(self.filename) in PYAV_PREFERRED_CODECS
+        ):
+            return "pyav"
         if "cv2" in sys.modules:
             return "opencv"
         elif "imageio_ffmpeg" in sys.modules:

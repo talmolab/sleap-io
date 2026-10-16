@@ -1,8 +1,15 @@
 """Fixtures for video and media files."""
 
+import numpy as np
 import pytest
 
 import sleap_io
+
+# Frames of the synthetic AV1 video: a 24 px bright square on a dark background,
+# moving right by this many pixels per frame.
+AV1_VIDEO_FRAMES = 16
+AV1_SQUARE_STEP = 6
+AV1_SQUARE_SIZE = 24
 
 
 @pytest.fixture
@@ -80,3 +87,42 @@ def small_robot_path():
 def small_robot_video(small_robot_path):
     """Small 3-frame robot video for testing RGB/BGR consistency."""
     return sleap_io.Video.from_filename(small_robot_path)
+
+
+@pytest.fixture
+def av1_video_path(tmp_path):
+    """Path to a small synthetic AV1 video (128x128, 16 frames, keyframe every 8).
+
+    Frame `i` shows a bright 24 px square whose left edge is at x = 4 + 6 * i. The
+    video is encoded at test time with pyav's AV1 encoder (SVT-AV1 or libaom), so the
+    test is skipped when pyav or both encoders are missing.
+    """
+    av = pytest.importorskip("av")
+    encoder = None
+    for name in ("libsvtav1", "libaom-av1"):
+        try:
+            av.codec.Codec(name, "w")
+        except Exception:
+            continue
+        encoder = name
+        break
+    if encoder is None:
+        pytest.skip("pyav has no AV1 encoder")
+
+    path = tmp_path / "av1.mp4"
+    with av.open(str(path), "w") as container:
+        stream = container.add_stream(encoder, rate=10)
+        stream.width = 128
+        stream.height = 128
+        stream.pix_fmt = "yuv420p"
+        stream.codec_context.gop_size = 8
+        for i in range(AV1_VIDEO_FRAMES):
+            img = np.full((128, 128), 16, dtype=np.uint8)
+            x0 = 4 + AV1_SQUARE_STEP * i
+            img[52 : 52 + AV1_SQUARE_SIZE, x0 : x0 + AV1_SQUARE_SIZE] = 235
+            frame = av.VideoFrame.from_ndarray(img, format="gray")
+            for packet in stream.encode(frame):
+                container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+    return path.as_posix()
