@@ -5791,6 +5791,14 @@ which provides purpose-built tools for pose trajectory processing.</p>
 </tbody>
 </table>
 </div>
+<div class="admonition note">
+<p class="admonition-title">AV1 videos</p>
+<p>When no plugin is set, AV1 videos are read with PyAV whenever it is installed,
+even if OpenCV is too. OpenCV's wheels decode AV1 with libaom on Windows (4-6x
+slower than PyAV's libdav1d, for sequential reads and seeks alike) and, before
+opencv-python 4.14.0.94, cannot decode it at all on Linux. Install PyAV
+(<code>pip install sleap-io[pyav]</code>) to read AV1 at full speed.</p>
+</div>
 <p>Choose which backend to use when encoding frames in <code>.pkg.slp</code> files with <code>sio.save_slp()</code>.</p>
 <div class="highlight"><span class="filename">image_backends.py</span><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1"></a><a href="#__codelineno-46-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-46-2" name="__codelineno-46-2"></a><a href="#__codelineno-46-2"><span class="linenos" data-linenos=" 2 "></span></a>

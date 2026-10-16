@@ -1158,6 +1158,14 @@ print(sio.get_default_video_plugin())  # "FFMPEG"
     | **OpenCV** (`opencv`) | `pip install sleap-io[opencv]` | Fastest | May have platform-specific issues |
     | **PyAV** (`pyav`) | `pip install sleap-io[pyav]` | Fast | Alternative FFMPEG wrapper |
 
+!!! note "AV1 videos"
+
+    When no plugin is set, AV1 videos are read with PyAV whenever it is installed,
+    even if OpenCV is too. OpenCV's wheels decode AV1 with libaom on Windows (4-6x
+    slower than PyAV's libdav1d, for sequential reads and seeks alike) and, before
+    opencv-python 4.14.0.94, cannot decode it at all on Linux. Install PyAV
+    (`pip install sleap-io[pyav]`) to read AV1 at full speed.
+
 Choose which backend to use when encoding frames in `.pkg.slp` files with `sio.save_slp()`.
 
 ```python title="image_backends.py" linenums="1"
