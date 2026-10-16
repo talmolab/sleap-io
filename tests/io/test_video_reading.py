@@ -2453,3 +2453,30 @@ def test_hdf5_pushdown_embedded_falls_back(slp_minimal_pkg):
     assert cb.detect_grayscale() is True
     ref = crop_frame(inner._read_frame(fidx), (5, 5, 55, 55))
     assert_equal(cb[fidx], ref[..., [0]])
+
+
+def test_hdf5video_img_shape_respects_grayscale(small_robot_path, tmp_path):
+    """Toggling grayscale on an embedded RGB video should update the channel count."""
+    video = sio.load_video(small_robot_path)
+    skeleton = sio.Skeleton(["a"])
+    instance = sio.Instance.from_numpy(np.array([[10.0, 10.0]]), skeleton=skeleton)
+    frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = sio.Labels(videos=[video], skeletons=[skeleton], labeled_frames=[frame])
+    pkg_path = str(tmp_path / "robot.pkg.slp")
+    labels.save(pkg_path, embed="user")
+
+    embedded = sio.load_slp(pkg_path).video
+    assert type(embedded.backend) is HDF5Video
+    assert embedded.shape[-1] == 3
+
+    # Turning grayscale on: shape must match the 1-channel frames.
+    embedded.grayscale = True
+    assert embedded[0].shape[-1] == 1
+    assert embedded.shape[-1] == 1
+    assert embedded.grayscale is True
+
+    # Turning it back off: the toggle must work in both directions.
+    embedded.grayscale = False
+    assert embedded[0].shape[-1] == 3
+    assert embedded.shape[-1] == 3
+    assert embedded.grayscale is False
