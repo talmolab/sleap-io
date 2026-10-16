@@ -336,6 +336,41 @@ def _is_pyav_available() -> bool:
     return importlib.util.find_spec("av") is not None  # pragma: no cover
 
 
+# Video codecs that `MediaVideo` reads with pyav instead of OpenCV when no plugin was
+# requested. OpenCV's pip wheels decode AV1 badly: the Windows wheels' bundled FFmpeg
+# uses libaom, which is 4-6x slower than the libdav1d that pyav's wheels ship (and
+# makes every seek 4-6x slower too), and the Linux wheels before opencv-python
+# 4.14.0.94 (including 5.0.0.93) have no software AV1 decoder at all.
+PYAV_PREFERRED_CODECS = frozenset({"av1"})
+
+
+def _probe_video_codec(filename: str) -> str | None:
+    """Return the codec name of the first video stream of a local media file.
+
+    Only the container header is read; no frames are decoded.
+
+    Args:
+        filename: Path to a local media video.
+
+    Returns:
+        The FFmpeg codec name (e.g. `"h264"`, `"hevc"`, `"av1"`), or None if pyav is
+        not available, the file cannot be opened, or it has no video stream.
+    """
+    # Same availability rule as `MediaVideo`'s plugin auto-detection (a module that
+    # imported at load time), so probing never imports pyav as a side effect.
+    if "av" not in sys.modules:
+        return None
+    import av
+
+    try:
+        with av.open(filename) as container:
+            if not container.streams.video:
+                return None
+            return container.streams.video[0].codec_context.codec.canonical_name
+    except (av.FFmpegError, OSError):
+        return None
+
+
 def _fps_from_av_container(filename: str) -> float | None:
     """Read the frame rate of a (possibly remote) media video via pyav.
 
@@ -879,7 +914,12 @@ class MediaVideo(VideoBackend):
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
         plugin: Video plugin to use. One of "opencv", "FFMPEG", or "pyav". If `None`,
-            will use the first available plugin in the order listed above.
+            will use the first available plugin in the order listed above, except
+            that a video whose codec is in `PYAV_PREFERRED_CODECS` (AV1) is read with
+            "pyav" whenever it is installed: OpenCV's wheels decode AV1 slowly on
+            Windows and, before opencv-python 4.14.0.94, not at all on Linux, and
+            the FFMPEG plugin is slow at random access. A plugin passed here or set
+            with `set_default_video_plugin` always wins.
     """
 
     plugin: str = attrs.field()
@@ -913,6 +953,11 @@ class MediaVideo(VideoBackend):
                 return _default_video_plugin
 
         # Auto-detect based on what's available
+        if (
+            not _remote._is_url(self.filename)
+            and _probe_video_codec(self.filename) in PYAV_PREFERRED_CODECS
+        ):
+            return "pyav"
         if "cv2" in sys.modules:
             return "opencv"
         elif "imageio_ffmpeg" in sys.modules:
@@ -931,6 +976,16 @@ class MediaVideo(VideoBackend):
                 "  pyav (balanced):   pip install sleap-io[pyav]\n\n"
                 "For more information, see: https://io.sleap.ai"
             )
+
+    @property
+    def _imageio_read_kwargs(self) -> dict:
+        """Keyword arguments for imageio's `read` with the current plugin.
+
+        pyav otherwise decodes H.264/HEVC on a single thread (FFmpeg's slice
+        threading, which most camera streams cannot use). Frame threading reads
+        them 3-5x faster with seeks no slower. libdav1d (AV1) threads by itself.
+        """
+        return {"thread_type": "AUTO"} if self.plugin == "pyav" else {}
 
     @property
     def reader(self) -> object:
@@ -1064,10 +1119,10 @@ class MediaVideo(VideoBackend):
 
         elif self.plugin == "pyav" or self.plugin == "FFMPEG":
             if self.keep_open:
-                img = self.reader.read(index=frame_idx)
+                img = self.reader.read(index=frame_idx, **self._imageio_read_kwargs)
             else:
                 with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
-                    img = reader.read(index=frame_idx)
+                    img = reader.read(index=frame_idx, **self._imageio_read_kwargs)
             success = img is not None
 
         if not success:
@@ -1108,17 +1163,20 @@ class MediaVideo(VideoBackend):
             imgs = imgs[..., ::-1]  # BGR -> RGB
 
         elif self.plugin == "pyav" or self.plugin == "FFMPEG":
+            kwargs = self._imageio_read_kwargs
             if self.keep_open:
                 if self._open_reader is None:
                     self._open_reader = iio.imopen(
                         self.filename, "r", plugin=self.plugin
                     )
                 reader = self._open_reader
-                imgs = np.stack([reader.read(index=idx) for idx in frame_inds], axis=0)
+                imgs = np.stack(
+                    [reader.read(index=idx, **kwargs) for idx in frame_inds], axis=0
+                )
             else:
                 with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
                     imgs = np.stack(
-                        [reader.read(index=idx) for idx in frame_inds], axis=0
+                        [reader.read(index=idx, **kwargs) for idx in frame_inds], axis=0
                     )
         return imgs
 
