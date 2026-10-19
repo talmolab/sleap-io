@@ -594,6 +594,42 @@ def _format_video(video: Video, labels: Labels, video_id: str) -> str | int | Vi
         raise ValueError(f"Invalid video_id: {video_id}")
 
 
+def _point_coord(point, axis: int) -> float:
+    """Return a point's x (`axis=0`) or y (`axis=1`), or NaN if it is not visible.
+
+    A point marked not visible keeps its last coordinates, but it has no location
+    in the frame, so it is exported as NaN. This matches `Instance.numpy()`
+    (`invisible_as_nan=True`) and the Analysis HDF5 export, and `from_dataframe`
+    reads NaN coordinates back as not visible.
+
+    Args:
+        point: One entry of an instance's points array.
+        axis: 0 for x, 1 for y.
+
+    Returns:
+        The coordinate, or NaN for a point that is not visible.
+    """
+    if not point["visible"]:
+        return float("nan")
+    return float(point["xy"][axis])
+
+
+def _raw_point_coord(pt, field: str, coord_offset: float) -> float:
+    """Lazy-path counterpart of `_point_coord` for a raw stored point record.
+
+    Args:
+        pt: One record of the stored points dataset (fields "x", "y", "visible").
+        field: "x" or "y".
+        coord_offset: Offset subtracted from stored coordinates (legacy files).
+
+    Returns:
+        The coordinate, or NaN for a point that is not visible.
+    """
+    if not pt["visible"]:
+        return float("nan")
+    return float(pt[field]) - coord_offset
+
+
 # =============================================================================
 # Row Iterators for Streaming
 # =============================================================================
@@ -629,8 +665,8 @@ def _iter_points_rows(
                 row = {
                     "frame_idx": int(lf.frame_idx),
                     "node": node.name,
-                    "x": float(point["xy"][0]),
-                    "y": float(point["xy"][1]),
+                    "x": _point_coord(point, 0),
+                    "y": _point_coord(point, 1),
                 }
 
                 if include_metadata:
@@ -722,8 +758,8 @@ def _iter_instances_rows(
             # Add node coordinates
             for node_idx, node in enumerate(instance.skeleton.nodes):
                 point = instance.points[node_idx]
-                row[f"{node.name}.x"] = float(point["xy"][0])
-                row[f"{node.name}.y"] = float(point["xy"][1])
+                row[f"{node.name}.x"] = _point_coord(point, 0)
+                row[f"{node.name}.y"] = _point_coord(point, 1)
                 if include_score and is_predicted:
                     row[f"{node.name}.score"] = float(point["score"])
                 elif include_score:
@@ -858,8 +894,8 @@ def _iter_frames_rows(
 
                     for node_idx, node in enumerate(skeleton.nodes):
                         point = instance.points[node_idx]
-                        row[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
-                        row[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                        row[f"{prefix}.{node.name}.x"] = _point_coord(point, 0)
+                        row[f"{prefix}.{node.name}.y"] = _point_coord(point, 1)
                         if include_score and is_predicted:
                             row[f"{prefix}.{node.name}.score"] = float(point["score"])
                         elif include_score:
@@ -906,8 +942,8 @@ def _iter_frames_rows(
 
                     for node_idx, node in enumerate(skeleton.nodes):
                         point = instance.points[node_idx]
-                        row[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
-                        row[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                        row[f"{prefix}.{node.name}.x"] = _point_coord(point, 0)
+                        row[f"{prefix}.{node.name}.y"] = _point_coord(point, 1)
                         if include_score and is_predicted:
                             row[f"{prefix}.{node.name}.score"] = float(point["score"])
                         elif include_score:
@@ -999,8 +1035,8 @@ def _to_points_df(
                 row = {
                     "frame_idx": int(lf.frame_idx),
                     "node": node.name,
-                    "x": float(point["xy"][0]),
-                    "y": float(point["xy"][1]),
+                    "x": _point_coord(point, 0),
+                    "y": _point_coord(point, 1),
                 }
 
                 if include_metadata:
@@ -1128,8 +1164,8 @@ def _to_instances_df(  # noqa: D417
             # Add columns for each node using dot separator
             for node_idx, node in enumerate(instance.skeleton.nodes):
                 point = instance.points[node_idx]
-                row[f"{node.name}.x"] = float(point["xy"][0])
-                row[f"{node.name}.y"] = float(point["xy"][1])
+                row[f"{node.name}.x"] = _point_coord(point, 0)
+                row[f"{node.name}.y"] = _point_coord(point, 1)
 
                 if include_score and is_predicted:
                     row[f"{node.name}.score"] = float(point["score"])
@@ -1299,8 +1335,8 @@ def _to_points_df_lazy(
                 continue  # Safety check
 
             pt = pts_data[node_idx]
-            x = float(pt["x"]) - coord_offset
-            y = float(pt["y"]) - coord_offset
+            x = _raw_point_coord(pt, "x", coord_offset)
+            y = _raw_point_coord(pt, "y", coord_offset)
 
             row: dict = {
                 "frame_idx": frame_idx,
@@ -1448,8 +1484,8 @@ def _to_instances_df_lazy(
                 continue
 
             pt = pts_data[node_idx]
-            row[f"{node_name}.x"] = float(pt["x"]) - coord_offset
-            row[f"{node_name}.y"] = float(pt["y"]) - coord_offset
+            row[f"{node_name}.x"] = _raw_point_coord(pt, "x", coord_offset)
+            row[f"{node_name}.y"] = _raw_point_coord(pt, "y", coord_offset)
 
             if include_score and is_predicted:
                 row[f"{node_name}.score"] = float(pt["score"])
@@ -1646,8 +1682,8 @@ def _to_frames_df(  # noqa: D417
                     # Node coordinates
                     for node_idx, node in enumerate(skeleton.nodes):
                         point = instance.points[node_idx]
-                        row[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
-                        row[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                        row[f"{prefix}.{node.name}.x"] = _point_coord(point, 0)
+                        row[f"{prefix}.{node.name}.y"] = _point_coord(point, 1)
                         if include_score and is_predicted:
                             row[f"{prefix}.{node.name}.score"] = float(point["score"])
                         elif include_score:
@@ -1698,8 +1734,8 @@ def _to_frames_df(  # noqa: D417
                     # Node coordinates
                     for node_idx, node in enumerate(skeleton.nodes):
                         point = instance.points[node_idx]
-                        row[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
-                        row[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                        row[f"{prefix}.{node.name}.x"] = _point_coord(point, 0)
+                        row[f"{prefix}.{node.name}.y"] = _point_coord(point, 1)
                         if include_score and is_predicted:
                             row[f"{prefix}.{node.name}.score"] = float(point["score"])
                         elif include_score:
@@ -1874,8 +1910,8 @@ def _to_multi_index_df(  # noqa: D417
                     for node_idx, node in enumerate(skeleton.nodes):
                         point = instance.points[node_idx]
                         if use_flat_keys:
-                            row_dict[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
-                            row_dict[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                            row_dict[f"{prefix}.{node.name}.x"] = _point_coord(point, 0)
+                            row_dict[f"{prefix}.{node.name}.y"] = _point_coord(point, 1)
                             if include_score and is_predicted:
                                 row_dict[f"{prefix}.{node.name}.score"] = float(
                                     point["score"]
@@ -1883,8 +1919,8 @@ def _to_multi_index_df(  # noqa: D417
                             elif include_score:
                                 row_dict[f"{prefix}.{node.name}.score"] = None
                         else:
-                            row_dict[(prefix, node.name, "x")] = float(point["xy"][0])
-                            row_dict[(prefix, node.name, "y")] = float(point["xy"][1])
+                            row_dict[(prefix, node.name, "x")] = _point_coord(point, 0)
+                            row_dict[(prefix, node.name, "y")] = _point_coord(point, 1)
                             if include_score and is_predicted:
                                 row_dict[(prefix, node.name, "score")] = float(
                                     point["score"]
@@ -1964,8 +2000,8 @@ def _to_multi_index_df(  # noqa: D417
                     for node_idx, node in enumerate(skeleton.nodes):
                         point = instance.points[node_idx]
                         if use_flat_keys:
-                            row_dict[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
-                            row_dict[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                            row_dict[f"{prefix}.{node.name}.x"] = _point_coord(point, 0)
+                            row_dict[f"{prefix}.{node.name}.y"] = _point_coord(point, 1)
                             if include_score and is_predicted:
                                 row_dict[f"{prefix}.{node.name}.score"] = float(
                                     point["score"]
@@ -1973,8 +2009,8 @@ def _to_multi_index_df(  # noqa: D417
                             elif include_score:
                                 row_dict[f"{prefix}.{node.name}.score"] = None
                         else:
-                            row_dict[(prefix, node.name, "x")] = float(point["xy"][0])
-                            row_dict[(prefix, node.name, "y")] = float(point["xy"][1])
+                            row_dict[(prefix, node.name, "x")] = _point_coord(point, 0)
+                            row_dict[(prefix, node.name, "y")] = _point_coord(point, 1)
                             if include_score and is_predicted:
                                 row_dict[(prefix, node.name, "score")] = float(
                                     point["score"]

@@ -148,6 +148,9 @@ frame_idx,video_path,inst0.nose.x,inst0.nose.y,inst0.nose.score,inst0.tail.x,ins
 !!! note "Empty Frames"
     When `all_frames=True` (or `include_empty=True`), frames without instances are included with NaN values for all coordinates.
 
+!!! note "Points that are not visible"
+    Points marked as not visible (e.g. occluded body parts) are written with NaN coordinates in every format, matching `Instance.numpy()` and the Analysis HDF5 export. Loading the CSV back reads these points as not visible.
+
 ## Frame Padding
 
 By default, CSV export only includes frames with instances. To include all frames:
