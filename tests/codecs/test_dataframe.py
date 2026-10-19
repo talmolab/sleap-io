@@ -4273,3 +4273,98 @@ def test_to_dataframe_all_frames_video_shorter_than_labels():
 
     df = to_dataframe(labels, format="frames", all_frames=True)
     assert list(df["frame_idx"]) == [0, 1, 2, 3, 4, 5, 6]
+
+
+def _labels_with_invisible_node():
+    """Labels where node "B" is marked not visible but keeps its coordinates.
+
+    Frame 0 has a user instance and frame 1 a predicted instance; in both, "A" is
+    visible at (1, 2) and "B" is hidden at (3, 4).
+    """
+    skeleton = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+
+    user = Instance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton, track=track
+    )
+    user.points["visible"][1] = False
+
+    pred = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        point_scores=np.array([0.9, 0.8]),
+        score=0.9,
+        skeleton=skeleton,
+        track=track,
+    )
+    pred.points["visible"][1] = False
+
+    return Labels(
+        labeled_frames=[
+            LabeledFrame(video=video, frame_idx=0, instances=[user]),
+            LabeledFrame(video=video, frame_idx=1, instances=[pred]),
+        ],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
+    )
+
+
+def _assert_hidden_node_is_nan(df, fmt):
+    """Node "B" coordinates are NaN and node "A" coordinates are kept."""
+    if fmt == "points":
+        b = df[df["node"] == "B"]
+        a = df[df["node"] == "A"]
+        assert len(b) == 2
+        assert b["x"].isna().all() and b["y"].isna().all()
+        assert (a["x"] == 1.0).all() and (a["y"] == 2.0).all()
+        return
+
+    def coord_cols(node):
+        cols = []
+        for col in df.columns:
+            parts = col if isinstance(col, tuple) else tuple(col.split("."))
+            if len(parts) >= 2 and parts[-2] == node and parts[-1] in ("x", "y"):
+                cols.append(col)
+        return cols
+
+    b_cols, a_cols = coord_cols("B"), coord_cols("A")
+    assert b_cols and a_cols
+    assert df[b_cols].isna().all().all()
+    assert df[a_cols].notna().any().all()
+
+
+@pytest.mark.parametrize("fmt", ["points", "instances", "frames", "multi_index"])
+def test_to_dataframe_hidden_points_are_nan(fmt):
+    """Points marked not visible are written as NaN, like `Instance.numpy()`."""
+    labels = _labels_with_invisible_node()
+    _assert_hidden_node_is_nan(to_dataframe(labels, format=fmt), fmt)
+
+
+@pytest.mark.parametrize("fmt", ["points", "instances", "frames", "multi_index"])
+def test_to_dataframe_iter_hidden_points_are_nan(fmt):
+    """The chunked iterator applies the same rule as `to_dataframe`."""
+    labels = _labels_with_invisible_node()
+    df = pd.concat(list(to_dataframe_iter(labels, format=fmt, chunk_size=1)))
+    _assert_hidden_node_is_nan(df, fmt)
+
+
+@pytest.mark.parametrize("fmt", ["points", "instances"])
+def test_to_dataframe_lazy_hidden_points_are_nan(fmt, tmp_path):
+    """The lazy fast path reads the stored visible flag too."""
+    path = tmp_path / "hidden.slp"
+    _labels_with_invisible_node().save(path)
+    labels_lazy = load_slp(path, lazy=True)
+    assert labels_lazy.is_lazy
+    _assert_hidden_node_is_nan(to_dataframe(labels_lazy, format=fmt), fmt)
+
+
+def test_hidden_points_roundtrip_as_not_visible():
+    """Reading the exported dataframe back leaves the hidden node not visible."""
+    labels = _labels_with_invisible_node()
+    df = to_dataframe(labels, format="instances")
+    restored = from_dataframe(df, format="instances")
+    for lf in restored:
+        for inst in lf:
+            assert inst.points["visible"][0]
+            assert not inst.points["visible"][1]
