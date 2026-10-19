@@ -4224,6 +4224,10 @@
 <p class="admonition-title">Empty Frames</p>
 <p>When <code>all_frames=True</code> (or <code>include_empty=True</code>), frames without instances are included with NaN values for all coordinates.</p>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Points that are not visible</p>
+<p>Points marked as not visible (e.g. occluded body parts) are written with NaN coordinates in every format, matching <code>Instance.numpy()</code> and the Analysis HDF5 export. Loading the CSV back reads these points as not visible.</p>
+</div>
 <h2 id="frame-padding">Frame Padding<a class="headerlink" href="#frame-padding" title="Permanent link">&para;</a></h2>
 <p>By default, CSV export only includes frames with instances. To include all frames:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
