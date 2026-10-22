@@ -32,6 +32,61 @@ try:
 except ImportError:
     pass
 
+if "av" in sys.modules:
+    from imageio.plugins.pyav import PyAVPlugin
+
+    class _PyAVPlugin(PyAVPlugin):
+        """imageio's pyav plugin with a seek that works near the end of a video.
+
+        imageio (2.38.1 and its master as of 2026-10-22) finds the keyframe before
+        the requested frame by decoding it, seeks back to it, and then keeps
+        decoding with the same frame iterator. A decoder that holds frames back
+        (FFmpeg's frame threading, or libdav1d for AV1) only gives the keyframe up
+        once it has read to the end of the file, if the keyframe is that close to
+        the end. The iterator is then draining the decoder's last frames, so the
+        seek back is ignored: the read returns the frame after the one asked for,
+        or raises `StopIteration` for the last frame. A one-frame video can only
+        be read once per reader.
+
+        This restarts the frame iterator after the seek back. Everything else,
+        including which frame an index refers to, is imageio's.
+        """
+
+        def _seek(self, index: int, *, constant_framerate: bool = True) -> None:
+            """Seek so that the next decoded frame is the one at `index`."""
+            if not constant_framerate:
+                # imageio decodes forward or restarts from frame 0 here, which
+                # starts a new iterator, so there is nothing stale to read from.
+                super()._seek(index, constant_framerate=False)
+                return
+            if index == self._next_idx:
+                return
+            if self._next_idx == 0:
+                # As imageio does: decode once before the first seek, or the frames
+                # come out corrupt.
+                next(self._decoder)
+                self._next_idx += 1
+                if index == self._next_idx:
+                    return
+
+            stream = self._video_stream
+            pts_delta = (1 / stream.guessed_rate) / stream.time_base
+            index_pts = int(index * pts_delta)
+
+            # Find the keyframe at or before the requested frame, and its index.
+            self._container.seek(index_pts, stream=stream)
+            keyframe = next(self._container.decode(video=0))
+            keyframe_pts = int(keyframe.pts * keyframe.time_base / stream.time_base)
+            keyframe_index = keyframe_pts // pts_delta
+
+            # Seek back to it with a new iterator, then decode up to the frame.
+            self._container.seek(index_pts, stream=stream)
+            self._decoder = self._container.decode(video=0)
+            self._next_idx = keyframe_index
+            for _ in range(index - keyframe_index):
+                next(self._decoder)
+                self._next_idx += 1
+
 
 # Track available backends (populated on module import)
 _AVAILABLE_VIDEO_BACKENDS = {
@@ -988,6 +1043,17 @@ class MediaVideo(VideoBackend):
         return {"thread_type": "AUTO"} if self.plugin == "pyav" else {}
 
     @property
+    def _imageio_plugin(self) -> str | type:
+        """The plugin to open the video with in imageio.
+
+        "pyav" is opened with `_PyAVPlugin`, which fixes imageio's seek near the end
+        of a video. Without pyav installed, imageio reports the missing package.
+        """
+        if self.plugin == "pyav" and "av" in sys.modules:
+            return _PyAVPlugin
+        return self.plugin
+
+    @property
     def reader(self) -> object:
         """Return the reader object for the video, caching if necessary."""
         if self.keep_open:
@@ -996,14 +1062,14 @@ class MediaVideo(VideoBackend):
                     self._open_reader = cv2.VideoCapture(self.filename)
                 elif self.plugin == "pyav" or self.plugin == "FFMPEG":
                     self._open_reader = iio.imopen(
-                        self.filename, "r", plugin=self.plugin
+                        self.filename, "r", plugin=self._imageio_plugin
                     )
             return self._open_reader
         else:
             if self.plugin == "opencv":
                 return cv2.VideoCapture(self.filename)
             elif self.plugin == "pyav" or self.plugin == "FFMPEG":
-                return iio.imopen(self.filename, "r", plugin=self.plugin)
+                return iio.imopen(self.filename, "r", plugin=self._imageio_plugin)
 
     @property
     def num_frames(self) -> int:
@@ -1121,7 +1187,9 @@ class MediaVideo(VideoBackend):
             if self.keep_open:
                 img = self.reader.read(index=frame_idx, **self._imageio_read_kwargs)
             else:
-                with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
+                with iio.imopen(
+                    self.filename, "r", plugin=self._imageio_plugin
+                ) as reader:
                     img = reader.read(index=frame_idx, **self._imageio_read_kwargs)
             success = img is not None
 
@@ -1167,14 +1235,16 @@ class MediaVideo(VideoBackend):
             if self.keep_open:
                 if self._open_reader is None:
                     self._open_reader = iio.imopen(
-                        self.filename, "r", plugin=self.plugin
+                        self.filename, "r", plugin=self._imageio_plugin
                     )
                 reader = self._open_reader
                 imgs = np.stack(
                     [reader.read(index=idx, **kwargs) for idx in frame_inds], axis=0
                 )
             else:
-                with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
+                with iio.imopen(
+                    self.filename, "r", plugin=self._imageio_plugin
+                ) as reader:
                     imgs = np.stack(
                         [reader.read(index=idx, **kwargs) for idx in frame_inds], axis=0
                     )
