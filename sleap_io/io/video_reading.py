@@ -1155,6 +1155,39 @@ class MediaVideo(VideoBackend):
             raise ValueError(f"FPS must be positive, got {value}")
         self._fps = value
 
+    def _opencv_read(
+        self, reader: cv2.VideoCapture, frame_idx: int
+    ) -> tuple[cv2.VideoCapture, np.ndarray | None]:
+        """Read one frame with an OpenCV capture, seeking to it if needed.
+
+        OpenCV (seen with opencv-python 4.10, 4.12 and 5.0) cannot seek back to the
+        frame of a one-frame video once it has read it. If a read after a seek fails,
+        the frame is read from a new capture, which replaces `reader` (and the cached
+        reader, if `keep_open` is True).
+
+        Args:
+            reader: The OpenCV capture to read with.
+            frame_idx: Index of frame to read.
+
+        Returns:
+            A tuple of `(reader, img)`: the capture to keep reading with, and the frame
+            in BGR order, or None if it could not be read.
+        """
+        if reader.get(cv2.CAP_PROP_POS_FRAMES) == frame_idx:
+            success, img = reader.read()
+            return reader, (img if success else None)
+
+        reader.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+        success, img = reader.read()
+        if not success:
+            reader.release()
+            reader = cv2.VideoCapture(self.filename)
+            if self.keep_open:
+                self._open_reader = reader
+            reader.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            success, img = reader.read()
+        return reader, (img if success else None)
+
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.
 
@@ -1176,9 +1209,8 @@ class MediaVideo(VideoBackend):
             else:
                 reader = cv2.VideoCapture(self.filename)
 
-            if reader.get(cv2.CAP_PROP_POS_FRAMES) != frame_idx:
-                reader.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            success, img = reader.read()
+            _, img = self._opencv_read(reader, frame_idx)
+            success = img is not None
 
             if success:
                 img = img[..., ::-1]  # BGR -> RGB
@@ -1219,12 +1251,11 @@ class MediaVideo(VideoBackend):
             else:
                 reader = cv2.VideoCapture(self.filename)
 
-            reader.set(cv2.CAP_PROP_POS_FRAMES, frame_inds[0])
             imgs = []
             for idx in frame_inds:
-                if reader.get(cv2.CAP_PROP_POS_FRAMES) != idx:
-                    reader.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                _, img = reader.read()
+                reader, img = self._opencv_read(reader, idx)
+                if img is None:
+                    raise IndexError(f"Failed to read frame index {idx}.")
                 imgs.append(img)
             imgs = np.stack(imgs, axis=0)
 

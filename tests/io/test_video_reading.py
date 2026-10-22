@@ -1309,6 +1309,44 @@ def _write_all_keyframes_h264(path: Path, n_frames: int) -> np.ndarray:
 
 
 @pytest.mark.parametrize("keep_open", [True, False])
+@pytest.mark.parametrize("plugin", ["opencv", "FFMPEG", "pyav"])
+def test_media_video_one_frame_video(tmp_path, plugin, keep_open):
+    """Test reading a video that holds a single frame, more than once."""
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not available")
+    if plugin == "pyav":
+        pytest.importorskip("av")
+    path = tmp_path / "one_frame.mp4"
+    expected = _write_all_keyframes_h264(path, 1)[0]
+
+    video = sio.load_video(path.as_posix(), plugin=plugin, grayscale=False)
+    assert video.shape == (1, 32, 48, 3)
+
+    # The shape is read from frame 0 first, so every read below goes back to it.
+    backend = MediaVideo(
+        path.as_posix(), plugin=plugin, keep_open=keep_open, grayscale=False
+    )
+    assert backend.shape == (1, 32, 48, 3)
+    for _ in range(3):
+        assert np.abs(backend[0].astype(int) - expected).max() <= 2
+    frames = backend.get_frames([0, 0])
+    assert frames.shape == (2, 32, 48, 3)
+    assert np.abs(frames.astype(int) - expected).max() <= 2
+
+
+@pytest.mark.skipif(cv2 is None, reason="OpenCV not available")
+def test_media_video_opencv_read_past_end_raises(tmp_path):
+    """Test OpenCV reads past the last frame still fail after a fresh capture."""
+    path = tmp_path / "one_frame.mp4"
+    _write_all_keyframes_h264(path, 1)
+    backend = MediaVideo(path.as_posix(), plugin="opencv", keep_open=True)
+    with pytest.raises(IndexError, match="Failed to read frame index 1"):
+        backend._read_frame(1)
+    with pytest.raises(IndexError, match="Failed to read frame index 1"):
+        backend._read_frames([0, 1])
+
+
+@pytest.mark.parametrize("keep_open", [True, False])
 def test_media_video_pyav_reads_last_frames(tmp_path, keep_open):
     """Test pyav reads the right frame near the end of a video, in any order.
 
