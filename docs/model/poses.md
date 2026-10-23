@@ -358,7 +358,7 @@ metadata.
 | `xy`       | `float64[2]` | (x, y) coordinates                 |
 | `score`    | `float64`    | Per-point confidence (predicted only) |
 | `visible`  | `bool`       | Whether the point is labeled/visible |
-| `complete` | `bool`       | Whether the point is fully visible  |
+| `complete` | `bool`       | Set by the SLEAP GUI when a human placed, moved, or toggled visibility of the point (stored, not interpreted) |
 | `name`     | `object`     | Node name string                    |
 
 !!! tip "Performance"

@@ -972,7 +972,7 @@ point_dtype = np.dtype([
     ("x", "f8"),        # X coordinate
     ("y", "f8"),        # Y coordinate
     ("visible", "?"),   # Is point visible
-    ("complete", "?"),  # Is point marked complete
+    ("complete", "?"),  # Human-edited in SLEAP GUI (not interpreted)
 ])
 ```
 
@@ -983,7 +983,7 @@ predicted_point_dtype = np.dtype([
     ("x", "f8"),        # X coordinate
     ("y", "f8"),        # Y coordinate
     ("visible", "?"),   # Is point visible
-    ("complete", "?"),  # Is point marked complete
+    ("complete", "?"),  # Human-edited in SLEAP GUI (not interpreted)
     ("score", "f8"),    # Prediction confidence
 ])
 ```
