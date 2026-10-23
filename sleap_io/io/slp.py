@@ -279,6 +279,24 @@ def _identity_index(items: Iterable) -> dict[int, int]:
     return index
 
 
+def _create_json_rows_dataset(f: h5py.File, name: str, rows: list | np.ndarray):
+    """Create a 1D dataset of per-row JSON strings (e.g. ``videos_json``).
+
+    Rows are stored as variable-length UTF-8 strings. A fixed-width string array
+    pads every row to the longest one, so a single long row (e.g. an
+    `ImageVideo` listing thousands of filenames) multiplies the dataset size by
+    the number of rows. Readers decode both layouts identically, since h5py
+    returns ``bytes`` for each row either way.
+
+    Args:
+        f: An open, writable `h5py.File`.
+        name: The dataset name to create.
+        rows: The JSON rows as ``str`` or ``bytes`` (including arrays read back
+            from an existing fixed-width or variable-length dataset).
+    """
+    f.create_dataset(name, data=rows, dtype=h5py.string_dtype(), maxshape=(None,))
+
+
 def _is_embedded_video_metadata(video: Video) -> bool:
     """Check if a video has embedded frames based on metadata.
 
@@ -1777,11 +1795,11 @@ def write_videos(
     video_jsons = []
     for video_ind, video in sorted(videos_to_write, key=lambda x: x[0]):
         video_json = video_to_dict(video, labels_path, prefer_metadata=prefer_metadata)
-        video_jsons.append(np.bytes_(json.dumps(video_json, separators=(",", ":"))))
+        video_jsons.append(json.dumps(video_json, separators=(",", ":")))
 
     with h5py.File(labels_path, "a") as f:
         if "videos_json" not in f:
-            f.create_dataset("videos_json", data=video_jsons, maxshape=(None,))
+            _create_json_rows_dataset(f, "videos_json", video_jsons)
 
     # Save source_video lineage metadata in a separate pass to ensure video groups exist
     # Note: original_video is now a computed property derived from source_video chain,
@@ -1861,11 +1879,10 @@ def write_tracks(labels_path: str, tracks: list[Track]):
     # TODO: Add support for track metadata like spawned on frame.
     SPAWNED_ON = 0
     tracks_json = [
-        np.bytes_(json.dumps([SPAWNED_ON, track.name], separators=(",", ":")))
-        for track in tracks
+        json.dumps([SPAWNED_ON, track.name], separators=(",", ":")) for track in tracks
     ]
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("tracks_json", data=tracks_json, maxshape=(None,))
+        _create_json_rows_dataset(f, "tracks_json", tracks_json)
 
 
 def read_identities(
@@ -3414,11 +3431,10 @@ def write_suggestions(
             "frame_idx": suggestion.frame_idx,
             "group": group,
         }
-        suggestion_json = np.bytes_(json.dumps(suggestion_dict, separators=(",", ":")))
-        suggestions_json.append(suggestion_json)
+        suggestions_json.append(json.dumps(suggestion_dict, separators=(",", ":")))
 
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("suggestions_json", data=suggestions_json, maxshape=(None,))
+        _create_json_rows_dataset(f, "suggestions_json", suggestions_json)
 
 
 def write_negative_frames(labels_path: str, labels: Labels):
@@ -5455,7 +5471,7 @@ def write_sessions(
                 np.bytes_(json.dumps(session_json, separators=(",", ":")))
             )
 
-        f.create_dataset("sessions_json", data=sessions_json, maxshape=(None,))
+        _create_json_rows_dataset(f, "sessions_json", sessions_json)
 
         # Columnar frame-group tables (only when there are frame groups).
         if fg_rows:
@@ -5527,7 +5543,7 @@ def write_sessions_passthrough(labels_path: str, store) -> bool:
         return False
     session_data = getattr(store, "session_data", None)
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("sessions_json", data=raw, maxshape=(None,))
+        _create_json_rows_dataset(f, "sessions_json", raw)
         if session_data is not None:
             grp = f.require_group("session_data")
             for name, arr in session_data.items():
