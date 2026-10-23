@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.category import Category
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -438,11 +439,20 @@ def read_labels(
     # Parse COCO annotation file
     coco_data = parse_coco_json(json_path)
 
-    # Create skeletons from categories and category name mapping
+    # Create skeletons from categories and category name mapping. One shared
+    # `Category` is created per COCO category id so that every annotation of that
+    # category references the same object (rather than a fresh `Category` per
+    # annotation, which bloats the catalog and makes deduplication expensive).
     skeletons = {}
     category_names = {}
+    category_objs: dict[int, Category | None] = {}
     for category in coco_data["categories"]:
         category_names[category["id"]] = category.get("name", "")
+        category_objs[category["id"]] = (
+            Category(name=category_names[category["id"]])
+            if category_names[category["id"]]
+            else None
+        )
         if "keypoints" in category and len(category["keypoints"]) > 0:
             skeleton = create_skeleton_from_category(category)
             skeletons[category["id"]] = skeleton
@@ -529,6 +539,7 @@ def read_labels(
             for annotation in image_annotations[image_id]:
                 category_id = annotation["category_id"]
                 cat_name = category_names.get(category_id, "")
+                category = category_objs.get(category_id)
                 has_kpts = "keypoints" in annotation and annotation["keypoints"]
 
                 if has_kpts and category_id in skeletons:
@@ -567,7 +578,7 @@ def read_labels(
                     # Also extract segmentation/bbox if present alongside
                     # keypoints. Linked annotations share the instance's track.
                     roi_kwargs = dict(
-                        category=cat_name,
+                        category=category,
                         instance=instance,
                         track=track,
                     )
@@ -592,7 +603,7 @@ def read_labels(
                             y,
                             w,
                             h,
-                            category=cat_name,
+                            category=category,
                             instance=instance,
                             track=track,
                         )
@@ -618,7 +629,7 @@ def read_labels(
                         track = _category_track(cat_name)
 
                     roi_kwargs = dict(
-                        category=cat_name,
+                        category=category,
                         track=track,
                     )
 
