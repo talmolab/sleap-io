@@ -384,6 +384,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v094" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.4
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v093" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -696,17 +707,6 @@
     <span class="md-ellipsis">
       
         v0.1.8
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v017" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.7
       
     </span>
   </a>
@@ -3877,6 +3877,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v094" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.4
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v093" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4195,17 +4206,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v017" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.7
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -4225,6 +4225,148 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v094"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.9.4">v0.9.4</a><a class="headerlink" href="#v094" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.9.4 Release Notes</h1>
+<h2>Summary</h2>
+<p>sleap-io v0.9.4 is a patch release headlined by a large scaling fix: converting big human-pose datasets to <code>.slp</code> previously did not work. <code>sio.load_coco</code> on COCO train (118K images / 262K annotations) never finished, and an AI Challenger train save took about 9 minutes and wrote a 76.7 GB file. Quadratic catalog scans, per-item <code>list.index()</code> lookups in the SLP writers, a per-image recursive directory walk, and fixed-width padding on the JSON row datasets are all fixed. COCO train now loads in 19 s and saves in 16 s to a 288 MB file.</p>
+<p>This release also corrects the dataframe/CSV export, which wrote coordinates for points marked not visible, and fixes <code>HDF5Video.img_shape</code> ignoring the grayscale setting.</p>
+<p>There are no SLP format changes (still <strong>2.8</strong>) and no breaking API changes.</p>
+<p><strong>Highlights:</strong></p>
+<ul>
+<li><strong>COCO load and SLP save scale to 100K+ image datasets (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5989546544" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/565" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/565/hovercard" href="https://github.com/talmolab/sleap-io/pull/565">#565</a>).</strong> Dedup of videos, tracks, identities and categories is now O(1) per item instead of a linear scan per frame; the COCO reader interns one <code>Category</code> per category id instead of one per annotation; the SLP writers and reader index by object identity instead of <code>list.index()</code>; COCO image resolution walks the tree once instead of per image; and the JSON row datasets are written as variable-length strings instead of zero-padded fixed-width arrays.</li>
+<li><strong>Non-visible points export as NaN (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5933077566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/564" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/564/hovercard" href="https://github.com/talmolab/sleap-io/pull/564">#564</a>).</strong> <code>to_dataframe</code> and the CSV export wrote the stored coordinates of points marked not visible, so occluded keypoints hidden in the SLEAP GUI still appeared in Export Analysis CSV. They now write NaN, matching <code>Instance.numpy()</code> and the Analysis HDF5 export.</li>
+<li><strong><code>HDF5Video.img_shape</code> respects grayscale (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5892649706" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/562" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/562/hovercard" href="https://github.com/talmolab/sleap-io/pull/562">#562</a>).</strong> For videos embedded in a <code>.pkg.slp</code>, toggling grayscale changed the frames but not the reported shape, which made the SLEAP GUI's Toggle Grayscale one-way.</li>
+</ul>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.9.4 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.9.4 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span></pre></div>
+<hr>
+<h2>Performance</h2>
+<p><strong>Large-dataset COCO → SLP conversion (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5989546544" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/565" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/565/hovercard" href="https://github.com/talmolab/sleap-io/pull/565">#565</a>).</strong> All runs use <code>sio.load_coco(json, dataset_root=&lt;image dir&gt;, segmentation_format="roi")</code>, then <code>labels.save(path)</code> with referenced (not embedded) images, then <code>sio.load_slp(path, open_videos=False)</code>. "Before" is v0.9.3.</p>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>Step</th>
+<th>Before</th>
+<th>v0.9.4</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>COCO val</strong><br>5K images, 11,004 annotations</td>
+<td><code>load_coco</code></td>
+<td>2.1 s</td>
+<td>0.7 s</td>
+</tr>
+<tr>
+<td></td>
+<td>categories in catalog</td>
+<td>23,455</td>
+<td>1</td>
+</tr>
+<tr>
+<td></td>
+<td>save</td>
+<td>1.3 s</td>
+<td>0.5 s</td>
+</tr>
+<tr>
+<td></td>
+<td>file size</td>
+<td>123.7 MB</td>
+<td>12.3 MB</td>
+</tr>
+<tr>
+<td><strong>COCO train</strong><br>118K images, 262,465 annotations</td>
+<td><code>load_coco</code></td>
+<td>did not finish in 30 min</td>
+<td>19.3 s</td>
+</tr>
+<tr>
+<td></td>
+<td>save</td>
+<td>432 s, 13.1 GB RSS</td>
+<td>16.3 s, 2.5 GB RSS</td>
+</tr>
+<tr>
+<td></td>
+<td>file size</td>
+<td>11,490 MB</td>
+<td>288 MB</td>
+</tr>
+<tr>
+<td><strong>AIC train</strong><br>210K images, 378,374 annotations</td>
+<td><code>load_coco</code></td>
+<td>964 s</td>
+<td>14.8 s</td>
+</tr>
+<tr>
+<td></td>
+<td>save</td>
+<td>556 s, 76.5 GB RSS</td>
+<td>15.4 s, 2.4 GB RSS</td>
+</tr>
+<tr>
+<td></td>
+<td>file size</td>
+<td>76,730 MB</td>
+<td>254 MB</td>
+</tr>
+</tbody>
+</table>
+<p>Recursive image search (when images are not at <code>dataset_root/file_name</code> or under <code>images/</code>, <code>imgs/</code>, <code>data/images/</code>) went from roughly 0.23 s per image to a single shared index: 30,000 AIC val images resolve in 3.9 s instead of an extrapolated ~2 hours.</p>
+<p><strong>What changed:</strong></p>
+<ul>
+<li><code>Labels.update()</code>, <code>append()</code> and <code>extend()</code> deduplicated catalogs with a linear <code>not in</code> scan per frame and annotation. A small <code>_IdentitySet</code> is now built once per batch, and the three per-frame <code>_collect_annotation_*</code> helpers are folded into one <code>_collect_frame_catalogs</code>.</li>
+<li><code>io/coco.py</code> passed the category name string to every bbox/ROI/mask, so <code>to_category()</code> built a fresh <code>Category("person")</code> per annotation. One <code>Category</code> is now interned per COCO category id.</li>
+<li><code>write_rois</code>, <code>write_bboxes</code>, <code>write_centroids</code>, <code>write_masks</code>, <code>write_label_images</code>, <code>write_lfs</code>, <code>write_suggestions</code>, <code>write_negative_frames</code>, <code>write_labels</code> and <code>_read_labels_from_open_file</code> used <code>list.index()</code> per item; they now use an <code>id()</code>-keyed index built once per call.</li>
+<li>COCO image resolution uses a lazily built file-name index shared across the load. This also fixes file names containing glob characters such as <code>img[1].png</code>, which <code>rglob</code> treated as patterns. Images that still cannot be resolved now emit a warning with the count and first missing name instead of being dropped silently.</li>
+<li><code>videos_json</code>, <code>tracks_json</code>, <code>suggestions_json</code> and <code>sessions_json</code> were fixed-width <code>|S&lt;max&gt;</code> arrays, so every row was zero-padded to the longest. An <code>ImageVideo</code> row lists all of its filenames, which cost n_videos × longest row (111 MB of padding on COCO val, over 76 GB on AIC train). They are now written with <code>h5py.string_dtype()</code>.</li>
+</ul>
+<p><strong>Compatibility.</strong> Reading old files is unchanged — h5py returns <code>bytes</code> per row for both layouts, and every reader <code>json.loads</code> the rows. Re-saving an old file upgrades it to variable-length. Older readers (SLEAP, older sleap-io) iterate these datasets row by row and <code>json.loads</code> each row, which works the same for variable-length strings. <code>docs/formats/slp.md</code> already specified these datasets as variable-length, so this brings the writer in line with the documented format rather than changing it. <code>resolve_image_path</code> gains an optional <code>file_index</code> argument; existing calls behave as before.</p>
+<p><strong>Not changed:</strong> embedded image frames (<code>save(embed=...)</code>) are still stored as a fixed-width <code>(n_frames, max_encoded_bytes)</code> int8 array per video, so every frame is padded to the largest encoded image. Switching to variable-length rows would roughly halve those files (1,629 MB → 831 MB on COCO val with <code>embed="all"</code>), but it changes what other readers of <code>.pkg.slp</code> must handle, so the default is unchanged pending verification against SLEAP 1.x and h5wasm-based readers.</p>
+<hr>
+<h2>Fixes</h2>
+<ul>
+<li><strong>Non-visible points write NaN in dataframe/CSV export (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5933077566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/564" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/564/hovercard" href="https://github.com/talmolab/sleap-io/pull/564">#564</a>).</strong> A point marked not visible keeps its last <code>xy</code>, and the dataframe codec copied <code>point["xy"]</code> without checking <code>point["visible"]</code>. A new <code>_point_coord(point, axis)</code> returns NaN for non-visible points at every coordinate write — the <code>points</code>, <code>instances</code>, <code>frames</code> and <code>multi_index</code> formats, in both <code>to_dataframe</code> and <code>to_dataframe_iter</code> — and <code>_raw_point_coord(...)</code> does the same for the lazy fast path (<code>load_slp(..., lazy=True)</code>). <code>from_dataframe</code> already reads NaN back as not visible, so the round trip keeps the point hidden instead of promoting it to a labeled point. Reported in talmolab/sleap#2881.</li>
+<li><strong><code>HDF5Video.img_shape</code> respects the grayscale setting (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5892649706" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/562" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/562/hovercard" href="https://github.com/talmolab/sleap-io/pull/562">#562</a>).</strong> <code>get_frame()</code> returns 1-channel frames when <code>grayscale=True</code>, but <code>img_shape</code> returned the channel count stored in <code>ds.attrs["channels"]</code> and never checked <code>self.grayscale</code>, so the reported shape stopped matching the frames. Because <code>Video.grayscale</code> is derived from <code>shape[-1] == 1</code>, the SLEAP GUI's Toggle Grayscale only worked in one direction. <code>img_shape</code> now reports 1 channel when <code>self.grayscale is True</code>; the <code>False</code> case keeps the stored value, since <code>get_frame()</code> never adds channels. Related: <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5749563501" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap/issues/2882" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap/issues/2882/hovercard" href="https://github.com/talmolab/sleap/issues/2882">talmolab/sleap#2882</a>.</li>
+</ul>
+<hr>
+<h2>Documentation</h2>
+<ul>
+<li><strong>README "Create labels from scratch" works on copy-paste (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5394088092" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/558" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/558/hovercard" href="https://github.com/talmolab/sleap-io/pull/558">#558</a>).</strong> <code>sio.Instance.from_numpy(points=...)</code> raised <code>TypeError</code>; the parameter is <code>points_data</code>.</li>
+<li><strong>Dead and stale links fixed (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5394088092" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/558" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/558/hovercard" href="https://github.com/talmolab/sleap-io/pull/558">#558</a>).</strong> The README's <code>io.sleap.ai</code> deep links (<code>/examples</code>, <code>/cli</code>, <code>/formats/</code> and its 11 format anchors) 404'd because <code>mike</code> serves versioned docs under <code>/latest/</code>; the DeepLabCut anchor is now <code>#deeplabcut-format-csv</code>. Also <code>pypa.github.io/pipx</code> → <code>pipx.pypa.io</code> in <code>CONTRIBUTING.md</code>, the skia-python docs link → the GitHub repo in <code>docs/rendering.md</code>, and the AlphaTracker repo → <code>ZexinChen/AlphaTracker</code> in <code>docs/formats/index.md</code>.</li>
+<li><strong>New notes (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5933077566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/564" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/564/hovercard" href="https://github.com/talmolab/sleap-io/pull/564">#564</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5989546544" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/565" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/565/hovercard" href="https://github.com/talmolab/sleap-io/pull/565">#565</a>).</strong> <code>docs/formats/csv.md</code> documents the non-visible point behavior; <code>docs/formats/coco.md</code> and <code>docs/formats/slp.md</code> cover image resolution and the variable-length JSON row datasets.</li>
+</ul>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5394088092" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/558" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/558/hovercard" href="https://github.com/talmolab/sleap-io/pull/558">#558</a>: docs: fix README <code>from_numpy</code> kwarg and dead/stale doc links</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5892649706" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/562" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/562/hovercard" href="https://github.com/talmolab/sleap-io/pull/562">#562</a>: Fix HDF5 grayscale shape permanence</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5933077566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/564" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/564/hovercard" href="https://github.com/talmolab/sleap-io/pull/564">#564</a>: fix(codecs): write NaN for non-visible points in dataframe/CSV export</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5989546544" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/565" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/565/hovercard" href="https://github.com/talmolab/sleap-io/pull/565">#565</a>: perf: make COCO load and SLP save scale to 100K+ image datasets</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/talmolab/sleap-io/compare/v0.9.3...v0.9.4">v0.9.3...v0.9.4</a></p>
 <h2 id="v093"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.9.3">v0.9.3</a><a class="headerlink" href="#v093" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.9.3 Release Notes</h1>
 <h2>Summary</h2>
@@ -11218,12 +11360,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li><a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/lochhh/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/lochhh">@lochhh</a> made their first contribution in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2517585968" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/115" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/115/hovercard" href="https://github.com/talmolab/sleap-io/pull/115">#115</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.7...v0.1.8"><tt>v0.1.7...v0.1.8</tt></a></p>
-<h2 id="v017"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.7">v0.1.7</a><a class="headerlink" href="#v017" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Path sanitization hotfix by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2443763673" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/107" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/107/hovercard" href="https://github.com/talmolab/sleap-io/pull/107">#107</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.6...v0.1.7"><tt>v0.1.6...v0.1.7</tt></a></p>
 
 
 
