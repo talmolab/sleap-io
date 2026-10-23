@@ -12,6 +12,7 @@ from shapely.geometry import box
 
 import sleap_io
 from sleap_io import (
+    Category,
     Embedding,
     EventType,
     FrameGroup,
@@ -7269,6 +7270,83 @@ def test_labels_collect_annotation_tracks_on_append():
     assert t_bbox in labels.tracks
     assert t_mask in labels.tracks
     assert t_roi in labels.tracks
+
+
+def _annotated_frame(video, frame_idx, category, identity, track):
+    """Build a frame whose bbox/mask/centroid/ROI all share the given objects."""
+    mask_data = np.zeros((10, 10), dtype=bool)
+    mask_data[2:8, 2:8] = True
+    kwargs = dict(category=category, identity=identity, track=track)
+    return LabeledFrame(
+        video=video,
+        frame_idx=frame_idx,
+        bboxes=[
+            UserBoundingBox(x1=0, y1=0, x2=10, y2=10, **kwargs),
+            UserBoundingBox(x1=1, y1=1, x2=9, y2=9, **kwargs),
+        ],
+        masks=[UserSegmentationMask.from_numpy(mask_data, **kwargs)],
+        centroids=[UserCentroid(x=1.0, y=2.0, **kwargs)],
+        rois=[UserROI.from_bbox(0, 0, 10, 10, **kwargs)],
+    )
+
+
+def test_labels_update_dedups_annotation_catalogs_by_identity():
+    """Shared annotation categories/identities/tracks are registered once.
+
+    Distinct objects that merely share a name stay distinct entries, and objects
+    already in the catalog are not re-added.
+    """
+    video = Video(filename="test.mp4", open_backend=False)
+    category = Category(name="person")
+    same_name = Category(name="person")
+    identity = Identity(name="alice")
+    track = Track(name="t1")
+
+    lfs = [_annotated_frame(video, i, category, identity, track) for i in range(3)]
+    lfs.append(_annotated_frame(video, 3, same_name, identity, track))
+    labels = Labels(labeled_frames=lfs, categories=[category])
+
+    assert labels.videos == [video]
+    assert len(labels.categories) == 2
+    assert labels.categories[0] is category
+    assert labels.categories[1] is same_name
+    assert labels.identities == [identity]
+    assert labels.tracks == [track]
+
+    labels.update()
+    assert len(labels.categories) == 2
+    assert len(labels.identities) == 1
+    assert len(labels.tracks) == 1
+
+
+def test_labels_append_extend_dedup_annotation_catalogs():
+    """append()/extend() register only annotation catalog objects not yet seen."""
+    video = Video(filename="test.mp4", open_backend=False)
+    category = Category(name="person")
+    identity = Identity(name="alice")
+    track = Track(name="t1")
+    labels = Labels(
+        labeled_frames=[_annotated_frame(video, 0, category, identity, track)]
+    )
+
+    labels.append(_annotated_frame(video, 1, category, identity, track))
+    assert len(labels.categories) == 1
+    assert len(labels.identities) == 1
+    assert len(labels.tracks) == 1
+
+    new_category = Category(name="ball")
+    new_track = Track(name="t2")
+    labels.extend(
+        [
+            _annotated_frame(video, 2, category, identity, track),
+            _annotated_frame(video, 3, new_category, identity, new_track),
+            _annotated_frame(video, 4, new_category, identity, new_track),
+        ]
+    )
+    assert labels.categories == [category, new_category]
+    assert labels.identities == [identity]
+    assert labels.tracks == [track, new_track]
+    assert labels.videos == [video]
 
 
 def test_labels_materialize_with_annotations(tmp_path):

@@ -50,7 +50,9 @@ from sleap_io.io.slp import (
     OWNER_ROI,
     ExportCancelled,
     LabelImageWriter,
+    _create_json_rows_dataset,
     _encode_metadata_attr,
+    _identity_index,
     _identity_link_rows_for_owner,
     _is_known_toplevel_name,
     _points_from_hdf5_data,
@@ -113,6 +115,7 @@ from sleap_io.io.slp import (
     write_labels,
     write_lfs,
     write_metadata,
+    write_negative_frames,
     write_sessions,
     write_suggestions,
     write_tracks,
@@ -11074,7 +11077,114 @@ def test_uncropped_writes_no_video_crops_and_golden_videos_json(slp_minimal, tmp
 
     # videos_json is byte-identical to a baseline save.
     with h5py.File(baseline, "r") as f1, h5py.File(candidate, "r") as f2:
-        assert f1["videos_json"][:].tobytes() == f2["videos_json"][:].tobytes()
+        assert list(f1["videos_json"][:]) == list(f2["videos_json"][:])
+
+
+def test_json_row_datasets_written_as_vlen_strings(slp_multiview, tmp_path):
+    """videos/tracks/suggestions/sessions JSON rows are stored unpadded (vlen)."""
+    labels = load_slp(slp_multiview)
+    labels.suggestions.append(SuggestionFrame(video=labels.videos[0], frame_idx=0))
+    path = tmp_path / "labels.slp"
+    labels.save(path)
+
+    with h5py.File(path, "r") as f:
+        for name in ("videos_json", "tracks_json", "suggestions_json", "sessions_json"):
+            string_info = h5py.check_string_dtype(f[name].dtype)
+            assert string_info is not None and string_info.length is None, name
+
+    loaded = load_slp(path)
+    assert [v.filename for v in loaded.videos] == [v.filename for v in labels.videos]
+    assert [t.name for t in loaded.tracks] == [t.name for t in labels.tracks]
+    assert len(loaded.suggestions) == 1
+    assert len(loaded.sessions) == 1
+    assert len(loaded.sessions[0].camera_group.cameras) == len(
+        labels.sessions[0].camera_group.cameras
+    )
+
+
+def test_read_fixed_width_json_row_datasets(slp_multiview, tmp_path):
+    """Files with legacy fixed-width JSON row datasets still load identically."""
+    labels = load_slp(slp_multiview)
+    labels.suggestions.append(SuggestionFrame(video=labels.videos[1], frame_idx=3))
+    path = tmp_path / "labels.slp"
+    labels.save(path)
+    expected = load_slp(path)
+
+    # Rewrite each row dataset in the old fixed-width (zero-padded) layout.
+    with h5py.File(path, "a") as f:
+        for name in ("videos_json", "tracks_json", "suggestions_json", "sessions_json"):
+            rows = list(f[name][:])
+            del f[name]
+            f.create_dataset(name, data=np.array(rows, dtype="S"), maxshape=(None,))
+            assert f[name].dtype.kind == "S"
+
+    loaded = load_slp(path)
+    assert [v.filename for v in loaded.videos] == [v.filename for v in expected.videos]
+    assert [t.name for t in loaded.tracks] == [t.name for t in expected.tracks]
+    assert [
+        (loaded.videos.index(s.video), s.frame_idx) for s in loaded.suggestions
+    ] == [(1, 3)]
+    assert len(loaded.sessions) == len(expected.sessions)
+
+    # Re-saving a legacy file (eagerly or via the lazy passthrough) upgrades it.
+    for lazy in (False, True):
+        resaved = tmp_path / f"resaved_{lazy}.slp"
+        load_slp(path, lazy=lazy).save(resaved)
+        with h5py.File(resaved, "r") as f:
+            assert h5py.check_string_dtype(f["videos_json"].dtype).length is None
+            assert h5py.check_string_dtype(f["sessions_json"].dtype).length is None
+        assert len(load_slp(resaved).sessions) == len(expected.sessions)
+
+
+def test_create_json_rows_dataset_accepts_str_and_bytes(tmp_path):
+    """JSON rows can be passed as str, bytes, or an array read from a dataset."""
+    path = tmp_path / "rows.h5"
+    with h5py.File(path, "w") as f:
+        _create_json_rows_dataset(f, "from_str", ['{"a":1}', "[2]"])
+        _create_json_rows_dataset(f, "from_bytes", [np.bytes_(b'{"a":1}'), b"[2]"])
+        _create_json_rows_dataset(f, "from_array", f["from_str"][:])
+        _create_json_rows_dataset(f, "empty", [])
+        for name in ("from_str", "from_bytes", "from_array"):
+            assert [json.loads(x) for x in f[name][:]] == [{"a": 1}, [2]]
+        assert f["empty"].shape == (0,)
+
+
+@pytest.mark.parametrize(
+    "unregistered", ["frame_video", "track", "suggestion", "negative"]
+)
+def test_write_labels_rejects_unregistered_references(unregistered, tmp_path):
+    """References to videos/tracks missing from the catalogs raise on save."""
+    skeleton = Skeleton(["a"])
+    video = Video(filename="a.mp4", open_backend=False)
+    other = Video(filename="b.mp4", open_backend=False)
+    labels = Labels(videos=[video], skeletons=[skeleton])
+    points = np.array([[1.0, 2.0]])
+    if unregistered == "frame_video":
+        inst = Instance.from_numpy(points, skeleton=skeleton)
+        labels.labeled_frames.append(LabeledFrame(other, 0, instances=[inst]))
+    elif unregistered == "track":
+        inst = Instance.from_numpy(points, skeleton=skeleton, track=Track("t"))
+        labels.labeled_frames.append(LabeledFrame(video, 0, instances=[inst]))
+    elif unregistered == "suggestion":
+        labels.suggestions.append(SuggestionFrame(video=other, frame_idx=0))
+    else:
+        labels.labeled_frames.append(LabeledFrame(other, 0, is_negative=True))
+
+    path = str(tmp_path / "labels.slp")
+    with pytest.raises(ValueError, match="is not in list"):
+        if unregistered == "negative":
+            # Called directly: through write_labels, write_lfs rejects it first.
+            write_negative_frames(path, labels)
+        else:
+            write_labels(path, labels)
+
+
+def test_identity_index_maps_first_occurrence():
+    """`_identity_index` keys by object identity and keeps the first position."""
+    a, b = Track(name="same"), Track(name="same")
+    index = _identity_index([a, b, a])
+    assert index == {id(a): 0, id(b): 1}
+    assert index.get(id(Track(name="same")), -1) == -1
 
 
 def test_crop_format_id_bumped_only_with_crop(

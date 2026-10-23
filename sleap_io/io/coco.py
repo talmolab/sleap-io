@@ -12,11 +12,14 @@ COCO-style format specification:
 from __future__ import annotations
 
 import json
+import os
+import warnings
 from pathlib import Path
 
 import numpy as np
 
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.category import Category
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -86,12 +89,60 @@ def create_skeleton_from_category(category: dict) -> Skeleton:
     return Skeleton(nodes, edges, name=skeleton_name)
 
 
-def resolve_image_path(image_filename: str, dataset_root: Path) -> Path:
+class _ImageFileIndex:
+    """Lazily-built index from file name to path for every file under a root.
+
+    `resolve_image_path` falls back to searching the whole dataset tree for images
+    that are not at any of the expected locations. Walking the tree once and
+    reusing this index keeps that fallback O(files) in total, instead of one
+    recursive glob per image (O(images x files)), which never finishes on
+    datasets with 100K+ images.
+
+    Attributes:
+        root: The directory to index. It is walked on the first `get` call.
+    """
+
+    def __init__(self, root: Path):
+        """Create an index for `root` without walking it yet."""
+        self.root = root
+        self._paths: dict[str, Path] | None = None
+
+    def get(self, name: str) -> Path | None:
+        """Return the first file named `name` under the root, or ``None``.
+
+        Args:
+            name: A bare file name (no directory components).
+
+        Returns:
+            The path of the first matching file found by a top-down walk of the
+            root (symlinked directories are not followed), or ``None``.
+        """
+        if self._paths is None:
+            self._paths = {}
+            for dirpath, _, filenames in os.walk(self.root):
+                for filename in filenames:
+                    self._paths.setdefault(filename, Path(dirpath) / filename)
+        return self._paths.get(name)
+
+
+def resolve_image_path(
+    image_filename: str,
+    dataset_root: Path,
+    file_index: _ImageFileIndex | None = None,
+) -> Path:
     """Resolve image file path handling various directory structures.
+
+    The image is looked up at ``dataset_root / image_filename``, then under the
+    common ``images``, ``imgs`` and ``data/images`` subdirectories, and finally by
+    file name anywhere under `dataset_root`.
 
     Args:
         image_filename: Image filename from COCO annotation.
         dataset_root: Root directory of the dataset.
+        file_index: Index used for the recursive search by file name. Pass one
+            shared `_ImageFileIndex` when resolving many images so the dataset
+            tree is walked only once. If ``None``, a temporary index is built when
+            the recursive search is needed.
 
     Returns:
         Resolved absolute path to the image file.
@@ -105,21 +156,17 @@ def resolve_image_path(image_filename: str, dataset_root: Path) -> Path:
         return image_path
 
     # Try common variations
-    common_prefixes = ["images", "imgs", "data/images", ""]
-
-    for prefix in common_prefixes:
-        if prefix:
-            test_path = dataset_root / prefix / image_filename
-        else:
-            # Try finding the file anywhere in the dataset
-            test_path = None
-            for found_path in dataset_root.rglob(Path(image_filename).name):
-                if found_path.is_file():
-                    test_path = found_path
-                    break
-
-        if test_path and test_path.exists():
+    for prefix in ["images", "imgs", "data/images"]:
+        test_path = dataset_root / prefix / image_filename
+        if test_path.exists():
             return test_path
+
+    # Try finding the file anywhere in the dataset
+    if file_index is None:
+        file_index = _ImageFileIndex(dataset_root)
+    found_path = file_index.get(Path(image_filename).name)
+    if found_path is not None and found_path.is_file():
+        return found_path
 
     raise FileNotFoundError(
         f"Image file not found: {image_filename} (searched in {dataset_root})"
@@ -438,11 +485,20 @@ def read_labels(
     # Parse COCO annotation file
     coco_data = parse_coco_json(json_path)
 
-    # Create skeletons from categories and category name mapping
+    # Create skeletons from categories and category name mapping. One shared
+    # `Category` is created per COCO category id so that every annotation of that
+    # category references the same object (rather than a fresh `Category` per
+    # annotation, which bloats the catalog and makes deduplication expensive).
     skeletons = {}
     category_names = {}
+    category_objs: dict[int, Category | None] = {}
     for category in coco_data["categories"]:
         category_names[category["id"]] = category.get("name", "")
+        category_objs[category["id"]] = (
+            Category(name=category_names[category["id"]])
+            if category_names[category["id"]]
+            else None
+        )
         if "keypoints" in category and len(category["keypoints"]) > 0:
             skeleton = create_skeleton_from_category(category)
             skeletons[category["id"]] = skeleton
@@ -467,6 +523,8 @@ def read_labels(
     image_id_to_path = {}
     image_id_to_shape = {}
     image_id_to_frame_idx = {}
+    file_index = _ImageFileIndex(dataset_root)
+    missing_images = []
 
     for image_info in coco_data["images"]:
         image_id = image_info["id"]
@@ -476,7 +534,7 @@ def read_labels(
 
         # Resolve image path
         try:
-            image_path = resolve_image_path(image_filename, dataset_root)
+            image_path = resolve_image_path(image_filename, dataset_root, file_index)
             image_id_to_path[image_id] = image_path
 
             # Group by shape
@@ -488,7 +546,17 @@ def read_labels(
             shape_to_images[shape_key].append(str(image_path))
         except FileNotFoundError:
             # Skip missing images
+            missing_images.append(image_filename)
             continue
+
+    if missing_images:
+        warnings.warn(
+            f"{len(missing_images)} of {len(coco_data['images'])} images in "
+            f"{json_path} were not found under {dataset_root} and were skipped "
+            f"along with their annotations (first missing: {missing_images[0]!r}). "
+            "Pass the directory containing the images as `dataset_root`.",
+            stacklevel=2,
+        )
 
     # Create Video objects for each unique shape
     shape_to_video = {}
@@ -529,6 +597,7 @@ def read_labels(
             for annotation in image_annotations[image_id]:
                 category_id = annotation["category_id"]
                 cat_name = category_names.get(category_id, "")
+                category = category_objs.get(category_id)
                 has_kpts = "keypoints" in annotation and annotation["keypoints"]
 
                 if has_kpts and category_id in skeletons:
@@ -567,7 +636,7 @@ def read_labels(
                     # Also extract segmentation/bbox if present alongside
                     # keypoints. Linked annotations share the instance's track.
                     roi_kwargs = dict(
-                        category=cat_name,
+                        category=category,
                         instance=instance,
                         track=track,
                     )
@@ -592,7 +661,7 @@ def read_labels(
                             y,
                             w,
                             h,
-                            category=cat_name,
+                            category=category,
                             instance=instance,
                             track=track,
                         )
@@ -618,7 +687,7 @@ def read_labels(
                         track = _category_track(cat_name)
 
                     roi_kwargs = dict(
-                        category=cat_name,
+                        category=category,
                         track=track,
                     )
 

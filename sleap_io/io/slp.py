@@ -82,7 +82,7 @@ import zlib
 from contextlib import nullcontext
 from enum import Enum, IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Iterable
 
 import h5py
 import imageio.v3 as iio
@@ -258,6 +258,43 @@ class ExportCancelled(Exception):
     """Raised when an export operation is cancelled by the user."""
 
     pass
+
+
+def _identity_index(items: Iterable) -> dict[int, int]:
+    """Map each item's ``id()`` to the position of its first occurrence.
+
+    A drop-in for repeated ``items.index(x)`` lookups on lists of ``eq=False``
+    objects (videos, tracks, instances, ...), which are O(len(items)) each and made
+    writing large labels O(N^2). Look up with ``index.get(id(x), default)``.
+
+    Args:
+        items: The sequence to index.
+
+    Returns:
+        A dict mapping ``id(item)`` to its first index in `items`.
+    """
+    index: dict[int, int] = {}
+    for i, item in enumerate(items):
+        index.setdefault(id(item), i)
+    return index
+
+
+def _create_json_rows_dataset(f: h5py.File, name: str, rows: list | np.ndarray):
+    """Create a 1D dataset of per-row JSON strings (e.g. ``videos_json``).
+
+    Rows are stored as variable-length UTF-8 strings. A fixed-width string array
+    pads every row to the longest one, so a single long row (e.g. an
+    `ImageVideo` listing thousands of filenames) multiplies the dataset size by
+    the number of rows. Readers decode both layouts identically, since h5py
+    returns ``bytes`` for each row either way.
+
+    Args:
+        f: An open, writable `h5py.File`.
+        name: The dataset name to create.
+        rows: The JSON rows as ``str`` or ``bytes`` (including arrays read back
+            from an existing fixed-width or variable-length dataset).
+    """
+    f.create_dataset(name, data=rows, dtype=h5py.string_dtype(), maxshape=(None,))
 
 
 def _is_embedded_video_metadata(video: Video) -> bool:
@@ -1758,11 +1795,11 @@ def write_videos(
     video_jsons = []
     for video_ind, video in sorted(videos_to_write, key=lambda x: x[0]):
         video_json = video_to_dict(video, labels_path, prefer_metadata=prefer_metadata)
-        video_jsons.append(np.bytes_(json.dumps(video_json, separators=(",", ":"))))
+        video_jsons.append(json.dumps(video_json, separators=(",", ":")))
 
     with h5py.File(labels_path, "a") as f:
         if "videos_json" not in f:
-            f.create_dataset("videos_json", data=video_jsons, maxshape=(None,))
+            _create_json_rows_dataset(f, "videos_json", video_jsons)
 
     # Save source_video lineage metadata in a separate pass to ensure video groups exist
     # Note: original_video is now a computed property derived from source_video chain,
@@ -1842,11 +1879,10 @@ def write_tracks(labels_path: str, tracks: list[Track]):
     # TODO: Add support for track metadata like spawned on frame.
     SPAWNED_ON = 0
     tracks_json = [
-        np.bytes_(json.dumps([SPAWNED_ON, track.name], separators=(",", ":")))
-        for track in tracks
+        json.dumps([SPAWNED_ON, track.name], separators=(",", ":")) for track in tracks
     ]
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("tracks_json", data=tracks_json, maxshape=(None,))
+        _create_json_rows_dataset(f, "tracks_json", tracks_json)
 
 
 def read_identities(
@@ -3382,20 +3418,23 @@ def write_suggestions(
         videos: A list of `Video` objects.
     """
     suggestions_json = []
+    video_ids = _identity_index(videos)
     for suggestion in suggestions:
         # Get group from metadata if available, otherwise use default
         group = suggestion.metadata.get("group", 0) if suggestion.metadata else 0
 
+        video_idx = video_ids.get(id(suggestion.video))
+        if video_idx is None:
+            video_idx = videos.index(suggestion.video)  # Raises for unknown videos.
         suggestion_dict = {
-            "video": str(videos.index(suggestion.video)),
+            "video": str(video_idx),
             "frame_idx": suggestion.frame_idx,
             "group": group,
         }
-        suggestion_json = np.bytes_(json.dumps(suggestion_dict, separators=(",", ":")))
-        suggestions_json.append(suggestion_json)
+        suggestions_json.append(json.dumps(suggestion_dict, separators=(",", ":")))
 
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("suggestions_json", data=suggestions_json, maxshape=(None,))
+        _create_json_rows_dataset(f, "suggestions_json", suggestions_json)
 
 
 def write_negative_frames(labels_path: str, labels: Labels):
@@ -3437,9 +3476,12 @@ def write_negative_frames(labels_path: str, labels: Labels):
 
     # Collect negative frames
     negative_data = []
+    video_ids = _identity_index(labels.videos)
     for lf in labels.labeled_frames:
         if lf.is_negative:
-            video_idx = labels.videos.index(lf.video)
+            video_idx = video_ids.get(id(lf.video))
+            if video_idx is None:
+                video_idx = labels.videos.index(lf.video)  # Raises if unknown.
             sparse_video_id = video_idx_id_map[video_idx]
             negative_data.append((sparse_video_id, lf.frame_idx))
 
@@ -4180,6 +4222,8 @@ def write_lfs(labels_path: str, labels: Labels):
             except (ValueError, IndexError):
                 # If parsing fails, keep the default sequential index
                 pass
+    video_ids = _identity_index(labels.videos)
+    track_ids = _identity_index(labels.tracks)
     for lf in labels:
         frame_id = len(frames)
         instance_id_start = len(instances)
@@ -4187,7 +4231,11 @@ def write_lfs(labels_path: str, labels: Labels):
             instance_id = len(instances)
             inst_to_id[id(inst)] = instance_id
             skeleton_id = labels.skeletons.index(inst.skeleton)
-            track = labels.tracks.index(inst.track) if inst.track else -1
+            track = -1
+            if inst.track:
+                track = track_ids.get(id(inst.track))
+                if track is None:
+                    track = labels.tracks.index(inst.track)  # Raises if unknown.
             from_predicted = -1
             if inst.from_predicted:
                 to_link.append((instance_id, inst.from_predicted))
@@ -4244,10 +4292,13 @@ def write_lfs(labels_path: str, labels: Labels):
 
         instance_id_end = len(instances)
 
+        video_idx = video_ids.get(id(lf.video))
+        if video_idx is None:
+            video_idx = labels.videos.index(lf.video)  # Raises if unknown.
         frames.append(
             [
                 frame_id,
-                video_idx_id_map[labels.videos.index(lf.video)],
+                video_idx_id_map[video_idx],
                 lf.frame_idx,
                 instance_id_start,
                 instance_id_end,
@@ -5420,7 +5471,7 @@ def write_sessions(
                 np.bytes_(json.dumps(session_json, separators=(",", ":")))
             )
 
-        f.create_dataset("sessions_json", data=sessions_json, maxshape=(None,))
+        _create_json_rows_dataset(f, "sessions_json", sessions_json)
 
         # Columnar frame-group tables (only when there are frame groups).
         if fg_rows:
@@ -5492,7 +5543,7 @@ def write_sessions_passthrough(labels_path: str, store) -> bool:
         return False
     session_data = getattr(store, "session_data", None)
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("sessions_json", data=raw, maxshape=(None,))
+        _create_json_rows_dataset(f, "sessions_json", raw)
         if session_data is not None:
             grp = f.require_group("session_data")
             for name, arr in session_data.items():
@@ -6012,6 +6063,9 @@ def write_rois(
     names = []
     sources = []
 
+    track_ids = _identity_index(tracks)
+    instance_ids = _identity_index(instances) if instances is not None else None
+
     for i_roi, roi in enumerate(rois):
         wkb = shapely.to_wkb(roi.geometry)
         wkb_start = wkb_offset
@@ -6020,14 +6074,11 @@ def write_rois(
         wkb_offset = wkb_end
 
         video_idx, frame_idx = contexts[i_roi]
-        track_idx = tracks.index(roi.track) if roi.track in tracks else -1
+        track_idx = track_ids.get(id(roi.track), -1)
 
         instance_idx = roi._instance_idx  # Use stored index as default
-        if instances is not None and roi.instance is not None:
-            try:
-                instance_idx = instances.index(roi.instance)
-            except ValueError:
-                pass  # Keep stored _instance_idx
+        if instance_ids is not None and roi.instance is not None:
+            instance_idx = instance_ids.get(id(roi.instance), instance_idx)
 
         is_predicted = isinstance(roi, PredictedROI)
         score = roi.score if is_predicted else float("nan")
@@ -6312,6 +6363,9 @@ def write_bboxes(
     names = []
     sources = []
 
+    track_ids = _identity_index(tracks)
+    instance_ids = _identity_index(instances) if instances is not None else None
+
     for i, bbox in enumerate(bboxes):
         x1_arr[i] = bbox.x1
         y1_arr[i] = bbox.y1
@@ -6320,14 +6374,11 @@ def write_bboxes(
         angle_arr[i] = bbox.angle
 
         video_arr[i], frame_idx_arr[i] = contexts[i]
-        track_arr[i] = tracks.index(bbox.track) if bbox.track in tracks else -1
+        track_arr[i] = track_ids.get(id(bbox.track), -1)
 
         instance_idx = bbox._instance_idx
-        if instances is not None and bbox.instance is not None:
-            try:
-                instance_idx = instances.index(bbox.instance)
-            except ValueError:
-                pass
+        if instance_ids is not None and bbox.instance is not None:
+            instance_idx = instance_ids.get(id(bbox.instance), instance_idx)
         instance_arr[i] = instance_idx
 
         is_predicted = isinstance(bbox, PredictedBoundingBox)
@@ -6517,20 +6568,20 @@ def write_centroids(
     names = []
     sources = []
 
+    track_ids = _identity_index(tracks)
+    instance_ids = _identity_index(instances) if instances is not None else None
+
     for i, centroid in enumerate(centroids):
         x_arr[i] = centroid.x
         y_arr[i] = centroid.y
         z_arr[i] = centroid.z if centroid.z is not None else float("nan")
 
         video_arr[i], frame_idx_arr[i] = contexts[i]
-        track_arr[i] = tracks.index(centroid.track) if centroid.track in tracks else -1
+        track_arr[i] = track_ids.get(id(centroid.track), -1)
 
         instance_idx = centroid._instance_idx
-        if instances is not None and centroid.instance is not None:
-            try:
-                instance_idx = instances.index(centroid.instance)
-            except ValueError:
-                pass
+        if instance_ids is not None and centroid.instance is not None:
+            instance_idx = instance_ids.get(id(centroid.instance), instance_idx)
         instance_arr[i] = instance_idx
 
         is_predicted = isinstance(centroid, PredictedCentroid)
@@ -6832,6 +6883,8 @@ def write_masks(
     # long as the source prediction is anywhere in this list (typically the same
     # frame); a source absent from the saved labels resolves to -1.
     mask_id_to_idx = {id(mask): i for i, mask in enumerate(masks)}
+    track_ids = _identity_index(tracks)
+    instance_ids = _identity_index(instances) if instances is not None else None
 
     for i_mask, mask in enumerate(masks):
         # Pack uint32 RLE counts as raw bytes (uint8)
@@ -6843,14 +6896,11 @@ def write_masks(
         rle_offset = rle_end
 
         video_idx, frame_idx = contexts[i_mask]
-        track_idx = tracks.index(mask.track) if mask.track in tracks else -1
+        track_idx = track_ids.get(id(mask.track), -1)
 
         instance_idx = mask._instance_idx  # Use stored index as default
-        if instances is not None and mask.instance is not None:
-            try:
-                instance_idx = instances.index(mask.instance)
-            except ValueError:
-                pass  # Keep stored _instance_idx
+        if instance_ids is not None and mask.instance is not None:
+            instance_idx = instance_ids.get(id(mask.instance), instance_idx)
 
         # Resolve the ``from_predicted`` provenance link to a global mask index
         # (-1 if absent, or if the source prediction was removed from the
@@ -7321,6 +7371,9 @@ def write_label_images(
     data_chunks: list[bytes] = []
     data_offset = 0
 
+    track_ids = _identity_index(tracks)
+    instance_ids = _identity_index(instances) if instances is not None else None
+
     with h5py.File(labels_path, "a") as f:
         # Create pixel data dataset
         if use_chunked:
@@ -7359,14 +7412,11 @@ def write_label_images(
             for label_id in sorted(li.objects):
                 info = li.objects[label_id]
 
-                track_idx = tracks.index(info.track) if info.track in tracks else -1
+                track_idx = track_ids.get(id(info.track), -1)
 
                 instance_idx = info._instance_idx  # Use stored index as default
-                if instances is not None and info.instance is not None:
-                    try:
-                        instance_idx = instances.index(info.instance)
-                    except ValueError:
-                        pass  # Keep stored _instance_idx
+                if instance_ids is not None and info.instance is not None:
+                    instance_idx = instance_ids.get(id(info.instance), instance_idx)
 
                 obj_score = info.score if info.score is not None else float("nan")
                 obj_tracking_score = (
@@ -8647,8 +8697,9 @@ def _read_labels_from_open_file(
 
     # Attach annotations to their corresponding LabeledFrames
     frame_lookup: dict[tuple[int, int], LabeledFrame] = {}
+    video_ids = _identity_index(videos)
     for lf in labeled_frames:
-        vid_idx = videos.index(lf.video) if lf.video in videos else -1
+        vid_idx = video_ids.get(id(lf.video), -1)
         frame_lookup[(vid_idx, lf.frame_idx)] = lf
 
     def _get_or_create_frame(vid_idx, frame_idx):
@@ -9175,13 +9226,10 @@ def _write_labels_lazy(
             for ann in ann_list:
                 anns.append(ann)
                 ctxs.append((vid_idx, fidx))
+        video_ids = _identity_index(videos)
         for ann in undistributed:
             anns.append(ann)
-            try:
-                vid_idx = videos.index(getattr(ann, "video", None))
-            except ValueError:
-                vid_idx = -1
-            ctxs.append((vid_idx, -1))
+            ctxs.append((video_ids.get(id(getattr(ann, "video", None)), -1), -1))
         return anns, ctxs
 
     all_centroids, centroid_ctxs = _collect_from_lazy(
@@ -9466,9 +9514,10 @@ def write_labels(
     all_rois: list = []
     roi_contexts: list[tuple[int, int]] = []
 
+    video_ids = _identity_index(labels.videos)
     for lf in labels.labeled_frames:
         all_instances.extend(lf.instances)
-        vid_idx = labels.videos.index(lf.video) if lf.video in labels.videos else -1
+        vid_idx = video_ids.get(id(lf.video), -1)
         ctx = (vid_idx, lf.frame_idx)
         for c in lf.centroids:
             all_centroids.append(c)
@@ -9489,9 +9538,7 @@ def write_labels(
     # Add static ROIs (not tied to any frame)
     for r in labels.static_rois:
         all_rois.append(r)
-        roi_contexts.append(
-            (labels.videos.index(r.video) if r.video in labels.videos else -1, -1)
-        )
+        roi_contexts.append((video_ids.get(id(r.video), -1), -1))
 
     write_rois(
         labels_path,
