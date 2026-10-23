@@ -73,6 +73,7 @@ dev = [
     "pytest-cov",
     "pytest-watch",
     "pytest-httpserver>=1.0",
+    "pytest-xdist",
     "ruff",
     "toml",
     "twine",
