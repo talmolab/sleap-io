@@ -63,6 +63,32 @@ if TYPE_CHECKING:
 DEFAULT_MERGE_HISTORY_LIMIT = 1000
 
 
+class _IdentitySet:
+    """Append-only, identity-deduplicated view over a `Labels` catalog list.
+
+    Wraps a catalog list (``videos``, ``tracks``, ``identities``, ``categories``)
+    with an ``id()``-keyed set so each membership check is O(1) instead of a
+    linear ``not in`` scan, which made building large labels O(N^2). The catalog
+    types are all ``eq=False``, so identity membership matches ``in`` exactly.
+
+    Attributes:
+        items: The wrapped catalog list. New items are appended to it in place.
+    """
+
+    __slots__ = ("items", "_ids")
+
+    def __init__(self, items: list):
+        """Wrap `items`, indexing the objects it already contains."""
+        self.items = items
+        self._ids = {id(x) for x in items}
+
+    def add(self, item: Any) -> None:
+        """Append `item` to the catalog unless it is ``None`` or already present."""
+        if item is not None and id(item) not in self._ids:
+            self._ids.add(id(item))
+            self.items.append(item)
+
+
 @define
 class Labels:
     """Pose data for a set of videos that have user labels and/or predictions.
@@ -541,26 +567,9 @@ class Labels:
         This function will update the list of skeletons, videos, tracks and
         identities from the labeled frames, instances, annotations, and suggestions.
         """
+        catalogs = self._catalog_sets()
         for lf in self.labeled_frames:
-            if lf.video not in self.videos:
-                self.videos.append(lf.video)
-
-            for inst in lf:
-                self._register_skeleton(inst)
-
-                if inst.track is not None and inst.track not in self.tracks:
-                    self.tracks.append(inst.track)
-
-                if inst.identity is not None and inst.identity not in self.identities:
-                    self.identities.append(inst.identity)
-
-                if inst.category is not None and inst.category not in self.categories:
-                    self.categories.append(inst.category)
-
-            # Collect tracks and identities from nested annotations
-            self._collect_annotation_tracks(lf)
-            self._collect_annotation_identities(lf)
-            self._collect_annotation_categories(lf)
+            self._collect_frame_catalogs(lf, catalogs)
 
         # Collect multi-view identities bound only on InstanceGroups (sessions).
         self._collect_session_identities()
@@ -569,9 +578,9 @@ class Labels:
         # Register event catalog entries and participants referenced by events.
         self._collect_events()
 
+        videos = _IdentitySet(self.videos)
         for sf in self.suggestions:
-            if sf.video not in self.videos:
-                self.videos.append(sf.video)
+            videos.add(sf.video)
 
     def _lazy_flat_annotations(self, by_frame_attr: str, undist_attr: str) -> list:
         """Get flat annotation list from lazy store without materializing."""
@@ -964,50 +973,59 @@ class Labels:
 
         return labels_copy
 
-    def _collect_annotation_tracks(self, lf: LabeledFrame):
-        """Collect tracks from annotations on a frame into self.tracks."""
-        for c in lf.centroids:
-            if c.track is not None and c.track not in self.tracks:
-                self.tracks.append(c.track)
-        for b in lf.bboxes:
-            if b.track is not None and b.track not in self.tracks:
-                self.tracks.append(b.track)
-        for m in lf.masks:
-            if m.track is not None and m.track not in self.tracks:
-                self.tracks.append(m.track)
-        for r in lf.rois:
-            if r.track is not None and r.track not in self.tracks:
-                self.tracks.append(r.track)
+    def _catalog_sets(
+        self,
+    ) -> tuple[_IdentitySet, _IdentitySet, _IdentitySet, _IdentitySet]:
+        """Wrap the video/track/identity/category catalogs for O(1) registration.
+
+        Returns:
+            A ``(videos, tracks, identities, categories)`` tuple of `_IdentitySet`
+            views over the corresponding catalog lists. Build it once per batch of
+            frames and pass it to `_collect_frame_catalogs`.
+        """
+        return (
+            _IdentitySet(self.videos),
+            _IdentitySet(self.tracks),
+            _IdentitySet(self.identities),
+            _IdentitySet(self.categories),
+        )
+
+    def _collect_frame_catalogs(
+        self,
+        lf: LabeledFrame,
+        catalogs: tuple[_IdentitySet, _IdentitySet, _IdentitySet, _IdentitySet],
+    ):
+        """Register the video, skeletons, tracks, identities and categories of a frame.
+
+        Covers the frame's instances and its nested annotations: `Centroid`,
+        `BoundingBox`, `SegmentationMask` and `ROI` carry a ``track``, ``identity``
+        and ``category``; `LabelImage` objects carry a ``track``. Deduplication is
+        by object identity (all catalog types are ``eq=False``). Static ROIs (not
+        frame-bound) are swept by the save-time `_collect_identities` /
+        `_collect_categories`.
+
+        Args:
+            lf: The labeled frame whose contents to register.
+            catalogs: The views returned by `_catalog_sets`, shared across all
+                frames of a batch so each registration is O(1).
+        """
+        videos, tracks, identities, categories = catalogs
+        videos.add(lf.video)
+
+        for inst in lf:
+            self._register_skeleton(inst)
+            tracks.add(inst.track)
+            identities.add(inst.identity)
+            categories.add(inst.category)
+
+        for ann in (*lf.centroids, *lf.bboxes, *lf.masks, *lf.rois):
+            tracks.add(ann.track)
         for li in lf.label_images:
             for info in li.objects.values():
-                if info.track is not None and info.track not in self.tracks:
-                    self.tracks.append(info.track)
-
-    def _collect_annotation_identities(self, lf: LabeledFrame):
-        """Collect identities from non-instance annotations on a frame.
-
-        Mirrors `_collect_annotation_tracks` for the global `Identity` catalog.
-        `SegmentationMask`, `Centroid`, `BoundingBox`, and `ROI` carry an
-        `identity`; deduped by object identity (``not in``), matching the
-        instance-identity collection in update/append/extend. Static ROIs (not
-        frame-bound) are swept by the save-time `_collect_identities`.
-        """
+                tracks.add(info.track)
         for ann in (*lf.masks, *lf.centroids, *lf.bboxes, *lf.rois):
-            if ann.identity is not None and ann.identity not in self.identities:
-                self.identities.append(ann.identity)
-
-    def _collect_annotation_categories(self, lf: LabeledFrame):
-        """Collect categories from non-instance annotations on a frame.
-
-        Mirrors `_collect_annotation_identities` for the global `Category` catalog.
-        `SegmentationMask`, `Centroid`, `BoundingBox`, and `ROI` carry a `category`;
-        deduped by object identity (``not in``), matching the instance-category
-        collection in update/append/extend. Static ROIs (not frame-bound) are swept
-        by the save-time `_collect_categories`.
-        """
-        for ann in (*lf.masks, *lf.centroids, *lf.bboxes, *lf.rois):
-            if ann.category is not None and ann.category not in self.categories:
-                self.categories.append(ann.category)
+            identities.add(ann.identity)
+            categories.add(ann.category)
 
     def _collect_identities(self):
         """Register every detection's `Identity` in the catalog.
@@ -1067,15 +1085,16 @@ class Labels:
         appearing on a per-instance ``Instance.identity``. Those identities would
         otherwise be dropped on save, so collect them into ``self.identities``.
 
-        Deduped by object identity (``not in``), mirroring instance-identity
-        collection. Cheap no-op for labels without sessions.
+        Deduped by object identity, mirroring instance-identity collection. Cheap
+        no-op for labels without sessions.
         """
+        if not self.sessions:
+            return
+        identities = _IdentitySet(self.identities)
         for session in self.sessions:
             for frame_group in session.frame_groups.values():
                 for instance_group in frame_group.instance_groups:
-                    identity = instance_group.identity
-                    if identity is not None and identity not in self.identities:
-                        self.identities.append(identity)
+                    identities.add(instance_group.identity)
 
     def _collect_session_categories(self):
         """Collect multi-view categories bound only on `InstanceGroup`s.
@@ -1085,15 +1104,16 @@ class Labels:
         appearing on a per-instance ``Instance.category``. Those categories would
         otherwise be dropped on save, so collect them into ``self.categories``.
 
-        Deduped by object identity (``not in``), mirroring
-        `_collect_session_identities`. Cheap no-op for labels without sessions.
+        Deduped by object identity, mirroring `_collect_session_identities`. Cheap
+        no-op for labels without sessions.
         """
+        if not self.sessions:
+            return
+        categories = _IdentitySet(self.categories)
         for session in self.sessions:
             for frame_group in session.frame_groups.values():
                 for instance_group in frame_group.instance_groups:
-                    category = instance_group.category
-                    if category is not None and category not in self.categories:
-                        self.categories.append(category)
+                    categories.add(instance_group.category)
 
     def _collect_events(self):
         """Register catalog entries and participants referenced by `events`.
@@ -1102,25 +1122,27 @@ class Labels:
         ``self.event_types`` (deduped by name, canonicalizing each event's ``type``
         onto the first catalog entry of that name) and every `Track` / `Identity`
         used as an event ``subject`` / ``target`` is registered in ``self.tracks`` /
-        ``self.identities``. Mirrors `_collect_annotation_tracks` /
+        ``self.identities``. Mirrors `_collect_frame_catalogs` /
         `_collect_identities`: called from `update()` (build path) and again at save
         time so post-hoc ``labels.events.append(...)`` assignments are not dropped.
         Idempotent and a cheap no-op when there are no events.
         """
         self._collect_event_types()
+        if not self.events:
+            return
+        videos = _IdentitySet(self.videos)
+        tracks = _IdentitySet(self.tracks)
+        identities = _IdentitySet(self.identities)
         for ev in self.events:
             # An event may reference a video that carries no pose labels and so is
             # not otherwise in the catalog; collect it (like suggestion videos in
             # `update`) so its reference is not dropped (written as -1) on save.
-            if ev.video is not None and ev.video not in self.videos:
-                self.videos.append(ev.video)
+            videos.add(ev.video)
             for participant in (ev.subject, ev.target):
                 if isinstance(participant, Track):
-                    if participant not in self.tracks:
-                        self.tracks.append(participant)
+                    tracks.add(participant)
                 elif isinstance(participant, Identity):
-                    if participant not in self.identities:
-                        self.identities.append(participant)
+                    identities.add(participant)
 
     def _collect_event_types(self):
         """Register every event's `EventType` in ``self.event_types`` by name.
@@ -1166,24 +1188,7 @@ class Labels:
         self._invalidate_indices()
 
         if update:
-            if lf.video not in self.videos:
-                self.videos.append(lf.video)
-
-            for inst in lf:
-                self._register_skeleton(inst)
-
-                if inst.track is not None and inst.track not in self.tracks:
-                    self.tracks.append(inst.track)
-
-                if inst.identity is not None and inst.identity not in self.identities:
-                    self.identities.append(inst.identity)
-
-                if inst.category is not None and inst.category not in self.categories:
-                    self.categories.append(inst.category)
-
-            self._collect_annotation_tracks(lf)
-            self._collect_annotation_identities(lf)
-            self._collect_annotation_categories(lf)
+            self._collect_frame_catalogs(lf, self._catalog_sets())
             self._collect_session_identities()
             self._collect_session_categories()
 
@@ -1203,31 +1208,9 @@ class Labels:
         self._invalidate_indices()
 
         if update:
+            catalogs = self._catalog_sets()
             for lf in lfs:
-                if lf.video not in self.videos:
-                    self.videos.append(lf.video)
-
-                for inst in lf:
-                    self._register_skeleton(inst)
-
-                    if inst.track is not None and inst.track not in self.tracks:
-                        self.tracks.append(inst.track)
-
-                    if (
-                        inst.identity is not None
-                        and inst.identity not in self.identities
-                    ):
-                        self.identities.append(inst.identity)
-
-                    if (
-                        inst.category is not None
-                        and inst.category not in self.categories
-                    ):
-                        self.categories.append(inst.category)
-
-                self._collect_annotation_tracks(lf)
-                self._collect_annotation_identities(lf)
-                self._collect_annotation_categories(lf)
+                self._collect_frame_catalogs(lf, catalogs)
 
             self._collect_session_identities()
             self._collect_session_categories()
