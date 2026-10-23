@@ -35,7 +35,9 @@ class PointsArray(np.ndarray):
     The structured dtype includes the following fields:
         - xy: A float64 array of shape (2,) containing the x, y coordinates
         - visible: A boolean indicating if the point is visible
-        - complete: A boolean indicating if the point is complete
+        - complete: A boolean set by the SLEAP GUI when a human placed, moved, or
+          toggled the visibility of this point. Stored but not interpreted by
+          sleap-io.
         - name: An object dtype containing the name of the node
     """
 
@@ -187,7 +189,9 @@ class PredictedPointsArray(PointsArray):
         - xy: A float64 array of shape (2,) containing the x, y coordinates
         - score: A float64 containing the confidence score for the point
         - visible: A boolean indicating if the point is visible
-        - complete: A boolean indicating if the point is complete
+        - complete: A boolean set by the SLEAP GUI when a human placed, moved, or
+          toggled the visibility of this point. Stored but not interpreted by
+          sleap-io.
         - name: An object dtype containing the name of the node
     """
 

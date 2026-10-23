@@ -48,8 +48,10 @@ from sleap_io.io.slp import (
     OWNER_INSTANCE,
     OWNER_MASK,
     OWNER_ROI,
+    SLP_FORMAT_ID_LIMIT,
     ExportCancelled,
     LabelImageWriter,
+    _check_format_id,
     _create_json_rows_dataset,
     _encode_metadata_attr,
     _identity_index,
@@ -12058,3 +12060,86 @@ def test_slp_event_video_survives_embed(tmp_path):
     # The video reference survives and points at the (embedded) catalog video.
     assert ev.video is not None
     assert ev.video in loaded.videos
+
+
+def _copy_with_format_id(src: str, dst: Path, format_id: float) -> str:
+    """Copy an SLP file and overwrite its `/metadata` `format_id` attribute."""
+    shutil.copy(src, dst)
+    with h5py.File(dst, "r+") as f:
+        f["metadata"].attrs["format_id"] = format_id
+    return str(dst)
+
+
+def test_format_id_limit_is_3():
+    """Format 3.0 (columnar tables) is the first one this release refuses."""
+    assert SLP_FORMAT_ID_LIMIT == 3.0
+
+
+def test_read_labels_newer_format_raises(tmp_path, slp_minimal):
+    """Eager loading refuses a file whose format is newer than supported."""
+    path = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 3.0)
+    with pytest.raises(ValueError, match=r"SLP format 3, which is newer.*max 2\.x"):
+        read_labels(path)
+    with pytest.raises(ValueError, match="upgrade sleap-io"):
+        load_slp(path)
+
+
+def test_read_labels_lazy_newer_format_raises(tmp_path, slp_minimal):
+    """Lazy loading refuses a file whose format is newer than supported."""
+    path = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 3.1)
+    with pytest.raises(ValueError, match=r"SLP format 3\.1, which is newer"):
+        load_slp(path, lazy=True)
+
+
+def test_read_labels_newer_format_checked_before_tables(tmp_path, slp_minimal):
+    """The format check runs before any table is read."""
+    path = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 3.0)
+    with h5py.File(path, "r+") as f:
+        # A 3.0 file stores `/points` as a group of columns, which the 2.x readers
+        # can't slice. The clear error must come before that h5py failure.
+        del f["points"]
+        f.create_group("points")
+    with pytest.raises(ValueError, match="newer than this version of sleap-io"):
+        read_labels(path)
+    with pytest.raises(ValueError, match="newer than this version of sleap-io"):
+        load_slp(path, lazy=True)
+
+
+def test_read_labels_set_newer_format_raises(tmp_path, slp_minimal):
+    """`read_labels_set` refuses a file whose format is newer than supported."""
+    shutil.copy(slp_minimal, tmp_path / "train.slp")
+    _copy_with_format_id(slp_minimal, tmp_path / "val.slp", 3.0)
+    with pytest.raises(ValueError, match="val.slp uses SLP format 3"):
+        read_labels_set(tmp_path)
+
+
+def test_merge_label_images_newer_format_raises(tmp_path, slp_minimal):
+    """`merge_label_images` refuses a source whose format is newer than supported."""
+    src = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 3.0)
+    with pytest.raises(ValueError, match="newer than this version of sleap-io"):
+        merge_label_images([src], tmp_path / "merged.slp")
+
+
+def test_read_labels_format_2_8_still_loads(tmp_path, slp_minimal):
+    """The newest 2.x format still loads, eagerly and lazily."""
+    expected = read_labels(slp_minimal)
+    # Re-save with the current writer so the file has every field a 2.x reader reads.
+    resaved = tmp_path / "resaved.slp"
+    save_slp(expected, str(resaved))
+    path = _copy_with_format_id(str(resaved), tmp_path / "v2_8.slp", 2.8)
+    labels = read_labels(path)
+    assert len(labels) == len(expected)
+    np.testing.assert_array_equal(labels.numpy(), expected.numpy())
+    lazy = load_slp(path, lazy=True)
+    np.testing.assert_array_equal(lazy.numpy(), expected.numpy())
+
+
+def test_check_format_id_without_format_id(tmp_path, slp_minimal):
+    """Files without a `format_id` attribute or `/metadata` group pass the check."""
+    path = tmp_path / "no_format_id.slp"
+    shutil.copy(slp_minimal, path)
+    with h5py.File(path, "r+") as f:
+        del f["metadata"].attrs["format_id"]
+        _check_format_id(str(path), f)
+        del f["metadata"]
+        _check_format_id(str(path), f)

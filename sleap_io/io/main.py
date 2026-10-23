@@ -82,7 +82,8 @@ def load_slp(
             retries, connection failures).
         ImportError: For cloud schemes when the corresponding extra is not
             installed.
-        ValueError: For an unrecognized `stream_mode`.
+        ValueError: For an unrecognized `stream_mode`, or if the file's SLP format
+            is newer than this sleap-io can read.
 
     See Also:
         Labels.is_lazy: Check if Labels is lazy-loaded.
