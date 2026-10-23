@@ -216,6 +216,11 @@ file.slp
 | `events/` | group | Frame-spanning event annotations: columnar per-field datasets + ragged CSR `scores`/`score_offsets` framewise traces (Format 2.6+, optional) |
 | `provenance_json` | `bytes` | JSON object of provenance metadata (optional) |
 
+`videos_json`, `tracks_json`, `suggestions_json` and `sessions_json` hold one JSON
+document per row and are written as variable-length UTF-8 strings. Files written by older versions of sleap-io (and by
+SLEAP) store them as fixed-width, zero-padded byte strings instead; both layouts
+are read identically.
+
 ### Provenance storage and the 64 KB metadata limit
 
 The skeletons and nodes live in the `metadata/@json` HDF5 *attribute*. HDF5 caps
