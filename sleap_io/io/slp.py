@@ -1007,6 +1007,17 @@ def can_use_fast_path(video: Video, frame_idx: int, target_format: str) -> bool:
     if not video.backend.has_embedded_images:
         return False
 
+    # A grayscale video whose stored frames are multi-channel must go through a
+    # decode. The channel count written to the dataset attrs comes from `video.shape`,
+    # which `HDF5Video.img_shape` reports as 1 when grayscale is set, but the raw bytes
+    # still carry the source's own channels. Copying them verbatim would file RGB
+    # pixels under a `channels=1` attr, leaving the reloaded video stuck in grayscale:
+    # its shape would say 1 channel while its frames decode to 3. Frames that are
+    # already single-channel are unaffected and still copy verbatim, so a genuinely
+    # grayscale package keeps its byte-exact (and, for JPEG, lossless) fast path.
+    if video.backend.grayscale and video.backend.stored_channels != 1:
+        return False
+
     # Format must match
     if video.backend.image_format != target_format:
         return False

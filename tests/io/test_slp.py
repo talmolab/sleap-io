@@ -2532,6 +2532,74 @@ def test_can_use_fast_path_non_embedded_hdf5(tmpdir):
     assert can_use_fast_path(video, 0, "png") is False
 
 
+def _write_rgb_pkg(pkg_path: str, source_path: str):
+    """Embed the first frame of an RGB video into a package at `pkg_path`."""
+    video = Video.from_filename(source_path)
+    skeleton = Skeleton(["a"])
+    instance = Instance.from_numpy(np.array([[10.0, 10.0]]), skeleton=skeleton)
+    frame = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[frame])
+    write_labels(pkg_path, labels, embed="user")
+
+
+def test_can_use_fast_path_grayscale(tmpdir, small_robot_path, slp_minimal_pkg):
+    """Grayscale blocks the fast path only when the stored frames are multi-channel."""
+    # An RGB package: the stored bytes decode to 3 channels, but a grayscale video
+    # records 1, so they cannot be copied verbatim.
+    pkg_path = str(tmpdir / "rgb.pkg.slp")
+    _write_rgb_pkg(pkg_path, small_robot_path)
+    rgb = read_labels(pkg_path).video
+    assert rgb.backend.stored_channels == 3
+    assert can_use_fast_path(rgb, 0, "png") is True
+
+    rgb.grayscale = True
+    assert can_use_fast_path(rgb, 0, "png") is False
+
+    # Frames that are already single-channel are unaffected: nothing is lost by
+    # copying them verbatim, so a genuinely grayscale package keeps its fast path.
+    gray = read_labels(slp_minimal_pkg).video
+    assert gray.backend.stored_channels == 1
+    gray.grayscale = True
+    assert can_use_fast_path(gray, 0, "png") is True
+
+
+def test_embed_grayscale_round_trip_keeps_shape_and_frames_in_sync(
+    tmpdir, small_robot_path
+):
+    """A grayscale-toggled package must reload with its shape and frames agreeing.
+
+    The channel count stored in the dataset attrs comes from `video.shape`, which is 1
+    once grayscale is set. If the RGB bytes were copied verbatim they would still
+    decode to 3 channels, so the reloaded video would report a shape that its own
+    frames contradict, and grayscale could never be toggled back off.
+    """
+    pkg_path = str(tmpdir / "rgb.pkg.slp")
+    _write_rgb_pkg(pkg_path, small_robot_path)
+
+    labels = read_labels(pkg_path)
+    assert labels.video.shape[-1] == 3
+    labels.video.grayscale = True
+
+    gray_path = str(tmpdir / "gray.pkg.slp")
+    write_labels(gray_path, labels, embed="user")
+
+    # The frames must have been re-encoded as single-channel, not byte-copied, so the
+    # recorded channel count describes the pixels that are actually stored.
+    with h5py.File(gray_path) as f:
+        assert f["video0/video"].attrs["channels"] == 1
+
+    reloaded = read_labels(gray_path).video
+    assert reloaded.backend.stored_channels == 1
+    assert reloaded.shape[-1] == 1
+    assert reloaded[0].shape[-1] == 1
+
+    # Toggling grayscale back off must not strand the shape: the stored frames really
+    # are single-channel now, so the shape and the frames must still agree.
+    reloaded.grayscale = False
+    assert reloaded[0].shape[-1] == 1
+    assert reloaded.shape[-1] == 1
+
+
 def test_fast_path_progress_callback_cancellation(tmpdir, slp_minimal_pkg):
     """Test that progress_callback cancellation works in fast path."""
     # Load package file (uses fast path when saving with same format)

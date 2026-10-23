@@ -1255,6 +1255,9 @@ class HDF5Video(VideoBackend):
     _can_push_crop_cached: bool | None = attrs.field(
         init=False, default=None, repr=False, eq=False
     )
+    _stored_channels: int | None = attrs.field(
+        init=False, default=None, repr=False, eq=False
+    )
     source_filename: str | None = None
     source_inds: np.ndarray | None = None
     image_format: str = "hdf5"
@@ -1402,6 +1405,9 @@ class HDF5Video(VideoBackend):
                 if "format" in ds.attrs:
                     self.image_format = ds.attrs["format"]
 
+                if "channels" in ds.attrs:
+                    self._stored_channels = int(ds.attrs["channels"])
+
                 # Read channel_order, with backwards compatibility
                 if "channel_order" in ds.attrs:
                     self.channel_order = ds.attrs["channel_order"]
@@ -1504,6 +1510,17 @@ class HDF5Video(VideoBackend):
             # so report 1 channel to match the frames that are returned.
             channels = 1
         return height, width, channels
+
+    @property
+    def stored_channels(self) -> int | None:
+        """Channel count of the stored frames, ignoring the `grayscale` setting.
+
+        This is the channel count recorded in the dataset attributes, i.e. what the
+        embedded bytes actually decode to. `img_shape` reports 1 channel instead when
+        `grayscale` is set, so this is the value to consult when deciding whether those
+        bytes can be copied verbatim. `None` if the dataset records no channel count.
+        """
+        return self._stored_channels
 
     def read_test_frame(self) -> np.ndarray:
         """Read a single frame from the video to test for grayscale."""
