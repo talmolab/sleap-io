@@ -20,6 +20,9 @@ uv run ruff format sleap_io tests && uv run ruff check --fix sleap_io tests
 # Run tests
 uv run pytest tests/
 
+# Run tests in parallel across CPU cores (pytest-xdist)
+uv run pytest -n auto tests/
+
 # Check coverage
 uv run pytest -q --maxfail=1 --cov --cov-branch && rm .coverage.* && uv run coverage annotate
 ```
