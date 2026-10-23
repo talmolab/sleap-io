@@ -150,6 +150,35 @@ except ImportError:
     pass
 
 
+# Files whose `/metadata` `format_id` is at or above this value use a layout this
+# version of sleap-io can't read (e.g., the columnar 3.0 tables), so readers refuse
+# them up front instead of failing partway through with an h5py error.
+SLP_FORMAT_ID_LIMIT = 3.0
+
+
+def _check_format_id(labels_path: str, f: h5py.File) -> None:
+    """Raise if an SLP file's format is newer than this sleap-io can read.
+
+    Files without a `/metadata` group or `format_id` attribute pass, as before.
+
+    Args:
+        labels_path: Path or URL to the SLP file (used in the error message).
+        f: An already-open `h5py.File` handle for the SLP file.
+
+    Raises:
+        ValueError: If the file's `format_id` is at or above `SLP_FORMAT_ID_LIMIT`.
+    """
+    if "metadata" not in f or "format_id" not in f["metadata"].attrs:
+        return
+    format_id = float(f["metadata"].attrs["format_id"])
+    if format_id >= SLP_FORMAT_ID_LIMIT:
+        raise ValueError(
+            f"{labels_path} uses SLP format {format_id:g}, which is newer than this "
+            f"version of sleap-io supports (max {int(SLP_FORMAT_ID_LIMIT) - 1}.x); "
+            "upgrade sleap-io to read it."
+        )
+
+
 # -- Label image HDF5 dtype constants (shared by write/merge/streaming writer) --------
 
 LI_DTYPE = np.dtype(
@@ -5632,6 +5661,8 @@ def _read_labels_lazy_from_open_file(
     """
     from sleap_io.io.slp_lazy import LazyDataStore, LazyFrameList
 
+    _check_format_id(labels_path, f)
+
     # Read raw arrays
     frames_data = read_hdf5_dataset(labels_path, "frames", _hdf5_file=f)
     instances_data = read_hdf5_dataset(labels_path, "instances", _hdf5_file=f)
@@ -8009,7 +8040,8 @@ def merge_label_images(
     Raises:
         ValueError: If source files have label images with different
             ``(height, width)`` dimensions, or if no source files are
-            provided, or if a source contains no label images.
+            provided, or if a source contains no label images, or if a
+            source's format is newer than this sleap-io can read.
     """
     if not source_paths:
         raise ValueError("At least one source path is required.")
@@ -8036,6 +8068,7 @@ def merge_label_images(
         for src_path in source_paths:
             f = h5py.File(src_path, "r")
             source_files.append(f)
+            _check_format_id(src_path, f)
 
             # Read index table
             if "label_images" not in f or "label_image_data" not in f:
@@ -8448,6 +8481,10 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
 
     Returns:
         The processed `Labels` object.
+
+    Raises:
+        ValueError: If the file's format is newer than this sleap-io can read (see
+            `SLP_FORMAT_ID_LIMIT`).
     """
     with h5py.File(labels_path, "r") as f:
         return _read_labels_from_open_file(labels_path, f, open_videos=open_videos)
@@ -8487,6 +8524,7 @@ def _read_labels_from_open_file(
     Returns:
         The processed `Labels` object.
     """
+    _check_format_id(labels_path, f)
     tracks = read_tracks(labels_path, _hdf5_file=f)
     videos = read_videos(
         labels_path,
