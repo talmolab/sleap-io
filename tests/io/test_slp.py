@@ -51,6 +51,7 @@ from sleap_io.io.slp import (
     ExportCancelled,
     LabelImageWriter,
     _encode_metadata_attr,
+    _identity_index,
     _identity_link_rows_for_owner,
     _is_known_toplevel_name,
     _points_from_hdf5_data,
@@ -113,6 +114,7 @@ from sleap_io.io.slp import (
     write_labels,
     write_lfs,
     write_metadata,
+    write_negative_frames,
     write_sessions,
     write_suggestions,
     write_tracks,
@@ -11075,6 +11077,44 @@ def test_uncropped_writes_no_video_crops_and_golden_videos_json(slp_minimal, tmp
     # videos_json is byte-identical to a baseline save.
     with h5py.File(baseline, "r") as f1, h5py.File(candidate, "r") as f2:
         assert f1["videos_json"][:].tobytes() == f2["videos_json"][:].tobytes()
+
+
+@pytest.mark.parametrize(
+    "unregistered", ["frame_video", "track", "suggestion", "negative"]
+)
+def test_write_labels_rejects_unregistered_references(unregistered, tmp_path):
+    """References to videos/tracks missing from the catalogs raise on save."""
+    skeleton = Skeleton(["a"])
+    video = Video(filename="a.mp4", open_backend=False)
+    other = Video(filename="b.mp4", open_backend=False)
+    labels = Labels(videos=[video], skeletons=[skeleton])
+    points = np.array([[1.0, 2.0]])
+    if unregistered == "frame_video":
+        inst = Instance.from_numpy(points, skeleton=skeleton)
+        labels.labeled_frames.append(LabeledFrame(other, 0, instances=[inst]))
+    elif unregistered == "track":
+        inst = Instance.from_numpy(points, skeleton=skeleton, track=Track("t"))
+        labels.labeled_frames.append(LabeledFrame(video, 0, instances=[inst]))
+    elif unregistered == "suggestion":
+        labels.suggestions.append(SuggestionFrame(video=other, frame_idx=0))
+    else:
+        labels.labeled_frames.append(LabeledFrame(other, 0, is_negative=True))
+
+    path = str(tmp_path / "labels.slp")
+    with pytest.raises(ValueError, match="is not in list"):
+        if unregistered == "negative":
+            # Called directly: through write_labels, write_lfs rejects it first.
+            write_negative_frames(path, labels)
+        else:
+            write_labels(path, labels)
+
+
+def test_identity_index_maps_first_occurrence():
+    """`_identity_index` keys by object identity and keeps the first position."""
+    a, b = Track(name="same"), Track(name="same")
+    index = _identity_index([a, b, a])
+    assert index == {id(a): 0, id(b): 1}
+    assert index.get(id(Track(name="same")), -1) == -1
 
 
 def test_crop_format_id_bumped_only_with_crop(
