@@ -331,8 +331,9 @@ class TestCOCOErrorHandling:
         annotations_dst = tmp_path / "annotations.json"
         shutil.copy2(annotations_src, annotations_dst)
 
-        # Should not raise error, but should skip missing images
-        labels = coco.read_labels(annotations_dst)
+        # Should not raise error, but should skip missing images with a warning
+        with pytest.warns(UserWarning, match="3 of 3 images"):
+            labels = coco.read_labels(annotations_dst)
 
         # Should have 0 frames since no images exist
         assert len(labels.labeled_frames) == 0
@@ -3451,3 +3452,54 @@ def test_read_labels_shares_one_category_per_coco_category(tmp_path):
     for bbox in loaded.bboxes:
         expected = loaded.categories[0 if bbox.instance is not None else 1]
         assert bbox.category is expected
+
+
+def test_read_labels_warns_on_missing_images(tmp_path):
+    """Images that cannot be resolved are skipped with a counted warning."""
+    iio.imwrite(tmp_path / "present.png", np.zeros((10, 10, 3), dtype=np.uint8))
+    coco_data = {
+        "images": [
+            {"id": 1, "file_name": "present.png", "width": 10, "height": 10},
+            {"id": 2, "file_name": "absent.png", "width": 10, "height": 10},
+        ],
+        "annotations": [],
+        "categories": [{"id": 1, "name": "person"}],
+    }
+    json_path = tmp_path / "annotations.json"
+    json_path.write_text(json.dumps(coco_data))
+
+    with pytest.warns(UserWarning, match=r"1 of 2 images.*'absent.png'"):
+        labels = coco.read_labels(json_path)
+
+    assert len(labels) == 1
+
+
+def test_resolve_image_path_recursive_search(tmp_path):
+    """Images anywhere under the root are found by name, even with glob chars."""
+    nested = tmp_path / "a" / "b"
+    nested.mkdir(parents=True)
+    image_path = nested / "img[1].png"
+    image_path.touch()
+
+    assert coco.resolve_image_path("img[1].png", tmp_path) == image_path
+    assert coco.resolve_image_path("other/img[1].png", tmp_path) == image_path
+    with pytest.raises(FileNotFoundError, match="missing.png"):
+        coco.resolve_image_path("missing.png", tmp_path)
+
+
+def test_resolve_image_path_reuses_file_index(tmp_path):
+    """A shared `_ImageFileIndex` walks the dataset tree only once."""
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "first.png").touch()
+    file_index = coco._ImageFileIndex(tmp_path)
+
+    found = coco.resolve_image_path("first.png", tmp_path, file_index)
+    assert found == tmp_path / "sub" / "first.png"
+
+    # Files created after the walk are not in the shared index...
+    (tmp_path / "sub" / "second.png").touch()
+    with pytest.raises(FileNotFoundError):
+        coco.resolve_image_path("second.png", tmp_path, file_index)
+    # ...but a fresh lookup without the index finds them.
+    found = coco.resolve_image_path("second.png", tmp_path)
+    assert found == tmp_path / "sub" / "second.png"

@@ -19,7 +19,15 @@ to the keypoint `Instance`.
     `LabeledFrame`s, so the frame count matches the input and unannotated images
     round-trip losslessly. One caveat: an image whose file path cannot be resolved
     is skipped, so a 0-annotation image with a missing file is dropped rather than
-    preserved.
+    preserved. `load_coco` warns with the number of skipped images when this
+    happens.
+
+!!! note "Image path resolution"
+    Each `file_name` is looked up at `dataset_root / file_name`, then under the
+    `images/`, `imgs/` and `data/images/` subdirectories, and finally by file name
+    anywhere under `dataset_root`. The dataset tree is walked at most once per
+    load for that last search, but pointing `dataset_root` at the directory that
+    actually contains the images is still the fastest option for large datasets.
 
 ## Segmentation handling
 
