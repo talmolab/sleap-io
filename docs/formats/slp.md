@@ -1578,6 +1578,8 @@ Different data structures use different on-disk representations, chosen per subs
 
 The SLP format has evolved through several versions, tracked by the `format_id` attribute in `/metadata`.
 
+sleap-io refuses files whose `format_id` is at or above `SLP_FORMAT_ID_LIMIT` (currently `3.0`), raising a `ValueError` that asks you to upgrade sleap-io before any table is read. Files without a `format_id` are not affected by this check.
+
 ### Format 1.0
 
 Initial release format.
