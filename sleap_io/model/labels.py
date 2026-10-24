@@ -519,6 +519,7 @@ class Labels:
 
         # Deep copy static ROIs and relink video/track
         static_rois = []
+        copied_rois = {}
         for orig in self._lazy_store._undistributed_rois:
             new = deepcopy(orig)
             if orig.video is not None:
@@ -526,6 +527,7 @@ class Labels:
             if orig.track is not None:
                 new.track = track_map.get(id(orig.track), new.track)
             static_rois.append(new)
+            copied_rois[id(orig)] = new
 
         materialized_labels = Labels(
             labeled_frames=labeled_frames,
@@ -537,7 +539,7 @@ class Labels:
             rois=static_rois,
         )
         materialized_labels._carried_columns = self._lazy_store.column_carry(
-            materialized
+            materialized, replaced=copied_rois
         )
         return materialized_labels
 

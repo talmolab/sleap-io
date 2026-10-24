@@ -151,6 +151,11 @@ from sleap_io.model.roi import PredictedROI, UserROI
 from sleap_io.transform.frame import crop_frame
 
 
+def _table_columns(group: h5py.Group) -> dict[str, np.ndarray]:
+    """Read the columns of an SLP 3.0 table (a group of 1-D datasets)."""
+    return {name: ds[()] for name, ds in group.items() if isinstance(ds, h5py.Dataset)}
+
+
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
     """Test `read_labels` can read different types of .slp files."""
     labels = read_labels(slp_typical)
@@ -1154,9 +1159,8 @@ def test_per_instance_identity_round_trip(tmp_path):
         assert f["metadata"].attrs["format_id"] >= 2.5
         assert "links" in f["identity"]
         # Owner-type-aware: instance owners are written as OWNER_INSTANCE (0).
-        links = f["identity"]["links"][:]
-        assert "owner_type" in links.dtype.names
-        assert set(links["owner_type"].tolist()) == {OWNER_INSTANCE}
+        links = f["identity"]["links"]
+        assert set(links["owner_type"][:].tolist()) == {OWNER_INSTANCE}
 
     loaded = load_slp(path)
     li = list(loaded[0].instances)
@@ -1330,7 +1334,7 @@ def test_mask_identity_and_embedding_round_trip(tmp_path):
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.5
-        links = f["identity"]["links"][:]
+        links = _table_columns(f["identity/links"])
         # Both mask owners present (owner_type == OWNER_MASK).
         assert set(links["owner_type"].tolist()) == {OWNER_MASK}
         assert sorted(links["owner_id"].tolist()) == [0, 1]
@@ -1399,7 +1403,7 @@ def test_centroid_identity_and_embedding_round_trip(tmp_path):
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.5
-        links = f["identity"]["links"][:]
+        links = _table_columns(f["identity/links"])
         assert set(links["owner_type"].tolist()) == {OWNER_CENTROID}
         assert links["owner_id"].tolist() == [0]
         assert set(f["embeddings/owner_type"][:].tolist()) == {OWNER_CENTROID}
@@ -1649,7 +1653,7 @@ def test_bbox_identity_and_embedding_round_trip(tmp_path):
     path = str(tmp_path / "bbox_ids.slp")
     save_slp(labels, path, save_embedding_vectors=True)
     with h5py.File(path, "r") as f:
-        links = f["identity"]["links"][:]
+        links = _table_columns(f["identity/links"])
         assert set(links["owner_type"].tolist()) == {OWNER_BBOX}
         assert links["owner_id"].tolist() == [0]
         assert set(f["embeddings/owner_type"][:].tolist()) == {OWNER_BBOX}
@@ -1680,7 +1684,7 @@ def test_roi_identity_and_embedding_round_trip(tmp_path):
     path = str(tmp_path / "roi_ids.slp")
     save_slp(labels, path, save_embedding_vectors=True)
     with h5py.File(path, "r") as f:
-        links = f["identity"]["links"][:]
+        links = _table_columns(f["identity/links"])
         assert set(links["owner_type"].tolist()) == {OWNER_ROI}
         assert set(f["embeddings/owner_type"][:].tolist()) == {OWNER_ROI}
 
@@ -5572,26 +5576,26 @@ def _polygon_heavy_rois(n_rois=100, n_verts=64):
 
 
 def test_slp_roi_wkb_gzip_compressed(tmp_path):
-    """`roi_wkb` is written with gzip compression (follow-up to #463)."""
+    """The `wkb` buffer is written with gzip compression (follow-up to #463)."""
     labels = _polygon_heavy_rois(n_rois=5, n_verts=8)
     path = str(tmp_path / "gzip_rois.slp")
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        wkb = f["roi_wkb"]
+        wkb = f["rois/wkb"]
         assert wkb.compression == "gzip"
         assert wkb.compression_opts == 1
         assert wkb.chunks is not None  # gzip requires a chunked layout
 
 
 def test_slp_roi_wkb_compression_reduces_size(tmp_path):
-    """Gzip meaningfully shrinks `roi_wkb` on disk vs. its raw byte size."""
+    """Gzip meaningfully shrinks the `wkb` buffer on disk vs. its raw byte size."""
     labels = _polygon_heavy_rois(n_rois=100, n_verts=64)
     path = str(tmp_path / "compressed_rois.slp")
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        wkb = f["roi_wkb"]
+        wkb = f["rois/wkb"]
         on_disk = wkb.id.get_storage_size()
         raw = wkb.nbytes
     # A polygon-heavy ROI set packs ~100 KB of WKB; gzip beats it ~2x.
@@ -5664,7 +5668,7 @@ def test_slp_roi_wkb_roundtrip_geometry_types(tmp_path):
 def test_slp_roi_wkb_empty_geometry(tmp_path):
     """An empty-geometry ROI still packs non-empty WKB and round-trips gzip.
 
-    Pins the invariant that lets ``write_rois`` always gzip ``roi_wkb`` with no
+    Pins the invariant that lets ``write_rois`` always gzip ``wkb`` with no
     empty-dataset guard: every geometry — even an empty polygon — serializes to
     a non-empty WKB header, so ``wkb_flat`` is never empty when ROIs exist.
     """
@@ -5677,8 +5681,8 @@ def test_slp_roi_wkb_empty_geometry(tmp_path):
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        assert f["roi_wkb"].compression == "gzip"
-        assert f["roi_wkb"].nbytes > 0
+        assert f["rois/wkb"].compression == "gzip"
+        assert f["rois/wkb"].nbytes > 0
 
     loaded = load_slp(path, open_videos=False)
     assert len(loaded.rois) == 1
@@ -5729,7 +5733,7 @@ def _fragmented_mask():
 
 
 def test_slp_mask_rle_gzip_compressed(tmp_path):
-    """`mask_rle` is written with gzip compression (issue #463)."""
+    """The `rle` buffer is written with gzip compression (issue #463)."""
     video = Video(filename="test.mp4")
     mask = UserSegmentationMask.from_numpy(_fragmented_mask())
     lf = LabeledFrame(video=video, frame_idx=0)
@@ -5742,14 +5746,14 @@ def test_slp_mask_rle_gzip_compressed(tmp_path):
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        rle = f["mask_rle"]
+        rle = f["masks/rle"]
         assert rle.compression == "gzip"
         assert rle.compression_opts == 1
         assert rle.chunks is not None  # gzip requires a chunked layout
 
 
 def test_slp_mask_rle_compression_reduces_size(tmp_path):
-    """Gzip meaningfully shrinks `mask_rle` on disk vs. its raw byte size."""
+    """Gzip meaningfully shrinks the `rle` buffer on disk vs. its raw byte size."""
     video = Video(filename="test.mp4")
     mask = UserSegmentationMask.from_numpy(_fragmented_mask())
     lf = LabeledFrame(video=video, frame_idx=0)
@@ -5762,7 +5766,7 @@ def test_slp_mask_rle_compression_reduces_size(tmp_path):
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        rle = f["mask_rle"]
+        rle = f["masks/rle"]
         on_disk = rle.id.get_storage_size()
         raw = rle.nbytes
     # A fragmented RLE has thousands of bytes raw; gzip easily beats 2x on it.
@@ -5811,7 +5815,7 @@ def test_slp_mask_rle_empty_roundtrip(tmp_path):
 
     with h5py.File(path, "r") as f:
         # Empty RLE skips the gzip filter: there is nothing to compress.
-        assert f["mask_rle"].compression is None
+        assert f["masks/rle"].compression is None
 
     loaded = load_slp(path)
     assert len(loaded.masks) == 1
@@ -8391,8 +8395,12 @@ def test_slp_lazy_resave_preserves_group_metadata(tmp_path, camera_group_345):
     assert fg.metadata == {"reviewed": True}
 
 
-def test_slp_columnar_missing_points_dataset_warns(tmp_path, camera_group_345):
-    """A file whose points_3d dataset was truncated warns and drops 3D (no crash)."""
+@pytest.mark.parametrize("legacy_format", [True, False])
+def test_slp_columnar_missing_points_dataset(tmp_path, camera_group_345, legacy_format):
+    """A file whose points_3d dataset was removed raises (3.0) or warns (2.x).
+
+    A 2.x file drops the 3D points and keeps the 2D grouping (no crash).
+    """
     skeleton = Skeleton(["A", "B"])
     labels = _make_3d_session_labels(
         camera_group_345,
@@ -8406,12 +8414,19 @@ def test_slp_columnar_missing_points_dataset_warns(tmp_path, camera_group_345):
         skeleton=skeleton,
     )
     path = str(tmp_path / "t.slp")
-    write_labels(path, labels)
+    write_labels(path, labels, legacy_format=legacy_format)
     # Simulate a truncated/corrupt file: remove the referenced points dataset.
     with h5py.File(path, "a") as f:
         del f["session_data"]["points_3d"]
-    with pytest.warns(UserWarning, match="referenced points dataset is missing"):
+    if not legacy_format:
+        with pytest.raises(ValueError, match="3D ranges fall outside points_3d"):
+            read_labels(path)
+        return
+    with pytest.warns(UserWarning) as record:
         loaded = read_labels(path)
+    messages = [str(w.message) for w in record]
+    assert any("3D ranges fall outside points_3d" in m for m in messages)
+    assert any("referenced points dataset is missing" in m for m in messages)
     lig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
     assert lig.instance_3d is None  # gracefully dropped, 2D grouping intact
     assert len(lig.instance_by_camera) == 2
@@ -9710,11 +9725,10 @@ def test_label_image_writer_roundtrip(tmp_path):
         assert rli.objects[1].category == "neuron"
         assert rli.objects[2].category == "glia"
 
-    # Check format version is 2.2 (chunked)
+    # The streaming writer writes SLP 3.0, with chunked pixel data
     with h5py.File(path, "r") as f:
-        assert f["label_image_data"].ndim == 3
-        fmt = f["metadata"].attrs["format_id"]
-        assert fmt >= 2.2
+        assert f["label_images/data"].ndim == 3
+        assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
 
 
 def test_label_image_writer_context_manager(tmp_path):
@@ -10247,7 +10261,7 @@ def test_write_label_images_blob_fallback_mixed_sizes(tmp_path):
 
     # Verify blob format was used (1D flat array, not 3D chunked)
     with h5py.File(path, "r") as f:
-        assert f["label_image_data"].ndim == 1
+        assert f["label_images/data"].ndim == 1
 
     # Verify round-trip
     reloaded = load_slp(path, open_videos=False)
@@ -10267,12 +10281,12 @@ def test_write_metadata_bumps_format_for_chunked(tmp_path):
     _lf.label_images.append(li)
     labels = Labels(labeled_frames=[_lf], videos=[video])
 
-    # First save normally (write_metadata runs before label images)
-    save_slp(labels, path)
+    # First save in the 2.x layout (write_metadata runs before label images)
+    save_slp(labels, path, legacy_format=True)
 
     # Re-call write_metadata now that label_image_data exists in the file
-    # This exercises the format_id bump at lines 1518-1519
-    write_metadata(path, labels)
+    # This exercises the format_id bump for chunked label image data
+    write_metadata(path, labels, legacy_format=True)
 
     with h5py.File(path, "r") as f:
         assert f["label_image_data"].ndim == 3  # chunked
