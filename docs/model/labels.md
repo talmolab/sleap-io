@@ -317,7 +317,7 @@ To embed images directly into an SLP file (creating a self-contained package):
 labels.save("output.pkg.slp", embed=True)
 ```
 
-The current SLP layout can't store [unlabeled points](poses.md#point-flags-and-states) or record `metadata`. By default, saving labels with unlabeled points raises a `ValueError` before anything is written; pass `unlabeled_as="absent"` to save them as hidden points (labeled, not visible) with a warning. Instance, frame and bounding box metadata is dropped with a warning.
+The current SLP layout can't store [unlabeled points](poses.md#point-flags-and-states) or record `metadata`. By default, saving labels with unlabeled points raises a `ValueError` before anything is written; pass `unlabeled_as="absent"` to save them as hidden points with no location (labeled, not visible, NaN coordinates) with a warning. Instance, frame and bounding box metadata is dropped with a warning.
 
 ```python
 labels.save("output.slp", unlabeled_as="absent")

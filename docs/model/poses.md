@@ -488,7 +488,8 @@ argument decides how those nodes are filled:
     The current SLP layout has no `labeled` column, so
     [`save_slp`][sleap_io.save_slp] refuses to write unlabeled points by default
     (`unlabeled_as="error"`). Pass `unlabeled_as="absent"` to save them as hidden
-    points instead (with a warning). See [Labels → Saving](labels.md#saving).
+    points with no location instead (with a warning). See
+    [Labels → Saving](labels.md#saving).
 
 ---
 

@@ -994,7 +994,8 @@ predicted_point_dtype = np.dtype([
     This layout has no `labeled` column and no storage for instance, frame or
     bounding box `metadata`, so [unlabeled points](../model/poses.md#point-flags-and-states)
     can't be saved as such: [`save_slp`][sleap_io.save_slp] raises a `ValueError` by
-    default, or writes them as hidden points (labeled, not visible) with a warning
+    default, or writes them as hidden points with no location (labeled, not
+    visible, NaN coordinates) with a warning
     when called with `unlabeled_as="absent"`. Metadata is dropped with a warning.
     Points read from these files are always labeled.
 
