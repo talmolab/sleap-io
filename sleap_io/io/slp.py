@@ -92,7 +92,7 @@ import zlib
 from contextlib import nullcontext
 from enum import Enum, IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Iterable
+from typing import TYPE_CHECKING, Callable, Iterable, NamedTuple
 
 import h5py
 import imageio.v3 as iio
@@ -143,6 +143,7 @@ from sleap_io.model.mask import (
     SegmentationMask,
     UserSegmentationMask,
 )
+from sleap_io.model.record_metadata import metadata_column_kinds
 from sleap_io.model.roi import ROI, PredictedROI, UserROI
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.suggestions import SuggestionFrame
@@ -3510,43 +3511,23 @@ def write_suggestions(
 
 
 def write_negative_frames(labels_path: str, labels: Labels):
-    """Write negative frame markers to a SLEAP labels file.
+    """Write negative frame markers to a SLEAP labels file in the 2.x layout.
+
+    SLP 3.0 files store negative frames in the `/frames` `is_negative` column
+    instead, so `write_labels` only writes this dataset with `legacy_format=True`.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object containing negative frames to write.
 
     Notes:
-        Uses sparse video IDs (same as /frames dataset) for consistency when videos
-        are embedded or reordered. The /negative_frames dataset stores (video_id,
-        frame_idx) tuples identifying which frames are explicitly marked as negative
-        (pure background, no instances).
+        Uses the video ids of the 2.x `/frames` table (each embedded video's sparse
+        `videoN` number, see `_video_id_map`). The /negative_frames dataset stores
+        (video_id, frame_idx) tuples identifying which frames are explicitly marked
+        as negative (pure background, no instances).
     """
-    # Build video index to sparse ID mapping (reuse pattern from write_lfs)
-    video_idx_id_map = {}
-    for video_idx, video in enumerate(labels.videos):
-        # Default to sequential index
-        video_idx_id_map[video_idx] = video_idx
-
-        # Check if this is an embedded video with a sparse video ID
-        if (
-            hasattr(video, "backend")
-            and video.backend is not None
-            and hasattr(video.backend, "dataset")
-            and video.backend.dataset is not None
-        ):
-            dataset = video.backend.dataset
-            # Extract video ID from dataset name (e.g., "video15/video" → 15)
-            try:
-                video_group = dataset.split("/")[0]
-                if video_group.startswith("video"):
-                    video_id = int(video_group[5:])  # Remove "video" prefix and convert
-                    video_idx_id_map[video_idx] = video_id
-            except (ValueError, IndexError):
-                # If parsing fails, keep the default sequential index
-                pass
-
-    # Collect negative frames
+    with h5py.File(labels_path, "a") as f:
+        video_id_map = _written_video_id_map(f, labels.videos)
     negative_data = []
     video_ids = _identity_index(labels.videos)
     for lf in labels.labeled_frames:
@@ -3554,8 +3535,7 @@ def write_negative_frames(labels_path: str, labels: Labels):
             video_idx = video_ids.get(id(lf.video))
             if video_idx is None:
                 video_idx = labels.videos.index(lf.video)  # Raises if unknown.
-            sparse_video_id = video_idx_id_map[video_idx]
-            negative_data.append((sparse_video_id, lf.frame_idx))
+            negative_data.append((int(video_id_map[video_idx]), lf.frame_idx))
 
     if negative_data:
         dtype = np.dtype([("video_id", "u4"), ("frame_idx", "u8")])
@@ -4314,6 +4294,754 @@ _COLUMN_CHUNK_ROWS = 65536
 _COMPRESSION_MODES = (None, "gzip", "lzf")
 
 
+# In-memory layout of the raw instance records that every reader normalises to,
+# whatever the on-disk layout (see `_normalize_instances`). Unknown columns found in
+# a 3.0 table follow these fields. `instance_id` is the row number: SLP 3.0 doesn't
+# store it, and older files are remapped so that it is.
+RAW_INSTANCE_DTYPE = np.dtype(
+    [
+        ("instance_id", "i8"),
+        ("instance_type", "u1"),
+        ("frame_id", "i8"),
+        ("skeleton", "i8"),
+        ("track", "i8"),
+        ("from_predicted", "i8"),
+        ("score", "f8"),
+        ("point_id_start", "i8"),
+        ("point_id_end", "i8"),
+        ("tracking_score", "f8"),
+    ]
+)
+
+# In-memory layout of the raw frame records (see `_normalize_frames`). `frame_id` is
+# the row number and `video` the index into the file's videos.
+RAW_FRAME_DTYPE = np.dtype(
+    [
+        ("frame_id", "i8"),
+        ("video", "i8"),
+        ("frame_idx", "i8"),
+        ("instance_id_start", "i8"),
+        ("instance_id_end", "i8"),
+        ("is_negative", "?"),
+    ]
+)
+
+# The 2.x compound layouts, written by `save_slp(..., legacy_format=True)`.
+LEGACY_INSTANCE_DTYPE = np.dtype(
+    [
+        ("instance_id", "i8"),
+        ("instance_type", "u1"),
+        ("frame_id", "u8"),
+        ("skeleton", "u4"),
+        ("track", "i4"),
+        ("from_predicted", "i8"),
+        ("score", "f4"),
+        ("point_id_start", "u8"),
+        ("point_id_end", "u8"),
+        ("tracking_score", "f4"),  # FORMAT_ID >= 1.2 (1.3 adds explicit handling)
+    ]
+)
+LEGACY_FRAME_DTYPE = np.dtype(
+    [
+        ("frame_id", "u8"),
+        ("video", "u4"),
+        ("frame_idx", "u8"),
+        ("instance_id_start", "u8"),
+        ("instance_id_end", "u8"),
+    ]
+)
+
+# The id column of each table: dropped in SLP 3.0, where the row number is the id.
+_ROW_ID_COLUMNS = {"instances": "instance_id", "frames": "frame_id"}
+
+# Defaults for optional columns missing from a table. Every other column of the raw
+# layout is required.
+_TABLE_COLUMN_DEFAULTS = {
+    "instances": {
+        "track": -1,
+        "from_predicted": -1,
+        "score": np.nan,
+        "tracking_score": np.nan,
+    },
+    "frames": {"is_negative": False},
+}
+
+
+def _table_rows(columns: dict[str, np.ndarray], table: str) -> np.ndarray:
+    """Build the raw records of `/instances` or `/frames` from the table's columns.
+
+    Args:
+        columns: The table's columns by name (see `_read_columns`).
+        table: `"instances"` or `"frames"`.
+
+    Returns:
+        A structured array with the fields of `RAW_INSTANCE_DTYPE` (or
+        `RAW_FRAME_DTYPE`), followed by any unknown columns. The id field is the row
+        number, whatever the table stores; missing optional columns take their
+        defaults.
+
+    Raises:
+        ValueError: If a required column is missing or the columns don't all have
+            the same length.
+    """
+    base = RAW_INSTANCE_DTYPE if table == "instances" else RAW_FRAME_DTYPE
+    id_name = _ROW_ID_COLUMNS[table]
+    defaults = _TABLE_COLUMN_DEFAULTS[table]
+    missing = [
+        name
+        for name in base.names
+        if name != id_name and name not in columns and name not in defaults
+    ]
+    if missing:
+        raise ValueError(f"/{table} is missing column(s) {', '.join(missing)}.")
+    lengths = {name: len(col) for name, col in columns.items()}
+    if len(set(lengths.values())) > 1:
+        detail = ", ".join(f"{name}: {n}" for name, n in lengths.items())
+        raise ValueError(f"/{table} columns have different lengths ({detail}).")
+    n = next(iter(lengths.values()))
+    extra = [
+        (name, col.dtype, col.shape[1:])
+        for name, col in columns.items()
+        if name not in base.names
+    ]
+    rows = np.empty(n, dtype=base.descr + extra)
+    for name in base.names:
+        if name == id_name:
+            rows[name] = np.arange(n)
+        elif name in columns:
+            rows[name] = columns[name]
+        else:
+            rows[name] = defaults[name]
+    for name, _, _ in extra:
+        rows[name] = columns[name]
+    return rows
+
+
+def _row_id_map(columns: dict[str, np.ndarray], table: str) -> dict[int, int] | None:
+    """Map the ids stored in a 2.x table to row numbers.
+
+    Args:
+        columns: The table's columns by name.
+        table: `"instances"` or `"frames"`.
+
+    Returns:
+        A dictionary mapping each stored id to its row, or `None` if the table stores
+        no ids or every id equals its row (as in every file sleap-io and SLEAP
+        write).
+    """
+    stored = columns.get(_ROW_ID_COLUMNS[table])
+    if stored is None:
+        return None
+    stored = np.asarray(stored).astype(np.int64)
+    if np.array_equal(stored, np.arange(len(stored))):
+        return None
+    return {int(sid): row for row, sid in enumerate(stored.tolist())}
+
+
+def _remap_ids(values: np.ndarray, id_map: dict[int, int]) -> np.ndarray:
+    """Map stored ids to rows, with ids that match no row becoming -1."""
+    return np.array(
+        [id_map.get(v, -1) if v >= 0 else -1 for v in values.tolist()], dtype="i8"
+    )
+
+
+def _normalize_instances(
+    columns: dict[str, np.ndarray], *, is_legacy: bool
+) -> tuple[np.ndarray, dict[int, int] | None]:
+    """Normalise an instance table's columns into the raw in-memory record layout.
+
+    Args:
+        columns: The table's columns by name (see `_read_columns`).
+        is_legacy: If `True`, the columns come from a 2.x table: a missing
+            `tracking_score` (files older than 1.2) reads as 0.0, and stored
+            `instance_id` values that aren't row numbers are mapped to rows,
+            remapping `from_predicted` through them.
+
+    Returns:
+        A tuple `(rows, id_map)`: the `RAW_INSTANCE_DTYPE` records followed by any
+        unknown columns, and the stored id -> row mapping of a 2.x table whose ids
+        aren't row numbers (`None` otherwise). Other links to instances in the file
+        are remapped through `id_map` (see `_remap_instance_owners`).
+
+    Raises:
+        ValueError: If a required column is missing or the columns don't all have
+            the same length.
+    """
+    rows = _table_rows(columns, "instances")
+    id_map = None
+    if is_legacy:
+        if "tracking_score" not in columns:
+            rows["tracking_score"] = 0.0
+        id_map = _row_id_map(columns, "instances")
+        if id_map is not None:
+            rows["from_predicted"] = _remap_ids(rows["from_predicted"], id_map)
+    return rows, id_map
+
+
+def _dataset_video_id(dataset: str | None) -> int | None:
+    """Return the `N` of an embedded video dataset path like `"videoN/video"`.
+
+    Args:
+        dataset: The dataset path of a video's backend, or `None`.
+
+    Returns:
+        `N`, or `None` if the path isn't a `videoN` dataset.
+    """
+    group = (dataset or "").split("/")[0]
+    if group.startswith("video") and group[5:].isdigit():
+        return int(group[5:])
+    return None
+
+
+def _embedded_video_id(video: Video, *, use_metadata: bool = False) -> int | None:
+    """Return the `videoN` number of an embedded video's dataset, if it has one.
+
+    Args:
+        video: A video, embedded (with a backend `dataset` like `"video15/video"`)
+            or not.
+        use_metadata: If `True`, fall back to the `dataset` recorded in
+            `video.backend_metadata` when the video has no open backend (for videos
+            just read from a file with `open_videos=False`).
+
+    Returns:
+        The embedded number (15 above), or `None` for other videos.
+    """
+    if video.backend is not None:
+        return _dataset_video_id(getattr(video.backend, "dataset", None))
+    if use_metadata:
+        return _dataset_video_id(video.backend_metadata.get("dataset"))
+    return None
+
+
+def _video_id_map(videos: list[Video], *, use_metadata: bool = False) -> np.ndarray:
+    """Return the id each video is stored under in a 2.x `/frames` table.
+
+    Args:
+        videos: The videos, in order.
+        use_metadata: Whether to fall back to the recorded backend metadata of
+            videos that aren't open (see `_embedded_video_id`).
+
+    Returns:
+        An array with each video's embedded `videoN` number, or its list index for
+        videos that aren't embedded.
+    """
+    ids = [_embedded_video_id(video, use_metadata=use_metadata) for video in videos]
+    return np.array(
+        [i if vid is None else vid for i, vid in enumerate(ids)], dtype="i8"
+    )
+
+
+def _written_video_id_map(f: h5py.File, videos: list[Video]) -> np.ndarray:
+    """Return the 2.x `/frames` id of each video as written to a file.
+
+    The ids follow the `videos_json` already written to `f`, since a save may
+    write videos differently from how they are held in memory (for example
+    restoring the source video of an embedded one).
+
+    Args:
+        f: The file being written, with its `videos_json`.
+        videos: The videos written, in order.
+
+    Returns:
+        An array with each written video's embedded `videoN` number, or its list
+        index for videos that aren't embedded.
+    """
+    if "videos_json" not in f:
+        return _video_id_map(videos)
+    ids = [
+        _dataset_video_id(json.loads(raw).get("backend", {}).get("dataset"))
+        for raw in f["videos_json"][()]
+    ]
+    return np.array(
+        [i if vid is None else vid for i, vid in enumerate(ids)], dtype="i8"
+    )
+
+
+def _video_list_indices(stored: np.ndarray, videos: list[Video]) -> np.ndarray:
+    """Map the video ids of a 2.x `/frames` table to list indices.
+
+    Older SLEAP files store embedded videos under their sparse `videoN` numbers
+    (for example 0, 15, 29) rather than list indices. Ids that are exactly the list
+    indices `0..n-1` are kept; otherwise each embedded video's number maps to its
+    index, and other ids are kept as they are.
+
+    Args:
+        stored: The stored video id of each frame.
+        videos: The file's videos.
+
+    Returns:
+        The list index of each frame's video.
+    """
+    if np.array_equal(np.unique(stored), np.arange(len(videos))):
+        return stored
+    id_map = {
+        vid: i
+        for i, vid in enumerate(_video_id_map(videos, use_metadata=True).tolist())
+    }
+    return np.array([id_map.get(v, v) for v in stored.tolist()], dtype="i8")
+
+
+def _normalize_frames(
+    columns: dict[str, np.ndarray],
+    *,
+    is_legacy: bool,
+    videos: list[Video],
+    negative_frames: set[tuple[int, int]],
+) -> tuple[np.ndarray, dict[int, int] | None]:
+    """Normalise a frame table's columns into the raw in-memory record layout.
+
+    Args:
+        columns: The table's columns by name (see `_read_columns`).
+        is_legacy: If `True`, the columns come from a 2.x table: stored video ids
+            are mapped to list indices (see `_video_list_indices`), `is_negative`
+            comes from `negative_frames`, and stored `frame_id` values that aren't
+            row numbers are mapped to rows.
+        videos: The file's videos.
+        negative_frames: The `(stored video id, frame_idx)` pairs of the 2.x
+            `/negative_frames` dataset (see `read_negative_frames`).
+
+    Returns:
+        A tuple `(rows, id_map)`: the `RAW_FRAME_DTYPE` records followed by any
+        unknown columns, and the stored id -> row mapping of a 2.x table whose ids
+        aren't row numbers (`None` otherwise).
+
+    Raises:
+        ValueError: If a required column is missing or the columns don't all have
+            the same length.
+    """
+    rows = _table_rows(columns, "frames")
+    id_map = None
+    if is_legacy:
+        id_map = _row_id_map(columns, "frames")
+        stored = rows["video"].copy()
+        if negative_frames:
+            rows["is_negative"] = [
+                key in negative_frames
+                for key in zip(stored.tolist(), rows["frame_idx"].tolist())
+            ]
+        rows["video"] = _video_list_indices(stored, videos)
+    return rows, id_map
+
+
+def _check_pose_tables(
+    labels_path: str,
+    instances: np.ndarray,
+    frames: np.ndarray,
+    *,
+    n_points: int,
+    n_pred_points: int,
+    n_videos: int,
+    strict: bool,
+) -> None:
+    """Check the ranges and links between the pose tables, in one pass.
+
+    Checks that the frames' instance ranges never decrease and end at the instance
+    count, that each instance's `frame_id` is the frame whose range holds it, that
+    point ranges fit inside their point table, that `from_predicted` is a row (or
+    -1) and that `video` indexes a video. Empty tables are valid.
+
+    Args:
+        labels_path: Path or URL of the file (used in the message).
+        instances: Raw instance records (see `RAW_INSTANCE_DTYPE`).
+        frames: Raw frame records (see `RAW_FRAME_DTYPE`).
+        n_points: Number of rows in `/points`.
+        n_pred_points: Number of rows in `/pred_points`.
+        n_videos: Number of videos in the file.
+        strict: If `True` (SLP 3.0 tables), raise on a problem. Otherwise (2.x
+            tables, which have always been read leniently) warn.
+
+    Raises:
+        ValueError: If `strict` and a check fails. The message names the table.
+    """
+    problems = []
+    n_instances = len(instances)
+    start = frames["instance_id_start"]
+    end = frames["instance_id_end"]
+    ranges_ok = not (
+        np.any(end < start) or np.any(start[1:] < end[:-1]) or np.any(start < 0)
+    )
+    if not ranges_ok:
+        problems.append("/frames instance ranges decrease or overlap")
+    last = int(end[-1]) if len(frames) else 0
+    if last != n_instances:
+        problems.append(
+            f"/frames instance ranges end at {last}, not at the instance count "
+            f"({n_instances})"
+        )
+    if ranges_ok:
+        # The frame whose range holds each instance row, or -1.
+        rows = np.arange(n_instances)
+        owner = np.searchsorted(end, rows, side="right")
+        held = owner < len(frames)
+        held[held] &= start[owner[held]] <= rows[held]
+        owner[~held] = -1
+        if np.any(instances["frame_id"] != owner):
+            problems.append("/instances frame_id disagrees with the /frames ranges")
+    for inst_type, n, table in (
+        (InstanceType.USER, n_points, "points"),
+        (InstanceType.PREDICTED, n_pred_points, "pred_points"),
+    ):
+        of_type = instances["instance_type"] == inst_type
+        p_start = instances["point_id_start"][of_type]
+        p_end = instances["point_id_end"][of_type]
+        if np.any((p_start < 0) | (p_end < p_start) | (p_end > n)):
+            problems.append(f"/instances point ranges fall outside /{table} ({n} rows)")
+    from_predicted = instances["from_predicted"]
+    if np.any((from_predicted < -1) | (from_predicted >= n_instances)):
+        problems.append("/instances from_predicted is not an instance row")
+    video = frames["video"]
+    if np.any((video < 0) | (video >= n_videos)):
+        problems.append(f"/frames video is not one of the {n_videos} videos")
+    if not problems:
+        return
+    message = f"{labels_path} has inconsistent pose tables: {'; '.join(problems)}."
+    if strict:
+        raise ValueError(message)
+    warnings.warn(f"{message} Reading it leniently, as an SLP 2.x file.", stacklevel=4)
+
+
+# Metadata column kinds: the in-memory dtype and the placeholder for records that
+# lack the key.
+_METADATA_DTYPES = {"bool": "?", "int": "i8", "float": "f8", "str": object}
+_METADATA_PLACEHOLDERS = {"bool": False, "int": 0, "float": np.nan, "str": ""}
+
+
+def _read_metadata_columns(
+    node: h5py.Group | h5py.Dataset, table: str, n: int
+) -> dict[str, tuple[np.ndarray, np.ndarray | None]]:
+    """Read the per-record metadata columns of a 3.0 table.
+
+    Args:
+        node: The table (`/instances` or `/frames`). Compound datasets (2.x) have
+            no metadata.
+        table: The table name, for messages.
+        n: The number of records in the table.
+
+    Returns:
+        A dictionary mapping each metadata key to `(values, present)`: one value per
+        record (strings as a `str` object array) and a `bool` array that is `False`
+        for records lacking the key, or `None` if every record has it. Members of
+        `metadata/` that aren't a group with a 1-D `values` dataset of a supported
+        kind (bool, integer, float or string) are ignored.
+
+    Raises:
+        ValueError: If a key's `values` or `present` doesn't have `n` rows.
+    """
+    if not isinstance(node, h5py.Group) or "metadata" not in node:
+        return {}
+    columns = {}
+    for key, member in node["metadata"].items():
+        if not isinstance(member, h5py.Group) or "values" not in member:
+            continue
+        ds = member["values"]
+        if h5py.check_string_dtype(ds.dtype) is not None:
+            values = ds.asstr()[()]
+        elif ds.dtype.kind in "biuf":
+            values = ds[()]
+        else:
+            continue
+        if values.ndim != 1:
+            continue
+        present = member["present"][()].astype(bool) if "present" in member else None
+        if len(values) != n or (present is not None and len(present) != n):
+            raise ValueError(
+                f"/{table}/metadata/{key} doesn't have one row per record ({n})."
+            )
+        columns[key] = (values, present)
+    return columns
+
+
+def _metadata_records(
+    columns: dict[str, tuple[np.ndarray, np.ndarray | None]], n: int
+) -> list[dict]:
+    """Turn metadata columns into one metadata dictionary per record.
+
+    Args:
+        columns: Metadata columns (see `_read_metadata_columns`).
+        n: The number of records.
+
+    Returns:
+        A list of `n` dictionaries holding the keys each record has.
+    """
+    records: list[dict] = [{} for _ in range(n)]
+    for key, (values, present) in columns.items():
+        vals = values.tolist()
+        rows = range(n) if present is None else np.flatnonzero(present).tolist()
+        for row in rows:
+            records[row][key] = vals[row]
+    return records
+
+
+def _metadata_record(
+    columns: dict[str, tuple[np.ndarray, np.ndarray | None]], row: int
+) -> dict:
+    """Return the metadata dictionary of one record (see `_metadata_records`)."""
+    return {
+        key: values[row : row + 1].tolist()[0]
+        for key, (values, present) in columns.items()
+        if present is None or present[row]
+    }
+
+
+def _metadata_columns(
+    records: list, kinds: dict[str, str]
+) -> dict[str, tuple[np.ndarray, np.ndarray | None]]:
+    """Build metadata columns from records' `metadata` dictionaries.
+
+    Args:
+        records: Objects with a `metadata` attribute, one per table row.
+        kinds: The kind of each key (see `Labels.check_metadata`).
+
+    Returns:
+        Metadata columns (see `_read_metadata_columns`). Records lacking a key get
+        a placeholder value (False, 0, NaN or "").
+    """
+    n = len(records)
+    columns = {
+        key: (
+            np.full(n, _METADATA_PLACEHOLDERS[kind], dtype=_METADATA_DTYPES[kind]),
+            np.zeros(n, dtype=bool),
+        )
+        for key, kind in kinds.items()
+    }
+    if columns:
+        for row, record in enumerate(records):
+            for key, value in record.metadata.items():
+                if value is not None:
+                    values, present = columns[key]
+                    values[row] = value
+                    present[row] = True
+    return {
+        key: (values, None if present.all() else present)
+        for key, (values, present) in columns.items()
+    }
+
+
+def _write_metadata_columns(
+    grp: h5py.Group,
+    columns: dict[str, tuple[np.ndarray, np.ndarray | None]],
+    *,
+    compression: str | None = None,
+) -> None:
+    """Write metadata columns into a table's `metadata/` group.
+
+    Args:
+        grp: The table group (`/instances` or `/frames`).
+        columns: Metadata columns (see `_read_metadata_columns`). Nothing is written
+            if empty.
+        compression: `None`, `"gzip"` or `"lzf"` (see `_write_columns`).
+    """
+    if not columns:
+        return
+    md = grp.create_group("metadata")
+    for key, (values, present) in columns.items():
+        col = md.create_group(key)
+        kwargs = _compression_kwargs(compression, values.shape)
+        if values.dtype == object:
+            kwargs["dtype"] = h5py.string_dtype()
+        col.create_dataset("values", data=values, **kwargs)
+        if present is not None:
+            col.create_dataset(
+                "present",
+                data=present,
+                **_compression_kwargs(compression, present.shape),
+            )
+
+
+class _PoseTables(NamedTuple):
+    """The normalised pose tables of an SLP file (see `_read_pose_tables`).
+
+    Attributes:
+        points: Raw user point records (see `read_points`).
+        pred_points: Raw predicted point records (see `read_pred_points`).
+        instances: Raw instance records (see `_normalize_instances`).
+        frames: Raw frame records (see `_normalize_frames`).
+        instance_id_map: Stored instance id -> row for a 2.x file whose ids aren't
+            row numbers, or `None`.
+        instance_metadata: Metadata columns of `/instances`.
+        frame_metadata: Metadata columns of `/frames`.
+    """
+
+    points: np.ndarray
+    pred_points: np.ndarray
+    instances: np.ndarray
+    frames: np.ndarray
+    instance_id_map: dict[int, int] | None
+    instance_metadata: dict
+    frame_metadata: dict
+
+
+def _read_pose_tables(
+    labels_path: str, f: h5py.File, videos: list[Video]
+) -> _PoseTables:
+    """Read, normalise and check `/points`, `/pred_points`, `/instances`, `/frames`.
+
+    Each table is read in its own layout (3.0 columns or 2.x compound), so files
+    mixing the two read too. 2.x tables are cleaned up by the normalisers, and
+    `/negative_frames` is read into `is_negative` for 2.x frame tables. The range
+    checks (`_check_pose_tables`) raise for 3.0 tables and warn for 2.x ones.
+
+    Args:
+        labels_path: Path or URL of the file.
+        f: The open file.
+        videos: The file's videos (see `read_videos`).
+
+    Returns:
+        The normalised tables.
+    """
+    points = read_points(labels_path, _hdf5_file=f)
+    pred_points = read_pred_points(labels_path, _hdf5_file=f)
+    inst_columns, inst_legacy = _read_columns(f["instances"])
+    instances, instance_id_map = _normalize_instances(
+        inst_columns, is_legacy=inst_legacy
+    )
+    frame_columns, frame_legacy = _read_columns(f["frames"])
+    frames, frame_id_map = _normalize_frames(
+        frame_columns,
+        is_legacy=frame_legacy,
+        videos=videos,
+        negative_frames=(
+            read_negative_frames(labels_path, _hdf5_file=f) if frame_legacy else set()
+        ),
+    )
+    if frame_id_map is not None:
+        instances["frame_id"] = _remap_ids(instances["frame_id"], frame_id_map)
+    _check_pose_tables(
+        labels_path,
+        instances,
+        frames,
+        n_points=len(points),
+        n_pred_points=len(pred_points),
+        n_videos=len(videos),
+        strict=not (inst_legacy or frame_legacy),
+    )
+    return _PoseTables(
+        points=points,
+        pred_points=pred_points,
+        instances=instances,
+        frames=frames,
+        instance_id_map=instance_id_map,
+        instance_metadata=_read_metadata_columns(
+            f["instances"], "instances", len(instances)
+        ),
+        frame_metadata=_read_metadata_columns(f["frames"], "frames", len(frames)),
+    )
+
+
+def _remap_instance_owners(
+    id_map: dict[int, int] | None,
+    by_owner: Iterable[dict],
+    annotations: Iterable,
+    instances: list | None = None,
+) -> None:
+    """Remap links to instances from stored 2.x instance ids to rows.
+
+    Args:
+        id_map: Stored instance id -> row (see `_normalize_instances`). Nothing is
+            done if `None`.
+        by_owner: Owner-type-keyed link dictionaries (identity and category links,
+            embeddings), whose `OWNER_INSTANCE` entries are rekeyed in place.
+        annotations: ROIs, masks, bounding boxes, centroids and label images whose
+            instance links (`_instance_idx`) are remapped in place.
+        instances: The instances by row, to resolve each annotation's `instance`
+            (eager reads), or `None` to only remap the stored index (lazy reads).
+    """
+    if id_map is None:
+        return
+    for links in by_owner:
+        if OWNER_INSTANCE in links:
+            links[OWNER_INSTANCE] = {
+                id_map[sid]: value
+                for sid, value in links[OWNER_INSTANCE].items()
+                if sid in id_map
+            }
+    for ann in annotations:
+        targets = ann.objects.values() if isinstance(ann, LabelImage) else (ann,)
+        for target in targets:
+            if target._instance_idx < 0:
+                continue
+            row = id_map.get(target._instance_idx, -1)
+            target._instance_idx = row
+            if instances is not None:
+                target.instance = instances[row] if row >= 0 else None
+
+
+def _instances_from_rows(
+    rows: np.ndarray,
+    skeletons: list[Skeleton],
+    tracks: list[Track],
+    points: np.ndarray,
+    pred_points: np.ndarray,
+    metadata: dict,
+    *,
+    point_owners: list | None = None,
+) -> list[Instance | PredictedInstance | None]:
+    """Build instances from raw instance records.
+
+    Args:
+        rows: Raw instance records (see `RAW_INSTANCE_DTYPE`).
+        skeletons: The file's skeletons.
+        tracks: The file's tracks.
+        points: Raw user point records.
+        pred_points: Raw predicted point records.
+        metadata: The table's metadata columns (see `_read_metadata_columns`).
+        point_owners: If given, a list that each instance is appended to as a
+            `(point_id_start, point_id_end, instance)` tuple (see `_column_carry`).
+
+    Returns:
+        One instance per row, or `None` for rows of an unknown instance type.
+        `from_predicted` links are resolved, and a NaN `tracking_score` reads as
+        `None`.
+    """
+    n = len(rows)
+    records = _metadata_records(metadata, n) if metadata else None
+    types = rows["instance_type"].tolist()
+    skeleton_ids = rows["skeleton"].tolist()
+    track_ids = rows["track"].tolist()
+    scores = rows["score"].tolist()
+    starts = rows["point_id_start"].tolist()
+    ends = rows["point_id_end"].tolist()
+    tracking_scores = rows["tracking_score"].tolist()
+    instances: list[Instance | PredictedInstance | None] = [None] * n
+    for row in range(n):
+        skeleton = skeletons[skeleton_ids[row]]
+        track = tracks[track_ids[row]] if track_ids[row] >= 0 else None
+        tracking_score = tracking_scores[row]
+        if np.isnan(tracking_score):
+            tracking_score = None
+        start, end = starts[row], ends[row]
+        md = records[row] if records is not None else None
+        if types[row] == InstanceType.USER:
+            inst = Instance(
+                _points_from_hdf5_data(points[start:end], skeleton, is_predicted=False),
+                skeleton=skeleton,
+                track=track,
+                tracking_score=tracking_score,
+                metadata=md,
+            )
+        elif types[row] == InstanceType.PREDICTED:
+            inst = PredictedInstance(
+                _points_from_hdf5_data(
+                    pred_points[start:end], skeleton, is_predicted=True
+                ),
+                skeleton=skeleton,
+                track=track,
+                score=scores[row],
+                tracking_score=tracking_score,
+                metadata=md,
+            )
+        else:
+            continue
+        instances[row] = inst
+        if point_owners is not None:
+            point_owners.append((start, end, inst))
+
+    for row, source in enumerate(rows["from_predicted"].tolist()):
+        if 0 <= source < n and instances[row] is not None:
+            instances[row].from_predicted = instances[source]
+    return instances
+
+
 def read_instances(
     labels_path: str,
     skeletons: list[Skeleton],
@@ -4323,7 +5051,6 @@ def read_instances(
     format_id: float,
     *,
     _hdf5_file: h5py.File | None = None,
-    _point_owners: list | None = None,
 ) -> list[Instance | PredictedInstance]:
     """Read `Instance` dataset in a SLEAP labels file.
 
@@ -4339,80 +5066,24 @@ def read_instances(
             the data is read from this handle (left open for the caller to close);
             otherwise `labels_path` is opened and closed internally. This is a
             private argument used to thread a single open handle through reads.
-        _point_owners: If given, a list that each instance is appended to as a
-            `(point_id_start, point_id_end, instance)` tuple (see
-            `_PointColumnCarry`).
 
     Returns:
-        A list of `Instance` and/or `PredictedInstance` objects.
+        A list of `Instance` and/or `PredictedInstance` objects, in row order, with
+        their metadata and `from_predicted` links. Rows of an unknown instance type
+        are skipped.
     """
-    instances_data = read_hdf5_dataset(labels_path, "instances", _hdf5_file=_hdf5_file)
-    # Files older than 1.2 have no tracking_score column.
-    has_tracking_score = "tracking_score" in (instances_data.dtype.names or ())
-
-    instances = {}
-    from_predicted_pairs = []
-    for instance_data in instances_data:
-        # Cast index values to int for h5wasm compatibility. h5wasm may write
-        # all columns as float64, which can't be used as list indices or slice
-        # bounds. Safe for compound dtypes too: int(numpy.int64(x)) -> int.
-        instance_id = int(instance_data["instance_id"])
-        instance_type = int(instance_data["instance_type"])
-        skeleton_id = int(instance_data["skeleton"])
-        track_id = int(instance_data["track"])
-        from_predicted = int(instance_data["from_predicted"])
-        instance_score = instance_data["score"]
-        point_id_start = int(instance_data["point_id_start"])
-        point_id_end = int(instance_data["point_id_end"])
-        tracking_score = instance_data["tracking_score"] if has_tracking_score else 0.0
-
-        skeleton = skeletons[skeleton_id]
-        track = tracks[track_id] if track_id >= 0 else None
-
-        if instance_type == InstanceType.USER:
-            pts_data = points[point_id_start:point_id_end]
-            # Fast path: Build PointsArray directly from HDF5 data
-            points_array = _points_from_hdf5_data(
-                pts_data, skeleton, is_predicted=False
-            )
-            inst = Instance(
-                points_array,
-                skeleton=skeleton,
-                track=track,
-                tracking_score=tracking_score,
-            )
-            instances[instance_id] = inst
-
-        elif instance_type == InstanceType.PREDICTED:
-            pts_data = pred_points[point_id_start:point_id_end]
-            # Fast path: Build PredictedPointsArray directly from HDF5 data
-            points_array = _points_from_hdf5_data(pts_data, skeleton, is_predicted=True)
-            inst = PredictedInstance(
-                points_array,
-                skeleton=skeleton,
-                track=track,
-                score=instance_score,
-                tracking_score=tracking_score,
-            )
-            instances[instance_id] = inst
-
-        else:
-            continue
-
-        if _point_owners is not None:
-            _point_owners.append((point_id_start, point_id_end, inst))
-
-        if from_predicted >= 0:
-            from_predicted_pairs.append((instance_id, from_predicted))
-
-    # Link instances based on from_predicted field.
-    for instance_id, from_predicted in from_predicted_pairs:
-        instances[instance_id].from_predicted = instances[from_predicted]
-
-    # Convert instances back to list.
-    instances = list(instances.values())
-
-    return instances
+    with (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    ) as f:
+        columns, is_legacy = _read_columns(f["instances"])
+        rows, _ = _normalize_instances(columns, is_legacy=is_legacy)
+        metadata = _read_metadata_columns(f["instances"], "instances", len(rows))
+    instances = _instances_from_rows(
+        rows, skeletons, tracks, points, pred_points, metadata
+    )
+    return [inst for inst in instances if inst is not None]
 
 
 _UNLABELED_AS_MODES = ("error", "absent")
@@ -4469,21 +5140,29 @@ def _refuse_unlabeled_points(n_unlabeled: int, unlabeled_as: str) -> None:
     )
 
 
-def _check_dropped_metadata(labels: Labels) -> None:
-    """Check record metadata kinds, then warn that this layout drops metadata.
+def _check_dropped_metadata(labels: Labels, *, legacy_format: bool) -> None:
+    """Check record metadata kinds, then warn about metadata the layout drops.
 
     Args:
         labels: The labels about to be written.
+        legacy_format: If `True`, the 2.x layout is written, which stores no
+            metadata. Otherwise (SLP 3.0) instance and frame metadata is stored and
+            only bounding box metadata is dropped.
 
     Raises:
         TypeError: If a metadata key mixes kinds across a table's records (see
             `Labels.check_metadata`).
     """
     kinds = labels.check_metadata()
-    if any(kinds.values()):
+    if legacy_format and any(kinds.values()):
         warnings.warn(
-            "Instance, frame and bounding box metadata can't be stored in this "
+            "Instance, frame and bounding box metadata can't be stored in the legacy "
             "SLP layout and was not saved.",
+            stacklevel=3,
+        )
+    elif not legacy_format and kinds["bboxes"]:
+        warnings.warn(
+            "Bounding box metadata can't be stored yet and was not saved.",
             stacklevel=3,
         )
 
@@ -4598,20 +5277,23 @@ def _write_point_tables(
             _write_columns(f, name, rows, compression=compression)
 
 
-class _PointColumnCarry:
-    """Unknown point columns read from a file, kept to carry them through a save.
+class _ColumnCarry:
+    """Unknown pose table columns read from a file, kept to carry them through a save.
 
-    A newer sleap-io may add point columns this version doesn't know. They are kept
-    alongside the loaded `Labels` and written back if the rows of their table still
-    line up with the instances when saving: the same instances, with the same points
-    arrays, in the same order. Otherwise they are dropped with a warning.
+    A newer sleap-io may add columns to `/points`, `/pred_points`, `/instances` or
+    `/frames` that this version doesn't know. They are kept alongside the loaded
+    `Labels` and written back if the rows of their table still line up with the
+    objects when saving: the same instances (with the same points arrays) or frames,
+    in the same order. Otherwise they are dropped with a warning.
 
     Attributes:
-        tables: Maps a table name (`"points"` or `"pred_points"`) to a tuple
-            `(owners, columns)`. `owners` is a tuple of `(instance, points)` pairs
-            owning the table's rows in order, or `None` if the rows couldn't be
-            attributed to instances. `columns` is a structured array of the unknown
-            columns, one record per row.
+        tables: Maps a table name to a tuple `(owners, columns)`. `owners` is a
+            tuple with one key per object owning the table's rows, in order, or
+            `None` if the rows couldn't be attributed to objects. A key is
+            `(instance, points)` for the point tables, `(instance,)` for
+            `/instances` and `(frame,)` for `/frames` (see `_carry_keys`).
+            `columns` is a structured array of the unknown columns, one record per
+            row.
     """
 
     def __init__(self, tables: dict[str, tuple[tuple | None, np.ndarray]]):
@@ -4619,27 +5301,73 @@ class _PointColumnCarry:
         self.tables = tables
 
 
-def _point_column_carry(
-    points: np.ndarray,
-    pred_points: np.ndarray,
-    owners: list[tuple[int, int, Instance | PredictedInstance]],
-) -> _PointColumnCarry | None:
-    """Collect unknown point columns to carry through a later save.
+def _carry_keys(name: str, objects: Iterable) -> tuple:
+    """Return the keys identifying the objects that own a table's rows.
 
     Args:
-        points: Normalised user point records, as read.
-        pred_points: Normalised predicted point records, as read.
-        owners: `(point_id_start, point_id_end, instance)` for every instance read.
+        name: The table name.
+        objects: The instances (or, for `/frames`, the labeled frames) owning the
+            table's rows, in order.
 
     Returns:
-        A `_PointColumnCarry`, or `None` if neither table has unknown columns.
+        A tuple with one key per object (see `_ColumnCarry`).
     """
-    tables = {}
-    for name, rows, base, inst_type in (
-        ("points", points, RAW_POINT_DTYPE, Instance),
-        ("pred_points", pred_points, RAW_PRED_POINT_DTYPE, PredictedInstance),
-    ):
-        extra = [n for n in rows.dtype.names if n not in base.names]
+    if name in ("points", "pred_points"):
+        return tuple((inst, inst.points) for inst in objects)
+    return tuple((obj,) for obj in objects)
+
+
+def _unknown_columns(rows: np.ndarray, base: np.dtype) -> list[str]:
+    """Return the names of the columns of `rows` that aren't fields of `base`."""
+    return [name for name in rows.dtype.names if name not in base.names]
+
+
+def _point_row_owners(
+    owners: list[tuple[int, int, Instance | PredictedInstance]],
+    inst_type: type,
+    n_rows: int,
+) -> list | None:
+    """Return the instances owning a point table's rows, in row order.
+
+    Args:
+        owners: `(point_id_start, point_id_end, instance)` for every instance read.
+        inst_type: `Instance` for `/points`, `PredictedInstance` for `/pred_points`.
+        n_rows: The number of rows in the point table.
+
+    Returns:
+        The instances of `inst_type` sorted by their rows, or `None` unless they own
+        the rows back to back, from the first row to the last.
+    """
+    spans = sorted(
+        (span for span in owners if type(span[2]) is inst_type),
+        key=lambda span: span[0],
+    )
+    position = 0
+    for start, end, _ in spans:
+        if start != position:
+            return None
+        position = end
+    return [inst for _, _, inst in spans] if position == n_rows else None
+
+
+def _column_carry(
+    tables: dict[str, tuple[np.ndarray, np.dtype, Callable[[], list | None]]],
+) -> _ColumnCarry | None:
+    """Collect unknown pose table columns to carry through a later save.
+
+    Args:
+        tables: Maps a table name to `(rows, base, owners)`: the normalised records
+            as read, their raw dtype (for example `RAW_POINT_DTYPE`), and a
+            function returning the objects owning the rows in order (or `None` if
+            they can't be attributed), called only if the table has unknown
+            columns.
+
+    Returns:
+        A `_ColumnCarry`, or `None` if no table has unknown columns.
+    """
+    carried = {}
+    for name, (rows, base, owners) in tables.items():
+        extra = _unknown_columns(rows, base)
         if not extra:
             continue
         columns = np.empty(
@@ -4647,44 +5375,32 @@ def _point_column_carry(
         )
         for n in extra:
             columns[n] = rows[n]
-        spans = sorted(
-            (span for span in owners if type(span[2]) is inst_type),
-            key=lambda span: span[0],
+        objects = owners()
+        carried[name] = (
+            _carry_keys(name, objects) if objects is not None else None,
+            columns,
         )
-        # The rows can only follow their instances if the instances own them
-        # back to back, from the first row to the last.
-        position = 0
-        for start, end, _ in spans:
-            if start != position:
-                position = -1
-                break
-            position = end
-        contiguous = position == len(rows)
-        table_owners = (
-            tuple((inst, inst.points) for _, _, inst in spans) if contiguous else None
-        )
-        tables[name] = (table_owners, columns)
-    return _PointColumnCarry(tables) if tables else None
+    return _ColumnCarry(carried) if carried else None
 
 
-def _warn_dropped_point_columns(
-    carry: _PointColumnCarry, names: Iterable[str], reason: str
+def _warn_dropped_columns(
+    names: Iterable[str], columns: dict[str, Iterable[str]], reason: str
 ) -> None:
-    """Warn that carried point columns are not being saved.
+    """Warn that unknown pose table columns are not being saved.
 
     Args:
-        carry: The carried columns.
-        names: Names of tables in `carry.tables` whose columns are dropped.
+        names: Names of the tables whose columns are dropped.
+        columns: Maps each table name to its unknown column names.
         reason: `"legacy"` (the legacy layout can't store them) or `"changed"` (the
-            instances changed since loading, so the rows no longer line up).
+            objects changed since loading, so the rows no longer line up).
     """
     for name in names:
-        cols = ", ".join(carry.tables[name][1].dtype.names)
+        cols = ", ".join(columns[name])
         why = (
             "the legacy SLP layout can't store them"
             if reason == "legacy"
-            else "the instances changed since the file was loaded, so its rows no "
-            "longer line up"
+            else "the instances or frames changed since the file was loaded, so its "
+            "rows no longer line up"
         )
         warnings.warn(
             f"Unknown column(s) {cols} of /{name} were not saved: {why}.",
@@ -4692,34 +5408,45 @@ def _warn_dropped_point_columns(
         )
 
 
+def _warn_dropped_carry(carry: _ColumnCarry | None) -> None:
+    """Warn that the legacy layout drops every carried column (see `_ColumnCarry`)."""
+    if carry is not None:
+        _warn_dropped_columns(
+            carry.tables,
+            {name: cols.dtype.names for name, (_, cols) in carry.tables.items()},
+            "legacy",
+        )
+
+
 def _with_carried_columns(
     rows: np.ndarray,
-    carry: _PointColumnCarry | None,
+    carry: _ColumnCarry | None,
     name: str,
-    instances: list[Instance | PredictedInstance],
+    objects: list,
 ) -> np.ndarray:
-    """Append carried unknown columns to freshly built point records.
+    """Append carried unknown columns to freshly built records.
 
     Args:
-        rows: Raw point records built from `instances`.
+        rows: Raw records built from `objects`.
         carry: Unknown columns kept from loading, or `None`.
-        name: The table name, `"points"` or `"pred_points"`.
-        instances: The instances owning `rows`, in order.
+        name: The table name.
+        objects: The instances (or labeled frames, for `/frames`) owning `rows`, in
+            order.
 
     Returns:
-        `rows` with the carried columns appended when the instances (and their
-        points arrays) are the ones loaded, in the same order. Otherwise `rows`
-        unchanged, with a warning if columns had to be dropped.
+        `rows` with the carried columns appended when the objects are the ones
+        loaded, in the same order. Otherwise `rows` unchanged, with a warning if
+        columns had to be dropped.
     """
     if carry is None or name not in carry.tables:
         return rows
     owners, columns = carry.tables[name]
+    keys = _carry_keys(name, objects)
     if (
         owners is not None
-        and len(owners) == len(instances)
+        and len(owners) == len(keys)
         and all(
-            inst is owner and inst.points is points
-            for inst, (owner, points) in zip(instances, owners)
+            all(a is b for a, b in zip(owner, key)) for owner, key in zip(owners, keys)
         )
     ):
         merged = np.empty(len(rows), dtype=rows.dtype.descr + columns.dtype.descr)
@@ -4728,8 +5455,97 @@ def _with_carried_columns(
         for n in columns.dtype.names:
             merged[n] = columns[n]
         return merged
-    _warn_dropped_point_columns(carry, [name], "changed")
+    _warn_dropped_columns([name], {name: columns.dtype.names}, "changed")
     return rows
+
+
+def _legacy_table_rows(rows: np.ndarray, dtype: np.dtype) -> np.ndarray:
+    """Convert raw instance or frame records to a 2.x compound layout.
+
+    Args:
+        rows: Raw records (see `RAW_INSTANCE_DTYPE` and `RAW_FRAME_DTYPE`).
+        dtype: `LEGACY_INSTANCE_DTYPE` or `LEGACY_FRAME_DTYPE`.
+
+    Returns:
+        Compound records of `dtype`, with the row numbers as ids. Unknown columns
+        are dropped. For frames, `video` is still the list index (see
+        `_write_pose_tables`).
+    """
+    legacy = np.empty(len(rows), dtype=dtype)
+    for name in dtype.names:
+        legacy[name] = rows[name]
+    return legacy
+
+
+def _without_field(rows: np.ndarray, name: str) -> np.ndarray:
+    """Return a view of structured records without one field."""
+    return rows[[n for n in rows.dtype.names if n != name]]
+
+
+def _write_pose_tables(
+    f: h5py.File,
+    points: np.ndarray,
+    pred_points: np.ndarray,
+    instances: np.ndarray,
+    frames: np.ndarray,
+    *,
+    videos: list[Video],
+    instance_metadata: dict,
+    frame_metadata: dict,
+    legacy_format: bool = False,
+    compression: str | None = None,
+) -> None:
+    """Write `/points`, `/pred_points`, `/instances` and `/frames`.
+
+    Args:
+        f: The open file to write into.
+        points: Raw user point records (see `RAW_POINT_DTYPE`).
+        pred_points: Raw predicted point records (see `RAW_PRED_POINT_DTYPE`).
+        instances: Raw instance records (see `RAW_INSTANCE_DTYPE`), whose
+            `instance_id` is the row number.
+        frames: Raw frame records (see `RAW_FRAME_DTYPE`), whose `frame_id` is the
+            row number and `video` indexes `videos`.
+        videos: The videos written to the file, in order.
+        instance_metadata: Metadata columns of the instances (see
+            `_read_metadata_columns`).
+        frame_metadata: Metadata columns of the frames.
+        legacy_format: If `True`, write 2.x compound datasets, with each embedded
+            video's sparse `videoN` number as its id in `/frames` and negative
+            frames in `/negative_frames`. Metadata and unknown columns are not
+            written. Otherwise groups of columns, without the id columns.
+        compression: `None`, `"gzip"` or `"lzf"`.
+    """
+    _write_point_tables(
+        f, points, pred_points, legacy_format=legacy_format, compression=compression
+    )
+    if legacy_format:
+        legacy_instances = _legacy_table_rows(instances, LEGACY_INSTANCE_DTYPE)
+        legacy_frames = _legacy_table_rows(frames, LEGACY_FRAME_DTYPE)
+        legacy_frames["video"] = _written_video_id_map(f, videos)[frames["video"]]
+        for name, rows in (("instances", legacy_instances), ("frames", legacy_frames)):
+            f.create_dataset(
+                name, data=rows, **_compression_kwargs(compression, rows.shape)
+            )
+        negative = legacy_frames[frames["is_negative"]]
+        if len(negative):
+            neg = np.empty(
+                len(negative), dtype=[("video_id", "u4"), ("frame_idx", "u8")]
+            )
+            neg["video_id"] = negative["video"]
+            neg["frame_idx"] = negative["frame_idx"]
+            f.create_dataset("negative_frames", data=neg)
+        return
+    for name, rows, metadata in (
+        ("instances", instances, instance_metadata),
+        ("frames", frames, frame_metadata),
+    ):
+        grp = _write_columns(
+            f,
+            name,
+            _without_field(rows, _ROW_ID_COLUMNS[name]),
+            compression=compression,
+        )
+        _write_metadata_columns(grp, metadata, compression=compression)
 
 
 def write_lfs(
@@ -4744,90 +5560,37 @@ def write_lfs(
     Args:
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object to store the metadata for.
-        legacy_format: If `True`, write `/points` and `/pred_points` as 2.x compound
-            datasets, after `_check_unlabeled_points`. Otherwise (the default) write
-            them as groups of columns (SLP 3.0).
-        compression: Compression for the point tables: `None`, `"gzip"` or `"lzf"`.
+        legacy_format: If `True`, write the pose tables as 2.x compound datasets
+            (after `_check_unlabeled_points`), with negative frames in
+            `/negative_frames` and without metadata. Otherwise (the default) write
+            them as groups of columns (SLP 3.0), with instance and frame metadata.
+        compression: Compression for the pose tables: `None`, `"gzip"` or `"lzf"`.
     """
-    # We store the data in structured arrays for performance, so we first define the
-    # dtype fields.
-    instance_dtype = np.dtype(
-        [
-            ("instance_id", "i8"),
-            ("instance_type", "u1"),
-            ("frame_id", "u8"),
-            ("skeleton", "u4"),
-            ("track", "i4"),
-            ("from_predicted", "i8"),
-            ("score", "f4"),
-            ("point_id_start", "u8"),
-            ("point_id_end", "u8"),
-            ("tracking_score", "f4"),  # FORMAT_ID >= 1.2 (1.3 adds explicit handling)
-        ]
-    )
-    frame_dtype = np.dtype(
-        [
-            ("frame_id", "u8"),
-            ("video", "u4"),
-            ("frame_idx", "u8"),
-            ("instance_id_start", "u8"),
-            ("instance_id_end", "u8"),
-        ]
-    )
-
-    # Next, we extract the data from the labels object into lists with the same
-    # fields. Points are kept as the instances' own points arrays and turned into
-    # columns in one go below.
-    frames, instances, to_link = [], [], []
+    # The rows of each table are gathered as tuples and turned into structured
+    # arrays in one go. Points are kept as the instances' own points arrays.
+    frame_rows, instance_rows = [], []
+    lfs = list(labels.labeled_frames)
+    all_instances: list[Instance | PredictedInstance] = []
     user_points: list = []
     pred_points: list = []
     n_user_points, n_pred_points = 0, 0
     inst_to_id = {}
-    # get sparse ids instead of list indices
-    video_idx_id_map = {}
-    for video_idx, video in enumerate(labels.videos):
-        # Default to sequential index
-        video_idx_id_map[video_idx] = video_idx
-
-        # Check if this is an embedded video with a sparse video ID
-        if (
-            hasattr(video, "backend")
-            and video.backend is not None
-            and hasattr(video.backend, "dataset")
-            and video.backend.dataset is not None
-        ):
-            dataset = video.backend.dataset
-            # Extract video ID from dataset name (e.g., "video15/video" → 15)
-            try:
-                video_group = dataset.split("/")[0]
-                if video_group.startswith("video"):
-                    video_id = int(video_group[5:])  # Remove "video" prefix and convert
-                    video_idx_id_map[video_idx] = video_id
-            except (ValueError, IndexError):
-                # If parsing fails, keep the default sequential index
-                pass
     video_ids = _identity_index(labels.videos)
     track_ids = _identity_index(labels.tracks)
-    for lf in labels:
-        frame_id = len(frames)
-        instance_id_start = len(instances)
+    for frame_id, lf in enumerate(lfs):
+        instance_id_start = len(instance_rows)
         for inst in lf:
-            instance_id = len(instances)
-            inst_to_id[id(inst)] = instance_id
+            inst_to_id[id(inst)] = len(instance_rows)
             skeleton_id = labels.skeletons.index(inst.skeleton)
             track = -1
             if inst.track:
                 track = track_ids.get(id(inst.track))
                 if track is None:
                     track = labels.tracks.index(inst.track)  # Raises if unknown.
-            from_predicted = -1
-            if inst.from_predicted:
-                to_link.append((instance_id, inst.from_predicted))
             score = 0.0
 
             if type(inst) is Instance:
                 instance_type = InstanceType.USER
-                tracking_score = inst.tracking_score
                 point_id_start = n_user_points
                 user_points.append(inst)
                 n_user_points += len(inst.points)
@@ -4836,7 +5599,6 @@ def write_lfs(
             elif type(inst) is PredictedInstance:
                 instance_type = InstanceType.PREDICTED
                 score = inst.score
-                tracking_score = inst.tracking_score
                 point_id_start = n_pred_points
                 pred_points.append(inst)
                 n_pred_points += len(inst.points)
@@ -4845,76 +5607,79 @@ def write_lfs(
             else:
                 raise ValueError(f"Unknown instance type: {type(inst)}")
 
-            instances.append(
-                [
-                    instance_id,
+            tracking_score = inst.tracking_score
+            instance_rows.append(
+                (
+                    len(instance_rows),
                     int(instance_type),
                     frame_id,
                     skeleton_id,
                     track,
-                    from_predicted,
+                    -1,  # from_predicted, linked below
                     score,
                     point_id_start,
                     point_id_end,
-                    tracking_score,
-                ]
+                    np.nan if tracking_score is None else tracking_score,
+                )
             )
-
-        instance_id_end = len(instances)
+            all_instances.append(inst)
 
         video_idx = video_ids.get(id(lf.video))
         if video_idx is None:
             video_idx = labels.videos.index(lf.video)  # Raises if unknown.
-        frames.append(
-            [
+        frame_rows.append(
+            (
                 frame_id,
-                video_idx_id_map[video_idx],
+                video_idx,
                 lf.frame_idx,
                 instance_id_start,
-                instance_id_end,
-            ]
+                len(instance_rows),
+                lf.is_negative,
+            )
         )
 
-    # Link instances based on from_predicted field.
-    for instance_id, from_predicted in to_link:
-        # Source instance may be missing if predictions were removed from the labels, in
-        # which case, remove the link.
-        instances[instance_id][5] = inst_to_id.get(id(from_predicted), -1)
+    instances = np.array(instance_rows, dtype=RAW_INSTANCE_DTYPE)
+    frames = np.array(frame_rows, dtype=RAW_FRAME_DTYPE)
+    # Link instances based on from_predicted field. The source instance may be
+    # missing if predictions were removed from the labels, in which case the link
+    # is dropped.
+    for row, inst in enumerate(all_instances):
+        if inst.from_predicted is not None:
+            instances["from_predicted"][row] = inst_to_id.get(
+                id(inst.from_predicted), -1
+            )
 
-    # Create structured arrays.
     points = _raw_points_from_instances(user_points, is_predicted=False)
     predicted_points = _raw_points_from_instances(pred_points, is_predicted=True)
-    instances = np.array([tuple(x) for x in instances], dtype=instance_dtype)
-    frames = np.array([tuple(x) for x in frames], dtype=frame_dtype)
 
-    carry = getattr(labels, "_point_columns", None)
+    carry = getattr(labels, "_carried_columns", None)
+    instance_metadata, frame_metadata = {}, {}
     if legacy_format:
-        if carry is not None:
-            _warn_dropped_point_columns(carry, carry.tables, "legacy")
+        _warn_dropped_carry(carry)
     else:
         points = _with_carried_columns(points, carry, "points", user_points)
         predicted_points = _with_carried_columns(
             predicted_points, carry, "pred_points", pred_points
         )
+        instances = _with_carried_columns(instances, carry, "instances", all_instances)
+        frames = _with_carried_columns(frames, carry, "frames", lfs)
+        instance_metadata = _metadata_columns(
+            all_instances, metadata_column_kinds(all_instances, "instances")
+        )
+        frame_metadata = _metadata_columns(lfs, metadata_column_kinds(lfs, "frames"))
 
-    # Write to file.
     with h5py.File(labels_path, "a") as f:
-        _write_point_tables(
+        _write_pose_tables(
             f,
             points,
             predicted_points,
+            instances,
+            frames,
+            videos=labels.videos,
+            instance_metadata=instance_metadata,
+            frame_metadata=frame_metadata,
             legacy_format=legacy_format,
             compression=compression,
-        )
-        f.create_dataset(
-            "instances",
-            data=instances,
-            dtype=instances.dtype,
-        )
-        f.create_dataset(
-            "frames",
-            data=frames,
-            dtype=frames.dtype,
         )
 
 
@@ -6202,12 +6967,6 @@ def _read_labels_lazy_from_open_file(
 
     _check_format_id(labels_path, f)
 
-    # Read raw arrays
-    frames_data = read_hdf5_dataset(labels_path, "frames", _hdf5_file=f)
-    instances_data = read_hdf5_dataset(labels_path, "instances", _hdf5_file=f)
-    points_data = read_points(labels_path, _hdf5_file=f)
-    pred_points_data = read_pred_points(labels_path, _hdf5_file=f)
-
     # Read format ID
     format_id = read_hdf5_attrs(labels_path, "metadata", "format_id", _hdf5_file=f)
 
@@ -6219,6 +6978,9 @@ def _read_labels_lazy_from_open_file(
         _url_headers=_url_headers,
         _url_stream_mode=_url_stream_mode,
     )
+    # Read the raw pose tables (normalised and checked, see `_read_pose_tables`).
+    tables = _read_pose_tables(labels_path, f, videos)
+    frames_data = tables.frames
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
     tracks = read_tracks(labels_path, _hdf5_file=f)
     identities = read_identities(labels_path, _hdf5_file=f)
@@ -6235,6 +6997,7 @@ def _read_labels_lazy_from_open_file(
     # instance_id) and attach at materialization time; mask owners attach eagerly
     # to the masks read below.
     identity_links = read_identity_links(labels_path, _hdf5_file=f)
+    _remap_instance_owners(tables.instance_id_map, [identity_links], [])
     instance_identities = identity_links.get(OWNER_INSTANCE, {})
     mask_identity_map = identity_links.get(OWNER_MASK, {})
     centroid_identity_map = identity_links.get(OWNER_CENTROID, {})
@@ -6242,6 +7005,7 @@ def _read_labels_lazy_from_open_file(
     roi_identity_map = identity_links.get(OWNER_ROI, {})
     # Category links (SLP 2.7+): same owner-keyed split as identity links.
     category_links = read_category_links(labels_path, _hdf5_file=f)
+    _remap_instance_owners(tables.instance_id_map, [category_links], [])
     instance_categories = category_links.get(OWNER_INSTANCE, {})
     mask_category_map = category_links.get(OWNER_MASK, {})
     centroid_category_map = category_links.get(OWNER_CENTROID, {})
@@ -6250,6 +7014,7 @@ def _read_labels_lazy_from_open_file(
     # Embeddings: per-instance embeddings ride on the lazy store; mask/centroid/
     # bbox/ROI embeddings attach to those (eagerly-read) annotations below.
     embeddings_by_owner = read_embeddings(labels_path, _hdf5_file=f)
+    _remap_instance_owners(tables.instance_id_map, [embeddings_by_owner], [])
     instance_embeddings = embeddings_by_owner.get(OWNER_INSTANCE, {})
     mask_embedding_map = embeddings_by_owner.get(OWNER_MASK, {})
     centroid_embedding_map = embeddings_by_owner.get(OWNER_CENTROID, {})
@@ -6257,6 +7022,7 @@ def _read_labels_lazy_from_open_file(
     roi_embedding_map = embeddings_by_owner.get(OWNER_ROI, {})
     # Category embeddings (SLP 2.7+): parallel category_* datasets in /embeddings.
     category_embeddings_by_owner = read_category_embeddings(labels_path, _hdf5_file=f)
+    _remap_instance_owners(tables.instance_id_map, [category_embeddings_by_owner], [])
     instance_category_embeddings = category_embeddings_by_owner.get(OWNER_INSTANCE, {})
     mask_category_embedding_map = category_embeddings_by_owner.get(OWNER_MASK, {})
     centroid_category_embedding_map = category_embeddings_by_owner.get(
@@ -6267,7 +7033,6 @@ def _read_labels_lazy_from_open_file(
     suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
     metadata = read_metadata(labels_path, _hdf5_file=f)
     provenance = read_provenance(labels_path, metadata, _hdf5_file=f)
-    negative_frames = read_negative_frames(labels_path, _hdf5_file=f)
 
     # Read sessions (small, no need for lazy loading)
     # Note: sessions require labeled_frames for full linking, but for lazy loading
@@ -6287,15 +7052,16 @@ def _read_labels_lazy_from_open_file(
         session_data=session_data_raw,
         session_video_ids=tuple(id(v) for v in videos),
         frames_data=frames_data,
-        instances_data=instances_data,
-        pred_points_data=pred_points_data,
-        points_data=points_data,
+        instances_data=tables.instances,
+        pred_points_data=tables.pred_points,
+        points_data=tables.points,
+        instance_metadata=tables.instance_metadata,
+        frame_metadata=tables.frame_metadata,
         videos=videos,
         skeletons=skeletons,
         tracks=tracks,
         format_id=format_id,
         source_path=str(labels_path),
-        negative_frames=negative_frames,
         identities=identities,
         instance_identities=instance_identities,
         instance_embeddings=instance_embeddings,
@@ -6371,6 +7137,21 @@ def _read_labels_lazy_from_open_file(
         _url_stream_mode=_url_stream_mode,
         _url_bytes=_url_bytes,
     )
+    _remap_instance_owners(
+        tables.instance_id_map,
+        [],
+        [
+            ann
+            for tuples in (
+                roi_tuples,
+                mask_tuples,
+                bbox_tuples,
+                centroid_tuples,
+                li_tuples,
+            )
+            for ann, _, _ in tuples
+        ],
+    )
 
     # Build per-frame annotation dicts for lazy materialization
     def _build_ann_by_frame(ann_tuples):
@@ -6405,9 +7186,9 @@ def _read_labels_lazy_from_open_file(
     lazy_store._undistributed_label_images = li_undist
 
     # Check for annotation-only frames not in /frames (e.g., old TrackMate SLPs)
-    frame_keys = set()
-    for row in frames_data:
-        frame_keys.add((int(row[1]), int(row[2])))  # (video_id, frame_idx)
+    frame_keys = set(
+        zip(frames_data["video"].tolist(), frames_data["frame_idx"].tolist())
+    )
 
     all_ann_keys = set()
     for d in (
@@ -8114,7 +8895,7 @@ def _write_metadata_standalone(
     Args:
         labels_path: Path to the SLP file.
         format_id: Format version identifier. Defaults to ``SLP_FORMAT_ID`` (3.0),
-            matching the empty columnar point tables written here.
+            matching the empty columnar pose tables written here.
         skeletons: Optional list of skeletons to serialize.
         provenance: Optional provenance dict.
         videos: Optional list of videos; if any carries a virtual crop the
@@ -8141,31 +8922,6 @@ def _write_metadata_standalone(
         "provenance": provenance,
     }
 
-    # Dtypes for empty placeholder datasets required by read_labels
-    instance_dtype = np.dtype(
-        [
-            ("instance_id", "i8"),
-            ("instance_type", "u1"),
-            ("frame_id", "u8"),
-            ("skeleton", "u4"),
-            ("track", "i4"),
-            ("from_predicted", "i8"),
-            ("score", "f4"),
-            ("point_id_start", "u8"),
-            ("point_id_end", "u8"),
-            ("tracking_score", "f4"),
-        ]
-    )
-    frame_dtype = np.dtype(
-        [
-            ("frame_id", "u8"),
-            ("video", "u4"),
-            ("frame_idx", "u8"),
-            ("instance_id_start", "u8"),
-            ("instance_id_end", "u8"),
-        ]
-    )
-
     if videos and any(v._crop_tuple() is not None for v in videos):
         format_id = max(format_id, 2.3)
 
@@ -8187,9 +8943,15 @@ def _write_metadata_standalone(
         if "pred_points" not in f:
             _write_columns(f, "pred_points", np.empty(0, dtype=RAW_PRED_POINT_DTYPE))
         if "instances" not in f:
-            f.create_dataset("instances", data=np.array([], dtype=instance_dtype))
+            _write_columns(
+                f,
+                "instances",
+                _without_field(np.empty(0, RAW_INSTANCE_DTYPE), "instance_id"),
+            )
         if "frames" not in f:
-            f.create_dataset("frames", data=np.array([], dtype=frame_dtype))
+            _write_columns(
+                f, "frames", _without_field(np.empty(0, RAW_FRAME_DTYPE), "frame_id")
+            )
 
 
 class LabelImageWriter:
@@ -9068,88 +9830,70 @@ def _read_labels_from_open_file(
         _url_stream_mode=_url_stream_mode,
     )
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
-    points = read_points(labels_path, _hdf5_file=f)
-    pred_points = read_pred_points(labels_path, _hdf5_file=f)
-    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id", _hdf5_file=f)
+    tables = _read_pose_tables(labels_path, f, videos)
     point_owners: list = []
-    instances = read_instances(
-        labels_path,
+    # One entry per /instances row (None for rows of an unknown type), so links to
+    # instances index it by row.
+    instances = _instances_from_rows(
+        tables.instances,
         skeletons,
         tracks,
-        points,
-        pred_points,
-        format_id,
-        _hdf5_file=f,
-        _point_owners=point_owners,
+        tables.points,
+        tables.pred_points,
+        tables.instance_metadata,
+        point_owners=point_owners,
     )
-    point_columns = _point_column_carry(points, pred_points, point_owners)
     suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
     metadata = read_metadata(labels_path, _hdf5_file=f)
     provenance = read_provenance(labels_path, metadata, _hdf5_file=f)
 
-    frames = read_hdf5_dataset(labels_path, "frames", _hdf5_file=f)
-    negative_markers = read_negative_frames(labels_path, _hdf5_file=f)
-
-    # Check if video IDs in frames are sequential list indices (0, 1, 2, ..., n-1)
-    # or sparse embedded IDs (e.g., 0, 15, 29, 47, ...) that need remapping
-    frame_video_ids = set(int(frame[1]) for frame in frames)
-    max_frame_video_id = max(frame_video_ids) if frame_video_ids else 0
-
-    # If max video ID == len(videos) - 1 and IDs are contiguous, they're list indices
-    # In this case, use identity mapping (backwards compatible behavior)
-    frames_use_list_indices = (
-        len(frame_video_ids) == len(videos) and max_frame_video_id == len(videos) - 1
+    frames = tables.frames
+    frame_records = (
+        _metadata_records(tables.frame_metadata, len(frames))
+        if tables.frame_metadata
+        else None
     )
-
-    if frames_use_list_indices:
-        # Video IDs are sequential list indices - use identity mapping
-        video_id_to_index = {i: i for i in range(len(videos))}
-    else:
-        # Build mapping from sparse video IDs to list indices
-        # This handles files from old SLEAP where video IDs can be sparse
-        # (e.g., 0, 15, 29, 47, ...) rather than sequential (0, 1, 2, 3, ...)
-        video_id_to_index = {}
-        for i, video in enumerate(videos):
-            # For embedded videos, extract the video ID from backend.dataset
-            if (
-                hasattr(video, "backend")
-                and video.backend is not None
-                and hasattr(video.backend, "dataset")
-                and video.backend.dataset is not None
-            ):
-                dataset = video.backend.dataset
-                # Extract video ID from dataset name (e.g., "video15/video" → 15)
-                if "/" in dataset:
-                    video_group = dataset.split("/")[0]
-                    if video_group.startswith("video"):
-                        video_id_str = video_group[5:]  # Remove "video" prefix
-                        if video_id_str.isdigit():
-                            video_id = int(video_id_str)
-                            video_id_to_index[video_id] = i
-                            continue
-
-            # For non-embedded videos or videos without extractable IDs,
-            # assume sequential indexing (backwards compatible behavior)
-            video_id_to_index[i] = i
-
     labeled_frames = []
-    for _, video_id, frame_idx, instance_id_start, instance_id_end in frames:
-        # Cast to int for h5wasm files, which store every column as float64.
-        video_id, frame_idx = int(video_id), int(frame_idx)
-        # Map sparse video_id to sequential list index
-        video_index = video_id_to_index.get(video_id, video_id)
-
-        # Check if this frame is marked as negative (using sparse video_id)
-        is_negative = (video_id, frame_idx) in negative_markers
-
+    for row, (video_idx, frame_idx, start, end, is_negative) in enumerate(
+        zip(
+            frames["video"].tolist(),
+            frames["frame_idx"].tolist(),
+            frames["instance_id_start"].tolist(),
+            frames["instance_id_end"].tolist(),
+            frames["is_negative"].tolist(),
+        )
+    ):
         labeled_frames.append(
             LabeledFrame(
-                video=videos[video_index],
+                video=videos[video_idx],
                 frame_idx=frame_idx,
-                instances=instances[int(instance_id_start) : int(instance_id_end)],
+                instances=[inst for inst in instances[start:end] if inst is not None],
                 is_negative=is_negative,
+                metadata=frame_records[row] if frame_records is not None else None,
             )
         )
+    carried_columns = _column_carry(
+        {
+            "points": (
+                tables.points,
+                RAW_POINT_DTYPE,
+                lambda: _point_row_owners(point_owners, Instance, len(tables.points)),
+            ),
+            "pred_points": (
+                tables.pred_points,
+                RAW_PRED_POINT_DTYPE,
+                lambda: _point_row_owners(
+                    point_owners, PredictedInstance, len(tables.pred_points)
+                ),
+            ),
+            "instances": (
+                tables.instances,
+                RAW_INSTANCE_DTYPE,
+                lambda: None if any(i is None for i in instances) else instances,
+            ),
+            "frames": (tables.frames, RAW_FRAME_DTYPE, lambda: list(labeled_frames)),
+        }
+    )
 
     identities = read_identities(labels_path, _hdf5_file=f)
     # Class/category catalog (SLP 2.7+). Self-contained mirror of /identity; a
@@ -9166,26 +9910,36 @@ def _read_labels_from_open_file(
     # is ordered by instance_id, so it indexes directly; mask owners are attached
     # after read_masks (mask-list index order).
     identity_links = read_identity_links(labels_path, _hdf5_file=f)
+    _remap_instance_owners(tables.instance_id_map, [identity_links], [])
     instance_identity_map = identity_links.get(OWNER_INSTANCE, {})
     mask_identity_map = identity_links.get(OWNER_MASK, {})
     centroid_identity_map = identity_links.get(OWNER_CENTROID, {})
     bbox_identity_map = identity_links.get(OWNER_BBOX, {})
     roi_identity_map = identity_links.get(OWNER_ROI, {})
     for inst_id, (identity_idx, identity_score) in instance_identity_map.items():
-        if 0 <= inst_id < len(instances) and 0 <= identity_idx < len(identities):
+        if (
+            0 <= inst_id < len(instances)
+            and instances[inst_id] is not None
+            and 0 <= identity_idx < len(identities)
+        ):
             instances[inst_id].identity = identities[identity_idx]
             instances[inst_id].identity_score = identity_score
 
     # Attach category links (SLP format 2.7+). Self-contained mirror of the identity
     # links above; absent /categories group -> empty mappings and a no-op.
     category_links = read_category_links(labels_path, _hdf5_file=f)
+    _remap_instance_owners(tables.instance_id_map, [category_links], [])
     instance_category_map = category_links.get(OWNER_INSTANCE, {})
     mask_category_map = category_links.get(OWNER_MASK, {})
     centroid_category_map = category_links.get(OWNER_CENTROID, {})
     bbox_category_map = category_links.get(OWNER_BBOX, {})
     roi_category_map = category_links.get(OWNER_ROI, {})
     for inst_id, (category_idx, category_score) in instance_category_map.items():
-        if 0 <= inst_id < len(instances) and 0 <= category_idx < len(categories):
+        if (
+            0 <= inst_id < len(instances)
+            and instances[inst_id] is not None
+            and 0 <= category_idx < len(categories)
+        ):
             instances[inst_id].category = categories[category_idx]
             instances[inst_id].category_score = category_score
 
@@ -9193,8 +9947,9 @@ def _read_labels_from_open_file(
     # /embeddings group -> empty mappings and a no-op. Mask/centroid/bbox/ROI
     # embeddings are attached after their respective read_* calls.
     embeddings_by_owner = read_embeddings(labels_path, _hdf5_file=f)
+    _remap_instance_owners(tables.instance_id_map, [embeddings_by_owner], [])
     for inst_id, emb in embeddings_by_owner.get(OWNER_INSTANCE, {}).items():
-        if 0 <= inst_id < len(instances):
+        if 0 <= inst_id < len(instances) and instances[inst_id] is not None:
             instances[inst_id].identity_embedding = emb
     mask_embedding_map = embeddings_by_owner.get(OWNER_MASK, {})
     centroid_embedding_map = embeddings_by_owner.get(OWNER_CENTROID, {})
@@ -9204,8 +9959,9 @@ def _read_labels_from_open_file(
     # Attach category embeddings (SLP format 2.7+): parallel category_* datasets in
     # /embeddings. Absent -> empty mappings and a no-op.
     category_embeddings_by_owner = read_category_embeddings(labels_path, _hdf5_file=f)
+    _remap_instance_owners(tables.instance_id_map, [category_embeddings_by_owner], [])
     for inst_id, emb in category_embeddings_by_owner.get(OWNER_INSTANCE, {}).items():
-        if 0 <= inst_id < len(instances):
+        if 0 <= inst_id < len(instances) and instances[inst_id] is not None:
             instances[inst_id].category_embedding = emb
     mask_category_embedding_map = category_embeddings_by_owner.get(OWNER_MASK, {})
     centroid_category_embedding_map = category_embeddings_by_owner.get(
@@ -9287,6 +10043,22 @@ def _read_labels_from_open_file(
         _url_headers=_url_headers,
         _url_stream_mode=_url_stream_mode,
         _url_bytes=_url_bytes,
+    )
+    _remap_instance_owners(
+        tables.instance_id_map,
+        [],
+        [
+            ann
+            for tuples in (
+                roi_tuples,
+                mask_tuples,
+                bbox_tuples,
+                centroid_tuples,
+                li_tuples,
+            )
+            for ann, _, _ in tuples
+        ],
+        instances,
     )
 
     # Attach annotations to their corresponding LabeledFrames
@@ -9370,7 +10142,7 @@ def _read_labels_from_open_file(
     # Store the HDF5 file handle for lazy label image data (keeps it alive)
     if _li_file is not None:
         labels._label_image_file = _li_file
-    labels._point_columns = point_columns
+    labels._carried_columns = carried_columns
 
     return labels
 
@@ -9616,7 +10388,7 @@ def _write_labels_lazy(
             group while still writing identity links. Set `True` to also write the
             attached re-ID appearance embeddings. See `write_labels`.
         legacy_format: If `True`, write the 2.x layout. See `write_labels`.
-        compression: Compression for the point tables. See `write_labels`.
+        compression: Compression for the pose tables. See `write_labels`.
         unlabeled_as: How the legacy layout handles unlabeled points. See
             `write_labels`.
 
@@ -9635,11 +10407,24 @@ def _write_labels_lazy(
             for rows in (lazy_store.points_data, lazy_store.pred_points_data)
         )
         _refuse_unlabeled_points(n_unlabeled, unlabeled_as)
-        carry = _point_column_carry(
-            lazy_store.points_data, lazy_store.pred_points_data, []
+        unknown = {
+            name: _unknown_columns(rows, base)
+            for name, rows, base in (
+                ("points", lazy_store.points_data, RAW_POINT_DTYPE),
+                ("pred_points", lazy_store.pred_points_data, RAW_PRED_POINT_DTYPE),
+                ("instances", lazy_store.instances_data, RAW_INSTANCE_DTYPE),
+                ("frames", lazy_store.frames_data, RAW_FRAME_DTYPE),
+            )
+        }
+        _warn_dropped_columns(
+            [n for n, cols in unknown.items() if cols], unknown, "legacy"
         )
-        if carry is not None:
-            _warn_dropped_point_columns(carry, carry.tables, "legacy")
+        if lazy_store.instance_metadata or lazy_store.frame_metadata:
+            warnings.warn(
+                "Instance and frame metadata can't be stored in the legacy SLP "
+                "layout and was not saved.",
+                stacklevel=3,
+            )
 
     # Capture unknown top-level members from the source file before it is
     # truncated, to carry them across the load/save cycle (see write_labels).
@@ -9801,33 +10586,21 @@ def _write_labels_lazy(
         write_sessions(labels_path, labels.sessions, labels.videos, [])
     write_metadata(labels_path, labels, legacy_format=legacy_format)
 
-    # Write raw arrays directly from lazy store (fast path). The point tables are
-    # in the same row order as loaded, so unknown columns are carried through.
+    # Write raw arrays directly from lazy store (fast path). The tables are in the
+    # same row order as loaded, so unknown columns and metadata are carried through.
     with h5py.File(labels_path, "a") as f:
-        _write_point_tables(
+        _write_pose_tables(
             f,
             lazy_store.points_data,
             lazy_store.pred_points_data,
+            lazy_store.instances_data,
+            lazy_store.frames_data,
+            videos=labels.videos,
+            instance_metadata=lazy_store.instance_metadata,
+            frame_metadata=lazy_store.frame_metadata,
             legacy_format=legacy_format,
             compression=compression,
         )
-        f.create_dataset(
-            "instances",
-            data=lazy_store.instances_data,
-            dtype=lazy_store.instances_data.dtype,
-        )
-        f.create_dataset(
-            "frames",
-            data=lazy_store.frames_data,
-            dtype=lazy_store.frames_data.dtype,
-        )
-
-    # Write negative frames directly from lazy store data
-    if lazy_store._negative_frames:
-        neg_dtype = np.dtype([("video_id", "u4"), ("frame_idx", "u8")])
-        neg_data = np.array(sorted(lazy_store._negative_frames), dtype=neg_dtype)
-        with h5py.File(labels_path, "a") as f:
-            f.create_dataset("negative_frames", data=neg_data)
 
     # Write annotations from lazy store (per-frame dicts + undistributed)
     # Build annotation lists with routing contexts from the lazy store keys
@@ -9973,27 +10746,31 @@ def write_labels(
             default) raises a `ValueError` before anything is written. `"absent"`
             saves them as hidden points (labeled, not visible, no location) and
             warns. Ignored for the default (3.0) layout, which stores them.
-        legacy_format: If `True`, write the SLP 2.x layout (compound `/points` and
-            `/pred_points` datasets and the 2.x `format_id`) that older sleap-io and
-            SLEAP releases can read. Default `False` writes SLP format 3.0.
-        compression: Compression for the point tables (`/points` and
-            `/pred_points`): `None` (the default) for contiguous, uncompressed data
+        legacy_format: If `True`, write the SLP 2.x layout (compound `/points`,
+            `/pred_points`, `/instances` and `/frames` datasets, `/negative_frames`
+            and the 2.x `format_id`) that older sleap-io and SLEAP releases can
+            read. Default `False` writes SLP format 3.0.
+        compression: Compression for the pose tables (`/points`, `/pred_points`,
+            `/instances`, `/frames` and their metadata columns): `None` (the
+            default) for contiguous, uncompressed data
             that reads fastest, or `"gzip"` or `"lzf"` (chunked, with the shuffle
             filter) for smaller files. Datasets that are compressed by default
             (segmentation, label image and 3D point data) stay compressed either
             way.
 
     Notes:
-        Instance, frame and bounding box `metadata` can't be stored yet; it is
-        dropped with a warning. Metadata kinds are still checked first
-        (`Labels.check_metadata`), so a key that mixes kinds across records raises
-        a `TypeError` before anything is written.
+        Instance and frame `metadata` is stored as columns of `/instances` and
+        `/frames` (lazy labels write the columns they were loaded with). Bounding
+        box metadata can't be stored yet, and `legacy_format=True` stores no
+        metadata; either is dropped with a warning. Metadata kinds are checked
+        first (`Labels.check_metadata`) for eager labels, so a key that mixes kinds
+        across records raises a `TypeError` before anything is written.
 
-        Unknown point columns read from a file written by a newer sleap-io are
-        carried through the save as long as the point tables' rows are in their
-        loaded order: always for lazy labels, and for eager labels whose instances
-        (and their points arrays) are the ones loaded. Otherwise they are dropped
-        with a warning.
+        Unknown pose table columns read from a file written by a newer sleap-io are
+        carried through the save as long as their table's rows are in their loaded
+        order: always for lazy labels, and for eager labels whose instances (with
+        their points arrays) and frames are the ones loaded. Otherwise they are
+        dropped with a warning.
     """
     if unlabeled_as not in _UNLABELED_AS_MODES:
         raise ValueError(
@@ -10043,7 +10820,7 @@ def write_labels(
     # Check before touching the output file so a refused save leaves it intact.
     if legacy_format:
         _check_unlabeled_points(labels, unlabeled_as)
-    _check_dropped_metadata(labels)
+    _check_dropped_metadata(labels, legacy_format=legacy_format)
 
     # Capture unknown top-level members from the source file before it is
     # truncated, so additions made by a newer sleap-io version survive a
@@ -10158,7 +10935,6 @@ def write_labels(
     )
     write_metadata(labels_path, labels, legacy_format=legacy_format)
     write_lfs(labels_path, labels, legacy_format=legacy_format, compression=compression)
-    write_negative_frames(labels_path, labels)
 
     # Collect all instances and build annotation lists with routing contexts
     all_instances: list[Instance | PredictedInstance] = []

@@ -236,9 +236,9 @@ class Labels:
         default=None, repr=False, eq=False, init=False, hash=False
     )
 
-    # Unknown point columns read from a newer SLP file, carried through a re-save
-    # while the instances are unchanged (see `sleap_io.io.slp._PointColumnCarry`).
-    _point_columns: "Any" = field(
+    # Unknown pose table columns read from a newer SLP file, carried through a re-save
+    # while the instances and frames are unchanged (see `sleap_io.io.slp._ColumnCarry`).
+    _carried_columns: "Any" = field(
         default=None, init=False, repr=False, eq=False, hash=False
     )
 
@@ -536,7 +536,7 @@ class Labels:
             provenance=dict(self.provenance),
             rois=static_rois,
         )
-        materialized_labels._point_columns = self._lazy_store.point_column_carry(
+        materialized_labels._carried_columns = self._lazy_store.column_carry(
             materialized
         )
         return materialized_labels
@@ -1932,7 +1932,7 @@ class Labels:
                 stay in memory). Note this is distinct from `embed`, which embeds
                 *video frames*. SLP also takes `legacy_format=True` to write the 2.x
                 layout that older sleap-io and SLEAP releases read, and
-                `compression="gzip"` or `"lzf"` to compress the point tables (see
+                `compression="gzip"` or `"lzf"` to compress the pose tables (see
                 `save_slp`).
         """
         from pathlib import Path
@@ -3258,9 +3258,9 @@ class Labels:
         labels.provenance = deepcopy(labels.provenance)
         labels.provenance["source_labels"] = self.provenance.get("filename", None)
 
-        # Unknown point columns can't follow a subset of the rows, so saving the
-        # extracted labels drops them with a warning instead of silently.
-        labels._point_columns = self._point_columns
+        # Unknown pose table columns can't follow a subset of the rows, so saving
+        # the extracted labels drops them with a warning instead of silently.
+        labels._carried_columns = self._carried_columns
 
         return labels
 

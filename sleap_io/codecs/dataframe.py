@@ -1277,10 +1277,9 @@ def _to_points_df_lazy(
         return _create_dataframe_from_rows([], backend)
     node_names = skeleton.node_names
 
-    # Build frame_id -> (video, frame_idx) mapping
+    # Build frame_id (the frame row) -> (video, frame_idx) mapping
     frame_lookup = {}
-    for frame_row in store.frames_data:
-        frame_id = int(frame_row["frame_id"])
+    for frame_id, frame_row in enumerate(store.frames_data):
         vid_id = int(frame_row["video"])
         frame_idx = int(frame_row["frame_idx"])
         frame_lookup[frame_id] = (vid_id, frame_idx)
@@ -1315,6 +1314,8 @@ def _to_points_df_lazy(
 
         # Get tracking score
         tracking_score = float(inst_row["tracking_score"]) if is_predicted else None
+        if tracking_score is not None and np.isnan(tracking_score):
+            tracking_score = None
 
         # Get points
         point_start = int(inst_row["point_id_start"])
@@ -1397,10 +1398,9 @@ def _to_instances_df_lazy(
         return _create_dataframe_from_rows([], backend)
     node_names = skeleton.node_names
 
-    # Build frame_id -> (video, frame_idx) mapping
+    # Build frame_id (the frame row) -> (video, frame_idx) mapping
     frame_lookup = {}
-    for frame_row in store.frames_data:
-        frame_id = int(frame_row["frame_id"])
+    for frame_id, frame_row in enumerate(store.frames_data):
         vid_id = int(frame_row["video"])
         frame_idx = int(frame_row["frame_idx"])
         frame_lookup[frame_id] = (vid_id, frame_idx)
@@ -1435,6 +1435,8 @@ def _to_instances_df_lazy(
 
         # Get tracking score
         tracking_score = float(inst_row["tracking_score"]) if is_predicted else None
+        if tracking_score is not None and np.isnan(tracking_score):
+            tracking_score = None
 
         # Build row
         row: dict = {"frame_idx": frame_idx}

@@ -23,13 +23,25 @@ if TYPE_CHECKING:
     from sleap_io.model.video import Video
 
 from sleap_io.io.slp import (
+    RAW_FRAME_DTYPE,
+    RAW_INSTANCE_DTYPE,
     RAW_POINT_DTYPE,
     RAW_PRED_POINT_DTYPE,
     InstanceType,
-    _point_column_carry,
-    _PointColumnCarry,
+    _column_carry,
+    _ColumnCarry,
+    _metadata_record,
+    _point_row_owners,
 )
 from sleap_io.model.instance import PointState, compute_point_states
+
+
+def _copy_metadata_columns(columns: dict) -> dict:
+    """Copy metadata columns (see `LazyDataStore.instance_metadata`)."""
+    return {
+        key: (values.copy(), None if present is None else present.copy())
+        for key, (values, present) in columns.items()
+    }
 
 
 @attrs.define
@@ -37,12 +49,15 @@ class LazyDataStore:
     """Holds raw HDF5 data and provides lazy access methods.
 
     Attributes:
-        frames_data: Structured array from /frames HDF5 dataset.
-            Fields: frame_id, video_id, frame_idx, instance_id_start, instance_id_end.
-        instances_data: Structured array from /instances HDF5 dataset.
-            Fields vary by format_id but include: instance_id, instance_type, frame_id,
-            skeleton_id, track_id, from_predicted, instance_score, point_id_start,
-            point_id_end, and optionally tracking_score.
+        frames_data: Normalised frame records (see
+            `sleap_io.io.slp._normalize_frames`). Fields: frame_id (the row),
+            video (the index into `videos`), frame_idx, instance_id_start,
+            instance_id_end, is_negative, then any unknown columns.
+        instances_data: Normalised instance records (see
+            `sleap_io.io.slp._normalize_instances`). Fields: instance_id (the row),
+            instance_type, frame_id, skeleton, track, from_predicted, score,
+            point_id_start, point_id_end, tracking_score (NaN for `None`), then any
+            unknown columns.
         pred_points_data: Normalised predicted point records (see
             `sleap_io.io.slp.read_pred_points`). Fields: x, y, visible, verified,
             labeled, score, then any unknown columns. Coordinates are already in the
@@ -54,6 +69,9 @@ class LazyDataStore:
         skeletons: List of eagerly loaded Skeleton objects.
         tracks: List of eagerly loaded Track objects.
         format_id: SLP format version.
+        instance_metadata: Metadata columns of `/instances`, by key (see
+            `sleap_io.io.slp._read_metadata_columns`).
+        frame_metadata: Metadata columns of `/frames`, by key.
         _source_path: Path to source SLP file (for debugging).
     """
 
@@ -71,9 +89,11 @@ class LazyDataStore:
     # Metadata
     format_id: float
     _source_path: str | None = attrs.field(default=None, alias="source_path")
-    _negative_frames: set[tuple[int, int]] = attrs.field(
-        factory=set, alias="negative_frames"
-    )
+
+    # Per-record metadata columns, held beside the fixed raw layouts so a lazy save
+    # keeps them: key -> (values, present or None).
+    instance_metadata: dict = attrs.field(factory=dict, repr=False)
+    frame_metadata: dict = attrs.field(factory=dict, repr=False)
 
     # Per-frame annotation lookups: (video_idx, frame_idx) -> list[annotation]
     # These are eagerly loaded from HDF5 but attached to frames lazily.
@@ -220,7 +240,8 @@ class LazyDataStore:
             instance_category_embeddings=dict(self._instance_category_embeddings),
             format_id=self.format_id,
             source_path=self._source_path,
-            negative_frames=self._negative_frames.copy(),
+            instance_metadata=_copy_metadata_columns(self.instance_metadata),
+            frame_metadata=_copy_metadata_columns(self.frame_metadata),
             centroid_by_frame={
                 k: [deepcopy(c) for c in v] for k, v in self._centroid_by_frame.items()
             },
@@ -266,17 +287,24 @@ class LazyDataStore:
         from sleap_io.model.labeled_frame import LabeledFrame
 
         frame_row = self.frames_data[idx]
-        video_id = int(frame_row[1])  # video_id
-        frame_idx = int(frame_row[2])  # frame_idx
-        inst_start = int(frame_row[3])  # instance_id_start
-        inst_end = int(frame_row[4])  # instance_id_end
+        video_id = int(frame_row["video"])
+        frame_idx = int(frame_row["frame_idx"])
+        inst_start = int(frame_row["instance_id_start"])
+        inst_end = int(frame_row["instance_id_end"])
 
         instances = []
         for inst_idx in range(inst_start, inst_end):
             inst = self._materialize_instance(inst_idx)
             instances.append(inst)
+        # Link user instances to the predictions in this frame they came from.
+        for inst, source in zip(
+            instances,
+            self.instances_data["from_predicted"][inst_start:inst_end].tolist(),
+        ):
+            if inst_start <= source < inst_end:
+                inst.from_predicted = instances[source - inst_start]
 
-        is_negative = (video_id, frame_idx) in self._negative_frames
+        is_negative = bool(frame_row["is_negative"])
 
         # Attach per-frame annotations from eagerly-loaded dicts
         key = (video_id, frame_idx)
@@ -296,6 +324,11 @@ class LazyDataStore:
             masks=masks,
             label_images=label_images,
             rois=rois,
+            metadata=(
+                _metadata_record(self.frame_metadata, idx)
+                if self.frame_metadata
+                else None
+            ),
         )
 
     def _materialize_instance(self, idx: int) -> "Instance | PredictedInstance":
@@ -311,19 +344,20 @@ class LazyDataStore:
 
         inst_row = self.instances_data[idx]
 
-        # Cast index values to int for h5wasm compatibility (float64 columns).
-        instance_id = int(inst_row["instance_id"])
+        instance_id = idx
         instance_type = int(inst_row["instance_type"])
         skeleton_id = int(inst_row["skeleton"])
         track_id = int(inst_row["track"])
-        instance_score = inst_row["score"]
+        instance_score = float(inst_row["score"])
         point_id_start = int(inst_row["point_id_start"])
         point_id_end = int(inst_row["point_id_end"])
-        # Files older than 1.2 have no tracking_score column.
-        tracking_score = (
-            inst_row["tracking_score"]
-            if "tracking_score" in self.instances_data.dtype.names
-            else 0.0
+        tracking_score = float(inst_row["tracking_score"])
+        if np.isnan(tracking_score):
+            tracking_score = None
+        metadata = (
+            _metadata_record(self.instance_metadata, idx)
+            if self.instance_metadata
+            else None
         )
 
         skeleton = self.skeletons[skeleton_id]
@@ -368,13 +402,14 @@ class LazyDataStore:
                 points=points_array,
                 skeleton=skeleton,
                 track=track,
-                tracking_score=float(tracking_score),
+                tracking_score=tracking_score,
                 identity=identity,
                 identity_score=identity_score,
                 identity_embedding=identity_embedding,
                 category=category,
                 category_score=category_score,
                 category_embedding=category_embedding,
+                metadata=metadata,
             )
         else:  # PREDICTED
             pts_data = self.pred_points_data[point_id_start:point_id_end]
@@ -383,14 +418,15 @@ class LazyDataStore:
                 points=points_array,
                 skeleton=skeleton,
                 track=track,
-                score=float(instance_score),
-                tracking_score=float(tracking_score),
+                score=instance_score,
+                tracking_score=tracking_score,
                 identity=identity,
                 identity_score=identity_score,
                 identity_embedding=identity_embedding,
                 category=category,
                 category_score=category_score,
                 category_embedding=category_embedding,
+                metadata=metadata,
             )
 
     def _make_points_array(
@@ -442,39 +478,93 @@ class LazyDataStore:
         points["name"] = skeleton.node_names
         return points
 
-    def point_column_carry(
-        self, frames: list["LabeledFrame"]
-    ) -> "_PointColumnCarry | None":
-        """Collect unknown point columns to carry through a save of materialized frames.
+    def _instances_by_row(self, frames: list["LabeledFrame"]) -> list:
+        """Return the instances of materialized frames by `instances_data` row.
 
         Args:
             frames: The frames returned by `materialize_all`, one per row of
                 `frames_data`.
 
         Returns:
-            A `_PointColumnCarry` for the frames' instances, or `None` if the point
-            tables have no unknown columns.
+            One entry per row of `instances_data`: the instance materialized for it,
+            or `None` if no frame's range holds the row.
         """
-        if len(self.points_data.dtype.names) == len(RAW_POINT_DTYPE.names) and len(
-            self.pred_points_data.dtype.names
-        ) == len(RAW_PRED_POINT_DTYPE.names):
+        by_row: list = [None] * len(self.instances_data)
+        starts = self.frames_data["instance_id_start"].tolist()
+        for start, lf in zip(starts, frames):
+            by_row[start : start + len(lf.instances)] = lf.instances
+        return by_row
+
+    def column_carry(self, frames: list["LabeledFrame"]) -> "_ColumnCarry | None":
+        """Collect unknown columns to carry through a save of materialized frames.
+
+        Args:
+            frames: The frames returned by `materialize_all`, one per row of
+                `frames_data`.
+
+        Returns:
+            A `_ColumnCarry` for the frames and their instances, or `None` if the
+            pose tables have no unknown columns.
+        """
+        if (
+            self.points_data.dtype.names == RAW_POINT_DTYPE.names
+            and self.pred_points_data.dtype.names == RAW_PRED_POINT_DTYPE.names
+            and self.instances_data.dtype.names == RAW_INSTANCE_DTYPE.names
+            and self.frames_data.dtype.names == RAW_FRAME_DTYPE.names
+        ):
             return None
-        owners = []
-        for frame_row, lf in zip(self.frames_data, frames):
-            first = int(frame_row["instance_id_start"])
-            for offset, inst in enumerate(lf.instances):
-                inst_row = self.instances_data[first + offset]
-                start = int(inst_row["point_id_start"])
-                owners.append((start, int(inst_row["point_id_end"]), inst))
-        return _point_column_carry(self.points_data, self.pred_points_data, owners)
+        by_row = self._instances_by_row(frames)
+
+        def point_owners() -> list:
+            # Rows that no frame holds (`None`) own no points.
+            return list(
+                zip(
+                    self.instances_data["point_id_start"].tolist(),
+                    self.instances_data["point_id_end"].tolist(),
+                    by_row,
+                )
+            )
+
+        from sleap_io.model.instance import Instance, PredictedInstance
+
+        return _column_carry(
+            {
+                "points": (
+                    self.points_data,
+                    RAW_POINT_DTYPE,
+                    lambda: _point_row_owners(
+                        point_owners(), Instance, len(self.points_data)
+                    ),
+                ),
+                "pred_points": (
+                    self.pred_points_data,
+                    RAW_PRED_POINT_DTYPE,
+                    lambda: _point_row_owners(
+                        point_owners(), PredictedInstance, len(self.pred_points_data)
+                    ),
+                ),
+                "instances": (
+                    self.instances_data,
+                    RAW_INSTANCE_DTYPE,
+                    lambda: None if any(i is None for i in by_row) else by_row,
+                ),
+                "frames": (self.frames_data, RAW_FRAME_DTYPE, lambda: list(frames)),
+            }
+        )
 
     def materialize_all(self) -> list["LabeledFrame"]:
         """Materialize all frames.
 
         Returns:
-            List of all LabeledFrame objects.
+            List of all LabeledFrame objects, with `from_predicted` links resolved
+            across frames.
         """
-        return [self.materialize_frame(i) for i in range(len(self))]
+        frames = [self.materialize_frame(i) for i in range(len(self))]
+        by_row = self._instances_by_row(frames)
+        for inst, source in zip(by_row, self.instances_data["from_predicted"].tolist()):
+            if inst is not None and 0 <= source < len(by_row):
+                inst.from_predicted = by_row[source]
+        return frames
 
     def get_user_frame_indices(self) -> list[int]:
         """Find indices of frames containing user (non-predicted) instances.
@@ -513,13 +603,7 @@ class LazyDataStore:
             result_indices.update(unique_frames[valid_mask].tolist())
 
         # Also include negative frames
-        if self._negative_frames:
-            for idx in range(len(self.frames_data)):
-                frame_row = self.frames_data[idx]
-                video_id = int(frame_row[1])
-                frame_idx = int(frame_row[2])
-                if (video_id, frame_idx) in self._negative_frames:
-                    result_indices.add(idx)
+        result_indices.update(np.flatnonzero(self.frames_data["is_negative"]).tolist())
 
         return sorted(result_indices)
 

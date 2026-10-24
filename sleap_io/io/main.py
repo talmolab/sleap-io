@@ -237,10 +237,10 @@ def save_slp(
         legacy_format: If `True`, write the SLP 2.x layout that older sleap-io
             (< 0.10) and SLEAP releases can read. Default `False` writes SLP format
             3.0, which they refuse to open.
-        compression: Compression for the point tables: `None` (the default) for
-            uncompressed data that reads fastest, or `"gzip"` or `"lzf"` for
-            smaller files. Segmentation, label image and 3D point data are
-            compressed regardless.
+        compression: Compression for the pose tables (points, instances and
+            frames): `None` (the default) for uncompressed data that reads
+            fastest, or `"gzip"` or `"lzf"` for smaller files. Segmentation, label
+            image and 3D point data are compressed regardless.
     """
     from sleap_io.io import slp
 

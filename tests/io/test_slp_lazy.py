@@ -7,6 +7,8 @@ import pytest
 import sleap_io as sio
 from sleap_io import Instance, PredictedInstance, Skeleton, Track, Video
 from sleap_io.io.slp import (
+    RAW_FRAME_DTYPE,
+    RAW_INSTANCE_DTYPE,
     RAW_POINT_DTYPE,
     RAW_PRED_POINT_DTYPE,
     InstanceType,
@@ -40,35 +42,12 @@ class TestLazyDataStoreValidation:
             skeleton = Skeleton(name="test", nodes=["a", "b"])
 
         # Create frames_data
-        frames_dtype = np.dtype(
-            [
-                ("frame_id", "<i8"),
-                ("video", "<i8"),
-                ("frame_idx", "<u8"),
-                ("instance_id_start", "<u8"),
-                ("instance_id_end", "<u8"),
-            ]
-        )
-        frames_data = np.zeros(n_frames, dtype=frames_dtype)
+        frames_data = np.zeros(n_frames, dtype=RAW_FRAME_DTYPE)
         if n_frames > 0:
-            frames_data[0] = (0, 0, 0, frame_inst_start, frame_inst_end)
+            frames_data[0] = (0, 0, 0, frame_inst_start, frame_inst_end, False)
 
         # Create instances_data
-        instances_dtype = np.dtype(
-            [
-                ("instance_id", "<i8"),
-                ("instance_type", "<u1"),
-                ("frame_id", "<i8"),
-                ("skeleton", "<i4"),
-                ("track", "<i4"),
-                ("from_predicted", "<i8"),
-                ("instance_score", "<f8"),
-                ("point_id_start", "<u8"),
-                ("point_id_end", "<u8"),
-                ("tracking_score", "<f8"),
-            ]
-        )
-        instances_data = np.zeros(n_instances, dtype=instances_dtype)
+        instances_data = np.zeros(n_instances, dtype=RAW_INSTANCE_DTYPE)
         if n_instances > 0:
             instances_data[0] = (
                 0,
