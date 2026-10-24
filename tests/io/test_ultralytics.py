@@ -303,13 +303,21 @@ def test_write_label_file(tmp_path, ultralytics_skeleton):
 
 def test_normalize_coordinates():
     """Test coordinate normalization."""
-    skeleton = Skeleton([Node("node1"), Node("node2")])
-    points_array = np.array([[100, 200, True], [0, 0, False]], dtype=np.float32)
+    skeleton = Skeleton([Node("node1"), Node("node2"), Node("node3")])
+    points_array = np.array(
+        [[100, 200, True], [np.nan, np.nan, False], [400, 100, False]],
+        dtype=np.float32,
+    )
     instance = Instance.from_numpy(points_data=points_array, skeleton=skeleton)
     normalized = normalize_coordinates(instance, (400, 800))
 
     assert normalized[0] == (0.125, 0.5, 2)  # 100/800, 200/400, visible
-    assert normalized[1] == (0.0, 0.0, 0)  # not visible
+    assert normalized[1] == (0.0, 0.0, 0)  # no location
+    assert normalized[2] == (0.5, 0.25, 1)  # occluded with an estimate
+
+    binary = normalize_coordinates(instance, (400, 800), visibility_encoding="binary")
+    assert [v for _, _, v in binary] == [1, 0, 0]
+    assert binary[2] == (0.0, 0.0, 0)
 
 
 def test_denormalize_coordinates():
@@ -324,6 +332,13 @@ def test_denormalize_coordinates():
     assert np.isnan(points_array[1, 0])
     assert np.isnan(points_array[1, 1])
     assert points_array[1, 2] == 0.0  # False converted to float
+    assert points_array[1, 4] == 0.0  # v=0 is unlabeled
+
+    points_array = denormalize_coordinates(
+        [(0.5, 0.25, 1), (0.0, 0.0, 0)], (400, 800), v0_as="absent"
+    )
+    np.testing.assert_array_equal(points_array[0], [400, 100, 0, 1, 1])
+    np.testing.assert_array_equal(points_array[1, 2:], [0, 1, 1])
 
 
 def test_load_file_integration(ultralytics_dataset):
@@ -1680,3 +1695,218 @@ def test_write_bbox_label_file_predicted_score(tmp_path):
 
     assert isinstance(bboxes_read[1], UserBoundingBox)
     assert bboxes_read[1].category.name == "dog"
+
+
+# ---------------------------------------------------------------------------
+# Visibility flags (SLP 3.0)
+# ---------------------------------------------------------------------------
+
+
+def _write_pose_dataset(root: Path, lines: dict[str, list[str]]) -> Path:
+    """Write a small Ultralytics pose dataset with one 40x50 image per label file."""
+    (root / "train" / "images").mkdir(parents=True)
+    (root / "train" / "labels").mkdir(parents=True)
+    config = {
+        "path": str(root),
+        "train": "train/images",
+        "kpt_shape": [3, 3],
+        "node_names": ["a", "b", "c"],
+        "skeleton": [[0, 1], [1, 2]],
+        "names": {0: "animal"},
+    }
+    (root / "data.yaml").write_text(yaml.safe_dump(config))
+    for stem, file_lines in lines.items():
+        iio.imwrite(
+            root / "train" / "images" / f"{stem}.png",
+            np.zeros((40, 50, 3), dtype=np.uint8),
+        )
+        (root / "train" / "labels" / f"{stem}.txt").write_text("\n".join(file_lines))
+    return root
+
+
+def test_read_ternary_visibility(tmp_path):
+    """v=0/1/2/-1 read as unlabeled/occluded/visible/unlabeled."""
+    root = _write_pose_dataset(
+        tmp_path,
+        {
+            "img": ["0 0.5 0.5 0.4 0.4 0.2 0.5 0 0.4 0.5 1 0.6 0.5 2"],
+            "neg": ["0 0.5 0.5 0.4 0.4 0.2 0.5 -1 0.4 0.5 2 0.6 0.5 2"],
+        },
+    )
+    labels = read_labels(str(root), split="train")
+
+    inst = labels[0].instances[0]
+    assert inst.point_states.tolist() == [0, 1, 2]
+    np.testing.assert_allclose(inst.points["xy"][1], [20.0, 20.0])
+    np.testing.assert_array_equal(inst.points["verified"], [False, True, True])
+    assert labels[1].instances[0].point_states.tolist() == [0, 2, 2]
+
+    labels = read_labels(str(root), split="train", v0_as="absent")
+    assert labels[0].instances[0].point_states.tolist() == [3, 1, 2]
+
+
+def test_read_binary_visibility_auto_warns(tmp_path):
+    """A split with v=1 and no v=2 reads as binary, with a warning."""
+    root = _write_pose_dataset(
+        tmp_path,
+        {
+            "img": [
+                "# a comment",
+                "0 0.5 0.5 0.4 0.4",
+                "0 0.5 0.5 0.4 0.4 0.2 0.5 1 0.4 0.5 0 0.6 0.5 1",
+            ]
+        },
+    )
+    with pytest.warns(UserWarning, match="read as binary"):
+        labels = read_labels(str(root), split="train")
+    assert labels[0].instances[0].point_states.tolist() == [2, 0, 2]
+
+    labels = read_labels(str(root), split="train", visibility_encoding="ternary")
+    assert labels[0].instances[0].point_states.tolist() == [1, 0, 1]
+
+
+def test_read_visibility_auto_skips_unparsable_lines(tmp_path):
+    """Pose lines that don't parse are skipped by the scan and by the parser."""
+    root = _write_pose_dataset(
+        tmp_path,
+        {
+            "img": [
+                "0 0.5 0.5 0.4 0.4 0.2 0.5 x 0.4 0.5 1 0.6 0.5 1",
+                "0 0.5 0.5 0.4 0.4 0.2 0.5 2 0.4 0.5 1 0.6 0.5 2",
+            ]
+        },
+    )
+    with pytest.warns(UserWarning, match="Error parsing line 0"):
+        labels = read_labels(str(root), split="train")
+    assert len(labels[0].instances) == 1
+    assert labels[0].instances[0].point_states.tolist() == [2, 1, 2]
+
+
+def test_read_visibility_options_rejected(tmp_path):
+    """Unknown visibility options raise before anything is read."""
+    with pytest.raises(ValueError, match="visibility_encoding must be one of"):
+        read_labels(str(tmp_path), visibility_encoding="quaternary")
+
+
+def test_write_occluded_points(tmp_path):
+    """Occluded estimates are written as v=1, and all-occluded instances kept."""
+    skeleton = Skeleton(["a", "b", "c"])
+    partly = Instance.from_numpy(
+        np.array([[10.0, 10.0], [20.0, 20.0], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        visible=[True, False, False],
+    )
+    occluded = Instance.from_numpy(
+        np.array([[25.0, 30.0], [35.0, 30.0], [30.0, 30.0]]),
+        skeleton=skeleton,
+        visible=False,
+    )
+    unlabeled = Instance.from_numpy(
+        np.full((3, 2), np.nan), skeleton=skeleton, labeled=False
+    )
+    frame = LabeledFrame(
+        video=Video("fake.mp4"), frame_idx=0, instances=[partly, occluded, unlabeled]
+    )
+
+    label_file = tmp_path / "frame.txt"
+    write_label_file(label_file, frame, skeleton, (40, 50))
+    lines = label_file.read_text().splitlines()
+    assert len(lines) == 2
+    assert lines[0].split()[5:] == [
+        "0.200000",
+        "0.250000",
+        "2",
+        "0.400000",
+        "0.500000",
+        "1",
+        "0.000000",
+        "0.000000",
+        "0",
+    ]
+    assert lines[1].split()[7::3] == ["1", "1", "1"]
+
+    write_label_file(
+        label_file, frame, skeleton, (40, 50), visibility_encoding="binary"
+    )
+    lines = label_file.read_text().splitlines()
+    assert lines[0].split()[7::3] == ["1", "0", "0"]
+    assert lines[1].split()[7::3] == ["0", "0", "0"]
+
+
+def test_ternary_write_read_round_trip(tmp_path):
+    """Occluded estimates survive a save and load through Ultralytics."""
+    skeleton = Skeleton(["a", "b", "c"])
+    image_path = tmp_path / "frame.png"
+    iio.imwrite(image_path, np.zeros((40, 50, 3), dtype=np.uint8))
+    inst = Instance.from_numpy(
+        np.array([[10.0, 10.0], [20.0, 20.0], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        visible=[True, False, False],
+        labeled=[True, True, False],
+    )
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=Video.from_filename(str(image_path)),
+                frame_idx=0,
+                instances=[inst],
+            )
+        ]
+    )
+
+    out = tmp_path / "yolo"
+    write_labels(labels, str(out), split_ratios={"train": 1.0}, verbose=False)
+    reread = read_labels(str(out), split="train", skeleton=skeleton)
+
+    reread_inst = reread[0].instances[0]
+    assert reread_inst.point_states.tolist() == inst.point_states.tolist()
+    np.testing.assert_allclose(reread_inst.points["xy"][:2], inst.points["xy"][:2])
+
+
+def test_binary_write_read_round_trip(tmp_path):
+    """A binary save reads back as binary, keeping the visible points."""
+    skeleton = Skeleton(["a", "b", "c"])
+    image_path = tmp_path / "frame.png"
+    iio.imwrite(image_path, np.zeros((40, 50, 3), dtype=np.uint8))
+    inst = Instance.from_numpy(
+        np.array([[10.0, 10.0], [np.nan, np.nan], [30.0, 20.0]]), skeleton=skeleton
+    )
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=Video.from_filename(str(image_path)),
+                frame_idx=0,
+                instances=[inst],
+            )
+        ]
+    )
+
+    out = tmp_path / "yolo"
+    save_ultralytics(
+        labels,
+        str(out),
+        split_ratios={"train": 1.0},
+        verbose=False,
+        visibility_encoding="binary",
+    )
+    with pytest.warns(UserWarning, match="read as binary"):
+        reread = load_ultralytics(str(out), split="train", skeleton=skeleton)
+    reread_inst = reread[0].instances[0]
+    np.testing.assert_array_equal(reread_inst.points["visible"], [True, False, True])
+    np.testing.assert_allclose(reread_inst.numpy(), inst.numpy())
+
+
+def test_read_labels_set_visibility_options(tmp_path):
+    """`read_labels_set` and `load_labels_set` forward the visibility options."""
+    root = _write_pose_dataset(
+        tmp_path, {"img": ["0 0.5 0.5 0.4 0.4 0.2 0.5 1 0.4 0.5 0 0.6 0.5 1"]}
+    )
+    labels_set = read_labels_set(
+        str(root), splits=["train"], visibility_encoding="ternary", v0_as="absent"
+    )
+    assert labels_set["train"][0].instances[0].point_states.tolist() == [1, 3, 1]
+
+    labels_set = sleap_io.load_labels_set(
+        str(root), format="ultralytics", visibility_encoding="binary"
+    )
+    assert labels_set["train"][0].instances[0].point_states.tolist() == [2, 0, 2]
