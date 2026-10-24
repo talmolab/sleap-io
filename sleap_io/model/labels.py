@@ -4755,7 +4755,10 @@ class Labels:
             new_node_inds, old_node_inds = mapped_skeleton.match_nodes(
                 source_points["name"]
             )
+            # Nodes the source skeleton lacks are unlabeled, as in
+            # `Instance.replace_skeleton`'s default.
             mapped_points = type(source_points).empty(len(mapped_skeleton))
+            mapped_points["labeled"] = False
             mapped_points[new_node_inds] = source_points[old_node_inds]
             mapped_points["name"] = mapped_skeleton.node_names
 

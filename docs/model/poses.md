@@ -400,11 +400,13 @@ A few rules keep these consistent:
 
 1. **Visible implies labeled.** Helpers read the flag as `labeled | visible`, so a
    visible point always counts as labeled.
-2. **NaN means no location.** Everything that creates points
-   ([`Instance.empty`][sleap_io.Instance.empty], dictionaries with missing nodes,
-   skeleton changes, merging) fills them as labeled, hidden and NaN. If you set
-   `points["visible"] = False` directly, clear `points["xy"]` too unless the
-   coordinates are a real estimate, or use
+2. **NaN means no location.** Factories that create points with no annotation
+   ([`Instance.empty`][sleap_io.Instance.empty], dictionaries with missing nodes)
+   fill them as labeled, hidden and NaN. Nodes that are new or unmapped after a
+   skeleton change ([`replace_skeleton`](#changing-the-skeleton),
+   `update_skeleton`) or a [merge](../merging.md#skeleton-matching) are filled as
+   unlabeled instead. If you set `points["visible"] = False` directly, clear
+   `points["xy"]` too unless the coordinates are a real estimate, or use
    [`set_hidden`][sleap_io.Instance.set_hidden].
 3. **`labeled` defaults to `True`.** You only need to set it to mark nodes as
    unlabeled.
