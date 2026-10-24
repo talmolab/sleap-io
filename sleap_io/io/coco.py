@@ -1297,7 +1297,7 @@ def convert_labels(
                 "num_keypoints": num_keypoints,
                 "bbox": bbox,
                 "area": area,
-                "iscrowd": _stored_iscrowd(instance.metadata, 0),
+                "iscrowd": _stored_iscrowd(instance.metadata),
             }
 
             # Add track ID if present
@@ -1444,7 +1444,7 @@ def convert_labels(
                 "category_id": category_id,
                 "bbox": [float(x), float(y), float(w), float(h)],
                 "area": area,
-                "iscrowd": _stored_iscrowd(bbox_obj.metadata, 0),
+                "iscrowd": _stored_iscrowd(bbox_obj.metadata),
             }
 
             if isinstance(bbox_obj, PredictedBoundingBox):
@@ -1502,20 +1502,16 @@ def _assign_coco_ids(stored_ids: list, kind: str) -> list[int]:
     return ids
 
 
-def _stored_iscrowd(metadata: dict, default: int) -> int:
+def _stored_iscrowd(metadata: dict) -> int:
     """Return the `iscrowd` flag stored in record metadata as 0 or 1.
 
     Args:
         metadata: The record's metadata.
-        default: The value to use when no `iscrowd` is stored.
 
     Returns:
-        1 for a crowd annotation, otherwise 0.
+        1 for a crowd annotation, otherwise 0 (also when no `iscrowd` is stored).
     """
-    iscrowd = metadata.get("iscrowd")
-    if isinstance(iscrowd, (bool, int)):
-        return int(bool(iscrowd))
-    return default
+    return int(bool(metadata.get("iscrowd", 0)))
 
 
 def _full_frame_mask(seg_mask: SegmentationMask) -> SegmentationMask:
