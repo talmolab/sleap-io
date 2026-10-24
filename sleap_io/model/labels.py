@@ -4243,6 +4243,7 @@ class Labels:
                         frame_idx=mapped_frame_idx,
                         instances=[],
                         is_negative=other_frame.is_negative,
+                        metadata=other_frame.metadata.copy(),
                     )
 
                     # Map instances to new skeleton/track
@@ -4676,6 +4677,7 @@ class Labels:
                 category=mapped_category,
                 category_score=instance.category_score,
                 category_embedding=instance.category_embedding,
+                metadata=instance.metadata.copy(),
             )
         else:
             new_instance = Instance(
@@ -4690,6 +4692,7 @@ class Labels:
                 category=mapped_category,
                 category_score=instance.category_score,
                 category_embedding=instance.category_embedding,
+                metadata=instance.metadata.copy(),
             )
         if memo is not None:
             memo[id(instance)] = new_instance

@@ -13,12 +13,18 @@ The class hierarchy:
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import attrs
 import numpy as np
 
 from sleap_io.model.category import to_category
+from sleap_io.model.record_metadata import (
+    RecordMetadata,
+    get_attrs_state,
+    set_attrs_state,
+    to_metadata,
+)
 
 if TYPE_CHECKING:
     from sleap_io.model.category import Category
@@ -65,6 +71,9 @@ class BoundingBox:
             classifier confidence). ``None`` if unassigned or assigned manually.
         category_embedding: Optional `Embedding` describing this detection's
             appearance for classification. ``None`` by default.
+        metadata: A dictionary of per-box values (for example a source annotation
+            id). Values must be ``bool``, ``int``, ``float``, ``str`` or ``None``
+            (missing); see `sleap_io.model.record_metadata`. Empty by default.
 
     Notes:
         Bounding boxes use identity-based equality (two BoundingBox objects are
@@ -90,9 +99,20 @@ class BoundingBox:
     identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
     category_score: float | None = attrs.field(default=None)
     category_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
+    metadata: RecordMetadata = attrs.field(
+        factory=RecordMetadata, converter=to_metadata, repr=False
+    )
 
     # Private: deferred instance index for lazy loading.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return the state for pickling and copying."""
+        return get_attrs_state(self)
+
+    def __setstate__(self, state: dict[str, Any] | tuple) -> None:
+        """Restore the state, defaulting fields missing from older pickles."""
+        set_attrs_state(self, state)
 
     def __attrs_post_init__(self):
         """Validate that this class is not instantiated directly."""
@@ -419,13 +439,14 @@ class BoundingBox:
             category_embedding=self.category_embedding,
             name=self.name,
             source=self.source,
+            metadata=self.metadata.copy(),
         )
         if self.is_predicted:
             return PredictedBoundingBox(score=self.score, **kwargs)
         return UserBoundingBox(**kwargs)
 
 
-@attrs.define(eq=False)
+@attrs.define(eq=False, getstate_setstate=False)
 class UserBoundingBox(BoundingBox):
     """A human-annotated bounding box.
 
@@ -437,7 +458,7 @@ class UserBoundingBox(BoundingBox):
     pass
 
 
-@attrs.define(eq=False)
+@attrs.define(eq=False, getstate_setstate=False)
 class PredictedBoundingBox(BoundingBox):
     """A model-predicted bounding box with a confidence score.
 

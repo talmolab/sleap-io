@@ -9502,3 +9502,38 @@ def test_labels_event_types_dedup_pre_supplied_duplicates():
     assert [et.name for et in labels.event_types] == ["groom"]
     assert labels.event_types[0] is d1
     assert labels.events[0].type is d1
+
+
+def test_map_instance_fills_nan_and_copies_metadata():
+    """Merge remapping fills unplaced nodes with NaN and copies metadata."""
+    labels = Labels()
+    src_skeleton = Skeleton(["A", "B"])
+    dst_skeleton = Skeleton(["B", "C", "A"])
+    for cls in (Instance, PredictedInstance):
+        inst = cls.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=src_skeleton)
+        inst.metadata["ann_id"] = 9
+        mapped = labels._map_instance(inst, {src_skeleton: dst_skeleton}, {})
+        assert type(mapped) is cls
+        assert_equal(mapped.points["xy"][[0, 2]], [[3, 4], [1, 2]])
+        assert np.isnan(mapped.points["xy"][1]).all()
+        assert mapped.points["labeled"].all()
+        assert not mapped.points["visible"][1]
+        assert mapped.metadata == {"ann_id": 9}
+        assert mapped.metadata is not inst.metadata
+
+
+def test_merge_copies_new_frame_metadata():
+    """A frame added by merge keeps a copy of its metadata."""
+    skeleton = Skeleton(["A"])
+    video = Video("test.mp4")
+    labels = Labels(videos=[video], skeletons=[skeleton])
+    other_lf = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[1, 2]]), skeleton=skeleton)],
+        metadata={"image_id": 3},
+    )
+    other = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[other_lf])
+    labels.merge(other)
+    assert labels[0].metadata == {"image_id": 3}
+    assert labels[0].metadata is not other_lf.metadata

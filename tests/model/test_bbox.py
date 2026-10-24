@@ -1,6 +1,8 @@
 """Tests for BoundingBox data model."""
 
+import copy
 import math
+import pickle
 
 import numpy as np
 import pytest
@@ -522,3 +524,28 @@ def test_bbox_pad_predicted_preserves_type_and_score():
     assert (padded.x1, padded.y1, padded.x2, padded.y2) == pytest.approx(
         (5, 15, 35, 45)
     )
+
+
+@pytest.mark.parametrize("cls", [UserBoundingBox, PredictedBoundingBox])
+def test_bbox_metadata_pad_copies(cls):
+    """`pad` keeps a copy of the metadata."""
+    bbox = cls(x1=0, y1=0, x2=10, y2=10, metadata={"ann_id": 4})
+    padded = bbox.pad(1)
+    assert padded.metadata == {"ann_id": 4}
+    assert padded.metadata is not bbox.metadata
+
+
+@pytest.mark.parametrize("cls", [UserBoundingBox, PredictedBoundingBox])
+def test_bbox_metadata_pickle(cls):
+    """Box metadata survives pickling and defaults when missing from old state."""
+    bbox = cls(x1=0, y1=0, x2=10, y2=10, metadata={"area": 100.0})
+    for restored in (pickle.loads(pickle.dumps(bbox)), copy.deepcopy(bbox)):
+        assert type(restored) is cls
+        assert restored.metadata == {"area": 100.0}
+
+    state = bbox.__getstate__()
+    del state["metadata"]
+    restored = cls.__new__(cls)
+    restored.__setstate__(state)
+    assert restored.metadata == {}
+    assert restored.x2 == 10

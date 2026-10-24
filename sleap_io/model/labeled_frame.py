@@ -14,6 +14,13 @@ import numpy as np
 from attrs import define, field
 
 from sleap_io.model.instance import Instance, PredictedInstance
+from sleap_io.model.record_metadata import (
+    RecordMetadata,
+    get_attrs_state,
+    merge_metadata,
+    set_attrs_state,
+    to_metadata,
+)
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
@@ -342,6 +349,10 @@ class LabeledFrame:
         masks: List of `SegmentationMask` annotations for this frame.
         label_images: List of `LabelImage` annotations for this frame.
         rois: List of `ROI` annotations for this frame.
+        metadata: A dictionary of per-frame values (for example a source image id or
+            file name). Values must be ``bool``, ``int``, ``float``, ``str`` or
+            ``None`` (missing); see `sleap_io.model.record_metadata`. Empty by
+            default.
 
     Notes:
         Instances of this class are hashed by identity, not by value. This means that
@@ -358,6 +369,17 @@ class LabeledFrame:
     masks: "list[SegmentationMask]" = field(factory=list)
     label_images: "list[LabelImage]" = field(factory=list)
     rois: "list[ROI]" = field(factory=list)
+    metadata: RecordMetadata = field(
+        factory=RecordMetadata, converter=to_metadata, repr=False
+    )
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return the state for pickling and copying."""
+        return get_attrs_state(self)
+
+    def __setstate__(self, state: dict[str, Any] | tuple) -> None:
+        """Restore the state, defaulting fields missing from older pickles."""
+        set_attrs_state(self, state)
 
     def append(
         self,
@@ -778,6 +800,9 @@ class LabeledFrame:
             caller can decide what to do with it. Frame-level annotations
             (centroids, bboxes, masks, label images, rois) and the
             ``is_negative`` flag are updated on this frame in place.
+
+            Frame ``metadata`` is combined key by key with every strategy, this
+            frame's values winning ties.
         """
         from sleap_io.model.matching import InstanceMatcher, InstanceMatchMethod
 
@@ -789,6 +814,7 @@ class LabeledFrame:
             instance_matcher = instance
 
         conflicts = []
+        self.metadata = merge_metadata(self.metadata, other.metadata)
 
         if frame == "keep_original":
             self._merge_annotations(other, strategy="keep_original")

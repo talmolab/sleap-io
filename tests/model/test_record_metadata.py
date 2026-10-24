@@ -7,6 +7,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from sleap_io import Instance, LabeledFrame, Skeleton, Video
+from sleap_io.model.bbox import UserBoundingBox
 from sleap_io.model.record_metadata import (
     RecordMetadata,
     merge_metadata,
@@ -163,3 +165,27 @@ def test_metadata_column_kinds_rejects_big_int_float_mix(values):
     """Integers beyond 2^53 can't be widened to float."""
     with pytest.raises(TypeError, match="2\\^53"):
         metadata_column_kinds(_records(*values), "instances")
+
+
+def test_metadata_on_records():
+    """Instances, frames and boxes validate metadata on construction and set."""
+    skel = Skeleton(["A"])
+    inst = Instance.empty(skel)
+    assert inst.metadata == {}
+    inst.metadata["ann_id"] = np.int64(5)
+    assert type(inst.metadata["ann_id"]) is int
+
+    inst.metadata = {"iscrowd": False}
+    assert isinstance(inst.metadata, RecordMetadata)
+    with pytest.raises(TypeError):
+        inst.metadata = {"bbox": [0, 0, 1, 1]}
+
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, metadata={"image_id": 1})
+    assert isinstance(lf.metadata, RecordMetadata)
+    with pytest.raises(TypeError):
+        lf.metadata["file"] = {"name": "a"}
+
+    box = UserBoundingBox(x1=0, y1=0, x2=1, y2=1, metadata={"area": 1.0})
+    assert box.metadata == {"area": 1.0}
+    with pytest.raises(TypeError):
+        UserBoundingBox(x1=0, y1=0, x2=1, y2=1, metadata={"bbox": [1]})
