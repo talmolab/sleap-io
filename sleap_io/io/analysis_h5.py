@@ -28,6 +28,8 @@ like ``tracks[frame, track, node, :]`` to get (x, y) coordinates.
                       dims: ("frame", "track")
     point_scores:     (n_frames, n_tracks, n_nodes)
                       dims: ("frame", "track", "node")
+    point_labeled:    (n_frames, n_tracks, n_nodes)
+                      dims: ("frame", "track", "node")
     instance_scores:  (n_frames, n_tracks)
                       dims: ("frame", "track")
     tracking_scores:  (n_frames, n_tracks)
@@ -46,6 +48,8 @@ which is optimized for MATLAB's column-major memory layout.
                       dims: ("frame", "track")
     point_scores:     (n_tracks, n_nodes, n_frames)
                       dims: ("track", "node", "frame")
+    point_labeled:    (n_tracks, n_nodes, n_frames)
+                      dims: ("track", "node", "frame")
     instance_scores:  (n_tracks, n_frames)
                       dims: ("track", "frame")
     tracking_scores:  (n_tracks, n_frames)
@@ -57,6 +61,11 @@ with frames first, while other arrays have tracks first. This quirk is
 preserved for exact MATLAB compatibility with SLEAP's analysis export.
 
 Note: The ``xy`` dimension always has size 2, representing (x, y) coordinates.
+
+Note: ``tracks`` holds NaN for every point that is not visible. ``point_labeled``
+(``uint8``) is 1 where a point is labeled and 0 for unlabeled points and empty
+slots, so hidden and unlabeled points can be told apart. It is written by
+sleap-io 0.10 and later and is not used when reading.
 
 Custom Axis Ordering
 --------------------
@@ -571,8 +580,13 @@ def write_labels(
         tracking_scores,
         track_names,
         first_frame,
+        point_labeled,
     ) = to_analysis_arrays(
-        labels, video=video, all_frames=all_frames, min_occupancy=min_occupancy
+        labels,
+        video=video,
+        all_frames=all_frames,
+        min_occupancy=min_occupancy,
+        return_labeled=True,
     )
 
     # Define canonical order
@@ -607,6 +621,7 @@ def write_labels(
     # Reorder arrays
     locations = np.transpose(locations, axes_4d)
     point_scores = np.transpose(point_scores, axes_3d)
+    point_labeled = np.transpose(point_labeled, axes_3d)
     instance_scores = np.transpose(instance_scores, axes_2d)
     tracking_scores = np.transpose(tracking_scores, axes_2d)
     occupancy = np.transpose(occupancy, axes_occupancy)
@@ -644,6 +659,7 @@ def write_labels(
         write_dataset("tracks", locations, dim_names=dims_4d)
         write_dataset("track_occupancy", occupancy, dim_names=dims_occupancy)
         write_dataset("point_scores", point_scores, dim_names=dims_3d)
+        write_dataset("point_labeled", point_labeled, dim_names=dims_3d)
         write_dataset("instance_scores", instance_scores, dim_names=dims_2d)
         write_dataset("tracking_scores", tracking_scores, dim_names=dims_2d)
 

@@ -343,15 +343,8 @@ def to_analysis_arrays(
     min_occupancy: float = 0.0,
     user_instances: bool = True,
     predicted_instances: bool = True,
-) -> tuple[
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    list[str],
-    int,
-]:
+    return_labeled: bool = False,
+) -> tuple:
     """Build occupancy and point-data matrices for an analysis HDF5 export.
 
     All returned arrays are in canonical shape (frame-first ordering). This is
@@ -373,6 +366,8 @@ def to_analysis_arrays(
         user_instances: If True, include user instances, preferring them over
             predicted instances.
         predicted_instances: If True, include predicted instances.
+        return_labeled: If True, also return a `point_labeled` matrix as the last
+            element of the tuple.
 
     Returns:
         A tuple of (all arrays in canonical shape):
@@ -387,6 +382,9 @@ def to_analysis_arrays(
         - tracking_scores: shape `(n_frames, n_tracks)`, tracking confidence.
         - track_names: list of track name strings, length `n_tracks`.
         - first_frame: first frame index (int).
+        - point_labeled (only with `return_labeled=True`): shape
+          `(n_frames, n_tracks, n_nodes)`, `uint8` matrix that is 1 where a point
+          is labeled (or visible) and 0 for unlabeled points and empty slots.
 
     Raises:
         ValueError: If there are no labeled frames for the selected video.
@@ -445,6 +443,7 @@ def to_analysis_arrays(
     point_scores = np.full((n_frames, n_tracks, node_count), np.nan, dtype=np.float64)
     instance_scores = np.full((n_frames, n_tracks), np.nan, dtype=np.float64)
     tracking_scores = np.full((n_frames, n_tracks), np.nan, dtype=np.float64)
+    point_labeled = np.zeros((n_frames, n_tracks, node_count), dtype=np.uint8)
 
     # Build lookup for frame index -> LabeledFrame.
     lf_map = {lf.frame_idx: lf for lf in lfs}
@@ -486,6 +485,9 @@ def to_analysis_arrays(
 
             occupancy[frame_i, track_i] = 1
             locations[frame_i, track_i, :, :] = inst.numpy()
+            point_labeled[frame_i, track_i, :] = (
+                inst.points["labeled"] | inst.points["visible"]
+            )
 
             if hasattr(inst, "tracking_score") and inst.tracking_score is not None:
                 tracking_scores[frame_i, track_i] = inst.tracking_score
@@ -507,6 +509,7 @@ def to_analysis_arrays(
         point_scores = point_scores[:, keep_mask, :]
         instance_scores = instance_scores[:, keep_mask]
         tracking_scores = tracking_scores[:, keep_mask]
+        point_labeled = point_labeled[:, keep_mask, :]
 
     # Build track names sized to the surviving tracks.
     if untracked:
@@ -517,7 +520,7 @@ def to_analysis_arrays(
             track.name for i, track in enumerate(labels.tracks) if keep_mask[i]
         ]
 
-    return (
+    arrays = (
         occupancy,
         locations,
         point_scores,
@@ -526,6 +529,9 @@ def to_analysis_arrays(
         track_names,
         first_frame,
     )
+    if return_labeled:
+        return (*arrays, point_labeled)
+    return arrays
 
 
 def from_numpy(
