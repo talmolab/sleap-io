@@ -988,6 +988,16 @@ predicted_point_dtype = np.dtype([
 ])
 ```
 
+!!! note "Mapping to the in-memory points"
+    The on-disk `complete` column is read into the in-memory
+    [`verified`](../model/poses.md#points-array) field (and written back from it).
+    This layout has no `labeled` column and no storage for instance, frame or
+    bounding box `metadata`, so [unlabeled points](../model/poses.md#point-flags-and-states)
+    can't be saved as such: [`save_slp`][sleap_io.save_slp] raises a `ValueError` by
+    default, or writes them as hidden points (labeled, not visible) with a warning
+    when called with `unlabeled_as="absent"`. Metadata is dropped with a warning.
+    Points read from these files are always labeled.
+
 ### Coordinate System
 
 !!! warning "Coordinate System Change"

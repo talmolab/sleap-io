@@ -132,6 +132,21 @@ Every bounding box can carry optional metadata:
 | `category`  | `str`              | Class label (e.g., `"mouse"`)                |
 | `name`      | `str`              | Human-readable name                          |
 | `source`    | `str`              | Annotation source identifier                 |
+| `metadata`  | `dict`             | Per-box scalar values (e.g. a source annotation id); see below |
+
+The `metadata` dictionary follows the same rules as
+[instance metadata](poses.md#metadata): values are `bool`, `int`, `float` or `str`
+(`None` means missing), validated when set, and each key holds one kind of value
+across all boxes. `pad()` keeps it on the new box. The current SLP layout
+doesn't store it yet (`save_slp` drops it with a warning).
+
+```pycon
+>>> import sleap_io as sio
+>>> bbox = sio.UserBoundingBox(x1=75, y1=160, x2=125, y2=240)
+>>> bbox.metadata["annotation_id"] = 17
+>>> print(bbox.pad(5).metadata)
+
+```
 
 !!! tip "Rendering"
     Use [`sio.draw_bboxes`][sleap_io.draw_bboxes] to composite bounding boxes onto an image, or pass `bboxes` to [`sio.render_image`][sleap_io.render_image] / [`sio.render_video`][sleap_io.render_video]. See [Rendering → Segmentation Overlays](../rendering.md#segmentation-overlays).
