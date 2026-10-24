@@ -35,9 +35,10 @@ file.slp
 ├── /suggestions_json            # Dataset: Suggestions (variable-length bytes, optional)
 ├── /sessions_json               # Dataset: Recording sessions (calibration + video map + fg range; variable-length bytes, optional)
 ├── /session_data/               # Group: columnar session frame-group data (Format 2.8+, optional)
-│   ├── frame_groups             # Dataset: struct (frame_idx, ig_start, ig_end)
-│   ├── instance_groups          # Dataset: struct (identity_idx, score, instance_3d_score, pts3d_start/end, pts3d_predicted, member_start/end)
-│   ├── instance_group_members   # Dataset: struct (camera, lf, inst) — columnarized camcorder_to_lf_and_inst_idx_map
+│   ├── frame_groups/            # Group (3.0+): int64 frame_idx, ig_start, ig_end
+│   ├── instance_groups/         # Group (3.0+): int64 identity_idx, float64 score, instance_3d_score,
+│   │                            #   int64 pts3d_start/_end, bool pts3d_predicted, int64 member_start/_end
+│   ├── instance_group_members/  # Group (3.0+): int64 camera, lf, inst — columnarized camcorder_to_lf_and_inst_idx_map
 │   ├── points_3d                # Dataset: float64 (N, 3) triangulated Instance3D points (chunked+gzip)
 │   ├── pred_points_3d           # Dataset: float64 (N, 4) [x,y,z,score] PredictedInstance3D (chunked+gzip)
 │   ├── frame_group_meta         # Dataset: per-frame-group JSON metadata blobs (optional)
@@ -85,7 +86,9 @@ file.slp
 │   ├── tracking_score           # Dataset: float32 tracking link confidence
 │   ├── category                 # Dataset: vlen str category labels
 │   ├── name                     # Dataset: vlen str name labels
-│   └── source                   # Dataset: vlen str source labels
+│   ├── source                   # Dataset: vlen str source labels
+│   └── metadata/                # Group: per-box metadata, one group per key (3.0+, optional)
+│       └── <key>/values, present
 │
 ├── /centroids/                  # Group: Columnar centroid storage (v0.7.0+)
 │   ├── x                        # Dataset: float64 x-coordinate
@@ -102,35 +105,23 @@ file.slp
 │   ├── name                     # Dataset: vlen str name labels
 │   └── source                   # Dataset: vlen str source labels
 │
-├── /rois                        # Dataset: ROI metadata (structured array, optional)
-│   ├── @categories              # Attribute: JSON array (legacy fallback)
-│   ├── @names                   # Attribute: JSON array (legacy fallback)
-│   └── @sources                 # Attribute: JSON array (legacy fallback)
-├── /roi_wkb                     # Dataset: Packed WKB geometry bytes (uint8 array, gzip-compressed)
-├── /roi_categories              # Dataset: vlen string, one per ROI (Format 1.9+)
-├── /roi_names                   # Dataset: vlen string, one per ROI (Format 1.9+)
-├── /roi_sources                 # Dataset: vlen string, one per ROI (Format 1.9+)
+├── /rois/                       # Group: ROIs, one dataset per column (3.0+, optional)
+│   ├── <row columns>            # Datasets: see "ROI Columns" below
+│   ├── name, category, source   # Dataset: vlen utf-8 str, one per ROI
+│   └── wkb                      # Dataset: Packed WKB geometry bytes (uint8, gzip-compressed)
 │
-├── /masks                       # Dataset: Mask metadata (structured array, optional)
-│   ├── @categories              # Attribute: JSON array (legacy fallback)
-│   ├── @names                   # Attribute: JSON array (legacy fallback)
-│   └── @sources                 # Attribute: JSON array (legacy fallback)
-├── /mask_rle                    # Dataset: Packed RLE bytes (uint8 array, gzip-compressed)
-├── /mask_categories             # Dataset: vlen string, one per mask (Format 1.9+)
-├── /mask_names                  # Dataset: vlen string, one per mask (Format 1.9+)
-├── /mask_sources                # Dataset: vlen string, one per mask (Format 1.9+)
+├── /masks/                      # Group: Segmentation masks, one dataset per column (3.0+, optional)
+│   ├── <row columns>            # Datasets: see "Mask Columns" below
+│   ├── name, category, source   # Dataset: vlen utf-8 str, one per mask
+│   ├── rle                      # Dataset: Packed RLE bytes (uint8, gzip-compressed)
+│   └── score_maps/              # Group: score map index columns + `data` buffer (optional)
 │
-├── /mask_score_map_index        # Dataset: Score map index for masks (Format 1.9+)
-├── /mask_score_maps             # Dataset: Packed score map data for masks (Format 1.9+)
-├── /label_image_score_map_index # Dataset: Score map index for label images (Format 1.9+)
-├── /label_image_score_maps      # Dataset: Packed score map data for label images (Format 1.9+)
-│
-├── /label_images                # Dataset: Label image metadata (Format 1.8+)
-├── /label_image_objects         # Dataset: Per-object metadata (Format 1.8+)
-├── /label_image_data            # Dataset: Pixel data (Format 1.8+, see below)
-├── /label_image_sources         # Dataset: vlen string, one per label image (Format 1.9+)
-├── /label_image_obj_categories  # Dataset: vlen string, one per object (Format 1.9+)
-├── /label_image_obj_names       # Dataset: vlen string, one per object (Format 1.9+)
+├── /label_images/               # Group: Label images, one dataset per column (3.0+, optional)
+│   ├── <row columns>            # Datasets: see "Label Image Columns" below
+│   ├── source                   # Dataset: vlen utf-8 str, one per label image
+│   ├── data                     # Dataset: Pixel data (see "Pixel Data" below)
+│   ├── objects/                 # Group: per-object columns, including name and category
+│   └── score_maps/              # Group: score map index columns + `data` buffer (optional)
 │
 ├── /video_crops                 # Dataset: JSON, virtual on-read crops (Format 2.3+, optional)
 │
@@ -139,16 +130,16 @@ file.slp
 │   ├── meta_owner               # Dataset: int32 identity index (EAV metadata; all three omitted if none)
 │   ├── meta_key                 # Dataset: vlen utf-8 str metadata key
 │   ├── meta_val                 # Dataset: vlen utf-8 str metadata value
-│   └── links                    # Dataset: structured (owner_type, owner_id, identity_idx, identity_score)
-│                                 #   one row per detection that has an identity
+│   └── links/                   # Group (3.0+): uint8 owner_type, int64 owner_id, int64 identity_idx,
+│                                #   float64 identity_score; one row per detection that has an identity
 │
 ├── /categories/                 # Group: class/category catalog (Format 2.7+, optional)
 │   ├── name                     # Dataset: vlen utf-8 str, one per category (catalog order)
 │   ├── meta_owner               # Dataset: int32 category index (EAV metadata; all three omitted if none)
 │   ├── meta_key                 # Dataset: vlen utf-8 str metadata key
 │   ├── meta_val                 # Dataset: vlen utf-8 str metadata value
-│   └── links                    # Dataset: structured (owner_type, owner_id, category_idx, category_score)
-│                                 #   one row per detection that has a category
+│   └── links/                   # Group (3.0+): uint8 owner_type, int64 owner_id, int64 category_idx,
+│                                #   float64 category_score; one row per detection that has a category
 │
 ├── /embeddings/                 # Group: per-detection re-ID embeddings (Format 2.5+, optional)
 │   ├── vectors                  # Dataset: float (N, D), chunked + gzip (all rows share D)
@@ -221,6 +212,10 @@ file.slp
 | `instances/` | group of `(N,)` columns | `u1`, `i8`, `f8` | Instances linking to points (a compound dataset before 3.0) |
 | `frames/` | group of `(N,)` columns | `i8`, `bool` | Labeled frames linking to instances (a compound dataset before 3.0) |
 
+Every other table — ROIs, masks, label images and their objects, the score map
+indexes, the identity and category links and the session tables — is a group of
+1-D columns too since 3.0. A 3.0 file holds no compound dataset.
+
 ### Metadata Datasets
 
 | Dataset | Type | Description |
@@ -229,7 +224,7 @@ file.slp
 | `tracks_json` | `bytes[]` | JSON array of track definitions |
 | `suggestions_json` | `bytes[]` | JSON array of suggested frames (optional) |
 | `sessions_json` | `bytes[]` | JSON array of recording sessions: calibration + camera→video map + session metadata + (Format 2.8+) an `fg_start`/`fg_end` range into `session_data/frame_groups`; ≤2.7 files instead inline `frame_group_dicts` (optional) |
-| `session_data/` | group | Columnar session frame-group data: `frame_groups` / `instance_groups` / `instance_group_members` struct tables, `points_3d` `(N,3)` / `pred_points_3d` `(N,4)` chunked float matrices, and optional per-row `frame_group_meta` / `instance_group_meta` JSON blobs (Format 2.8+, present only when a session has frame groups) |
+| `session_data/` | group | Columnar session frame-group data: `frame_groups` / `instance_groups` / `instance_group_members` tables (groups of columns in 3.0, compound datasets before), `points_3d` `(N,3)` / `pred_points_3d` `(N,4)` chunked float matrices, and optional per-row `frame_group_meta` / `instance_group_meta` JSON blobs (Format 2.8+, present only when a session has frame groups) |
 | `identity/` | group | re-ID identity catalog: `name` dataset + optional `meta_owner`/`meta_key`/`meta_val` EAV metadata + per-detection `links` (Format 2.5+, optional) |
 | `categories/` | group | class/category catalog: `name` dataset + optional `meta_owner`/`meta_key`/`meta_val` EAV metadata + per-detection `links` (Format 2.7+, optional) |
 | `embeddings/` | group | Per-detection re-ID embeddings: `vectors` `(N, D)` + `owner_type`/`owner_id` join columns; plus optional parallel `category_vectors` `(M, D')` + `category_owner_type`/`category_owner_id` for category embeddings (Format 2.5+; category datasets 2.7+, optional) |
@@ -287,8 +282,8 @@ and all datasets listed above are part of the known schema and are regenerated,
 not carried over.
 
 Unknown *columns* inside a known table (for example a new per-point column in
-`/points`) are handled separately and need no opt-in; see
-[Unknown columns](#unknown-columns). A newer writer can also list features in the
+`/points` or a new column of `/masks`) are handled separately and need no
+opt-in; see [Unknown columns](#unknown-columns). A newer writer can also list features in the
 `/metadata` `required_features` attribute: a reader that doesn't support every
 listed feature refuses the file instead of misreading it.
 
@@ -673,16 +668,18 @@ All three datasets are omitted entirely when no identity carries any metadata. A
 
 ### Per-Detection Linking (`/identity/links`)
 
-Per-detection identity assignments are stored in the `/identity/links` structured dataset, with one row per detection that carries an identity. Each row joins a detection — identified by an `owner_type`/`owner_id` pair (the same join scheme as the `/embeddings` group) — to an entry in the identity catalog:
+Per-detection identity assignments are stored in the `/identity/links` table — a group of 1-D columns since 3.0 (a compound dataset before) — with one row per detection that carries an identity. Each row joins a detection — identified by an `owner_type`/`owner_id` pair (the same join scheme as the `/embeddings` group) — to an entry in the identity catalog:
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `owner_type` | `uint8` | Detection modality code (shared `OWNER_*` codes: `0`=instance, `2`=centroid, `3`=mask, `4`=bbox, `5`=roi) |
 | `owner_id` | `int64` | Per-owner-type positional id: the global instance id for instance owners, or the global per-modality list index for centroid / mask / bbox / ROI owners (each enumeration order over frames then the modality, matching `write_lfs` / `write_masks` / `write_centroids` / `write_bboxes` / `write_rois`; static ROIs follow frame ROIs) |
-| `identity_idx` | `int32` | Index into `/identity/name` |
-| `identity_score` | `float32` | Identity-assignment score (NaN if unrecorded) |
+| `identity_idx` | `int64` | Index into `/identity/name` (`int32` before 3.0) |
+| `identity_score` | `float64` | Identity-assignment score (NaN if unrecorded; `float32` before 3.0) |
 
-This is additive: old readers ignore the group, and detections without an identity simply have no row. Each detection carries a single `identity_embedding` slot; those vectors, when present, live in the `/embeddings` group — see [Embeddings](#embeddings).
+The columns are resizable (`maxshape=(None,)`, so chunked). On read, an
+`identity_idx` outside the catalog raises for a 3.0 table and warns for an older
+one. This is additive: old readers ignore the group, and detections without an identity simply have no row. Each detection carries a single `identity_embedding` slot; those vectors, when present, live in the `/embeddings` group — see [Embeddings](#embeddings).
 
 ### Instance Group Linking
 
@@ -732,14 +729,17 @@ All three datasets are omitted entirely when no category carries any metadata.
 
 ### Per-Detection Linking (`/categories/links`)
 
-Per-detection category assignments are stored in the `/categories/links` structured dataset, with one row per detection that carries a category. Each row joins a detection — identified by an `owner_type`/`owner_id` pair (the same join scheme as `/identity/links` and `/embeddings`) — to an entry in the category catalog:
+Per-detection category assignments are stored in the `/categories/links` table — a group of 1-D columns since 3.0 (a compound dataset before) — with one row per detection that carries a category. Each row joins a detection — identified by an `owner_type`/`owner_id` pair (the same join scheme as `/identity/links` and `/embeddings`) — to an entry in the category catalog:
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `owner_type` | `uint8` | Detection modality code (shared `OWNER_*` codes: `0`=instance, `2`=centroid, `3`=mask, `4`=bbox, `5`=roi) |
 | `owner_id` | `int64` | Per-owner-type positional id (same enumeration as `/identity/links`: global instance id for instance owners, or global per-modality list index for centroid / mask / bbox / ROI owners; static ROIs follow frame ROIs) |
-| `category_idx` | `int32` | Index into `/categories/name` |
-| `category_score` | `float32` | Category-assignment score (NaN if unrecorded) |
+| `category_idx` | `int64` | Index into `/categories/name` (`int32` before 3.0) |
+| `category_score` | `float64` | Category-assignment score (NaN if unrecorded; `float32` before 3.0) |
+
+As for `/identity/links`, the columns are resizable and an out-of-range
+`category_idx` raises for a 3.0 table and warns for an older one.
 
 This is additive: old readers ignore the group, and detections without a category simply have no row. Each detection also carries a single `category_embedding` slot; those vectors, when present, live alongside identity vectors in the `/embeddings` group as parallel `category_*` datasets — see [Embeddings](#embeddings).
 
@@ -878,19 +878,21 @@ Each session is stored as a compact JSON object holding only bounded, `O(cameras
 
 ### The `/session_data` group (Format 2.8+)
 
-All `O(frames × instances × nodes)` session data is stored columnar, so it streams and compresses like the rest of the file:
+All `O(frames × instances × nodes)` session data is stored columnar, so it streams and compresses like the rest of the file. From 3.0 the three tables are groups of resizable 1-D columns (`maxshape=(None,)`); before 3.0 they were compound datasets with the types in parentheses:
 
-| Dataset | Kind | Columns / shape |
+| Member | Kind | Columns / shape |
 |---------|------|-----------------|
-| `frame_groups` | compound | `frame_idx` (i8), `ig_start` (u8), `ig_end` (u8) — range into `instance_groups` |
-| `instance_groups` | compound | `identity_idx` (i4, -1 if none), `score` (f8, NaN if none), `instance_3d_score` (f8, NaN if none), `pts3d_start`/`pts3d_end` (i8, -1 if no 3D), `pts3d_predicted` (u1), `member_start`/`member_end` (u8) — range into `instance_group_members` |
-| `instance_group_members` | compound | `camera` (u4), `lf` (i8), `inst` (u4) — the columnarized `camcorder_to_lf_and_inst_idx_map` |
+| `frame_groups/` | columns | `frame_idx` (i8), `ig_start` (i8; u8 before 3.0), `ig_end` (i8; u8) — range into `instance_groups` |
+| `instance_groups/` | columns | `identity_idx` (i8, -1 if none; i4 before 3.0), `score` (f8, NaN if none), `instance_3d_score` (f8, NaN if none), `pts3d_start`/`pts3d_end` (i8, -1 if no 3D), `pts3d_predicted` (bool; u1), `member_start`/`member_end` (i8; u8) — range into `instance_group_members` |
+| `instance_group_members/` | columns | `camera` (i8; u4), `lf` (i8), `inst` (i8; u4) — the columnarized `camcorder_to_lf_and_inst_idx_map` |
 | `points_3d` | `float64 (N, 3)` | Triangulated `Instance3D` coordinates, chunked + gzip, sliced by `pts3d_start:pts3d_end` when `pts3d_predicted == 0` |
 | `pred_points_3d` | `float64 (N, 4)` | `[x, y, z, score]` for `PredictedInstance3D`, chunked + gzip, sliced when `pts3d_predicted == 1` |
 | `frame_group_meta` | `str[]` | One `json.dumps(metadata)` blob per frame group (presence-guarded; omitted when all empty) |
 | `instance_group_meta` | `str[]` | One `json.dumps(metadata)` blob per instance group (presence-guarded) |
 
-`NaN` rows in `points_3d`/`pred_points_3d` denote missing/unresolved keypoints and round-trip natively. The group (and the 2.8 version bump) is only written when a session actually has frame groups, so single-view and session-free files are byte-identical to before.
+`NaN` rows in `points_3d`/`pred_points_3d` denote missing/unresolved keypoints and round-trip natively. The group (and, for `legacy_format=True`, the 2.8 version bump) is only written when a session actually has frame groups.
+
+On read, the ranges are checked: `ig_start`/`ig_end` must fall inside `instance_groups`, `member_start`/`member_end` inside `instance_group_members`, 3D ranges inside `points_3d` or `pred_points_3d`, `identity_idx` must be -1 or an identity, `lf` a `/frames` row, and `camera`/`inst` non-negative. A problem raises for 3.0 tables and warns for older ones, which are read leniently (an unreadable frame group is skipped).
 
 ### Legacy inline structure (≤ 2.7)
 
@@ -951,7 +953,7 @@ The reader dispatches on the presence of the `/session_data` group:
 
 Forward compatibility: a reader older than 2.8 opening a 2.8 file sees the slim `sessions_json` (calibration + video map only) and ignores `/session_data`, so it loads the session's calibration but not its frame groups/3D — data is never corrupted, only gracefully absent.
 
-Lazy loads capture the raw `sessions_json` bytes and `/session_data` arrays and copy them verbatim on save (no frame materialization), so a lazy re-save preserves frame groups and 3D losslessly as long as the video list is unchanged.
+Lazy loads capture the raw `sessions_json` bytes and `/session_data` arrays and copy them on save (no frame materialization), so a lazy re-save preserves frame groups, 3D points and unknown columns losslessly as long as the video list is unchanged. The three tables are written in the layout being saved, whatever layout they were loaded from, so a 3.0 file never gets compound session tables.
 
 ### Optional Dataset
 
@@ -1075,23 +1077,32 @@ and `/frames`):
 
 ### Unknown columns
 
-Columns of `/points`, `/pred_points`, `/instances` or `/frames` that this version
-of sleap-io doesn't know (for example a column added by a newer release) are carried
-through a save as long as the table's rows are still in their loaded order:
+Columns of a table that this version of sleap-io doesn't know (for example a
+column added by a newer release) are carried through a save as long as the table's
+rows are still in their loaded order. This covers the pose tables (`/points`,
+`/pred_points`, `/instances`, `/frames`) and the tables converted to columns in
+3.0: `/rois`, `/masks` and `/masks/score_maps`, `/label_images` with its
+`objects/` and `score_maps/`, `/identity/links`, `/categories/links` and the
+`/session_data` tables.
 
-* lazy-loaded labels always keep them;
-* eagerly loaded labels keep them when the instances (with their points arrays) or
-  frames owning the table's rows are the ones loaded and in the same order. Editing
-  coordinates or flags in place is fine; adding, removing, replacing or reordering
-  instances or frames is not;
-* otherwise, and with `legacy_format=True`, the columns are dropped with a warning.
+* lazy-loaded labels always keep the pose and session table columns, and keep the
+  others while the annotations (and links) are the ones loaded;
+* eagerly loaded labels keep them when the objects owning the table's rows are the
+  ones loaded and in the same order: instances (with their points arrays),
+  frames, ROIs, masks, label images and their objects, frame groups, instance
+  groups and their `(instance group, camera)` members. Link rows are matched by
+  their `(owner_type, owner_id, catalog index)` values. Editing values in place is
+  fine; adding, removing, replacing or reordering records is not;
+* otherwise (including when a table loses all its rows), and with
+  `legacy_format=True`, the columns are dropped with a warning.
 
 ### Compression
 
-Pose columns (`/points`, `/pred_points`, `/instances`, `/frames` and their
-metadata) are written contiguous and uncompressed by default, which reads
-fastest, including for lazy loading and remote files. Pass `compression="gzip"` or
-`"lzf"` to [`save_slp`][sleap_io.save_slp] (also accepted by
+Pose and row columns (`/points`, `/pred_points`, `/instances`, `/frames` and their
+metadata, and the columns of the ROI, mask, label image, link and session tables)
+are written contiguous and uncompressed by default, which reads fastest, including
+for lazy loading and remote files. Pass `compression="gzip"` or `"lzf"` to
+[`save_slp`][sleap_io.save_slp] (also accepted by
 [`Labels.save`][sleap_io.Labels.save] and [`save_file`][sleap_io.save_file]) to
 write chunked columns with the shuffle filter instead:
 
@@ -1099,8 +1110,9 @@ write chunked columns with the shuffle filter instead:
 sio.save_slp(labels, "labels.slp", compression="gzip")
 ```
 
-Datasets that are compressed by default (mask RLE buffers, score maps, label image
-data, 3D points and embeddings) stay compressed regardless.
+Datasets that are compressed by default (the ROI `wkb` and mask `rle` buffers,
+score maps, label image data, 3D points and embeddings) stay compressed regardless.
+The link and session columns are resizable, so they are always chunked.
 
 ### Files before 3.0
 
@@ -1204,14 +1216,15 @@ indices.
 
 ## Record Metadata
 
-Instances and frames can carry a `metadata` dictionary of scalar values (see
-[metadata](../model/poses.md#metadata)). From format 3.0 each key is stored as a
-column of its table:
+Instances, frames and bounding boxes can carry a `metadata` dictionary of scalar
+values (see [metadata](../model/poses.md#metadata)). From format 3.0 each key is
+stored as a column of its table:
 
 ```
 /instances/metadata/<key>/values    bool | i8 | f8 | vlen UTF-8 str, one row per instance
 /instances/metadata/<key>/present   bool, written only when some instances lack the key
 /frames/metadata/<key>/...          the same, one row per frame
+/bboxes/metadata/<key>/...          the same, one row per bounding box
 ```
 
 * Every record of a table holds one kind of value per key (`bool`, `int`, `float` or
@@ -1224,8 +1237,9 @@ column of its table:
 * Readers ignore members of `metadata/` that aren't a group with a 1-D `values`
   dataset of one of these kinds. String values may also be stored as fixed-length
   strings.
-* Lazy-loaded labels keep the metadata columns beside the raw tables, so lazy saves
-  write them back unchanged.
+* Lazy-loaded labels keep the instance and frame metadata columns beside the raw
+  tables, so lazy saves write them back unchanged. Boxes are read into objects
+  even by lazy loads, so their metadata travels with them.
 * `legacy_format=True` drops metadata with a warning.
 
 ## Negative Frames
@@ -1397,7 +1411,7 @@ Bounding box data is stored as individual datasets within the `/bboxes/` HDF5 gr
 
 ### String Metadata
 
-String metadata (`category`, `name`, `source`) is stored as vlen string datasets within the `/bboxes/` group, one entry per bounding box.
+String metadata (`category`, `name`, `source`) is stored as vlen string datasets within the `/bboxes/` group, one entry per bounding box. From 3.0, a box's `metadata` dictionary is stored in `/bboxes/metadata/` (see [Record Metadata](#record-metadata)); `legacy_format=True` drops it with a warning. The other `/bboxes` columns keep their types.
 
 ### Optional Dataset
 
@@ -1459,18 +1473,38 @@ The `/centroids/` group is only written when the [`Labels`][sleap_io.Labels] obj
 
 [`ROI`][sleap_io.ROI]s store vector geometry annotations such as polygons and other shapes. ROI support was introduced in format 1.5.
 
-### ROI Datasets
+### ROI Columns
 
-ROI data is stored across two datasets:
+From format 3.0, `/rois` is a group with one 1-D dataset per column, one row per ROI, plus the `wkb` byte buffer:
 
-- `/rois`: Structured array containing ROI metadata and byte offsets into the geometry data
-- `/roi_wkb`: Packed `uint8` array of [WKB (Well-Known Binary)](https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry#Well-known_binary) geometry bytes, gzip-compressed (`compression_opts=1`)
+| Column | Type | Description |
+|--------|------|-------------|
+| `annotation_type` | `u1` | Legacy enum, always written as 0 |
+| `video` | `i8` | Video index (-1 if none) |
+| `frame_idx` | `i8` | Frame index (-1 for static ROIs) |
+| `track` | `i8` | Track index (-1 if none) |
+| `instance` | `i8` | `/instances` row (-1 if none) |
+| `is_predicted` | `bool` | `False` = [`UserROI`][sleap_io.UserROI], `True` = [`PredictedROI`][sleap_io.PredictedROI] |
+| `score` | `f8` | Confidence score (NaN for user ROIs) |
+| `tracking_score` | `f8` | Tracking link confidence (NaN if unset) |
+| `wkb_start`, `wkb_end` | `i8` | Byte range of the ROI's geometry in `wkb` |
+| `name`, `category`, `source` | vlen `str` | String metadata |
 
-Each ROI's geometry is stored as a WKB blob in `/roi_wkb`, with `/rois` providing the byte range via `wkb_start` and `wkb_end` offsets.
+`wkb` is a flat `uint8` buffer of [WKB (Well-Known Binary)](https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry#Well-known_binary) geometry bytes. Variable-length bytes can't hold the NUL bytes that WKB contains, so each ROI's geometry is the range `wkb[wkb_start:wkb_end]`.
 
-`/roi_wkb` is stored with the HDF5 gzip filter (`compression="gzip", compression_opts=1`), a transparent on-disk storage detail: readers decompress it automatically, byte ranges are unchanged, and no `format_id` bump is required. This is lossless and typically shrinks `/roi_wkb` ~2x on polygon-heavy ROI sets. Browser/h5wasm readers must support the deflate filter, which is already required for the format's gzip-filtered `/mask_rle` and embedded video frames (and the v2.2 chunked `/label_image_data`).
+`wkb` is stored with the HDF5 gzip filter (`compression="gzip", compression_opts=1`), a transparent on-disk storage detail: readers decompress it automatically and byte ranges are unchanged. This is lossless and typically shrinks the buffer ~2x on polygon-heavy ROI sets. Browser/h5wasm readers must support the deflate filter, which is already required for mask RLE bytes, embedded video frames and chunked label image data.
 
-### ROI Dtype
+The `annotation_type` column is retained for backward compatibility but no longer used. Use the `category` string for semantic classification and [`BoundingBox`][sleap_io.BoundingBox] for detection annotations.
+
+On read, `instance`, `is_predicted`, `score`, `tracking_score`, `name`, `category` and `source` are optional (taking -1, `False`, NaN, NaN and `""`); the other columns are required. Ranges outside `wkb` and links to videos, tracks or instances that don't exist raise for a 3.0 table and warn for an older one.
+
+### ROIs before 3.0
+
+Files before 3.0 store ROIs across separate root datasets:
+
+- `/rois`: a compound dataset with the row columns below
+- `/roi_wkb`: the gzip-compressed WKB buffer
+- `/roi_categories`, `/roi_names`, `/roi_sources`: one vlen string per ROI (format 1.9+). Earlier files hold them as JSON attributes on `/rois` (`@categories`, `@names`, `@sources`).
 
 ```python
 roi_dtype = np.dtype([
@@ -1481,70 +1515,63 @@ roi_dtype = np.dtype([
     ("is_predicted", "u1"),     # 0 = UserROI, 1 = PredictedROI (Format 1.9+)
     ("score", "f4"),            # Confidence score (NaN for user ROIs) (Format 1.9+)
     ("tracking_score", "f4"),   # Tracking link confidence (NaN if unset)
-    ("wkb_start", "u8"),       # Start byte offset into /roi_wkb
-    ("wkb_end", "u8"),         # End byte offset into /roi_wkb
-    ("instance", "i4"),        # Instance index (-1 if none) (Format 1.6+)
+    ("wkb_start", "u8"),        # Start byte offset into /roi_wkb
+    ("wkb_end", "u8"),          # End byte offset into /roi_wkb
+    ("instance", "i4"),         # Instance index (-1 if none) (Format 1.6+)
 ])
 ```
 
-!!! note "Legacy and predicted fields"
-    The `annotation_type` column is retained in the on-disk dtype for backward
-    compatibility with older readers but is no longer used. Writers always set
-    `annotation_type = 0`. Use the `category` string metadata for semantic
-    classification and [`BoundingBox`][sleap_io.BoundingBox] for detection
-    annotations.
-
-    The `is_predicted` field distinguishes [`UserROI`][sleap_io.UserROI] (`0`)
-    from [`PredictedROI`][sleap_io.PredictedROI] (`1`). The `score` field stores
-    the confidence value for predicted ROIs (NaN for user ROIs).
-
-### String Metadata
-
-Format 1.9+ stores ROI string metadata as vlen HDF5 string datasets at the root level:
-
-- `/roi_categories`: One category string per ROI
-- `/roi_names`: One name string per ROI
-- `/roi_sources`: One source string per ROI
-
-The reader checks for these datasets first. For pre-1.9 files, it falls back to JSON-encoded HDF5 attributes on the `/rois` dataset (`@categories`, `@names`, `@sources`).
-
-```python
-# Format 1.9+ (vlen string datasets)
-f["/roi_categories"]  # ["arena", "nest"]
-f["/roi_names"]       # ["arena_boundary", "nest_region"]
-f["/roi_sources"]     # ["manual", "model_v2"]
-
-# Pre-1.9 legacy (JSON attributes on /rois dataset)
-rois_dataset.attrs["categories"]  # '["arena", "nest"]'
-rois_dataset.attrs["names"]       # '["arena_boundary", "nest_region"]'
-rois_dataset.attrs["sources"]     # '["manual", "model_v2"]'
-```
+`save_slp(..., legacy_format=True)` writes this layout. A 2.x file without `/roi_wkb` reads no ROIs, as it always has.
 
 ### Static vs Temporal ROIs
 
 - **Static ROIs**: `frame_idx = -1`. Apply globally (e.g., arena boundaries).
 - **Temporal ROIs**: `frame_idx >= 0`. Associated with a specific frame in a video.
 
-### Optional Dataset
+Static ROIs are written after the frame ROIs.
 
-The `/rois` and `/roi_wkb` datasets are only written when the [`Labels`][sleap_io.Labels] object contains ROIs. On read, missing datasets default to empty lists.
+### Optional Group
+
+`/rois` is only written when the [`Labels`][sleap_io.Labels] object contains ROIs. On read, a missing table defaults to an empty list.
 
 ## Segmentation Masks
 
 [`SegmentationMask`][sleap_io.SegmentationMask]s store raster binary masks using run-length encoding (RLE). Mask support was introduced in format 1.5.
 
-### Mask Datasets
+### Mask Columns
 
-Mask data is stored across two datasets:
+From format 3.0, `/masks` is a group with one 1-D dataset per column, one row per mask, plus the `rle` byte buffer and an optional `score_maps/` group (see [Score Maps](#score-maps)):
 
-- `/masks`: Structured array containing mask metadata and byte offsets into the RLE data
-- `/mask_rle`: Packed `uint8` array of RLE-encoded mask bytes, gzip-compressed (`compression_opts=1`)
+| Column | Type | Description |
+|--------|------|-------------|
+| `height`, `width` | `i8` | Mask size in pixels |
+| `annotation_type` | `u1` | Legacy enum, always written as 2 (SEGMENTATION) |
+| `video` | `i8` | Video index (-1 if none) |
+| `frame_idx` | `i8` | Frame index (-1 if none) |
+| `track` | `i8` | Track index (-1 if none) |
+| `instance` | `i8` | `/instances` row (-1 if none) |
+| `from_predicted` | `i8` | `/masks` row of the source prediction (-1 if none) |
+| `is_predicted` | `bool` | `False` = `UserSegmentationMask`, `True` = `PredictedSegmentationMask` |
+| `score` | `f8` | Confidence score (NaN for user masks) |
+| `tracking_score` | `f8` | Tracking link confidence (NaN if unset) |
+| `rle_start`, `rle_end` | `i8` | Byte range of the mask's RLE counts in `rle` |
+| `scale_x`, `scale_y` | `f8` | Spatial scale (1.0 = native resolution) |
+| `offset_x`, `offset_y` | `f8` | Spatial offset in pixels |
+| `name`, `category`, `source` | vlen `str` | String metadata |
 
-The RLE encoding stores `uint32` run-length counts packed as little-endian `uint8` bytes. Each mask's RLE data is located in `/mask_rle` at the byte range specified by `rle_start` and `rle_end`.
+The RLE encoding stores `uint32` run-length counts packed as little-endian `uint8` bytes in `rle`; each mask's counts are `rle[rle_start:rle_end]`.
 
-`/mask_rle` is stored with the HDF5 gzip filter (`compression="gzip", compression_opts=1`), a transparent on-disk storage detail: readers decompress it automatically, byte ranges are unchanged, and no `format_id` bump is required. RLE counts are run-lengths whose packed bytes are highly redundant, so gzip is lossless and typically shrinks `/mask_rle` ~8x (and the whole file ~5x on fragmented segmentation masks). Degenerate empty-RLE masks are written uncompressed (nothing to compress).
+`rle` is stored with the HDF5 gzip filter (`compression="gzip", compression_opts=1`), a transparent on-disk storage detail: readers decompress it automatically and byte ranges are unchanged. RLE counts are run-lengths whose packed bytes are highly redundant, so gzip is lossless and typically shrinks the buffer ~8x (and the whole file ~5x on fragmented segmentation masks). An empty buffer (only degenerate empty-RLE masks) is written uncompressed.
 
-### Mask Dtype
+On read, `annotation_type`, `instance`, `from_predicted`, `is_predicted`, `score`, `tracking_score`, the spatial columns and the strings are optional; the other columns are required. Ranges outside `rle`, a `from_predicted` that isn't a mask row and links to videos, tracks or instances that don't exist raise for a 3.0 table and warn for an older one.
+
+### Masks before 3.0
+
+Files before 3.0 store masks across separate root datasets:
+
+- `/masks`: a compound dataset with the row columns below
+- `/mask_rle`: the gzip-compressed RLE buffer
+- `/mask_categories`, `/mask_names`, `/mask_sources`: one vlen string per mask (format 1.9+). Earlier files hold them as JSON attributes on `/masks` (`@categories`, `@names`, `@sources`).
 
 ```python
 mask_dtype = np.dtype([
@@ -1559,8 +1586,8 @@ mask_dtype = np.dtype([
     ("is_predicted", "u1"),     # 0 = UserSegmentationMask, 1 = Predicted (Format 1.9+)
     ("score", "f4"),            # Confidence score (NaN for user masks) (Format 1.9+)
     ("tracking_score", "f4"),   # Tracking link confidence (NaN if unset)
-    ("rle_start", "u8"),       # Start byte offset into /mask_rle
-    ("rle_end", "u8"),         # End byte offset into /mask_rle
+    ("rle_start", "u8"),        # Start byte offset into /mask_rle
+    ("rle_end", "u8"),          # End byte offset into /mask_rle
     ("scale_x", "f4"),          # Spatial scale x (1.0 = native res) (Format 2.1+)
     ("scale_y", "f4"),          # Spatial scale y (1.0 = native res) (Format 2.1+)
     ("offset_x", "f4"),         # Spatial offset x in pixels (Format 2.1+)
@@ -1568,46 +1595,39 @@ mask_dtype = np.dtype([
 ])
 ```
 
-!!! note "Legacy and predicted fields"
-    The `annotation_type` column is retained for backward compatibility but
-    ignored on read. Writers always set `annotation_type = 2` (SEGMENTATION).
+`save_slp(..., legacy_format=True)` writes this layout. A 2.x file without `/mask_rle` reads no masks, as it always has.
 
-    The `is_predicted` field distinguishes `UserSegmentationMask` (`0`) from
-    `PredictedSegmentationMask` (`1`). The `score` field stores the confidence
-    value for predicted masks (NaN for user masks).
+### Optional Group
 
-### String Metadata
+`/masks` is only written when the [`Labels`][sleap_io.Labels] object contains masks. On read, a missing table defaults to an empty list.
 
-Format 1.9+ stores mask string metadata as vlen HDF5 string datasets at the root level:
+The [`UserSegmentationMask.from_predicted`][sleap_io.UserSegmentationMask] provenance link (set by [`PredictedSegmentationMask.to_user()`][sleap_io.PredictedSegmentationMask]) is persisted (Format 2.4+) in the `from_predicted` column as an index into the flat mask list, mirroring instance `from_predicted` (see the Instances → Instance Linking section above). On write, the linked `PredictedSegmentationMask` is resolved to its global mask index in a deferred pass; a `None` link or a source that is no longer in `labels.masks` is written as `-1`. On read, the index is resolved back to the mask object in a deferred pass after all masks are constructed; `-1` loads as `None`. Files written before Format 2.4 (which lack the column) load `from_predicted` as `None`.
 
-- `/mask_categories`: One category string per mask
-- `/mask_names`: One name string per mask
-- `/mask_sources`: One source string per mask
+## Score Maps
 
-The reader checks for these datasets first. For pre-1.9 files, it falls back to JSON-encoded HDF5 attributes on the `/masks` dataset (`@categories`, `@names`, `@sources`).
+Score maps store per-pixel confidence values for predicted segmentation masks and label images. They are only written when a `PredictedSegmentationMask` or `PredictedLabelImage` has a `score_map` set.
 
-### Optional Dataset
+### Score Map Columns
 
-The `/masks` and `/mask_rle` datasets are only written when the [`Labels`][sleap_io.Labels] object contains masks. On read, missing datasets default to empty lists.
+From format 3.0, `/masks/score_maps` and `/label_images/score_maps` are groups with one row per score map:
 
-The [`UserSegmentationMask.from_predicted`][sleap_io.UserSegmentationMask] provenance link (set by [`PredictedSegmentationMask.to_user()`][sleap_io.PredictedSegmentationMask]) is persisted (Format 2.4+) in the `from_predicted` column as an index into the flat mask list, mirroring instance `from_predicted` (see the Instances → Instance Linking section above). On write, the linked `PredictedSegmentationMask` is resolved to its global mask index in a deferred pass; a `None` link or a source that is no longer in `labels.masks` is written as `-1`. On read, the index is resolved back to the mask object in a deferred pass after all masks are constructed; `-1` and out-of-range indices load as `None`. The column is gated on presence at read time, so files written before Format 2.4 (which lack the column) load `from_predicted` as `None`.
+| Column | Type | Description |
+|--------|------|-------------|
+| `mask_idx` (masks) or `li_idx` (label images) | `i8` | Row of the owning `/masks` or `/label_images` table |
+| `data_start`, `data_end` | `i8` | Byte range of the compressed map in `data` |
+| `height`, `width` | `i8` | Score map size in pixels |
+| `scale_x`, `scale_y` | `f8` | Score map spatial scale (optional, default 1.0) |
+| `offset_x`, `offset_y` | `f8` | Score map spatial offset in pixels (optional, default 0.0) |
 
-## Score Map Datasets
+Each score map is a `float32` array compressed with zlib and packed into the group's `data` buffer, a flat `uint8` dataset that is chunked but not filtered (the maps are already compressed). An index that isn't a row of the owning table or a range outside `data` raises for a 3.0 table and warns for an older one.
 
-Score maps store per-pixel confidence values for predicted segmentation masks and label images. These datasets are only written when `PredictedSegmentationMask` or `PredictedLabelImage` objects have a `score_map` set.
+### Score maps before 3.0
 
-### Mask Score Maps
-
-Mask score maps are stored across two datasets:
-
-- `/mask_score_map_index`: Structured array indexing into the packed data
-- `/mask_score_maps`: Packed `uint8` array of zlib-compressed `float32` score map data
-
-#### Index Dtype
+Files before 3.0 store the index as a compound dataset next to its buffer: `/mask_score_map_index` with `/mask_score_maps`, and `/label_image_score_map_index` with `/label_image_score_maps`:
 
 ```python
 mask_score_map_index_dtype = np.dtype([
-    ("mask_idx", "u4"),     # Index into /masks dataset
+    ("mask_idx", "u4"),     # Index into /masks (li_idx into /label_images)
     ("data_start", "u8"),   # Start byte offset into /mask_score_maps
     ("data_end", "u8"),     # End byte offset into /mask_score_maps
     ("height", "u4"),       # Score map height in pixels
@@ -1619,107 +1639,66 @@ mask_score_map_index_dtype = np.dtype([
 ])
 ```
 
-### Label Image Score Maps
-
-Label image score maps follow the same structure:
-
-- `/label_image_score_map_index`: Structured array indexing into the packed data
-- `/label_image_score_maps`: Packed `uint8` array of zlib-compressed `float32` score map data
-
-#### Index Dtype
-
-```python
-label_image_score_map_index_dtype = np.dtype([
-    ("li_idx", "u4"),       # Index into /label_images dataset
-    ("data_start", "u8"),   # Start byte offset into /label_image_score_maps
-    ("data_end", "u8"),     # End byte offset into /label_image_score_maps
-    ("height", "u4"),       # Score map height in pixels
-    ("width", "u4"),        # Score map width in pixels
-    ("scale_x", "f4"),      # Score map spatial scale x (Format 2.1+)
-    ("scale_y", "f4"),      # Score map spatial scale y (Format 2.1+)
-    ("offset_x", "f4"),     # Score map spatial offset x in pixels (Format 2.1+)
-    ("offset_y", "f4"),     # Score map spatial offset y in pixels (Format 2.1+)
-])
-```
-
-### Data Format
-
-Score map pixel data is stored as `float32` arrays, compressed with zlib, and packed into a single `uint8` byte array. Each score map's compressed bytes are located at the byte range `[data_start, data_end)` in the corresponding packed dataset.
-
-### Optional Datasets
-
-The score map datasets are only written when at least one predicted mask or label image has a `score_map` set. On read, missing datasets are silently skipped.
-
 ## Label Images
 
 [`LabelImage`][sleap_io.LabelImage]s store dense per-pixel instance segmentation data, where each pixel is assigned an integer label corresponding to an object. Label image support was introduced in format 1.8.
 
-### Label Image Datasets
+### Label Image Columns
 
-Label image data is stored across three datasets:
+From format 3.0, `/label_images` is a group with one 1-D dataset per column, one row per label image, plus the pixel `data`, an `objects/` group and an optional `score_maps/` group (see [Score Maps](#score-maps)):
 
-- `/label_images`: Structured array containing label image metadata
-- `/label_image_objects`: Structured array containing per-object metadata
-- `/label_image_data`: Pixel data in one of two formats:
-    - **Blob format** (v1.8-v2.1): Flat `uint8` array of zlib-compressed bytes, indexed by `(data_start, data_end)` byte offsets
-    - **Chunked format** (v2.2+): `(T, H, W)` int32 dataset with per-frame gzip chunks, written via `write_direct_chunk` for maximum throughput
+| Column | Type | Description |
+|--------|------|-------------|
+| `video` | `i8` | Video index (-1 if none) |
+| `frame_idx` | `i8` | Frame index |
+| `height`, `width` | `i8` | Image size in pixels |
+| `n_objects`, `objects_start` | `i8` | The image's objects are `objects/` rows `objects_start` to `objects_start + n_objects` |
+| `data_start`, `data_end` | `i8` | Byte range of the image in a flat `data` buffer (0 for chunked data) |
+| `is_predicted` | `bool` | `False` = `UserLabelImage`, `True` = `PredictedLabelImage` |
+| `score` | `f8` | Confidence score (NaN for user label images) |
+| `scale_x`, `scale_y` | `f8` | Spatial scale (1.0 = native resolution) |
+| `offset_x`, `offset_y` | `f8` | Spatial offset in pixels |
+| `source` | vlen `str` | Source string |
 
-### Label Image Dtype
+`objects/` has one row per object:
 
-```python
-label_image_dtype = np.dtype([
-    ("video", "i4"),          # Video index (-1 if none)
-    ("frame_idx", "i8"),      # Frame index
-    ("height", "u4"),         # Image height in pixels
-    ("width", "u4"),          # Image width in pixels
-    ("n_objects", "u4"),      # Number of objects in this label image
-    ("objects_start", "u4"),  # Start index into /label_image_objects
-    ("data_start", "u8"),     # Start byte offset into /label_image_data
-    ("data_end", "u8"),       # End byte offset into /label_image_data
-    ("is_predicted", "u1"),   # 0 = UserLabelImage, 1 = Predicted (Format 1.9+)
-    ("score", "f4"),          # Confidence score (NaN for user) (Format 1.9+)
-    ("scale_x", "f4"),        # Spatial scale x (1.0 = native res) (Format 2.1+)
-    ("scale_y", "f4"),        # Spatial scale y (1.0 = native res) (Format 2.1+)
-    ("offset_x", "f4"),       # Spatial offset x in pixels (Format 2.1+)
-    ("offset_y", "f4"),       # Spatial offset y in pixels (Format 2.1+)
-])
-```
+| Column | Type | Description |
+|--------|------|-------------|
+| `label_id` | `i8` | Pixel label value in the image data |
+| `track` | `i8` | Track index (-1 if none) |
+| `instance` | `i8` | `/instances` row (-1 if none) |
+| `score` | `f8` | Per-object confidence score (NaN if unset) |
+| `tracking_score` | `f8` | Tracking link confidence (NaN if unset) |
+| `name`, `category` | vlen `str` | String metadata |
 
-### Objects Dtype
-
-Each object within a label image is described by a row in `/label_image_objects`:
-
-```python
-label_image_object_dtype = np.dtype([
-    ("label_id", "i4"),       # Pixel label value in the image data
-    ("track", "i4"),          # Track index (-1 if none)
-    ("instance", "i4"),       # Instance index (-1 if none)
-    ("score", "f4"),          # Per-object confidence score (Format 1.9+)
-    ("tracking_score", "f4"), # Tracking link confidence (NaN if unset)
-])
-```
+Object ranges outside `objects/`, rows without pixel data, data ranges outside a flat buffer and links to videos, tracks or instances that don't exist raise for a 3.0 table and warn for an older one.
 
 ### Pixel Data
 
-Label image pixel data is stored as `int32` arrays (0 = background, positive values = object IDs) in one of two formats:
+Label image pixel data is stored as `int32` arrays (0 = background, positive values = object IDs) in `/label_images/data`, in one of two formats:
 
-**Blob format (v1.8-v2.1):** Each frame is individually zlib-compressed and packed into `/label_image_data` as a flat `uint8` byte array. The `data_start` and `data_end` fields in the index table give the byte range `[data_start, data_end)` for each frame.
+**Chunked format (v2.2+):** When all frames share the same `(H, W)` dimensions, pixel data is stored as a 3D `(T, H, W)` int32 dataset with chunk shape `(1, H, W)` and gzip-1 compression. Data is written via `write_direct_chunk` (pre-compressed with `zlib.compress(level=1)`) for ~43x throughput improvement over standard h5py writes. The `data_start` and `data_end` columns are unused (set to 0).
 
-**Chunked format (v2.2+):** When all frames share the same `(H, W)` dimensions, pixel data is stored as a 3D `(T, H, W)` int32 dataset with chunk shape `(1, H, W)` and gzip-1 compression. Data is written via `write_direct_chunk` (pre-compressed with `zlib.compress(level=1)`) for ~43x throughput improvement over standard h5py writes. The `data_start` and `data_end` fields are unused (set to 0). The reader auto-detects the format by checking `label_image_data.ndim` (3 = chunked, 1 = blob).
+**Blob format (v1.8+):** Each frame is individually zlib-compressed and packed into `data` as a flat `uint8` byte array, with `[data_start, data_end)` giving each frame's byte range. When frame sizes are mixed, the writer falls back to this format automatically.
 
-When frame sizes are mixed, the writer falls back to blob format automatically.
+The reader detects the format from `data.ndim` (3 = chunked, 1 = blob). Pixels load lazily, on first `.data` access.
 
-### String Metadata
+The streaming [`LabelImageWriter`][sleap_io.LabelImageWriter] and [`merge_label_images`][sleap_io.merge_label_images] write SLP 3.0 with chunked data. Their files hold no instances, so objects link to none (`instance = -1`). `merge_label_images` reads sources of any layout, with the same checks as loading them.
 
-Format 1.9+ stores label image string metadata as vlen HDF5 string datasets:
+### Label images before 3.0
 
-- `/label_image_sources`: One source string per label image
-- `/label_image_obj_categories`: One category string per object
-- `/label_image_obj_names`: One name string per object
+Files before 3.0 store label images across separate root datasets:
 
-### Optional Datasets
+- `/label_images`: a compound dataset (`LI_DTYPE`: `video` i4, `frame_idx` i8, `height`/`width`/`n_objects`/`objects_start` u4, `data_start`/`data_end` u8, `is_predicted` u1, `score` and the spatial columns f4)
+- `/label_image_objects`: a compound dataset (`OBJ_DTYPE`: `label_id`/`track`/`instance` i4, `score`/`tracking_score` f4)
+- `/label_image_data`: the pixel data, in either format above
+- `/label_image_sources`, `/label_image_obj_categories`, `/label_image_obj_names`: vlen strings (format 1.9+). Earlier files hold them as JSON attributes on `/label_images` (`@sources`) and `/label_image_objects` (`@categories`, `@names`).
 
-The label image datasets are only written when the [`Labels`][sleap_io.Labels] object contains label images. On read, missing datasets default to empty lists.
+`save_slp(..., legacy_format=True)` writes this layout.
+
+### Optional Group
+
+`/label_images` is only written when the [`Labels`][sleap_io.Labels] object contains label images. On read, a missing table defaults to an empty list.
 
 ## Storage Representation Matrix
 
@@ -1740,7 +1719,7 @@ Different data structures use different on-disk representations, chosen per subs
 
 ### Write is single-method; read is broader
 
-- **Write:** the Python library writes **exactly one native representation per data structure** by default. `legacy_format=True` writes the 2.x layout instead (compound `/points`, `/pred_points`, `/instances` and `/frames`, and `/negative_frames`) for older readers. It never writes the h5wasm flat-2D substitute.
+- **Write:** the Python library writes **exactly one native representation per data structure** by default, and **no compound dataset** since 3.0. `legacy_format=True` writes the 2.x layout instead (compound `/points`, `/pred_points`, `/instances`, `/frames`, `/negative_frames`, ROI, mask, label image, score map, link and session tables, and the separate `roi_*`, `mask_*` and `label_image_*` datasets) for older readers. It never writes the h5wasm flat-2D substitute.
 - **Read:** the **compound** readers *also* accept the flat-2D + `field_names` encoding that [sleap-io.js](https://github.com/talmolab/sleap-io.js) writes (h5wasm cannot create compound datasets), routed through `utils._read_dataset_from_open_file`. Every other kind (columnar / matrix / string / JSON) is read directly and is already h5wasm-native, so no conversion is needed. **`compound` is therefore the only kind with a browser-interop dependency** (see [Browser-side compatibility](#browser-side-compatibility-h5wasm-sleap-iojs)).
 
 ### Matrix
@@ -1753,38 +1732,40 @@ Different data structures use different on-disk representations, chosen per subs
 | Instance / frame metadata | `/instances/metadata/`, `/frames/metadata/` | columnar group (one per key) | **3.0** | n/a |
 | 2D points | `/points`, `/pred_points` | columnar group (compound before 3.0) | **3.0** | ✅ (2.x files) |
 | Negative frames | `/frames/is_negative` (`/negative_frames` before 3.0) | columnar (compound before 3.0) | **3.0** | ✅ (2.x files) |
-| Segmentation masks (table) | `/masks` | compound | 1.5 | ✅ |
-| Mask RLE geometry | `/mask_rle` | ragged CSR | 1.5 | ✅ |
-| ROIs (table) | `/rois` | compound | 1.5 | ✅ |
-| ROI geometry (WKB) | `/roi_wkb` | ragged CSR | 1.5 | ✅ |
+| Segmentation masks (table) | `/masks` (compound before 3.0) | columnar group | **3.0** | ✅ (2.x files) |
+| Mask RLE geometry | `/masks/rle` (`/mask_rle` before 3.0) | ragged CSR | 1.5 | n/a |
+| ROIs (table) | `/rois` (compound before 3.0) | columnar group | **3.0** | ✅ (2.x files) |
+| ROI geometry (WKB) | `/rois/wkb` (`/roi_wkb` before 3.0) | ragged CSR | 1.5 | n/a |
 | Bounding boxes / centroids | `/bboxes`, `/centroids` | columnar group | 2.0 † | n/a |
-| Label images (table) | `/label_images`, `/label_image_objects` | compound | 1.8 | ✅ |
-| Label-image pixel maps | `/label_image_data` (T,H,W) | plain matrix | 2.2 | n/a |
-| Dense score-map index tables | `/mask_score_map_index`, `/label_image_score_map_index` | compound | 1.9 / 2.1 | ⚠️ no |
-| Dense score-map blobs | `/mask_score_maps`, `/label_image_score_maps` | ragged CSR | 1.9 | n/a |
+| Bounding box metadata | `/bboxes/metadata/` | columnar group (one per key) | **3.0** | n/a |
+| Label images (table + objects) | `/label_images`, `/label_images/objects` (`/label_image_objects` before 3.0) | columnar group (compound before 3.0) | **3.0** | ✅ (2.x files) |
+| Label-image pixel maps | `/label_images/data` (T,H,W) (`/label_image_data` before 3.0) | plain matrix (ragged CSR for mixed sizes) | 2.2 | n/a |
+| Dense score-map index tables | `/masks/score_maps`, `/label_images/score_maps` (`/mask_score_map_index`, `/label_image_score_map_index` before 3.0) | columnar group (compound before 3.0) | **3.0** | ✅ (2.x files) |
+| Dense score-map blobs | `…/score_maps/data` (`/mask_score_maps`, `/label_image_score_maps` before 3.0) | ragged CSR | 1.9 | n/a |
 | Identity / category catalog names | `/identity/name`, `/categories/name` | string | 2.5 / 2.7 | n/a |
 | Identity / category / event metadata | `…/meta_owner`, `…/meta_key`, `…/meta_val` | EAV | 2.5 / 2.7 / 2.6 | n/a |
-| Per-detection identity / category **links** | `/identity/links`, `/categories/links` | compound | 2.5 / 2.7 | ✅ |
+| Per-detection identity / category **links** | `/identity/links`, `/categories/links` | columnar group (compound before 3.0) | **3.0** | ✅ (2.x files) |
 | Re-ID / category embeddings + join cols | `/embeddings/vectors`, `owner_type`, `owner_id`, `category_*` | plain matrix | 2.5 / 2.7 | n/a |
 | Event types catalog | `/event_types/name`, `/description` | string | 2.6 | n/a |
 | Frame-spanning events | `/events/*` (video, start_frame, …) | columnar group | 2.6 | n/a |
 | Event framewise score traces | `/events/scores` + `/events/score_offsets` | ragged CSR | 2.6 | n/a |
 | **Sessions** — calibration + video map + frame-group range | `sessions_json` | JSON | **2.8** | n/a |
-| **Session frame groups / instance groups / members** | `/session_data/frame_groups`, `/instance_groups`, `/instance_group_members` | compound | **2.8** | ✅ |
+| **Session frame groups / instance groups / members** | `/session_data/frame_groups`, `/instance_groups`, `/instance_group_members` | columnar group (compound in 2.8) | **3.0** | ✅ (2.x files) |
 | **3D points** (row-range sliced) | `/session_data/points_3d` (N,3), `/pred_points_3d` (N,4) | plain matrix | **2.8** | n/a |
 | **Per-group session metadata** | `/session_data/frame_group_meta`, `/instance_group_meta` | JSON (per row) | **2.8** | n/a |
 | Videos / tracks / suggestions / provenance | `videos_json`, `tracks_json`, `suggestions_json`, `provenance_json` | JSON | 1.0 / 2.x | n/a |
 | Virtual video crops | `/video_crops` | JSON | 2.3 | n/a |
-| Per-detection string metadata | `/mask_*`, `/roi_*`, `/label_image_*` name/category/source | string | 1.9 | n/a |
+| Per-detection string metadata | `name`/`category`/`source` columns of `/rois`, `/masks`, `/label_images` and its `objects/` (`/mask_*`, `/roi_*`, `/label_image_*` before 3.0) | string | 1.9 | n/a |
 | Skeletons + provenance + `format_id` | `/metadata` attrs (`json`, `format_id`) | attribute | 1.0 | n/a |
 
 † Centroid presence alone does not bump `format_id` (see [Centroids](#centroids)); both `/bboxes` and `/centroids` use the same columnar-group mechanism introduced at 2.0.
 
 ### Notes
 
-- **The 2.8 sessions subsystem deliberately mixes three representations** — compound (the small structural index tables), plain matrix (the bulk 3D coordinates, chunked + gzip so they stream), and per-row JSON (arbitrary group metadata) — matching each payload to the right storage (see [Sessions](#sessions)).
-- **Only `compound` has a browser-interop dependency.** Two compound tables — the dense score-map index tables (⚠️) — are read *without* the flat-2D fallback, so a sleap-io.js-written score-map file would not load through them; score maps are a rare prediction-only feature outside the currently-in-flight port.
-- **Lazy loads** copy the entire `/session_data` group + `sessions_json` verbatim on save (no re-encoding), preserving the same on-disk representation without materializing frames.
+- **The sessions subsystem deliberately mixes three representations** — columnar groups (the small structural index tables; compound in 2.8), plain matrix (the bulk 3D coordinates, chunked + gzip so they stream), and per-row JSON (arbitrary group metadata) — matching each payload to the right storage (see [Sessions](#sessions)).
+- **Only `compound` has a browser-interop dependency**, and only for reading 2.x files: every 2.x compound table, including the dense score-map index tables, is read through one normaliser per table that also accepts the flat-2D encoding. A 3.0 file holds no compound dataset.
+- **Byte data stays in flat `uint8` buffers** (WKB, RLE, score maps, blob pixel data) sliced by start/end columns, since variable-length bytes can't hold NUL bytes.
+- **Lazy loads** copy the `/session_data` tables + `sessions_json` on save without materializing frames, writing the tables in the layout being saved.
 
 ## Version History
 
@@ -1969,24 +1950,28 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 
 **Breaking: tables are stored one dataset per column.**
 
-- `/points` and `/pred_points` are groups of 1-D columns (`x`, `y`, `visible`, `verified`, `labeled`, plus `score` for predictions) instead of compound datasets (see [Points](#points)). The other compound tables follow in the same release
+- `/points` and `/pred_points` are groups of 1-D columns (`x`, `y`, `visible`, `verified`, `labeled`, plus `score` for predictions) instead of compound datasets (see [Points](#points))
 - `/instances` and `/frames` are groups of 1-D columns with `f8` floats, `i8` integers, `bool` flags and a `u1` `instance_type` (see [Instances](#instances) and [Labeled Frames](#labeled-frames)). Their `instance_id` and `frame_id` columns are dropped: the row number is the id. Older files whose stored ids aren't row numbers have their links remapped on read
 - `/frames/video` is always the list index into `videos_json`; sparse embedded video ids are only guessed for older files
 - `/frames/is_negative` replaces the `/negative_frames` dataset, which is still read from older files
 - `tracking_score` NaN reads as `None`
-- New per-record metadata columns in `/instances/metadata/` and `/frames/metadata/` (see [Record Metadata](#record-metadata))
-- The pose tables are range-checked on read: strictly for 3.0 tables, with a warning for older ones
+- Every remaining compound table is a group of columns too, so a 3.0 file holds no compound dataset: [`/rois`](#regions-of-interest-rois) (with its `wkb` buffer and `name`/`category`/`source` columns, replacing `/roi_wkb` and the `/roi_*` string datasets), [`/masks`](#segmentation-masks) (with `rle` and `score_maps/`, replacing `/mask_rle`, `/mask_*` and `/mask_score_map*`), [`/label_images`](#label-images) (with `data`, `objects/` and `score_maps/`, replacing `/label_image_*`), `/identity/links`, `/categories/links` and the [`/session_data`](#sessions) tables. Converted tables use the same number types, and byte data stays in flat `uint8` buffers with start/end ranges and today's gzip defaults
+- New per-record metadata columns in `/instances/metadata/`, `/frames/metadata/` and `/bboxes/metadata/` (see [Record Metadata](#record-metadata))
+- Every table is range-checked on read: strictly for 3.0 tables, with a warning for older ones
 - New per-point `labeled` column, so unlabeled points round-trip; `complete` is renamed `verified`
 - Unknown columns are carried through re-saves, and `/metadata` gains an optional `required_features` attribute
 - Older files are cleaned up on read: hidden points lose their coordinates and visible points without coordinates become hidden
-- Pose columns are uncompressed by default; `compression="gzip"` or `"lzf"` compresses them
+- Pose and row columns are uncompressed by default; `compression="gzip"` or `"lzf"` compresses them
+- [`LabelImageWriter`][sleap_io.LabelImageWriter] and [`merge_label_images`][sleap_io.merge_label_images] write 3.0, and lazy saves write session tables loaded from older files as columns
 - sleap-io 0.9.x and SLEAP refuse to open 3.0 files; write `legacy_format=True` for them
 
 ## Browser-side compatibility (h5wasm / sleap-io.js)
 
-[`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so it stores compound datasets — `points`, `pred_points`, `instances` and `frames` (before 3.0), and (Format 2.8+) the `/session_data` struct tables (`frame_groups`, `instance_groups`, `instance_group_members`) — as **flat 2D arrays** with the same per-row field layout as the structured dtype, tagged with a `field_names` attribute. The Python reader detects this representation (via shape and the `field_names` attribute) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
+[`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so in files before 3.0 it stores compound datasets — `points`, `pred_points`, `instances`, `frames`, the link tables and (Format 2.8+) the `/session_data` struct tables (`frame_groups`, `instance_groups`, `instance_group_members`) — as **flat 2D arrays** with the same per-row field layout as the structured dtype, tagged with a `field_names` attribute. The Python reader detects this representation (via shape and the `field_names` attribute) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
 
-The `/mask_rle` dataset is stored with the HDF5 gzip (deflate) filter. Readers must support deflate to read masks — this is already required for the SLP format's embedded video frames (and the v2.2 chunked `/label_image_data`), and h5wasm bundles zlib, so no additional reader capability is introduced.
+From 3.0, sleap-io.js needs to read and write the columnar layout (groups of plain 1-D datasets, which h5wasm creates natively) to open new files; flags may be stored as integers, since readers accept any numeric type in any column.
+
+The mask `rle` and ROI `wkb` buffers (`/mask_rle` and `/roi_wkb` before 3.0) are stored with the HDF5 gzip (deflate) filter. Readers must support deflate to read them — this is already required for the SLP format's embedded video frames (and the chunked label image data), and h5wasm bundles zlib, so no additional reader capability is introduced.
 
 ## API
 
