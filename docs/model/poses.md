@@ -534,7 +534,8 @@ source annotation id:
 
 - Values must be `bool`, `int`, `float` or `str`; `None` means missing. Nested
   values raise `TypeError`, so JSON-encode them into a `str`.
-- Keys are non-empty strings without `/`.
+- Keys are non-empty strings without `/` or NUL characters, and not `.` or `..`
+  (each key is stored as an HDF5 group name).
 - Values are validated when they are set (on assignment, `update`, or when
   replacing the whole dictionary).
 - Each key must hold one kind of value across a table (e.g. all instances): `int`
