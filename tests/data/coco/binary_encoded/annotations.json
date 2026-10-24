@@ -1,0 +1,118 @@
+{
+  "info": {
+    "description": "Synthetic binary-encoded COCO keypoints (v in {0, 1})"
+  },
+  "images": [
+    {
+      "id": 11,
+      "file_name": "frame_a.png",
+      "height": 48,
+      "width": 64
+    },
+    {
+      "id": 12,
+      "file_name": "frame_b.png",
+      "height": 48,
+      "width": 64
+    }
+  ],
+  "annotations": [
+    {
+      "id": 101,
+      "image_id": 11,
+      "category_id": 1,
+      "keypoints": [
+        10.0,
+        12.0,
+        1,
+        20.0,
+        22.0,
+        1,
+        0.0,
+        0.0,
+        0
+      ],
+      "num_keypoints": 2,
+      "bbox": [
+        10.0,
+        12.0,
+        10.0,
+        10.0
+      ],
+      "area": 100.0,
+      "iscrowd": 0
+    },
+    {
+      "id": 205,
+      "image_id": 11,
+      "category_id": 1,
+      "keypoints": [
+        40.0,
+        30.0,
+        1,
+        0.0,
+        0.0,
+        0,
+        50.0,
+        40.0,
+        1
+      ],
+      "num_keypoints": 2,
+      "bbox": [
+        40.0,
+        30.0,
+        10.0,
+        10.0
+      ],
+      "area": 100.0,
+      "iscrowd": 0
+    },
+    {
+      "id": 307,
+      "image_id": 12,
+      "category_id": 1,
+      "keypoints": [
+        5.0,
+        6.0,
+        1,
+        15.0,
+        16.0,
+        1,
+        25.0,
+        26.0,
+        1
+      ],
+      "num_keypoints": 3,
+      "bbox": [
+        5.0,
+        6.0,
+        20.0,
+        20.0
+      ],
+      "area": 400.0,
+      "iscrowd": 0
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "fly",
+      "supercategory": "animal",
+      "keypoints": [
+        "head",
+        "thorax",
+        "abdomen"
+      ],
+      "skeleton": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    }
+  ]
+}

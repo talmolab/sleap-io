@@ -151,6 +151,8 @@ frame_idx,video_path,inst0.nose.x,inst0.nose.y,inst0.nose.score,inst0.tail.x,ins
 !!! note "Points that are not visible"
     Points marked as not visible (e.g. occluded body parts) are written with NaN coordinates in every format, matching `Instance.numpy()` and the Analysis HDF5 export. Loading the CSV back reads these points as not visible.
 
+    Unlabeled points are also written as NaN. The `points` format adds a `labeled` column that is `False` for them, so they can be told apart from hidden points; it is ignored when reading.
+
 ## Frame Padding
 
 By default, CSV export only includes frames with instances. To include all frames:

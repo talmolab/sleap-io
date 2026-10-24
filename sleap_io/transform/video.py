@@ -401,6 +401,10 @@ def transform_labels(
         For embedded videos (`.pkg.slp`), the output will also be an embedded file
         with transformed frame images. The `video_output_dir` and video encoding
         parameters are ignored for embedded videos.
+
+        The `"area"` key (for example COCO's annotation area) is dropped from the
+        `metadata` of instances and bounding boxes in transformed frames, since it
+        no longer matches the transformed image.
     """
     from sleap_io.model.video import Video
 
@@ -519,6 +523,12 @@ def transform_labels(
                 # Mark out-of-bounds points as not visible
                 oob_mask = get_out_of_bounds_mask(transformed_points, output_bounds)
                 instance.points["visible"][oob_mask] = False
+
+                # A stored COCO `area` no longer matches the transformed frame.
+                instance.metadata.pop("area", None)
+
+            for bbox in lf.bboxes:
+                bbox.metadata.pop("area", None)
 
     # Replace video references for regular videos
     if video_map:

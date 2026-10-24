@@ -6,7 +6,9 @@ COCO-style format specification:
 - Keypoint annotations with coordinates and visibility flags
 - Bounding box and segmentation annotations (polygon and RLE)
 - Support for multiple animal categories with different skeletons
-- Visibility encoding: binary (0/1) or ternary (0/1/2)
+- Visibility encoding: binary (0/1) or ternary (0/1/2), mapped onto the `visible`
+  and `labeled` point flags
+- Annotation and image fields kept as per-record `metadata`
 """
 
 from __future__ import annotations
@@ -14,16 +16,26 @@ from __future__ import annotations
 import json
 import os
 import warnings
+from collections.abc import Iterable
 from pathlib import Path
 
 import numpy as np
 
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.category import Category
-from sleap_io.model.instance import Instance, Track
+from sleap_io.model.instance import (
+    Instance,
+    PointState,
+    Track,
+    compute_point_states,
+)
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
+from sleap_io.model.mask import (
+    PredictedSegmentationMask,
+    SegmentationMask,
+    UserSegmentationMask,
+)
 from sleap_io.model.roi import PredictedROI, UserROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
@@ -173,8 +185,179 @@ def resolve_image_path(
     )
 
 
+VISIBILITY_ENCODINGS = ("auto", "ternary", "binary")
+"""Keypoint visibility encodings accepted by the COCO and Ultralytics readers."""
+
+V0_MODES = ("unlabeled", "absent")
+"""Ways to read a keypoint with visibility code 0 (see `decode_visibility`)."""
+
+
+def _check_visibility_options(visibility_encoding: str, v0_as: str = "unlabeled"):
+    """Validate the `visibility_encoding` and `v0_as` reader options.
+
+    Args:
+        visibility_encoding: One of `VISIBILITY_ENCODINGS`.
+        v0_as: One of `V0_MODES`.
+
+    Raises:
+        ValueError: If either option is not one of its accepted values.
+    """
+    if visibility_encoding not in VISIBILITY_ENCODINGS:
+        raise ValueError(
+            f"visibility_encoding must be one of {VISIBILITY_ENCODINGS}, got "
+            f"{visibility_encoding!r}."
+        )
+    if v0_as not in V0_MODES:
+        raise ValueError(f"v0_as must be one of {V0_MODES}, got {v0_as!r}.")
+
+
+def resolve_visibility_encoding(
+    visibility_encoding: str,
+    visibility_codes: Iterable[Iterable[float]],
+    source: str = "the dataset",
+) -> str:
+    """Resolve `visibility_encoding="auto"` to `"ternary"` or `"binary"`.
+
+    The two encodings only disagree on `v=1`: ternary reads it as occluded with an
+    estimated location, binary as visible. `"auto"` picks binary, with a warning,
+    when some keypoint has `v=1` and none anywhere has `v=2`. That is how binary
+    files (sleap-io's own binary export, CrowdPose) look, while a ternary file
+    almost always has visible keypoints.
+
+    Args:
+        visibility_encoding: `"auto"`, `"ternary"` or `"binary"`.
+        visibility_codes: The visibility codes of every keypoint annotation in the
+            dataset, one iterable of codes per annotation.
+        source: A description of the dataset, used in the warning.
+
+    Returns:
+        `"ternary"` or `"binary"`. Explicit encodings are returned unchanged.
+
+    Raises:
+        ValueError: If `visibility_encoding` is not an accepted value.
+    """
+    _check_visibility_options(visibility_encoding)
+    if visibility_encoding != "auto":
+        return visibility_encoding
+
+    has_occluded = False
+    for codes in visibility_codes:
+        codes = set(codes)
+        if 2 in codes:
+            return "ternary"
+        has_occluded = has_occluded or 1 in codes
+    if not has_occluded:
+        # No v=1 either, so both encodings read the same.
+        return "ternary"
+
+    warnings.warn(
+        f"No keypoint in {source} has visibility 2, so its visibility codes are read "
+        "as binary (v>0 is visible). Pass visibility_encoding='ternary' to read v=1 "
+        "as occluded instead.",
+        stacklevel=3,
+    )
+    return "binary"
+
+
+def decode_visibility(
+    xy: np.ndarray,
+    visibility: np.ndarray,
+    visibility_encoding: str = "ternary",
+    v0_as: str = "unlabeled",
+) -> np.ndarray:
+    """Map keypoint coordinates and visibility codes onto the point flags.
+
+    With `visibility_encoding="ternary"` (COCO's encoding):
+
+    - `v=0` is unlabeled (no location);
+    - `v=1` is labeled and not visible, with the coordinates kept as an estimate;
+    - `v=2` is visible;
+    - `v<0` is unlabeled;
+    - any other value (for example Halpe's float scores) is visible.
+
+    With `"binary"`, `v>0` is visible, `v=0` follows `v0_as`, and `v<0` is unlabeled.
+
+    Args:
+        xy: Coordinates of shape `(n_points, 2)`.
+        visibility: Visibility codes of shape `(n_points,)`.
+        visibility_encoding: `"ternary"` or `"binary"`. `"auto"` is resolved from
+            these codes alone (see `resolve_visibility_encoding`).
+        v0_as: `"unlabeled"` (the default) reads `v=0` as unlabeled. `"absent"`
+            reads it as labeled and not visible with no location, as sleap-io did
+            before 0.10.
+
+    Returns:
+        A `float64` array of shape `(n_points, 5)` with columns x, y, visible,
+        verified and labeled, the column layout `Instance.from_numpy` accepts.
+        Points without a location have NaN coordinates, and every labeled point is
+        marked verified, since these codes come from human annotations.
+
+    Raises:
+        ValueError: If `visibility_encoding` or `v0_as` is not an accepted value.
+    """
+    _check_visibility_options(visibility_encoding, v0_as)
+    v = np.asarray(visibility, dtype="float64")
+    if visibility_encoding == "auto":
+        visibility_encoding = resolve_visibility_encoding("auto", [v.tolist()])
+
+    labeled = v > 0
+    if visibility_encoding == "binary":
+        visible = labeled
+    else:
+        visible = labeled & (v != 1)
+    if v0_as == "absent":
+        labeled = labeled | (v == 0)
+
+    points = np.empty((len(v), 5), dtype="float64")
+    points[:, :2] = np.where((v > 0).reshape(-1, 1), xy, np.nan)
+    points[:, 2] = visible
+    points[:, 3] = labeled
+    points[:, 4] = labeled
+    return points
+
+
+def encode_visibility(
+    points: np.ndarray, visibility_encoding: str = "ternary"
+) -> tuple[np.ndarray, np.ndarray]:
+    """Map a points array onto keypoint coordinates and visibility codes.
+
+    With `visibility_encoding="ternary"`, visible points are written as `v=2`, hidden
+    points with coordinates (occluded estimates) as `v=1`, and every other point
+    (hidden without a location, or unlabeled) as `v=0`. With `"binary"`, visible
+    points are `v=1` and every other point is `v=0`. Points with `v=0` get `(0, 0)`
+    coordinates.
+
+    Args:
+        points: A `PointsArray` or `PredictedPointsArray` of shape `(n_points,)`.
+        visibility_encoding: `"ternary"` or `"binary"`.
+
+    Returns:
+        A tuple `(xy, visibility)` of a `float64` array of shape `(n_points, 2)` and
+        an `int64` array of shape `(n_points,)`.
+
+    Raises:
+        ValueError: If `visibility_encoding` is not `"ternary"` or `"binary"`.
+    """
+    if visibility_encoding not in ("ternary", "binary"):
+        raise ValueError(
+            "visibility_encoding must be 'ternary' or 'binary' for writing, got "
+            f"{visibility_encoding!r}."
+        )
+    states = compute_point_states(points["xy"], points["visible"], points["labeled"])
+    if visibility_encoding == "binary":
+        v = (states == PointState.VISIBLE).astype("int64")
+    else:
+        v = np.where(states == PointState.ABSENT, 0, states).astype("int64")
+    xy = np.where((v > 0).reshape(-1, 1), points["xy"], 0.0).astype("float64")
+    return xy, v
+
+
 def decode_keypoints(
-    keypoints: list[float], num_keypoints: int, skeleton: Skeleton
+    keypoints: list[float],
+    num_keypoints: int,
+    skeleton: Skeleton,
+    visibility_encoding: str = "ternary",
+    v0_as: str = "unlabeled",
 ) -> np.ndarray:
     """Decode COCO keypoint format to numpy array for Instance creation.
 
@@ -182,9 +365,13 @@ def decode_keypoints(
         keypoints: Flat list of [x1, y1, v1, x2, y2, v2, ...] values.
         num_keypoints: Number of keypoints (for validation).
         skeleton: Skeleton object defining the keypoint structure.
+        visibility_encoding: `"ternary"` (the default), `"binary"` or `"auto"`. See
+            `decode_visibility`.
+        v0_as: `"unlabeled"` (the default) or `"absent"`. See `decode_visibility`.
 
     Returns:
-        Numpy array of shape (num_keypoints, 3) with [x, y, visibility] values.
+        Numpy array of shape `(num_keypoints, 5)` with columns x, y, visible,
+        verified and labeled, ready for `Instance.from_numpy`.
     """
     if len(keypoints) != num_keypoints * 3:
         raise ValueError(
@@ -198,31 +385,13 @@ def decode_keypoints(
             f"{num_keypoints} keypoints"
         )
 
-    points = []
-    for i in range(num_keypoints):
-        x = keypoints[i * 3]
-        y = keypoints[i * 3 + 1]
-        visibility = keypoints[i * 3 + 2]
-
-        # Handle different visibility encodings
-        # 0 = not labeled/not visible, 1 = labeled but not visible,
-        # 2 = labeled and visible
-        # For binary encoding: 0 = not visible, 1 = visible
-        if visibility == 0:
-            # Not labeled or not visible - use NaN coordinates
-            points.append([np.nan, np.nan, False])
-        elif visibility == 1:
-            # Labeled but not visible (occluded) OR visible (in binary encoding)
-            # For now, treat as visible since we can't distinguish binary vs ternary
-            points.append([x, y, True])
-        elif visibility == 2:
-            # Labeled and visible
-            points.append([x, y, True])
-        else:
-            # Unknown visibility value, default to visible
-            points.append([x, y, True])
-
-    return np.array(points, dtype=np.float32)
+    values = np.asarray(keypoints, dtype="float64").reshape(num_keypoints, 3)
+    return decode_visibility(
+        values[:, :2],
+        values[:, 2],
+        visibility_encoding=visibility_encoding,
+        v0_as=v0_as,
+    )
 
 
 def _decode_compressed_rle_counts(counts: str | bytes) -> list[int]:
@@ -418,12 +587,71 @@ def _decode_segmentation(
     return masks, rois
 
 
+# Annotation fields kept as record metadata on read, as (field, metadata key).
+_ANNOTATION_METADATA_FIELDS = (
+    ("id", "ann_id"),
+    ("category_id", "category_id"),
+    ("iscrowd", "iscrowd"),
+    ("area", "area"),
+    ("num_keypoints", "num_keypoints"),
+)
+
+# Image fields kept as frame metadata on read, as (field, metadata key).
+_IMAGE_METADATA_FIELDS = (("id", "image_id"), ("file_name", "file_name"))
+
+
+def _scalar_fields(record: dict, fields: tuple[tuple[str, str], ...]) -> dict:
+    """Pick the scalar values of some fields of a COCO record as metadata.
+
+    Args:
+        record: A COCO annotation or image dictionary.
+        fields: Pairs of (COCO field, metadata key).
+
+    Returns:
+        A dictionary from metadata key to value for each field that holds a
+        `bool`, `int`, `float` or `str`. Missing fields and other values (`null`,
+        lists) are skipped.
+    """
+    return {
+        key: record[field]
+        for field, key in fields
+        if isinstance(record.get(field), (bool, int, float, str))
+    }
+
+
+def _annotation_metadata(annotation: dict) -> dict:
+    """Return the record metadata of a COCO annotation (see `read_labels`)."""
+    return _scalar_fields(annotation, _ANNOTATION_METADATA_FIELDS)
+
+
+def _image_metadata(image_info: dict) -> dict:
+    """Return the frame metadata of a COCO image (see `read_labels`)."""
+    return _scalar_fields(image_info, _IMAGE_METADATA_FIELDS)
+
+
+def _is_pose_annotation(annotation: dict, skeletons: dict) -> bool:
+    """Return whether an annotation is read as a pose instance.
+
+    Args:
+        annotation: A COCO annotation dictionary.
+        skeletons: Skeletons by COCO category id.
+
+    Returns:
+        `True` if the annotation has keypoints and its category has a skeleton.
+    """
+    return bool(annotation.get("keypoints")) and (
+        annotation.get("category_id") in skeletons
+    )
+
+
 def read_labels(
     json_path: str | Path,
     dataset_root: str | Path | None = None,
     grayscale: bool = False,
     segmentation_format: str = "mask",
     category_as_track: bool = False,
+    visibility_encoding: str = "auto",
+    v0_as: str = "unlabeled",
 ) -> Labels:
     """Read COCO-style dataset and return a Labels object.
 
@@ -432,6 +660,17 @@ def read_labels(
     contain both keypoints and segmentation/bbox data will have both preserved:
     keypoints are stored as `Instance` objects while segmentation and bounding box
     data are stored as `ROI` or `SegmentationMask` objects.
+
+    Keypoint visibility codes map onto the point flags (see `decode_visibility`):
+    with the ternary encoding, `v=0` reads as unlabeled, `v=1` as occluded with its
+    coordinates kept, and `v=2` as visible. Every labeled keypoint is marked
+    `verified`.
+
+    Annotation fields are kept as record `metadata`: `ann_id` (the annotation
+    `id`), `category_id`, `iscrowd`, `area` and `num_keypoints` go on the pose
+    instance (crowd annotations with keypoints included), or on the bounding box for
+    annotations read without keypoints. Each frame gets the image's `image_id` and
+    `file_name`. Annotations stored only as a mask or ROI keep no metadata.
 
     Args:
         json_path: Path to the COCO annotation JSON file.
@@ -452,17 +691,27 @@ def read_labels(
             ROIs, bounding boxes, and keypoint instances without an explicit
             track id). Useful for instance-segmentation datasets where the
             category encodes identity rather than object class. Default is False.
+        visibility_encoding: How to read keypoint visibility codes. ``"ternary"``
+            is COCO's 0/1/2 encoding. ``"binary"`` reads ``v>0`` as visible, as
+            written by ``save_coco(..., visibility_encoding="binary")``; use it for
+            CrowdPose too. ``"auto"`` (the default) picks binary, with a warning,
+            when some keypoint has ``v=1`` and none in the file has ``v=2``.
+        v0_as: How to read keypoints with ``v=0``. ``"unlabeled"`` (the default)
+            follows COCO. ``"absent"`` reads them as labeled and not visible with
+            no location, as sleap-io did before 0.10.
 
     Returns:
         Parsed labels as a Labels instance.
 
     Raises:
-        ValueError: If ``segmentation_format`` is not ``"mask"`` or ``"roi"``.
+        ValueError: If ``segmentation_format`` is not ``"mask"`` or ``"roi"``, or if
+            ``visibility_encoding`` or ``v0_as`` is not an accepted value.
     """
     if segmentation_format not in ("mask", "roi"):
         raise ValueError(
             f"segmentation_format must be 'mask' or 'roi', got {segmentation_format!r}."
         )
+    _check_visibility_options(visibility_encoding, v0_as)
 
     # One shared Track per category name, created on first use.
     category_track_dict: dict[str, Track] = {}
@@ -513,6 +762,17 @@ def read_labels(
         if image_id not in image_annotations:
             image_annotations[image_id] = []
         image_annotations[image_id].append(annotation)
+
+    # Pick one visibility encoding for the whole file.
+    visibility_encoding = resolve_visibility_encoding(
+        visibility_encoding,
+        (
+            annotation["keypoints"][2::3]
+            for annotation in coco_data["annotations"]
+            if _is_pose_annotation(annotation, skeletons)
+        ),
+        source=str(json_path),
+    )
 
     # Group images by shape (height, width) for shared Video objects. Each
     # ``images`` entry becomes its own frame in its shape's video, so the frame
@@ -598,9 +858,9 @@ def read_labels(
                 category_id = annotation["category_id"]
                 cat_name = category_names.get(category_id, "")
                 category = category_objs.get(category_id)
-                has_kpts = "keypoints" in annotation and annotation["keypoints"]
+                metadata = _annotation_metadata(annotation)
 
-                if has_kpts and category_id in skeletons:
+                if _is_pose_annotation(annotation, skeletons):
                     # Pose annotation with keypoints
                     skeleton = skeletons[category_id]
 
@@ -624,13 +884,18 @@ def read_labels(
                     expected_keypoints = len(skeleton.nodes)
 
                     points_array = decode_keypoints(
-                        keypoints_data, expected_keypoints, skeleton
+                        keypoints_data,
+                        expected_keypoints,
+                        skeleton,
+                        visibility_encoding=visibility_encoding,
+                        v0_as=v0_as,
                     )
                     instance = Instance.from_numpy(
                         points_data=points_array,
                         skeleton=skeleton,
                         track=track,
                     )
+                    instance.metadata = metadata
                     instances.append(instance)
 
                     # Also extract segmentation/bbox if present alongside
@@ -728,11 +993,15 @@ def read_labels(
                             bbox_obj = UserBoundingBox.from_xywh(
                                 x, y, w, h, **roi_kwargs
                             )
+                        bbox_obj.metadata = metadata
                         bboxes.append(bbox_obj)
 
         # Always create a labeled frame so unannotated images are preserved
         labeled_frame = LabeledFrame(
-            video=video, frame_idx=frame_idx, instances=instances
+            video=video,
+            frame_idx=frame_idx,
+            instances=instances,
+            metadata=_image_metadata(image_info),
         )
         labeled_frame.rois.extend(rois)
         labeled_frame.masks.extend(masks)
@@ -753,6 +1022,8 @@ def read_labels_set(
     grayscale: bool = False,
     segmentation_format: str = "mask",
     category_as_track: bool = False,
+    visibility_encoding: str = "auto",
+    v0_as: str = "unlabeled",
 ) -> dict[str, Labels]:
     """Read multiple COCO annotation files and return a dictionary of Labels.
 
@@ -773,6 +1044,9 @@ def read_labels_set(
             identity, creating one `Track` per category and assigning it to that
             category's annotations. See `read_labels` for details. Tracks are
             created independently per split. Default is False.
+        visibility_encoding: ``"auto"`` (the default), ``"ternary"`` or
+            ``"binary"``. ``"auto"`` is resolved per file. See `read_labels`.
+        v0_as: ``"unlabeled"`` (the default) or ``"absent"``. See `read_labels`.
 
     Returns:
         Dictionary mapping split names to Labels objects.
@@ -800,6 +1074,8 @@ def read_labels_set(
             grayscale=grayscale,
             segmentation_format=segmentation_format,
             category_as_track=category_as_track,
+            visibility_encoding=visibility_encoding,
+            v0_as=v0_as,
         )
         labels_dict[split_name] = labels
 
@@ -924,9 +1200,15 @@ def convert_labels(
                 f"number of labeled frames ({len(labels.labeled_frames)})"
             )
 
-    # Process labeled frames
-    image_id_counter = 1
-    annotation_id_counter = 1
+    # Process labeled frames. Stored image ids are reused when they're unique.
+    image_ids = _assign_coco_ids(
+        [lf.metadata.get("image_id") for lf in labels.labeled_frames], "image"
+    )
+    image_id_counter = max(image_ids, default=0) + 1
+
+    # Annotation ids are assigned once every annotation is built, so stored ids
+    # can be checked for uniqueness across the whole export.
+    stored_ann_ids = []
 
     # Build mapping from (video, frame_idx) to image_id for ROI/mask export
     video_frame_to_image_id = {}
@@ -959,8 +1241,9 @@ def convert_labels(
             width = 0
 
         # Add image entry
+        image_id = image_ids[frame_idx]
         image_info = {
-            "id": image_id_counter,
+            "id": image_id,
             "file_name": image_filename,
             "width": width,
             "height": height,
@@ -969,7 +1252,7 @@ def convert_labels(
 
         # Track video/frame to image_id mapping
         vf_key = (id(labeled_frame.video), labeled_frame.frame_idx)
-        video_frame_to_image_id[vf_key] = image_id_counter
+        video_frame_to_image_id[vf_key] = image_id
 
         # Process instances
         for instance in labeled_frame.instances:
@@ -977,45 +1260,44 @@ def convert_labels(
             category_id = skeleton_to_category[instance.skeleton]
 
             # Encode keypoints
-            points_array = instance.numpy()
-            keypoints = encode_keypoints(points_array, visibility_encoding)
+            xy, visibility = encode_visibility(instance.points, visibility_encoding)
+            keypoints = []
+            for (x, y), v in zip(xy.tolist(), visibility.tolist()):
+                keypoints.extend([x, y, v])
 
-            # Count visible keypoints
-            num_keypoints = sum(
-                1 for i in range(0, len(keypoints), 3) if keypoints[i + 2] > 0
-            )
+            # Count labeled keypoints (v > 0)
+            num_keypoints = int(np.count_nonzero(visibility))
 
-            # Compute bounding box from visible keypoints
-            visible_points = []
-            for i in range(0, len(keypoints), 3):
-                if keypoints[i + 2] > 0:  # visible
-                    visible_points.append([keypoints[i], keypoints[i + 1]])
-
-            if visible_points:
-                visible_points_array = np.array(visible_points)
-                x_min = float(np.min(visible_points_array[:, 0]))
-                y_min = float(np.min(visible_points_array[:, 1]))
-                x_max = float(np.max(visible_points_array[:, 0]))
-                y_max = float(np.max(visible_points_array[:, 1]))
+            # Compute bounding box from labeled keypoints
+            labeled_xy = xy[visibility > 0]
+            if len(labeled_xy) > 0:
+                x_min, y_min = labeled_xy.min(axis=0).tolist()
+                x_max, y_max = labeled_xy.max(axis=0).tolist()
 
                 # Bbox in COCO format: [x, y, width, height]
                 bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
                 area = (x_max - x_min) * (y_max - y_min)
             else:
-                # No visible keypoints - use zero bbox
+                # No labeled keypoints - use zero bbox
                 bbox = [0.0, 0.0, 0.0, 0.0]
                 area = 0.0
 
+            # Prefer the area of a linked mask or ROI, then the stored area.
+            geometry_area = _linked_geometry_area(labeled_frame, instance)
+            if geometry_area is not None:
+                area = geometry_area
+            elif isinstance(instance.metadata.get("area"), (int, float)):
+                area = instance.metadata["area"]
+
             # Create annotation
             annotation = {
-                "id": annotation_id_counter,
-                "image_id": image_id_counter,
+                "image_id": image_id,
                 "category_id": category_id,
                 "keypoints": keypoints,
                 "num_keypoints": num_keypoints,
                 "bbox": bbox,
                 "area": area,
-                "iscrowd": 0,
+                "iscrowd": _stored_iscrowd(instance.metadata),
             }
 
             # Add track ID if present
@@ -1023,9 +1305,7 @@ def convert_labels(
                 annotation["attributes"] = {"object_id": track_to_id[instance.track]}
 
             coco_data["annotations"].append(annotation)
-            annotation_id_counter += 1
-
-        image_id_counter += 1
+            stored_ann_ids.append(instance.metadata.get("ann_id"))
 
     # Export ROIs, masks, and bboxes as COCO annotations (iterate by frame)
     for lf in labels.labeled_frames:
@@ -1054,7 +1334,6 @@ def convert_labels(
                 image_id_counter = image_id + 1
 
             annotation = {
-                "id": annotation_id_counter,
                 "image_id": image_id,
                 "category_id": category_id,
                 "iscrowd": 0,
@@ -1080,7 +1359,7 @@ def convert_labels(
                 annotation["attributes"] = {"object_id": track_to_id[roi.track]}
 
             coco_data["annotations"].append(annotation)
-            annotation_id_counter += 1
+            stored_ann_ids.append(None)
 
         # Export masks as COCO RLE annotations
         for seg_mask in lf.masks:
@@ -1106,17 +1385,13 @@ def convert_labels(
                 image_id_counter = image_id + 1
 
             # COCO expects full-frame masks; resample if scaled/offset
-            export_mask = seg_mask
-            if seg_mask.has_spatial_transform:
-                target_h, target_w = seg_mask.image_extent
-                export_mask = seg_mask.resampled(target_h, target_w)
+            export_mask = _full_frame_mask(seg_mask)
 
             mask_data = export_mask.data
             rle = _encode_coco_rle(mask_data)
 
             bbox_xywh = export_mask.bbox
             annotation = {
-                "id": annotation_id_counter,
                 "image_id": image_id,
                 "category_id": category_id,
                 "segmentation": rle,
@@ -1130,7 +1405,7 @@ def convert_labels(
                 annotation["attributes"] = {"object_id": track_to_id[seg_mask.track]}
 
             coco_data["annotations"].append(annotation)
-            annotation_id_counter += 1
+            stored_ann_ids.append(None)
 
         # Export bounding boxes as COCO bbox annotations (skip instance-linked bboxes
         # since those are already represented in the keypoint annotations above).
@@ -1161,13 +1436,15 @@ def convert_labels(
                 image_id_counter = image_id + 1
 
             x, y, w, h = bbox_obj.xywh
+            area = bbox_obj.metadata.get("area")
+            if not isinstance(area, (int, float)):
+                area = float(bbox_obj.area)
             annotation = {
-                "id": annotation_id_counter,
                 "image_id": image_id,
                 "category_id": category_id,
                 "bbox": [float(x), float(y), float(w), float(h)],
-                "area": float(bbox_obj.area),
-                "iscrowd": 0,
+                "area": area,
+                "iscrowd": _stored_iscrowd(bbox_obj.metadata),
             }
 
             if isinstance(bbox_obj, PredictedBoundingBox):
@@ -1178,9 +1455,99 @@ def convert_labels(
                 annotation["attributes"] = {"object_id": track_to_id[bbox_obj.track]}
 
             coco_data["annotations"].append(annotation)
-            annotation_id_counter += 1
+            stored_ann_ids.append(bbox_obj.metadata.get("ann_id"))
+
+    # Assign annotation ids, reusing stored ones when they're unique.
+    ann_ids = _assign_coco_ids(stored_ann_ids, "annotation")
+    coco_data["annotations"] = [
+        {"id": ann_id, **annotation}
+        for ann_id, annotation in zip(ann_ids, coco_data["annotations"])
+    ]
 
     return coco_data
+
+
+def _assign_coco_ids(stored_ids: list, kind: str) -> list[int]:
+    """Assign COCO ids to records, reusing their stored ids when possible.
+
+    Stored ids (from `metadata`) are reused only if they are all integers and
+    unique. Records without one get new ids above the largest stored id. If the
+    stored ids collide, for example after merging labels loaded from two COCO files,
+    every record is renumbered from 1 with a warning.
+
+    Args:
+        stored_ids: The stored id of each record, or `None` for records without one.
+        kind: The kind of id (`"image"` or `"annotation"`), used in the warning.
+
+    Returns:
+        One id per record, in the same order.
+    """
+    given = [v for v in stored_ids if v is not None]
+    is_int = all(isinstance(v, int) and not isinstance(v, bool) for v in given)
+    if not is_int or len(set(given)) != len(given):
+        warnings.warn(
+            f"The stored COCO {kind} ids (`metadata`) are not unique integers, for "
+            f"example after merging labels, so every {kind} is renumbered from 1.",
+            stacklevel=3,
+        )
+        return list(range(1, len(stored_ids) + 1))
+
+    next_id = max(given, default=0) + 1
+    ids = []
+    for stored_id in stored_ids:
+        if stored_id is None:
+            stored_id = next_id
+            next_id += 1
+        ids.append(stored_id)
+    return ids
+
+
+def _stored_iscrowd(metadata: dict) -> int:
+    """Return the `iscrowd` flag stored in record metadata as 0 or 1.
+
+    Args:
+        metadata: The record's metadata.
+
+    Returns:
+        1 for a crowd annotation, otherwise 0 (also when no `iscrowd` is stored).
+    """
+    return int(bool(metadata.get("iscrowd", 0)))
+
+
+def _full_frame_mask(seg_mask: SegmentationMask) -> SegmentationMask:
+    """Return a mask at the full image resolution, resampling it if needed.
+
+    Args:
+        seg_mask: The mask to export.
+
+    Returns:
+        The mask itself, or a copy resampled to its image extent if it is scaled or
+        offset.
+    """
+    if seg_mask.has_spatial_transform:
+        target_h, target_w = seg_mask.image_extent
+        return seg_mask.resampled(target_h, target_w)
+    return seg_mask
+
+
+def _linked_geometry_area(lf: LabeledFrame, instance: Instance) -> float | None:
+    """Return the area of the first mask or ROI linked to an instance.
+
+    Args:
+        lf: The frame holding the instance.
+        instance: The pose instance.
+
+    Returns:
+        The area in image pixels of the first mask (preferred) or ROI in the frame
+        whose `instance` is this instance, or `None` if there is none.
+    """
+    for seg_mask in lf.masks:
+        if seg_mask.instance is instance:
+            return float(_full_frame_mask(seg_mask).area)
+    for roi in lf.rois:
+        if roi.instance is instance:
+            return float(roi.area)
+    return None
 
 
 def _get_or_create_image_id(

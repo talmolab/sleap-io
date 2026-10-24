@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+import sleap_io as sio
 from sleap_io.transform import Transform
 from sleap_io.transform.core import parse_crop, parse_pad, parse_scale, resolve_scale
 from sleap_io.transform.frame import (
@@ -21,6 +22,7 @@ from sleap_io.transform.points import (
     scale_points,
     transform_points,
 )
+from sleap_io.transform.video import transform_labels
 
 # ============================================================================
 # Transform Class Tests
@@ -1210,6 +1212,33 @@ class TestVideoTransforms:
         assert result_inst.points["visible"][0]  # center point in bounds
         assert not result_inst.points["visible"][1]  # OOB (negative)
         assert not result_inst.points["visible"][2]  # OOB (>= output size)
+
+    def test_transform_labels_drops_area_metadata(self, tmp_path):
+        """A stored `area` is dropped from transformed instances and boxes."""
+        skeleton = sio.Skeleton(["a"])
+        video = sio.Video(
+            filename="fake_video.mp4", backend_metadata={"shape": (1, 100, 100, 1)}
+        )
+        inst = sio.Instance.from_numpy(np.array([[50.0, 50.0]]), skeleton=skeleton)
+        inst.metadata.update({"area": 12.0, "ann_id": 3})
+        box = sio.UserBoundingBox.from_xywh(1, 2, 3, 4)
+        box.metadata.update({"area": 12, "iscrowd": 0})
+        lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+        lf.bboxes.append(box)
+        labels = sio.Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+        result = transform_labels(
+            labels=labels,
+            transforms=Transform(scale=(0.5, 0.5)),
+            output_path=tmp_path / "output.slp",
+            dry_run=True,
+        )
+
+        assert result[0].instances[0].metadata == {"ann_id": 3}
+        assert result[0].bboxes[0].metadata == {"iscrowd": 0}
+        # The source labels keep their metadata.
+        assert inst.metadata["area"] == 12.0
+        assert box.metadata["area"] == 12
 
     def test_compute_transform_summary_single_transform(self, slp_real_data):
         """Test compute_transform_summary with a single Transform."""

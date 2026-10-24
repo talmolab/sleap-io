@@ -23,6 +23,10 @@ from sleap_io.model.video import Video
 if TYPE_CHECKING:
     from sleap_io.io.slp_lazy import LazyDataStore
 
+# Version of the dictionary layout. 1.1.0 added the `labeled` point key and
+# `metadata`, and keeps the coordinates of hidden points (occluded estimates).
+DICT_FORMAT_VERSION = "1.1.0"
+
 
 def to_dict(
     labels: Labels,
@@ -41,7 +45,7 @@ def to_dict(
     Returns:
         Dictionary with structure:
         {
-            "version": "1.0.0",
+            "version": "1.1.0",
             "skeletons": [...],
             "videos": [...],
             "tracks": [...],
@@ -68,7 +72,10 @@ def to_dict(
     Notes:
         - Uses index-based references (e.g., skeleton_idx, video_idx) for compactness
         - Preserves all metadata including provenance
-        - Points are stored as list of dicts with x, y, visible, verified fields
+        - Points are stored as list of dicts with x, y, visible, verified fields,
+          plus ``labeled: False`` for unlabeled points. Hidden points keep their
+          coordinates, which are NaN unless they are an occluded estimate.
+        - Instances and frames with record metadata get a ``metadata`` dict
         - The output is fully compatible with JSON, YAML, or any format that handles
           Python primitives
     """
@@ -162,15 +169,16 @@ def to_dict(
                 is_predicted = isinstance(instance, PredictedInstance)
 
                 # Build points list
-                points_list = []
-                for point in instance.points:
-                    point_dict = {
-                        "x": float(point["xy"][0]),
-                        "y": float(point["xy"][1]),
-                        "visible": bool(point["visible"]),
-                        "verified": bool(point["verified"]),
-                    }
-                    points_list.append(point_dict)
+                points_list = [
+                    _point_dict(
+                        point["xy"][0],
+                        point["xy"][1],
+                        point["visible"],
+                        point["verified"],
+                        point["labeled"],
+                    )
+                    for point in instance.points
+                ]
 
                 # Build instance dict
                 instance_dict = {
@@ -202,6 +210,9 @@ def to_dict(
                     # Note: We can't serialize the reference, just indicate it exists
                     instance_dict["has_from_predicted"] = True
 
+                if instance.metadata:
+                    instance_dict["metadata"] = dict(instance.metadata)
+
                 instances_list.append(instance_dict)
 
             frame_dict = {
@@ -211,6 +222,8 @@ def to_dict(
             }
             if lf.is_negative:
                 frame_dict["is_negative"] = True
+            if lf.metadata:
+                frame_dict["metadata"] = dict(lf.metadata)
             labeled_frames_list.append(frame_dict)
 
     # Build suggestions list (if filtering by video, also filter suggestions)
@@ -229,7 +242,7 @@ def to_dict(
 
     # Build complete dictionary
     result = {
-        "version": "1.0.0",
+        "version": DICT_FORMAT_VERSION,
         "skeletons": skeletons_list,
         "videos": videos_list,
         "tracks": tracks_list,
@@ -260,12 +273,12 @@ def _build_labeled_frames_lazy(
     Returns:
         List of frame dictionaries in to_dict() format.
     """
-    from sleap_io.io.slp import InstanceType
+    from sleap_io.io.slp import InstanceType, _metadata_record
 
     labeled_frames_list = []
 
     # Iterate over frames
-    for frame_row in store.frames_data:
+    for frame_id, frame_row in enumerate(store.frames_data):
         video_id = int(frame_row["video"])
         frame_idx = int(frame_row["frame_idx"])
 
@@ -300,15 +313,12 @@ def _build_labeled_frames_lazy(
                 pts_data = store.points_data[point_start:point_end]
 
             # Build points list
-            points_list = []
-            for pt in pts_data:
-                point_dict = {
-                    "x": float(pt["x"]),
-                    "y": float(pt["y"]),
-                    "visible": bool(pt["visible"]),
-                    "verified": bool(pt["verified"]),
-                }
-                points_list.append(point_dict)
+            points_list = [
+                _point_dict(
+                    pt["x"], pt["y"], pt["visible"], pt["verified"], pt["labeled"]
+                )
+                for pt in pts_data
+            ]
 
             # Build instance dict
             skeleton_id = int(inst_row["skeleton"])
@@ -337,6 +347,10 @@ def _build_labeled_frames_lazy(
             if from_predicted >= 0:
                 instance_dict["has_from_predicted"] = True
 
+            metadata = _metadata_record(store.instance_metadata, inst_idx)
+            if metadata:
+                instance_dict["metadata"] = metadata
+
             instances_list.append(instance_dict)
 
         frame_dict = {
@@ -346,9 +360,39 @@ def _build_labeled_frames_lazy(
         }
         if is_negative:
             frame_dict["is_negative"] = True
+        metadata = _metadata_record(store.frame_metadata, frame_id)
+        if metadata:
+            frame_dict["metadata"] = metadata
         labeled_frames_list.append(frame_dict)
 
     return labeled_frames_list
+
+
+def _point_dict(
+    x: float, y: float, visible: bool, verified: bool, labeled: bool
+) -> dict[str, Any]:
+    """Build the dictionary of one point.
+
+    Args:
+        x: The x coordinate.
+        y: The y coordinate.
+        visible: The `visible` flag.
+        verified: The `verified` flag.
+        labeled: The `labeled` flag. A visible point always counts as labeled.
+
+    Returns:
+        A dictionary with `x`, `y`, `visible` and `verified`, plus `labeled: False`
+        for unlabeled points.
+    """
+    point_dict = {
+        "x": float(x),
+        "y": float(y),
+        "visible": bool(visible),
+        "verified": bool(verified),
+    }
+    if not (labeled or visible):
+        point_dict["labeled"] = False
+    return point_dict
 
 
 def from_dict(data: dict[str, Any]) -> Labels:
@@ -379,6 +423,10 @@ def from_dict(data: dict[str, Any]) -> Labels:
         - The `from_predicted` relationship cannot be fully restored since the
           dictionary only indicates its presence, not the actual reference.
         - Video backends are not restored; videos are created with filename only.
+        - Points read `labeled` (default `True`), `visible` (default `True`) and
+          `verified` (default `False`). Hidden points keep their coordinates as an
+          occluded estimate, except in dictionaries older than version 1.1.0,
+          where hidden points' coordinates are stale and are cleared to NaN.
     """
     import numpy as np
 
@@ -430,6 +478,9 @@ def from_dict(data: dict[str, Any]) -> Labels:
         track = Track(name=track_dict["name"])
         tracks.append(track)
 
+    # Before 1.1.0, hidden points could carry stale coordinates.
+    keep_hidden_xy = _parse_version(data.get("version")) >= (1, 1)
+
     # Build labeled frames
     labeled_frames = []
     for lf_dict in data["labeled_frames"]:
@@ -441,15 +492,23 @@ def from_dict(data: dict[str, Any]) -> Labels:
             skeleton = skeletons[inst_dict["skeleton_idx"]]
             is_predicted = inst_dict["type"] == "predicted_instance"
 
-            # Build points array
+            # Build points array: x, y, visible, verified, labeled
             points_list = inst_dict["points"]
-            n_nodes = len(points_list)
-            points_data = np.full((n_nodes, 2), np.nan, dtype="float64")
-
-            for node_idx, pt in enumerate(points_list):
-                if pt.get("visible", True):
-                    points_data[node_idx, 0] = pt["x"]
-                    points_data[node_idx, 1] = pt["y"]
+            points_data = np.array(
+                [
+                    [
+                        pt["x"],
+                        pt["y"],
+                        pt.get("visible", True),
+                        pt.get("verified", False),
+                        pt.get("labeled", True),
+                    ]
+                    for pt in points_list
+                ],
+                dtype="float64",
+            ).reshape(-1, 5)
+            if not keep_hidden_xy:
+                points_data[points_data[:, 2] == 0, :2] = np.nan
 
             # Get track if present
             track = None
@@ -465,20 +524,27 @@ def from_dict(data: dict[str, Any]) -> Labels:
 
                 # Create predicted instance
                 instance = PredictedInstance.from_numpy(
-                    points_data=points_data,
+                    points_data=points_data[:, :2],
                     skeleton=skeleton,
                     score=score,
                     track=track,
                     tracking_score=tracking_score,
+                    visible=points_data[:, 2],
+                    verified=points_data[:, 3],
+                    labeled=points_data[:, 4],
                 )
             else:
                 # Create user instance
                 instance = Instance.from_numpy(
-                    points_data=points_data,
+                    points_data=points_data[:, :2],
                     skeleton=skeleton,
                     track=track,
                     tracking_score=tracking_score,
+                    visible=points_data[:, 2],
+                    verified=points_data[:, 3],
+                    labeled=points_data[:, 4],
                 )
+            instance.metadata = inst_dict.get("metadata", {})
 
             instances.append(instance)
 
@@ -487,6 +553,7 @@ def from_dict(data: dict[str, Any]) -> Labels:
             frame_idx=frame_idx,
             instances=instances,
             is_negative=lf_dict.get("is_negative", False),
+            metadata=lf_dict.get("metadata", {}),
         )
         labeled_frames.append(labeled_frame)
 
@@ -514,3 +581,19 @@ def from_dict(data: dict[str, Any]) -> Labels:
     )
 
     return labels
+
+
+def _parse_version(version: Any) -> tuple[int, ...]:
+    """Parse a dictionary layout version such as `"1.1.0"`.
+
+    Args:
+        version: The `version` value of a dictionary, or `None` if it has none.
+
+    Returns:
+        The version as a tuple of integers, or `(1, 0)` if it is missing or
+        malformed (the layout before versions changed).
+    """
+    try:
+        return tuple(int(part) for part in str(version).split("."))
+    except ValueError:
+        return (1, 0)

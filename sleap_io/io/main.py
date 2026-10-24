@@ -623,6 +623,11 @@ def load_ultralytics(
             - image_size: Tuple of (height, width) for coordinate denormalization.
               Defaults to
               (480, 640). Will attempt to infer from actual images if available.
+            - visibility_encoding: "auto" (default), "ternary" or "binary". With
+              "ternary", v=0 is unlabeled, v=1 occluded with its coordinates kept,
+              and v=2 visible. "auto" picks binary, with a warning, when some
+              keypoint has v=1 and none has v=2.
+            - v0_as: "unlabeled" (default) or "absent" (the pre-0.10 reading).
 
     Returns:
         The dataset as a `Labels` object.
@@ -661,6 +666,9 @@ def save_ultralytics(
             - n_workers: Number of worker processes. If None, uses CPU count - 1.
               Only used if
               use_multiprocessing=True.
+            - visibility_encoding: "ternary" (default) writes visible points as 2,
+              occluded points with coordinates as 1 and others as 0. "binary"
+              writes visible points as 1 and others as 0.
     """
     from sleap_io.io import ultralytics
 
@@ -929,6 +937,8 @@ def load_coco(
     grayscale: bool = False,
     segmentation_format: str = "mask",
     category_as_track: bool = False,
+    visibility_encoding: str = "auto",
+    v0_as: str = "unlabeled",
     **kwargs,
 ) -> Labels:
     """Load a COCO-style dataset and return a Labels object.
@@ -950,6 +960,16 @@ def load_coco(
             identity, creating one `Track` per category and assigning it to that
             category's annotations. Useful for instance-segmentation datasets
             where the category encodes identity. Default is False.
+        visibility_encoding: How to read keypoint visibility codes. ``"ternary"``
+            is COCO's 0/1/2 encoding (``v=0`` unlabeled, ``v=1`` occluded with its
+            coordinates kept, ``v=2`` visible). ``"binary"`` reads ``v>0`` as
+            visible; use it for files saved with
+            ``save_coco(..., visibility_encoding="binary")`` and for CrowdPose.
+            ``"auto"`` (the default) picks binary, with a warning, when some
+            keypoint has ``v=1`` and none in the file has ``v=2``.
+        v0_as: ``"unlabeled"`` (the default) reads ``v=0`` keypoints as unlabeled.
+            ``"absent"`` reads them as labeled and not visible with no location, as
+            sleap-io did before 0.10.
         **kwargs: Additional arguments (currently unused).
 
     Returns:
@@ -963,6 +983,8 @@ def load_coco(
         grayscale=grayscale,
         segmentation_format=segmentation_format,
         category_as_track=category_as_track,
+        visibility_encoding=visibility_encoding,
+        v0_as=v0_as,
     )
 
 
@@ -1178,7 +1200,9 @@ def load_file(
               "mask" (default) rasterizes polygons into `SegmentationMask` objects;
               "roi" keeps them as vector `ROI` objects. category_as_track (bool): If
               True, treat each COCO category as a persistent identity, creating one
-              `Track` per category. Default is False.
+              `Track` per category. Default is False. visibility_encoding (str):
+              "auto" (default), "ternary" or "binary". v0_as (str): "unlabeled"
+              (default) or "absent". See `load_coco`.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
             - For "analysis_h5" format: video (Optional[Video | str]): Video to
@@ -1896,6 +1920,8 @@ def load_labels_set(
         splits = kwargs.pop("splits", None)
         skeleton = kwargs.pop("skeleton", None)
         image_size = kwargs.pop("image_size", (480, 640))
+        visibility_encoding = kwargs.pop("visibility_encoding", "auto")
+        v0_as = kwargs.pop("v0_as", "unlabeled")
         # Remove verbose from kwargs if present (for backward compatibility)
         kwargs.pop("verbose", None)
 
@@ -1912,6 +1938,8 @@ def load_labels_set(
             splits=splits,
             skeleton=skeleton,
             image_size=image_size,
+            visibility_encoding=visibility_encoding,
+            v0_as=v0_as,
         )
     else:
         raise ValueError(

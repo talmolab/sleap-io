@@ -97,6 +97,20 @@ def coco_visibility_ternary():
 
 
 @pytest.fixture
+def coco_binary_encoded():
+    """COCO keypoints with binary visibility, as written by a binary export.
+
+    This dataset:
+    - Uses binary visibility only: 1=visible, 0=not visible (with 0, 0 coordinates)
+    - Has no keypoint with v=2, so `visibility_encoding="auto"` picks binary
+    - Contains 2 images (64x48) with 2 and 1 annotations of a 3-node fly skeleton
+    - Uses non-sequential annotation ids (101, 205, 307) and image ids (11, 12)
+    - Stores `area`, `iscrowd` and `num_keypoints` on every annotation
+    """
+    return "tests/data/coco/binary_encoded"
+
+
+@pytest.fixture
 def coco_mixed_animals():
     """COCO dataset with multiple animal categories in the same images.
 
@@ -144,6 +158,12 @@ def coco_annotations_visibility_binary():
 def coco_annotations_visibility_ternary():
     """Path to annotations file for visibility_ternary dataset."""
     return "tests/data/coco/visibility_ternary/annotations.json"
+
+
+@pytest.fixture
+def coco_annotations_binary_encoded():
+    """Path to annotations file for binary_encoded dataset."""
+    return "tests/data/coco/binary_encoded/annotations.json"
 
 
 @pytest.fixture

@@ -29,6 +29,9 @@ analysis.h5
 ├── point_scores              # Dataset: Per-point confidence (3D array)
 │   └── @dims
 │
+├── point_labeled             # Dataset: 1 where a point is labeled (3D array)
+│   └── @dims
+│
 ├── instance_scores           # Dataset: Per-instance confidence (2D array)
 │   └── @dims
 │
@@ -70,6 +73,7 @@ Optimized for MATLAB's column-major memory layout. Compatible with SLEAP's origi
 | `tracks` | `(n_tracks, 2, n_nodes, n_frames)` | `["track", "xy", "node", "frame"]` |
 | `track_occupancy` | `(n_frames, n_tracks)` | `["frame", "track"]` |
 | `point_scores` | `(n_tracks, n_nodes, n_frames)` | `["track", "node", "frame"]` |
+| `point_labeled` | `(n_tracks, n_nodes, n_frames)` | `["track", "node", "frame"]` |
 | `instance_scores` | `(n_tracks, n_frames)` | `["track", "frame"]` |
 | `tracking_scores` | `(n_tracks, n_frames)` | `["track", "frame"]` |
 
@@ -94,6 +98,7 @@ Python-native ordering with frame as the first axis for intuitive indexing.
 | `tracks` | `(n_frames, n_tracks, n_nodes, 2)` | `["frame", "track", "node", "xy"]` |
 | `track_occupancy` | `(n_frames, n_tracks)` | `["frame", "track"]` |
 | `point_scores` | `(n_frames, n_tracks, n_nodes)` | `["frame", "track", "node"]` |
+| `point_labeled` | `(n_frames, n_tracks, n_nodes)` | `["frame", "track", "node"]` |
 | `instance_scores` | `(n_frames, n_tracks)` | `["frame", "track"]` |
 | `tracking_scores` | `(n_frames, n_tracks)` | `["frame", "track"]` |
 
@@ -145,6 +150,21 @@ Per-point confidence scores from the pose estimation model.
 | Dtype | `float64` |
 | Range | 0.0 to 1.0 |
 | Missing | `NaN` |
+
+### `point_labeled`
+
+Whether each point is [labeled](../model/poses.md#point-flags-and-states). `tracks`
+holds `NaN` for every point that is not visible, whether it is hidden or
+unlabeled; `point_labeled` tells the two apart.
+
+| Property | Value |
+|----------|-------|
+| Dtype | `uint8` |
+| Values | `1` for labeled (or visible) points, `0` for unlabeled points and empty slots |
+| Shape | Same as `point_scores` |
+
+Written since sleap-io 0.10. Reading ignores it, so unlabeled points load back as
+hidden.
 
 ### `instance_scores`
 

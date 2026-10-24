@@ -73,7 +73,7 @@ data = labels.to_dict()
 
 ```python
 {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "skeletons": [
         {
             "name": "fly",
@@ -97,13 +97,16 @@ data = labels.to_dict()
                     "skeleton_idx": 0,
                     "points": [
                         {"x": 100.0, "y": 200.0, "visible": true, "verified": false},
-                        {"x": 150.0, "y": 250.0, "visible": true, "verified": false},
-                        {"x": 200.0, "y": 300.0, "visible": true, "verified": false}
+                        {"x": 150.0, "y": 250.0, "visible": false, "verified": false},
+                        {"x": NaN, "y": NaN, "visible": false, "verified": false,
+                         "labeled": false}
                     ],
                     "track_idx": 0,
-                    "score": 0.91
+                    "score": 0.91,
+                    "metadata": {"ann_id": 17}
                 }
-            ]
+            ],
+            "metadata": {"image_id": 3}
         },
         {
             "frame_idx": 12,
@@ -118,6 +121,18 @@ data = labels.to_dict()
 ```
 
 The dictionary uses index-based references (`skeleton_idx`, `video_idx`, `track_idx`) for compactness. All values are JSON-serializable primitives.
+
+Each point carries its [flags](model/poses.md#point-flags-and-states):
+
+- `visible` and `verified` are always written.
+- `labeled: false` is written only for unlabeled points (it defaults to `true`).
+- Hidden points keep their coordinates: NaN when there is no location, or the
+  estimated location of an occluded point.
+
+Instances and frames with [record metadata](model/poses.md#metadata) get a
+`metadata` dictionary. Version `1.1.0` (sleap-io 0.10) added `labeled`, `metadata`
+and the coordinates of hidden points. `from_dict()` clears hidden points'
+coordinates in older dictionaries, since they could be stale.
 
 Frames explicitly marked as containing no instances (negative training examples) are preserved in v0.7.0 via an `is_negative: true` field on each frame dict — round-tripping through `to_dict()` / `from_dict()` no longer drops them (PR #369).
 
@@ -297,20 +312,22 @@ df = labels.to_dataframe(format="points")
 ```
 
 ```
-   frame_idx     node      x      y  track  track_score  instance_score  score
-0          0     head  100.0  200.0   None          NaN             NaN    NaN
-1          0   thorax  150.0  250.0   None          NaN             NaN    NaN
-2          0  abdomen  200.0  300.0   None          NaN             NaN    NaN
-3          0     head  105.0  205.0  fly_1         0.98            0.91   0.95
-4          0   thorax  155.0  255.0  fly_1         0.98            0.91   0.92
-5          0  abdomen  205.0  305.0  fly_1         0.98            0.91   0.88
+   frame_idx     node      x      y  labeled  track  track_score  instance_score  score
+0          0     head  100.0  200.0     True   None          NaN             NaN    NaN
+1          0   thorax  150.0  250.0     True   None          NaN             NaN    NaN
+2          0  abdomen    NaN    NaN    False   None          NaN             NaN    NaN
+3          0     head  105.0  205.0     True  fly_1         0.98            0.91   0.95
+4          0   thorax  155.0  255.0     True  fly_1         0.98            0.91   0.92
+5          0  abdomen  205.0  305.0     True  fly_1         0.98            0.91   0.88
 ```
 
 **Columns:**
 
 - `frame_idx`: Frame number
 - `node`: Body part name
-- `x`, `y`: Point coordinates
+- `x`, `y`: Point coordinates (NaN for points that are not visible)
+- `labeled`: `False` for [unlabeled](model/poses.md#point-flags-and-states)
+  points, which are NaN like hidden points. Ignored by `from_dataframe()`.
 - `track`: Track name (or `None` for untracked)
 - `track_score`: Tracking confidence
 - `instance_score`: Instance-level prediction score

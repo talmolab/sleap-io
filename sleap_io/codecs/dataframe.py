@@ -165,6 +165,10 @@ def to_dataframe(
     Returns:
         DataFrame in the specified format. Type depends on backend parameter.
 
+        Coordinates of points that are not visible are NaN in every format. The
+        "points" format also has a boolean ``labeled`` column, which is False for
+        unlabeled points, so they can be told apart from hidden ones.
+
     Raises:
         ValueError: If an invalid format is specified or polars is requested but
             not installed.
@@ -666,6 +670,7 @@ def _iter_points_rows(
                     "node": node.name,
                     "x": _point_coord(point, 0),
                     "y": _point_coord(point, 1),
+                    "labeled": bool(point["labeled"] or point["visible"]),
                 }
 
                 if include_metadata:
@@ -1012,7 +1017,8 @@ def _to_points_df(
     """Convert to points format (one row per point).
 
     Column structure:
-        frame_idx | video | track | track_score | instance_score | node | x | y | score
+        frame_idx | video | track | track_score | instance_score | node | x | y |
+        labeled | score
     """
     rows = []
 
@@ -1036,6 +1042,7 @@ def _to_points_df(
                     "node": node.name,
                     "x": _point_coord(point, 0),
                     "y": _point_coord(point, 1),
+                    "labeled": bool(point["labeled"] or point["visible"]),
                 }
 
                 if include_metadata:
@@ -1340,6 +1347,7 @@ def _to_points_df_lazy(
                 "node": node_name,
                 "x": x,
                 "y": y,
+                "labeled": bool(pt["labeled"] or pt["visible"]),
             }
 
             if include_metadata:
