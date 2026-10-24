@@ -880,6 +880,16 @@ def test_show_json_frames_lazy_matches_eager():
     }
 
 
+def test_show_json_frames_sparse_embedded_video_ids(slp_legacy_negative_frames):
+    """Lazy `--frames` reports list indices for sparse embedded video ids."""
+    args = ["show", slp_legacy_negative_frames, "--json", "--frames"]
+    lazy = _invoke_json(args + ["--no-open-videos"])
+    eager = _invoke_json(args + ["--no-lazy", "--no-open-videos"])
+    assert lazy["frames"] == eager["frames"]
+    # The second video is stored as `video4`, but it is video 1.
+    assert [f["video_index"] for f in lazy["frames"]] == [0, 0, 1, 1]
+
+
 def test_show_json_identities_and_embeddings(tmp_path):
     """JSON output reports identities and the embedding count (eager only)."""
     slp_path = tmp_path / "ids_emb.slp"

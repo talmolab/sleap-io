@@ -2061,3 +2061,62 @@ def test_lazy_save_persists_identities_and_embeddings(tmp_path):
     assert ri[0].identity_embedding.vector.dtype == np.float32
     assert ri[1].identity_embedding is None
     assert ri[2].identity_embedding is None
+
+
+def _labels_with_cross_frame_link() -> sio.Labels:
+    """Two frames whose user instances come from predictions in the first frame."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video("test.mp4")
+    pred = PredictedInstance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton, score=0.5
+    )
+    same_frame = Instance.from_numpy(pred.numpy(), skeleton=skeleton)
+    same_frame.from_predicted = pred
+    other_frame = Instance.from_numpy(pred.numpy(), skeleton=skeleton)
+    other_frame.from_predicted = pred
+    return sio.Labels(
+        [
+            LabeledFrame(video=video, frame_idx=0, instances=[pred, same_frame]),
+            LabeledFrame(video=video, frame_idx=1, instances=[other_frame]),
+        ]
+    )
+
+
+def test_lazy_materialize_links_predictions(tmp_path):
+    """`from_predicted` links survive lazy materialization, across frames too."""
+    path = tmp_path / "labels.slp"
+    _labels_with_cross_frame_link().save(path)
+    lazy = sio.load_slp(path, lazy=True)
+    # A single materialized frame links within itself.
+    lf = lazy[0]
+    assert lf.instances[1].from_predicted is lf.instances[0]
+    assert lazy[1].instances[0].from_predicted is None
+    # Materializing everything links across frames.
+    frames = lazy._lazy_store.materialize_all()
+    assert frames[0].instances[1].from_predicted is frames[0].instances[0]
+    assert frames[1].instances[0].from_predicted is frames[0].instances[0]
+    materialized = lazy.materialize()
+    assert materialized[1].instances[0].from_predicted is materialized[0].instances[0]
+
+
+def test_lazy_store_copy_copies_metadata_columns(tmp_path):
+    """`LazyDataStore.copy` copies the metadata columns."""
+    labels = _labels_with_cross_frame_link()
+    labels[0].instances[0].metadata["area"] = 2.5
+    labels[1].metadata["split"] = "val"
+    path = tmp_path / "labels.slp"
+    labels.save(path)
+    store = sio.load_slp(path, lazy=True)._lazy_store
+    copied = store.copy()
+    for original, copy in (
+        (store.instance_metadata, copied.instance_metadata),
+        (store.frame_metadata, copied.frame_metadata),
+    ):
+        assert original.keys() == copy.keys()
+        for key, (values, present) in original.items():
+            np.testing.assert_array_equal(copy[key][0], values)
+            assert copy[key][0] is not values
+            assert copy[key][1] is not present
+            assert np.array_equal(copy[key][1], present)
+    assert dict(copied.materialize_frame(1).metadata) == {"split": "val"}
+    assert dict(copied.materialize_frame(0).instances[0].metadata) == {"area": 2.5}

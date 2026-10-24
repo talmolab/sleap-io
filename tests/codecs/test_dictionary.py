@@ -850,3 +850,32 @@ def test_dict_lazy_roundtrip_preserves_is_negative(tmp_path):
     restored = from_dict(d)
     assert restored.labeled_frames[0].is_negative is True
     assert restored.labeled_frames[1].is_negative is False
+
+
+def test_to_dict_lazy_matches_eager_for_sparse_embedded_videos(
+    slp_legacy_negative_frames,
+):
+    """The lazy fast path reports list indices and negative frames like eager."""
+    eager = to_dict(load_slp(slp_legacy_negative_frames, open_videos=False))
+    lazy = to_dict(load_slp(slp_legacy_negative_frames, lazy=True, open_videos=False))
+    assert lazy["labeled_frames"] == eager["labeled_frames"]
+    assert [f["video_idx"] for f in lazy["labeled_frames"]] == [0, 0, 1, 1]
+    assert [f.get("is_negative", False) for f in lazy["labeled_frames"]] == [
+        False,
+        True,
+        False,
+        True,
+    ]
+
+
+def test_to_dict_lazy_skips_missing_tracking_scores(tmp_path):
+    """A missing tracking score (NaN on disk) isn't reported by the fast path."""
+    skel = Skeleton(["A"])
+    video = Video(filename="test.mp4")
+    pred = PredictedInstance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skel, tracking_score=None
+    )
+    path = tmp_path / "labels.slp"
+    Labels([LabeledFrame(video, 0, instances=[pred])]).save(path)
+    lazy = to_dict(load_slp(path, lazy=True))
+    assert "tracking_score" not in lazy["labeled_frames"][0]["instances"][0]
