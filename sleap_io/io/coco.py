@@ -192,12 +192,12 @@ V0_MODES = ("unlabeled", "absent")
 """Ways to read a keypoint with visibility code 0 (see `decode_visibility`)."""
 
 
-def _check_visibility_options(visibility_encoding: str, v0_as: str = "unlabeled"):
+def _check_visibility_options(visibility_encoding: str, v0_as: str | None = None):
     """Validate the `visibility_encoding` and `v0_as` reader options.
 
     Args:
         visibility_encoding: One of `VISIBILITY_ENCODINGS`.
-        v0_as: One of `V0_MODES`.
+        v0_as: One of `V0_MODES`, or `None` for the encoding's default.
 
     Raises:
         ValueError: If either option is not one of its accepted values.
@@ -207,7 +207,7 @@ def _check_visibility_options(visibility_encoding: str, v0_as: str = "unlabeled"
             f"visibility_encoding must be one of {VISIBILITY_ENCODINGS}, got "
             f"{visibility_encoding!r}."
         )
-    if v0_as not in V0_MODES:
+    if v0_as is not None and v0_as not in V0_MODES:
         raise ValueError(f"v0_as must be one of {V0_MODES}, got {v0_as!r}.")
 
 
@@ -247,7 +247,7 @@ def resolve_visibility_encoding(
             return "ternary"
         has_occluded = has_occluded or 1 in codes
     if not has_occluded:
-        # No v=1 either, so both encodings read the same.
+        # No v=1 either, so nothing tells the encodings apart: follow COCO.
         return "ternary"
 
     warnings.warn(
@@ -263,7 +263,7 @@ def decode_visibility(
     xy: np.ndarray,
     visibility: np.ndarray,
     visibility_encoding: str = "ternary",
-    v0_as: str = "unlabeled",
+    v0_as: str | None = None,
 ) -> np.ndarray:
     """Map keypoint coordinates and visibility codes onto the point flags.
 
@@ -277,14 +277,20 @@ def decode_visibility(
 
     With `"binary"`, `v>0` is visible, `v=0` follows `v0_as`, and `v<0` is unlabeled.
 
+    `v0_as` defaults to `"unlabeled"` for the ternary encoding and to `"absent"` for
+    the binary one. A binary file has no code for occluded keypoints, so sleap-io's
+    own binary export writes every hidden keypoint as `v=0`, and reading those as
+    absent keeps them hidden.
+
     Args:
         xy: Coordinates of shape `(n_points, 2)`.
         visibility: Visibility codes of shape `(n_points,)`.
         visibility_encoding: `"ternary"` or `"binary"`. `"auto"` is resolved from
             these codes alone (see `resolve_visibility_encoding`).
-        v0_as: `"unlabeled"` (the default) reads `v=0` as unlabeled. `"absent"`
-            reads it as labeled and not visible with no location, as sleap-io did
-            before 0.10.
+        v0_as: `"unlabeled"` reads `v=0` as unlabeled. `"absent"` reads it as
+            labeled and not visible with no location, as sleap-io did before 0.10.
+            `None` (the default) picks `"absent"` for the binary encoding and
+            `"unlabeled"` for the ternary one.
 
     Returns:
         A `float64` array of shape `(n_points, 5)` with columns x, y, visible,
@@ -299,6 +305,8 @@ def decode_visibility(
     v = np.asarray(visibility, dtype="float64")
     if visibility_encoding == "auto":
         visibility_encoding = resolve_visibility_encoding("auto", [v.tolist()])
+    if v0_as is None:
+        v0_as = "absent" if visibility_encoding == "binary" else "unlabeled"
 
     labeled = v > 0
     if visibility_encoding == "binary":
@@ -357,7 +365,7 @@ def decode_keypoints(
     num_keypoints: int,
     skeleton: Skeleton,
     visibility_encoding: str = "ternary",
-    v0_as: str = "unlabeled",
+    v0_as: str | None = None,
 ) -> np.ndarray:
     """Decode COCO keypoint format to numpy array for Instance creation.
 
@@ -367,7 +375,8 @@ def decode_keypoints(
         skeleton: Skeleton object defining the keypoint structure.
         visibility_encoding: `"ternary"` (the default), `"binary"` or `"auto"`. See
             `decode_visibility`.
-        v0_as: `"unlabeled"` (the default) or `"absent"`. See `decode_visibility`.
+        v0_as: `"unlabeled"`, `"absent"` or `None` (the default, which depends on
+            the encoding). See `decode_visibility`.
 
     Returns:
         Numpy array of shape `(num_keypoints, 5)` with columns x, y, visible,
@@ -651,7 +660,7 @@ def read_labels(
     segmentation_format: str = "mask",
     category_as_track: bool = False,
     visibility_encoding: str = "auto",
-    v0_as: str = "unlabeled",
+    v0_as: str | None = None,
 ) -> Labels:
     """Read COCO-style dataset and return a Labels object.
 
@@ -696,9 +705,13 @@ def read_labels(
             written by ``save_coco(..., visibility_encoding="binary")``; use it for
             CrowdPose too. ``"auto"`` (the default) picks binary, with a warning,
             when some keypoint has ``v=1`` and none in the file has ``v=2``.
-        v0_as: How to read keypoints with ``v=0``. ``"unlabeled"`` (the default)
-            follows COCO. ``"absent"`` reads them as labeled and not visible with
-            no location, as sleap-io did before 0.10.
+        v0_as: How to read keypoints with ``v=0``. ``"unlabeled"`` follows COCO.
+            ``"absent"`` reads them as labeled and not visible with no location, as
+            sleap-io did before 0.10, and as the binary encoding needs: it has no
+            code for occluded keypoints, so ``save_coco(...,
+            visibility_encoding="binary")`` writes every hidden keypoint as
+            ``v=0``. ``None`` (the default) picks ``"absent"`` when the encoding is
+            (or ``"auto"`` resolves to) binary, and ``"unlabeled"`` otherwise.
 
     Returns:
         Parsed labels as a Labels instance.
@@ -1023,7 +1036,7 @@ def read_labels_set(
     segmentation_format: str = "mask",
     category_as_track: bool = False,
     visibility_encoding: str = "auto",
-    v0_as: str = "unlabeled",
+    v0_as: str | None = None,
 ) -> dict[str, Labels]:
     """Read multiple COCO annotation files and return a dictionary of Labels.
 
@@ -1046,7 +1059,8 @@ def read_labels_set(
             created independently per split. Default is False.
         visibility_encoding: ``"auto"`` (the default), ``"ternary"`` or
             ``"binary"``. ``"auto"`` is resolved per file. See `read_labels`.
-        v0_as: ``"unlabeled"`` (the default) or ``"absent"``. See `read_labels`.
+        v0_as: ``"unlabeled"``, ``"absent"`` or ``None`` (the default, which
+            depends on the encoding). See `read_labels`.
 
     Returns:
         Dictionary mapping split names to Labels objects.

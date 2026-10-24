@@ -1759,7 +1759,8 @@ def test_read_binary_visibility_auto_warns(tmp_path):
     )
     with pytest.warns(UserWarning, match="read as binary"):
         labels = read_labels(str(root), split="train")
-    assert labels[0].instances[0].point_states.tolist() == [2, 0, 2]
+    # In a binary file, v=0 is a hidden keypoint.
+    assert labels[0].instances[0].point_states.tolist() == [2, 3, 2]
 
     labels = read_labels(str(root), split="train", visibility_encoding="ternary")
     assert labels[0].instances[0].point_states.tolist() == [1, 0, 1]
@@ -1896,6 +1897,65 @@ def test_binary_write_read_round_trip(tmp_path):
     np.testing.assert_allclose(reread_inst.numpy(), inst.numpy())
 
 
+def test_binary_round_trip_keeps_hidden_points(tmp_path):
+    """Hidden points, and all-occluded instances, come back hidden from binary."""
+    skeleton = Skeleton(["a", "b", "c"])
+    image_path = tmp_path / "frame.png"
+    iio.imwrite(image_path, np.zeros((40, 50, 3), dtype=np.uint8))
+    mixed = Instance.from_numpy(
+        np.array([[10.0, 10.0], [20.0, 20.0], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        visible=[True, False, False],
+        labeled=[True, True, True],
+    )
+    occluded = Instance.from_numpy(
+        np.array([[5.0, 5.0], [15.0, 25.0], [30.0, 20.0]]),
+        skeleton=skeleton,
+        visible=[False, False, False],
+    )
+    assert mixed.point_states.tolist() == [2, 1, 3]
+    assert occluded.point_states.tolist() == [1, 1, 1]
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=Video.from_filename(str(image_path)),
+                frame_idx=0,
+                instances=[mixed, occluded],
+            )
+        ]
+    )
+
+    out = tmp_path / "yolo"
+    save_ultralytics(
+        labels,
+        str(out),
+        split_ratios={"train": 1.0},
+        verbose=False,
+        visibility_encoding="binary",
+    )
+    lines = (out / "train" / "labels" / "0000000.txt").read_text().splitlines()
+    assert lines[1].split()[7::3] == ["0", "0", "0"]
+
+    with pytest.warns(UserWarning, match="read as binary"):
+        auto = load_ultralytics(str(out), split="train", skeleton=skeleton)
+    explicit = load_ultralytics(
+        str(out), split="train", skeleton=skeleton, visibility_encoding="binary"
+    )
+    for reread in (auto, explicit):
+        # Binary has no code for occluded estimates, so they come back absent.
+        assert reread[0].instances[0].point_states.tolist() == [2, 3, 3]
+        assert reread[0].instances[1].point_states.tolist() == [3, 3, 3]
+
+    unlabeled = load_ultralytics(
+        str(out),
+        split="train",
+        skeleton=skeleton,
+        visibility_encoding="binary",
+        v0_as="unlabeled",
+    )
+    assert unlabeled[0].instances[1].point_states.tolist() == [0, 0, 0]
+
+
 def test_read_labels_set_visibility_options(tmp_path):
     """`read_labels_set` and `load_labels_set` forward the visibility options."""
     root = _write_pose_dataset(
@@ -1908,5 +1968,13 @@ def test_read_labels_set_visibility_options(tmp_path):
 
     labels_set = sleap_io.load_labels_set(
         str(root), format="ultralytics", visibility_encoding="binary"
+    )
+    assert labels_set["train"][0].instances[0].point_states.tolist() == [2, 3, 2]
+
+    labels_set = sleap_io.load_labels_set(
+        str(root),
+        format="ultralytics",
+        visibility_encoding="binary",
+        v0_as="unlabeled",
     )
     assert labels_set["train"][0].instances[0].point_states.tolist() == [2, 0, 2]

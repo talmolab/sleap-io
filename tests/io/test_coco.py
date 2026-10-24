@@ -3568,13 +3568,33 @@ def test_decode_visibility_ternary():
 
 
 def test_decode_visibility_binary():
-    """Binary codes read v>0 as visible."""
+    """Binary codes read v>0 as visible and, by default, v=0 as absent."""
     xy = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
     points = coco.decode_visibility(xy, [0, 1, -1], visibility_encoding="binary")
 
     np.testing.assert_array_equal(points[:, 2], [0, 1, 0])
-    np.testing.assert_array_equal(points[:, 4], [0, 1, 0])
+    np.testing.assert_array_equal(points[:, 4], [1, 1, 0])
     np.testing.assert_array_equal(points[1, :2], [3.0, 4.0])
+    assert np.isnan(points[0, :2]).all()
+
+
+def test_decode_visibility_v0_as_explicit_override():
+    """An explicit `v0_as` wins over the encoding's default."""
+    xy = np.array([[1.0, 2.0], [3.0, 4.0]])
+    binary = coco.decode_visibility(
+        xy, [0, 1], visibility_encoding="binary", v0_as="unlabeled"
+    )
+    np.testing.assert_array_equal(binary[:, 4], [0, 1])
+
+    # "auto" resolves to binary here (v=1 and no v=2), so v=0 reads as absent.
+    with pytest.warns(UserWarning, match="read as binary"):
+        auto = coco.decode_visibility(xy, [0, 1], visibility_encoding="auto")
+    np.testing.assert_array_equal(auto[:, 4], [1, 1])
+    with pytest.warns(UserWarning, match="read as binary"):
+        auto = coco.decode_visibility(
+            xy, [0, 1], visibility_encoding="auto", v0_as="unlabeled"
+        )
+    np.testing.assert_array_equal(auto[:, 4], [0, 1])
 
 
 def test_decode_visibility_v0_as_absent():
@@ -3696,8 +3716,18 @@ def test_coco_binary_fixture_auto_detects(coco_annotations_binary_encoded):
 
     first = labels[0].instances[0]
     np.testing.assert_array_equal(first.points["visible"], [True, True, False])
-    np.testing.assert_array_equal(first.points["labeled"], [True, True, False])
+    # v=0 in a binary file is a hidden keypoint.
+    np.testing.assert_array_equal(first.points["labeled"], [True, True, True])
     assert first.n_visible == 2
+
+    labels = coco.read_labels(
+        coco_annotations_binary_encoded,
+        visibility_encoding="binary",
+        v0_as="unlabeled",
+    )
+    np.testing.assert_array_equal(
+        labels[0].instances[0].points["labeled"], [True, True, False]
+    )
 
     # Asking for ternary reads v=1 as occluded instead.
     labels = coco.read_labels(
@@ -3726,6 +3756,40 @@ def test_coco_binary_write_read_round_trip(tmp_path, coco_binary_encoded):
             np.testing.assert_array_equal(
                 inst_reread.numpy(), inst.numpy(), strict=True
             )
+
+
+def test_coco_binary_round_trip_keeps_hidden_points(tmp_path):
+    """Hidden points come back hidden from a binary save, not unlabeled."""
+    skeleton = sio.Skeleton(["a", "b", "c", "d"])
+    xy = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
+    visible = sio.Instance.from_numpy(xy, skeleton=skeleton)
+    hidden = sio.Instance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0], [np.nan, np.nan], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        visible=[False] * 4,
+        labeled=[True] * 4,
+    )
+    assert hidden.point_states.tolist() == [1, 1, 3, 3]
+    iio.imwrite(tmp_path / "img.png", np.zeros((10, 10, 3), dtype=np.uint8))
+    video = sio.Video.from_filename(["img.png"])
+    labels = sio.Labels(
+        [sio.LabeledFrame(video=video, frame_idx=0, instances=[visible, hidden])]
+    )
+    json_path = tmp_path / "binary.json"
+    coco.write_labels(labels, json_path, "img.png", visibility_encoding="binary")
+
+    with pytest.warns(UserWarning, match="read as binary"):
+        auto = coco.read_labels(json_path)
+    explicit = coco.read_labels(json_path, visibility_encoding="binary")
+    for reread in (auto, explicit):
+        assert reread[0].instances[0].point_states.tolist() == [2, 2, 2, 2]
+        # Binary has no code for occluded estimates, so they come back absent.
+        assert reread[0].instances[1].point_states.tolist() == [3, 3, 3, 3]
+
+    unlabeled = coco.read_labels(
+        json_path, visibility_encoding="binary", v0_as="unlabeled"
+    )
+    assert unlabeled[0].instances[1].point_states.tolist() == [0, 0, 0, 0]
 
 
 def test_coco_binary_export_drops_occluded_estimates(tmp_path):
@@ -4086,7 +4150,7 @@ def test_coco_metadata_survives_slp_round_trip(tmp_path, coco_binary_encoded):
     assert reloaded[0].metadata == labels[0].metadata
     assert reloaded[0].instances[1].metadata == labels[0].instances[1].metadata
     np.testing.assert_array_equal(
-        reloaded[0].instances[0].points["labeled"], [True, True, False]
+        reloaded[0].instances[0].points["labeled"], [True, True, True]
     )
 
 

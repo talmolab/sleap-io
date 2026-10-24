@@ -502,7 +502,7 @@ argument decides how those nodes are filled:
 
 | Format | Reading | Writing |
 | --- | --- | --- |
-| [COCO](../formats/coco.md#keypoint-visibility), [Ultralytics](../formats/ultralytics.md#keypoint-visibility) | `v=2` visible, `v=1` occluded with coordinates, `v=0` unlabeled (`visibility_encoding`, `v0_as`) | visible `2`, occluded estimate `1`, otherwise `0` |
+| [COCO](../formats/coco.md#keypoint-visibility), [Ultralytics](../formats/ultralytics.md#keypoint-visibility) | `v=2` visible, `v=1` occluded with coordinates, `v=0` unlabeled (hidden in binary files; `visibility_encoding`, `v0_as`) | visible `2`, occluded estimate `1`, otherwise `0` |
 | [NWB annotations](../formats/nwb.md#point-visibility-in-annotations) | `node_visibility=False` with a location is occluded | occluded estimates keep their location |
 | [Dictionary](../codecs.md#dictionary-codec) | `visible`, `verified`, `labeled` | all flags, `labeled` only when `False` |
 | [DataFrame](../codecs.md#points-format-default), [Analysis HDF5](../formats/analysis_h5.md#point_labeled) | NaN reads as hidden | NaN for hidden and unlabeled points, plus a `labeled` column or `point_labeled` dataset |

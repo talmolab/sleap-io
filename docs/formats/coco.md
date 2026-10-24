@@ -56,9 +56,11 @@ annotations.
       are effectively reversed.
     - `"auto"` (the **default**): binary when some keypoint has `v=1` and none in
       the file has `v=2`, with a warning; ternary otherwise.
-- `v0_as`: `"unlabeled"` (the **default**) reads `v=0` as unlabeled. `"absent"`
-  reads it as labeled and not visible with no location, which is what sleap-io did
-  before 0.10.
+- `v0_as`: `"unlabeled"` reads `v=0` as unlabeled. `"absent"` reads it as labeled
+  and not visible with no location, which is what sleap-io did before 0.10. The
+  **default** (`None`) depends on the encoding: `"unlabeled"` for ternary and
+  `"absent"` for binary (including when `"auto"` picks binary), since a binary file
+  writes every hidden keypoint as `v=0`. An explicit `v0_as` always wins.
 
 ```python
 import sleap_io as sio
@@ -85,6 +87,15 @@ On write, `save_coco` encodes each point from its state:
 bounding box (see [below](#annotation-metadata)), the annotation `bbox` covers
 them. COCO has no code for "hidden with no location", so those points
 read back as unlabeled.
+
+The binary encoding has no code for occluded keypoints either, so every hidden
+point is written as `v=0`, and reading a binary file reads `v=0` as hidden with no
+location (`ABSENT`). A binary round trip therefore keeps hidden points hidden but
+drops the estimated coordinates of occluded ones, and unlabeled points come back
+as `ABSENT` too; pass `v0_as="unlabeled"` to read them as unlabeled instead.
+`"auto"` can only spot a binary file that has some `v=1`, so pass
+`visibility_encoding="binary"` explicitly for a binary file with no visible
+keypoints.
 
 !!! warning "Changed in 0.10"
     Before 0.10, `v=0` read as a hidden keypoint and `v=1` as *visible*, so
