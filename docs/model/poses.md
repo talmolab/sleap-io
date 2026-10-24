@@ -530,8 +530,10 @@ source annotation id:
   is combined key by key, with the target frame winning ties.
 
 !!! note
-    The current SLP layout doesn't store metadata yet: `save_slp` drops it with a
-    warning.
+    SLP format 3.0 stores instance and frame metadata as typed columns (see
+    [Record Metadata](../formats/slp.md#record-metadata)), including through lazy
+    saves. Bounding box metadata isn't stored yet, and `legacy_format=True` drops
+    all metadata, each with a warning.
 
 ---
 
