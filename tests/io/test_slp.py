@@ -12248,7 +12248,7 @@ def test_save_slp_invalid_unlabeled_as(tmp_path, slp_minimal):
 
 
 def test_save_slp_warns_dropped_metadata(tmp_path):
-    """Metadata on instances, frames or boxes is dropped with a warning."""
+    """Metadata on instances, frames or boxes is dropped with a warning (legacy)."""
     skeleton = Skeleton(["A"])
     video = Video("test.mp4")
 
@@ -12263,21 +12263,17 @@ def test_save_slp_warns_dropped_metadata(tmp_path):
         warnings.simplefilter("error")
         save_slp(labels, str(tmp_path / "plain.slp"))
 
-    for set_metadata, dropped in (
-        (lambda lf: lf.metadata.update(image_id=1), False),
-        (lambda lf: lf.instances[0].metadata.update(ann_id=1), False),
-        (lambda lf: lf.bboxes[0].metadata.update(area=1.0), True),
+    for set_metadata in (
+        lambda lf: lf.metadata.update(image_id=1),
+        lambda lf: lf.instances[0].metadata.update(ann_id=1),
+        lambda lf: lf.bboxes[0].metadata.update(area=1.0),
     ):
         labels, lf = make_labels()
         set_metadata(lf)
-        # SLP 3.0 stores instance and frame metadata, but not box metadata yet.
-        if dropped:
-            with pytest.warns(UserWarning, match="Bounding box metadata"):
-                save_slp(labels, str(tmp_path / "meta.slp"))
-        else:
-            with warnings.catch_warnings():
-                warnings.simplefilter("error")
-                save_slp(labels, str(tmp_path / "meta.slp"))
+        # SLP 3.0 stores instance, frame and box metadata.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            save_slp(labels, str(tmp_path / "meta.slp"))
         # The legacy layout stores none of it.
         with pytest.warns(UserWarning, match="legacy SLP layout"):
             save_slp(labels, str(tmp_path / "legacy.slp"), legacy_format=True)

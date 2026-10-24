@@ -92,7 +92,8 @@ Format version history:
             `label_image_*` datasets. Byte data stays in flat `uint8` buffers
             indexed by start/end columns. Converted tables use `f8` floats, `i8`
             integers and `bool` flags, and range checks raise for 3.0 tables and
-            warn for older ones. A 3.0 file holds no compound dataset.
+            warn for older ones. `/bboxes` gains `metadata/`. A 3.0 file holds no
+            compound dataset.
 """
 
 from __future__ import annotations
@@ -4909,8 +4910,8 @@ def _read_metadata_columns(
     """Read the per-record metadata columns of a 3.0 table.
 
     Args:
-        node: The table (`/instances` or `/frames`). Compound datasets (2.x) have
-            no metadata.
+        node: The table (`/instances`, `/frames` or `/bboxes`). Compound datasets
+            (2.x) have no metadata.
         table: The table name, for messages.
         n: The number of records in the table.
 
@@ -5023,7 +5024,7 @@ def _write_metadata_columns(
     """Write metadata columns into a table's `metadata/` group.
 
     Args:
-        grp: The table group (`/instances` or `/frames`).
+        grp: The table group (`/instances`, `/frames` or `/bboxes`).
         columns: Metadata columns (see `_read_metadata_columns`). Nothing is written
             if empty.
         compression: `None`, `"gzip"` or `"lzf"` (see `_write_columns`).
@@ -5343,8 +5344,8 @@ def _check_dropped_metadata(labels: Labels, *, legacy_format: bool) -> None:
     Args:
         labels: The labels about to be written.
         legacy_format: If `True`, the 2.x layout is written, which stores no
-            metadata. Otherwise (SLP 3.0) instance and frame metadata is stored and
-            only bounding box metadata is dropped.
+            metadata, so a warning is raised if there is any. Otherwise (SLP 3.0)
+            instance, frame and bounding box metadata is stored.
 
     Raises:
         TypeError: If a metadata key mixes kinds across a table's records (see
@@ -5355,11 +5356,6 @@ def _check_dropped_metadata(labels: Labels, *, legacy_format: bool) -> None:
         warnings.warn(
             "Instance, frame and bounding box metadata can't be stored in the legacy "
             "SLP layout and was not saved.",
-            stacklevel=3,
-        )
-    elif not legacy_format and kinds["bboxes"]:
-        warnings.warn(
-            "Bounding box metadata can't be stored yet and was not saved.",
             stacklevel=3,
         )
 
@@ -8499,7 +8495,7 @@ def _read_bboxes_columnar(
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None,
 ) -> list[tuple[BoundingBox, int, int]]:
-    """Read bboxes from columnar /bboxes group (v2.0+ format)."""
+    """Read bboxes from columnar /bboxes group (v2.0+ format), with their metadata."""
     x1_arr = grp["x1"][:]
     y1_arr = grp["y1"][:]
     x2_arr = grp["x2"][:]
@@ -8515,9 +8511,12 @@ def _read_bboxes_columnar(
     name_arr = grp["name"][:]
     source_arr = grp["source"][:]
     tracking_score_arr = grp["tracking_score"][:] if "tracking_score" in grp else None
+    n = len(x1_arr)
+    metadata = _read_metadata_columns(grp, "bboxes", n)
+    records = _metadata_records(metadata, n) if metadata else None
 
     bboxes: list[BoundingBox] = []
-    for i in range(len(x1_arr)):
+    for i in range(n):
         video_idx = int(video_arr[i])
 
         frame_idx_val = int(frame_idx_arr[i])
@@ -8557,6 +8556,7 @@ def _read_bboxes_columnar(
             category=category,
             name=name,
             source=source,
+            metadata=records[i] if records is not None else None,
         )
 
         if bool(is_predicted_arr[i]):
@@ -8637,6 +8637,8 @@ def write_bboxes(
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
     contexts: list[tuple[int, int]] | None = None,
+    *,
+    legacy_format: bool = False,
 ) -> None:
     """Write bounding box annotations to a SLEAP labels file.
 
@@ -8650,6 +8652,13 @@ def write_bboxes(
             persisted.
         contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
             for each bounding box. If ``None``, defaults to ``(-1, -1)`` for all.
+        legacy_format: If `True`, write the 2.x layout, which has no metadata.
+            Otherwise (SLP 3.0) the boxes' `metadata` is written to
+            `/bboxes/metadata/` (see `_write_metadata_columns`).
+
+    Raises:
+        TypeError: If a metadata key mixes kinds across the boxes (see
+            `metadata_column_kinds`).
     """
     if not bboxes:
         return
@@ -8703,6 +8712,11 @@ def write_bboxes(
         names.append(bbox.name)
         sources.append(bbox.source)
 
+    metadata = (
+        {}
+        if legacy_format
+        else _metadata_columns(bboxes, metadata_column_kinds(bboxes, "bboxes"))
+    )
     str_dt = h5py.special_dtype(vlen=str)
     with h5py.File(labels_path, "a") as f:
         grp = f.create_group("bboxes")
@@ -8721,6 +8735,7 @@ def write_bboxes(
         grp.create_dataset("category", data=categories, dtype=str_dt)
         grp.create_dataset("name", data=names, dtype=str_dt)
         grp.create_dataset("source", data=sources, dtype=str_dt)
+        _write_metadata_columns(grp, metadata)
 
 
 def read_centroids(
@@ -11276,6 +11291,9 @@ def _write_labels_lazy(
 
     lazy_store = labels._lazy_store
 
+    lazy_bboxes = [
+        b for ann_list in lazy_store._bbox_by_frame.values() for b in ann_list
+    ] + list(lazy_store._undistributed_bboxes)
     if legacy_format:
         # Check before touching the output file so a refused save leaves it intact.
         n_unlabeled = sum(
@@ -11296,12 +11314,19 @@ def _write_labels_lazy(
             [n for n, cols in unknown.items() if cols], unknown, "legacy"
         )
         _warn_dropped_carry(lazy_store.annotation_carry)
-        if lazy_store.instance_metadata or lazy_store.frame_metadata:
+        if (
+            lazy_store.instance_metadata
+            or lazy_store.frame_metadata
+            or any(b.metadata for b in lazy_bboxes)
+        ):
             warnings.warn(
-                "Instance and frame metadata can't be stored in the legacy SLP "
-                "layout and was not saved.",
+                "Instance, frame and bounding box metadata can't be stored in the "
+                "legacy SLP layout and was not saved.",
                 stacklevel=3,
             )
+    else:
+        # Check bounding box metadata kinds before touching the output file.
+        metadata_column_kinds(lazy_bboxes, "bboxes")
 
     # Capture unknown top-level members from the source file before it is
     # truncated, to carry them across the load/save cycle (see write_labels).
@@ -11356,9 +11381,6 @@ def _write_labels_lazy(
     lazy_centroids = [
         c for ann_list in lazy_store._centroid_by_frame.values() for c in ann_list
     ] + list(lazy_store._undistributed_centroids)
-    lazy_bboxes = [
-        b for ann_list in lazy_store._bbox_by_frame.values() for b in ann_list
-    ] + list(lazy_store._undistributed_bboxes)
     lazy_rois = [
         r for ann_list in lazy_store._roi_by_frame.values() for r in ann_list
     ] + list(lazy_store._undistributed_rois)
@@ -11555,6 +11577,7 @@ def _write_labels_lazy(
         labels.videos,
         labels.tracks,
         contexts=bbox_ctxs,
+        legacy_format=legacy_format,
     )
     write_centroids(
         labels_path,
@@ -11676,11 +11699,11 @@ def write_labels(
             compressed either way.
 
     Notes:
-        Instance and frame `metadata` is stored as columns of `/instances` and
-        `/frames` (lazy labels write the columns they were loaded with). Bounding
-        box metadata can't be stored yet, and `legacy_format=True` stores no
-        metadata; either is dropped with a warning. Metadata kinds are checked
-        first (`Labels.check_metadata`) for eager labels, so a key that mixes kinds
+        Instance, frame and bounding box `metadata` is stored as columns of
+        `/instances`, `/frames` and `/bboxes` (lazy labels write the instance and
+        frame columns they were loaded with). `legacy_format=True` stores no
+        metadata; it is dropped with a warning. Metadata kinds are checked first
+        (`Labels.check_metadata`) for eager labels, so a key that mixes kinds
         across records raises a `TypeError` before anything is written.
 
         Unknown table columns read from a file written by a newer sleap-io are
@@ -11926,6 +11949,7 @@ def write_labels(
         labels.tracks,
         all_instances,
         contexts=bbox_contexts,
+        legacy_format=legacy_format,
     )
     write_centroids(
         labels_path,
