@@ -12190,8 +12190,23 @@ def test_save_slp_unlabeled_as_absent(tmp_path):
     for inst in loaded[0].instances:
         assert_equal(inst.point_states, [PointState.VISIBLE, PointState.ABSENT])
         assert inst.points["labeled"].all()
+
+
+def test_save_slp_unlabeled_as_absent_clears_location(tmp_path):
+    """Unlabeled points with stale coordinates are saved with no location."""
+    path = tmp_path / "labels.slp"
+    labels = _labels_with_unlabeled_point()
+    for inst in labels[0].instances:
+        inst.points["xy"][1] = [5, 6]
+    with pytest.warns(UserWarning, match="no location"):
+        save_slp(labels, str(path), unlabeled_as="absent")
+
+    for inst in load_slp(str(path))[0].instances:
+        assert_equal(inst.point_states, [PointState.VISIBLE, PointState.ABSENT])
+        assert np.isnan(inst.points["xy"][1]).all()
     # The in-memory labels are unchanged.
     assert not labels[0].instances[0].points["labeled"][1]
+    assert_equal(labels[0].instances[0].points["xy"][1], [5, 6])
 
 
 def test_save_slp_invalid_unlabeled_as(tmp_path, slp_minimal):

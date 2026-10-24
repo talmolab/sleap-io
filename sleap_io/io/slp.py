@@ -4210,8 +4210,8 @@ def _check_unlabeled_points(labels: Labels, unlabeled_as: str) -> None:
 
     Args:
         labels: The labels about to be written.
-        unlabeled_as: `"error"` raises if any point is unlabeled. `"absent"` writes
-            unlabeled points as hidden (labeled, not visible) and warns.
+        unlabeled_as: `"error"` raises if any point is unlabeled. `"absent"` warns;
+            `write_lfs` then writes unlabeled points as hidden with no location.
 
     Raises:
         ValueError: If `unlabeled_as` is `"error"` and an instance has unlabeled
@@ -4230,8 +4230,8 @@ def _check_unlabeled_points(labels: Labels, unlabeled_as: str) -> None:
             'unlabeled_as="absent" to save them as hidden points instead.'
         )
     warnings.warn(
-        f"Saving {n_unlabeled} unlabeled point(s) as hidden (labeled, not visible) "
-        "points, since this SLP layout can't store unlabeled points.",
+        f"Saving {n_unlabeled} unlabeled point(s) as hidden points with no location "
+        "(labeled, not visible), since this SLP layout can't store unlabeled points.",
         stacklevel=3,
     )
 
@@ -4342,10 +4342,11 @@ def write_lfs(labels_path: str, labels: Labels):
                 tracking_score = inst.tracking_score
                 point_id_start = len(points)
 
-                for pt in inst.points:
-                    points.append(
-                        [pt["xy"][0], pt["xy"][1], pt["visible"], pt["verified"]]
-                    )
+                # Unlabeled points (only present with unlabeled_as="absent") are
+                # written as hidden with no location.
+                xy = inst.numpy(invisible_as_nan=False)
+                for pt, (x, y) in zip(inst.points, xy):
+                    points.append([x, y, pt["visible"], pt["verified"]])
 
                 point_id_end = len(points)
 
@@ -4355,15 +4356,10 @@ def write_lfs(labels_path: str, labels: Labels):
                 tracking_score = inst.tracking_score
                 point_id_start = len(predicted_points)
 
-                for pt in inst.points:
+                xy = inst.numpy(invisible_as_nan=False)
+                for pt, (x, y) in zip(inst.points, xy):
                     predicted_points.append(
-                        [
-                            pt["xy"][0],
-                            pt["xy"][1],
-                            pt["visible"],
-                            pt["verified"],
-                            pt["score"],
-                        ]
+                        [x, y, pt["visible"], pt["verified"], pt["score"]]
                     )
 
                 point_id_end = len(predicted_points)
@@ -9505,13 +9501,13 @@ def write_labels(
             )
             return
 
-    # Capture unknown top-level members from the source file before it is
-    # truncated, so additions made by a newer sleap-io version survive a
-    # load/save cycle through this (potentially older) writer.
     # Check before touching the output file so a refused save leaves it intact.
     _check_unlabeled_points(labels, unlabeled_as)
     _warn_dropped_metadata(labels)
 
+    # Capture unknown top-level members from the source file before it is
+    # truncated, so additions made by a newer sleap-io version survive a
+    # load/save cycle through this (potentially older) writer.
     unknown_stash = (
         _stash_unknown_hdf5(labels.provenance.get("filename"))
         if preserve_unknown

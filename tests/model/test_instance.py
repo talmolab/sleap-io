@@ -1487,3 +1487,27 @@ def test_instance_metadata_copy_and_pickle():
         assert restored.metadata == {"iscrowd": False}
         assert restored.metadata is not pred.metadata
         assert restored.score == 0.5
+
+
+@pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+def test_numpy_unlabeled_is_nan(cls):
+    """`numpy(invisible_as_nan=False)` keeps estimates and NaNs unlabeled points."""
+    inst = cls.from_numpy(
+        np.array([[1, 2], [3, 4], [5, 6]]),
+        skeleton=Skeleton(["A", "B", "C"]),
+        visible=[True, False, False],
+        labeled=[True, True, False],
+    )
+    assert_equal(inst.numpy(invisible_as_nan=False), [[1, 2], [3, 4], [np.nan] * 2])
+    assert_equal(inst.numpy(), [[1, 2], [np.nan] * 2, [np.nan] * 2])
+    # The stored coordinates are left as they are.
+    assert_equal(inst.points["xy"][2], [5, 6])
+
+
+@pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+def test_from_numpy_flags_do_not_modify_input(cls):
+    """Flags are applied to a copy when the input array would be used as is."""
+    points = cls.empty(Skeleton(["A", "B"])).points
+    inst = cls.from_numpy(points, skeleton=Skeleton(["A", "B"]), labeled=False)
+    assert not inst.points["labeled"].any()
+    assert points["labeled"].all()

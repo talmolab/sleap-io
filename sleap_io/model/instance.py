@@ -461,6 +461,25 @@ def _check_unmapped(unmapped: str) -> None:
         )
 
 
+def _has_flags(*flags: np.ndarray | bool | None) -> bool:
+    """Return whether any of the optional flag arguments was given."""
+    return any(flag is not None for flag in flags)
+
+
+def _xy_with_unlabeled_as_nan(points: PointsArray) -> np.ndarray:
+    """Return a copy of the coordinates with NaN for unlabeled points.
+
+    Args:
+        points: A points array.
+
+    Returns:
+        A `(n_nodes, 2)` array of coordinates. Points that are neither labeled nor
+        visible carry no information, so their coordinates are NaN.
+    """
+    unlabeled = ~(points["labeled"] | points["visible"])
+    return np.where(unlabeled.reshape(-1, 1), np.nan, points["xy"])
+
+
 def _apply_point_flags(
     points: PointsArray,
     visible: np.ndarray | bool | None,
@@ -776,7 +795,11 @@ class Instance:
             category_embedding=category_embedding,
             from_predicted=from_predicted,
         )
-        _apply_point_flags(inst.points, visible, labeled, verified)
+        if _has_flags(visible, labeled, verified):
+            if np.may_share_memory(inst.points, points_data):
+                # Don't modify the caller's array, which is used without a copy.
+                inst.points = inst.points.copy()
+            _apply_point_flags(inst.points, visible, labeled, verified)
         return inst
 
     def __attrs_post_init__(self):
@@ -826,8 +849,9 @@ class Instance:
 
         Args:
             invisible_as_nan: If `True` (the default), points that are not visible will
-                be set to `np.nan`. If `False`, they will be whatever the stored value
-                of `Instance.points["xy"]` is.
+                be set to `np.nan`. If `False`, hidden points keep their stored
+                coordinates (an occluded estimate, or NaN if they have no location),
+                and unlabeled points are `np.nan`.
 
         Returns:
             A numpy array of shape `(n_nodes, 2)` corresponding to the points of the
@@ -844,7 +868,7 @@ class Instance:
                 self.points["visible"].reshape(-1, 1), self.points["xy"], np.nan
             )
         else:
-            return self.points["xy"].copy()
+            return _xy_with_unlabeled_as_nan(self.points)
 
     @property
     def centroid_xy(self) -> tuple[float, float] | None:
@@ -1700,7 +1724,11 @@ class PredictedInstance(Instance):
         points = cls._convert_points(points_data, skeleton)
         if point_scores is not None:
             points["score"] = point_scores
-        _apply_point_flags(points, visible, labeled, verified)
+        if _has_flags(visible, labeled, verified):
+            if np.may_share_memory(points, points_data):
+                # Don't modify the caller's array, which is used without a copy.
+                points = points.copy()
+            _apply_point_flags(points, visible, labeled, verified)
 
         return cls(
             points=points,
@@ -1726,8 +1754,8 @@ class PredictedInstance(Instance):
 
         Args:
             invisible_as_nan: If `True` (the default), points that are not visible will
-                be set to `np.nan`. If `False`, they will be whatever the stored value
-                of `PredictedInstance.points["xy"]` is.
+                be set to `np.nan`. If `False`, hidden points keep their stored
+                coordinates, and unlabeled points are `np.nan`.
             scores: If `True`, the score associated with each point will be
                 included in the output.
 
@@ -1750,7 +1778,7 @@ class PredictedInstance(Instance):
                 self.points["visible"].reshape(-1, 1), self.points["xy"], np.nan
             )
         else:
-            pts = self.points["xy"].copy()
+            pts = _xy_with_unlabeled_as_nan(self.points)
 
         if scores:
             return np.column_stack((pts, self.points["score"]))
