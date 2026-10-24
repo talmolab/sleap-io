@@ -27,6 +27,8 @@ Both approaches automatically:
 - Transform all video frames
 - Adjust all landmark coordinates using affine transformations
 - Preserve alignment between poses and video
+- Drop a stored `area` (for example from COCO) from instance and bounding box
+  `metadata`, since it no longer matches the transformed image
 
 ![Original frame](assets/transforms/original.png)
 
