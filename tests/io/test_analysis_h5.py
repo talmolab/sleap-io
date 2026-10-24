@@ -1099,3 +1099,41 @@ class TestRealData:
 
         # Verify structure
         assert len(loaded) == len(labels)
+
+
+def test_write_point_labeled(tmp_path):
+    """`point_labeled` marks labeled points and is ordered like `point_scores`."""
+    skeleton = Skeleton(["a", "b", "c"])
+    video = Video(filename="test.mp4", backend_metadata={"shape": (3, 10, 10, 1)})
+    inst = Instance.from_numpy(
+        np.array([[1.0, 2.0], [np.nan, np.nan], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        labeled=[True, True, False],
+    )
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=1, instances=[inst])],
+        skeletons=[skeleton],
+        videos=[video],
+    )
+
+    path = tmp_path / "labeled.analysis.h5"
+    analysis_h5.write_labels(labels, path, preset="standard")
+    with h5py.File(path, "r") as f:
+        point_labeled = f["point_labeled"][:]
+        assert json.loads(f["point_labeled"].attrs["dims"]) == [
+            "frame",
+            "track",
+            "node",
+        ]
+    assert point_labeled.dtype == np.uint8
+    assert point_labeled.shape == (3, 1, 3)
+    np.testing.assert_array_equal(point_labeled[1, 0], [1, 1, 0])
+    assert not point_labeled[[0, 2]].any()  # frames without an instance
+
+    analysis_h5.write_labels(labels, path)  # matlab preset: (track, node, frame)
+    with h5py.File(path, "r") as f:
+        np.testing.assert_array_equal(f["point_labeled"][0, :, 1], [1, 1, 0])
+
+    # Reading ignores the dataset; the hidden and unlabeled points are both NaN.
+    loaded = analysis_h5.read_labels(path)
+    assert np.isnan(loaded[0].instances[0].numpy()[1:]).all()

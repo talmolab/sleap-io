@@ -1057,6 +1057,31 @@ def test_to_analysis_arrays_min_occupancy_untracked():
     assert occ.shape[1] == 1
     assert names == ["track_0"]
 
+    # The point_labeled matrix is filtered the same way.
+    *_, point_labeled = to_analysis_arrays(
+        labels, min_occupancy=0.5, return_labeled=True
+    )
+    assert point_labeled.shape == (10, 1, 1)
+    assert point_labeled.all()
+
+
+def test_to_analysis_arrays_point_labeled():
+    """`return_labeled=True` appends a matrix marking labeled points."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(
+        np.array([[1.0, 1.0], [np.nan, np.nan]]), skeleton=skeleton, labeled=False
+    )
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst])]
+    )
+
+    arrays = to_analysis_arrays(labels, return_labeled=True)
+    assert len(arrays) == 8
+    # The visible point counts as labeled; the unlabeled one doesn't.
+    assert_array_equal(arrays[-1], [[[1, 0]]])
+    assert len(to_analysis_arrays(labels)) == 7
+
 
 def test_to_analysis_arrays_variable_instance_count():
     """n_tracks is sized to the largest per-frame instance count."""
