@@ -26,7 +26,7 @@ def test_to_dict_basic(slp_typical):
 
     # Check structure
     assert "version" in d
-    assert d["version"] == "1.0.0"
+    assert d["version"] == "1.1.0"
     assert "skeletons" in d
     assert "videos" in d
     assert "tracks" in d
@@ -241,7 +241,7 @@ def test_to_dict_empty_labels():
 
     d = to_dict(labels)
 
-    assert d["version"] == "1.0.0"
+    assert d["version"] == "1.1.0"
     assert len(d["skeletons"]) == 0
     assert len(d["videos"]) == 0
     assert len(d["tracks"]) == 0
@@ -630,7 +630,7 @@ def test_labels_to_dict_wrapper(slp_typical):
 
     # Verify it returns the same result as the codec function
     assert "version" in d
-    assert d["version"] == "1.0.0"
+    assert d["version"] == "1.1.0"
     assert "skeletons" in d
     assert "videos" in d
     assert "labeled_frames" in d
@@ -879,3 +879,91 @@ def test_to_dict_lazy_skips_missing_tracking_scores(tmp_path):
     Labels([LabeledFrame(video, 0, instances=[pred])]).save(path)
     lazy = to_dict(load_slp(path, lazy=True))
     assert "tracking_score" not in lazy["labeled_frames"][0]["instances"][0]
+
+
+def _flagged_labels() -> Labels:
+    """Labels with every point state, verified points and record metadata."""
+    skeleton = Skeleton(["a", "b", "c", "d"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0], [np.nan, np.nan], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        visible=[True, False, False, False],
+        labeled=[True, True, True, False],
+        verified=[True, True, False, False],
+    )
+    inst.metadata.update({"ann_id": 7, "iscrowd": False})
+    pred = PredictedInstance.from_numpy(
+        np.array([[5.0, 6.0], [np.nan, np.nan], [7.0, 8.0], [9.0, 9.0]]),
+        skeleton=skeleton,
+        score=0.5,
+        labeled=[True, False, True, True],
+    )
+    lf = LabeledFrame(
+        video=video,
+        frame_idx=3,
+        instances=[inst, pred],
+        metadata={"image_id": 12, "file_name": "a.png"},
+    )
+    return Labels(labeled_frames=[lf], skeletons=[skeleton], videos=[video])
+
+
+def test_to_dict_point_flags_and_metadata():
+    """Points carry `labeled` only when False; metadata is written when present."""
+    d = to_dict(_flagged_labels())
+
+    frame = d["labeled_frames"][0]
+    assert frame["metadata"] == {"image_id": 12, "file_name": "a.png"}
+    inst, pred = frame["instances"]
+    assert inst["metadata"] == {"ann_id": 7, "iscrowd": False}
+    assert "metadata" not in pred
+    assert [("labeled" in pt) for pt in inst["points"]] == [False] * 3 + [True]
+    assert inst["points"][3]["labeled"] is False
+    assert inst["points"][1] == {"x": 3.0, "y": 4.0, "visible": False, "verified": True}
+    assert pred["points"][1]["labeled"] is False
+    json.dumps(d)
+
+
+def test_dict_round_trip_preserves_point_flags_and_metadata():
+    """Every point state, `verified` and metadata survive a dict round trip."""
+    labels = _flagged_labels()
+    restored = from_dict(json.loads(json.dumps(to_dict(labels))))
+
+    lf = restored.labeled_frames[0]
+    assert lf.metadata == labels[0].metadata
+    for inst, original in zip(lf.instances, labels[0].instances):
+        np.testing.assert_array_equal(inst.point_states, original.point_states)
+        np.testing.assert_array_equal(
+            inst.points["verified"], original.points["verified"]
+        )
+        assert inst.metadata == original.metadata
+    np.testing.assert_array_equal(lf.instances[0].points["xy"][1], [3.0, 4.0])
+
+
+def test_from_dict_old_version_clears_hidden_coordinates():
+    """Hidden coordinates in dictionaries before 1.1.0 are stale and cleared."""
+    data = to_dict(_flagged_labels())
+    data["version"] = "1.0.0"
+    inst = from_dict(data).labeled_frames[0].instances[0]
+    assert np.isnan(inst.points["xy"][1]).all()
+    assert inst.point_states[1] == 3  # hidden, no location
+
+    del data["version"]
+    inst = from_dict(data).labeled_frames[0].instances[0]
+    assert np.isnan(inst.points["xy"][1]).all()
+
+    data["version"] = "dev"
+    inst = from_dict(data).labeled_frames[0].instances[0]
+    assert np.isnan(inst.points["xy"][1]).all()
+
+
+def test_to_dict_lazy_point_flags_and_metadata(tmp_path):
+    """The lazy fast path writes the same flags and metadata as the eager one."""
+    path = tmp_path / "flags.slp"
+    _flagged_labels().save(str(path))
+
+    d_lazy = to_dict(load_slp(str(path), lazy=True))
+    d_eager = to_dict(load_slp(str(path), lazy=False))
+    # Compare as JSON, since NaN coordinates don't compare equal.
+    assert json.dumps(d_lazy["labeled_frames"]) == json.dumps(d_eager["labeled_frames"])
+    assert d_lazy["labeled_frames"][0]["metadata"]["image_id"] == 12
