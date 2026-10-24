@@ -259,12 +259,19 @@ def sleap_instance_to_nwb_skeleton_instance(
 
     Returns:
         An ndx-pose SkeletonInstance object with equivalent data.
-    """
-    # Get node locations as (n_nodes, 2) array
-    node_locations = sleap_instance.numpy(invisible_as_nan=True)
 
-    # Get node visibility - True where points are not NaN
-    node_visibility = ~np.isnan(node_locations).any(axis=1)
+    Notes:
+        Occluded points with an estimated location are written with their
+        coordinates and `node_visibility=False`. Points without a location and
+        unlabeled points are both written as NaN with `node_visibility=False`.
+    """
+    # Get node locations as (n_nodes, 2) array, keeping occluded estimates
+    node_locations = sleap_instance.numpy(invisible_as_nan=False)
+
+    # Get node visibility - True where points are visible and have a location
+    node_visibility = sleap_instance.points["visible"] & ~np.isnan(node_locations).any(
+        axis=1
+    )
 
     # Convert id to unsigned integer if provided
     if id is not None:
@@ -290,23 +297,27 @@ def nwb_skeleton_instance_to_sleap_instance(
 
     Returns:
         A sleap-io Instance object with equivalent data.
+
+    Notes:
+        A node with `node_visibility=False` and a finite location reads as occluded
+        with that location as its estimate. Every point is labeled and, since
+        training frames are human annotations, verified.
     """
     # Get node locations and visibility
-    node_locations = np.array(nwb_skeleton_instance.node_locations)
+    node_locations = np.array(nwb_skeleton_instance.node_locations, dtype="float64")
+    located = ~np.isnan(node_locations).any(axis=1)
 
     # Handle visibility - use provided visibility or infer from NaN values
     if nwb_skeleton_instance.node_visibility is not None:
-        node_visibility = np.array(nwb_skeleton_instance.node_visibility)
+        node_visibility = np.array(nwb_skeleton_instance.node_visibility, dtype=bool)
+        node_visibility &= located
     else:
         # Infer visibility from non-NaN values
-        node_visibility = ~np.isnan(node_locations).any(axis=1)
+        node_visibility = located
 
-    # Create instance from numpy array - will handle visibility internally
-    # Set invisible points to NaN for proper handling
-    points_array = node_locations.copy()
-    points_array[~node_visibility] = np.nan
-
-    return SleapInstance.from_numpy(points_array, skeleton)
+    return SleapInstance.from_numpy(
+        node_locations, skeleton, visible=node_visibility, verified=True
+    )
 
 
 def sleap_video_to_nwb_image_series(
