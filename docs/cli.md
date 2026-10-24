@@ -578,6 +578,7 @@ sio convert spots.csv -o labels.slp --from trackmate
 | `--from` | Input format (required for `.json` and `.h5` files) |
 | `--to` | Output format (inferred from extension if not specified) |
 | `--embed` | Embed video frames in output (`user`, `all`, `suggestions`, `source`) |
+| `--legacy-format` | Write the SLP 2.x layout that sleap-io < 0.10 and SLEAP can open (SLP output only) |
 | `--csv-format` | CSV output format: `sleap`, `dlc`, `points`, `instances`, `frames` |
 | `--scorer` | Scorer name for DLC CSV output (default: `sleap-io`) |
 | `--save-metadata` | Save JSON metadata file for CSV round-trip support |
@@ -640,6 +641,15 @@ sio convert -i data.json -o labels.slp --from alphatracker
 
 # .h5 is read as JABS
 sio convert -i data.h5 -o labels.slp --from jabs
+```
+
+### Files for older SLEAP releases
+
+SLP files are written in [format 3.0](formats/slp.md#format-30-current), which
+sleap-io < 0.10 and SLEAP can't open. Write the older layout with `--legacy-format`:
+
+```bash
+sio convert labels.slp -o labels.v2.slp --legacy-format
 ```
 
 ### Embedding Frames

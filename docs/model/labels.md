@@ -317,11 +317,21 @@ To embed images directly into an SLP file (creating a self-contained package):
 labels.save("output.pkg.slp", embed=True)
 ```
 
-The current SLP layout can't store [unlabeled points](poses.md#point-flags-and-states) or record `metadata`. By default, saving labels with unlabeled points raises a `ValueError` before anything is written; pass `unlabeled_as="absent"` to save them as hidden points with no location (labeled, not visible, NaN coordinates) with a warning. Instance, frame and bounding box metadata is dropped with a warning.
+SLP files are written in [format 3.0](../formats/slp.md#format-30-current), which
+stores [unlabeled points](poses.md#point-flags-and-states). sleap-io < 0.10 and SLEAP
+can't open 3.0 files; to share labels with them, save the older layout with
+`legacy_format=True`. That layout has no `labeled` column, so saving unlabeled
+points raises a `ValueError` before anything is written; pass
+`unlabeled_as="absent"` to save them as hidden points with no location (labeled, not
+visible, NaN coordinates) with a warning. Instance, frame and bounding box
+`metadata` can't be saved yet and is dropped with a warning.
 
 ```python
-labels.save("output.slp", unlabeled_as="absent")
+labels.save("output.slp", legacy_format=True, unlabeled_as="absent")
 ```
+
+Point tables are uncompressed by default for read speed; pass `compression="gzip"`
+or `"lzf"` for smaller files.
 
 ---
 
