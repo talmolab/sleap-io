@@ -1573,3 +1573,72 @@ def test_multisubjects_skeleton_instance_id_linkage(slp_real_data, tmp_path):
             for inst in frame.skeleton_instances.skeleton_instances.values():
                 # The instance ID should be a valid row index in SubjectsTable
                 assert 0 <= inst.id < len(subject_ids)
+
+
+def test_sleap_instance_to_nwb_skeleton_instance_occluded():
+    """Occluded estimates keep their location with node_visibility=False."""
+    skeleton = SleapSkeleton(nodes=["a", "b", "c", "d"])
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+    sleap_instance = SleapInstance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0], [np.nan, np.nan], [7.0, 8.0]]),
+        skeleton,
+        visible=[True, False, False, False],
+        labeled=[True, True, True, False],
+    )
+
+    nwb_instance = sleap_instance_to_nwb_skeleton_instance(sleap_instance, nwb_skeleton)
+
+    np.testing.assert_array_equal(
+        nwb_instance.node_locations,
+        [[1.0, 2.0], [3.0, 4.0], [np.nan, np.nan], [np.nan, np.nan]],
+    )
+    np.testing.assert_array_equal(
+        nwb_instance.node_visibility, [True, False, False, False]
+    )
+
+
+def test_nwb_skeleton_instance_to_sleap_instance_occluded():
+    """node_visibility=False with a finite location reads as occluded."""
+    skeleton = SleapSkeleton(nodes=["a", "b", "c"])
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+    nwb_instance = NwbInstance(
+        node_locations=np.array([[1.0, 2.0], [3.0, 4.0], [np.nan, np.nan]]),
+        skeleton=nwb_skeleton,
+        name="occluded",
+        node_visibility=np.array([True, False, True]),
+    )
+
+    sleap_instance = nwb_skeleton_instance_to_sleap_instance(nwb_instance, skeleton)
+
+    states = sio.PointState
+    np.testing.assert_array_equal(
+        sleap_instance.point_states, [states.VISIBLE, states.OCCLUDED, states.ABSENT]
+    )
+    np.testing.assert_array_equal(sleap_instance.points["xy"][1], [3.0, 4.0])
+    assert sleap_instance.points["verified"].all()
+
+
+def test_save_load_labels_occluded_round_trip(tmp_path, centered_pair_low_quality_path):
+    """Occluded estimates survive a save and load through NWB."""
+    skeleton = SleapSkeleton(nodes=["a", "b", "c"])
+    video = SleapVideo.from_filename(centered_pair_low_quality_path)
+    inst = SleapInstance.from_numpy(
+        np.array([[10.0, 12.0], [20.0, 22.0], [np.nan, np.nan]]),
+        skeleton,
+        visible=[True, False, False],
+    )
+    labels = SleapLabels(
+        skeletons=[skeleton],
+        videos=[video],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=2, instances=[inst])],
+    )
+
+    nwb_path = tmp_path / "occluded.nwb"
+    save_labels(labels, nwb_path)
+    recovered = load_labels(nwb_path)
+
+    recovered_inst = recovered.labeled_frames[0].instances[0]
+    np.testing.assert_array_equal(recovered_inst.point_states, inst.point_states)
+    np.testing.assert_array_equal(
+        recovered_inst.points["xy"][:2], inst.points["xy"][:2]
+    )
