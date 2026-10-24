@@ -1919,7 +1919,10 @@ class Labels:
                 *links* are always persisted, but the large re-ID appearance
                 `/embeddings` vectors are skipped unless this is set `True` (they
                 stay in memory). Note this is distinct from `embed`, which embeds
-                *video frames*.
+                *video frames*. SLP also takes `legacy_format=True` to write the 2.x
+                layout that older sleap-io and SLEAP releases read, and
+                `compression="gzip"` or `"lzf"` to compress the point tables (see
+                `save_slp`).
         """
         from pathlib import Path
 

@@ -71,6 +71,16 @@ Format version history:
             `points`). Lazy save copies the group verbatim; only present when a session
             has frame groups (files without stay byte-identical). Read on group
             presence.
+    - 3.0: Breaking change: tables are stored one dataset per column. `/points`
+            and `/pred_points` are groups of 1-D columns (`x`, `y`, `visible`,
+            `verified` (renamed from `complete`), `labeled`, plus `score` for
+            predictions) instead of compound datasets. A missing `labeled` column
+            reads as True, and unknown columns are carried through re-saves. The
+            optional `required_features` attribute on `/metadata` lists features a
+            reader must understand. Older files are cleaned up on read: hidden
+            points lose their (stale) coordinates and visible points without
+            coordinates become hidden. `save_slp(..., legacy_format=True)` still
+            writes the 2.x layout.
 """
 
 from __future__ import annotations
@@ -3821,7 +3831,7 @@ def _write_provenance_dataset(f: h5py.File, provenance: dict) -> None:
     )
 
 
-def write_metadata(labels_path: str, labels: Labels):
+def write_metadata(labels_path: str, labels: Labels, *, legacy_format: bool = False):
     """Write metadata to a SLEAP labels file.
 
     This function will write the skeletons and provenance for the labels.
@@ -3834,6 +3844,9 @@ def write_metadata(labels_path: str, labels: Labels):
     Args:
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object to store the metadata for.
+        legacy_format: If `True`, write the 2.x `format_id` for the features used
+            (for files written with `legacy_format=True`). Otherwise write
+            `SLP_FORMAT_ID` (3.0).
 
     See also: serialize_skeletons
     """
@@ -4012,6 +4025,9 @@ def write_metadata(labels_path: str, labels: Labels):
         if "session_data" in f:
             format_id = max(format_id, 2.8)
 
+        if not legacy_format:
+            format_id = max(format_id, SLP_FORMAT_ID)
+
         grp = f.require_group("metadata")
         grp.attrs["format_id"] = format_id
         # Store provenance in a dedicated dataset (no 64 KB attribute limit) so an
@@ -4035,6 +4051,12 @@ RAW_POINT_DTYPE = np.dtype(
     ]
 )
 RAW_PRED_POINT_DTYPE = np.dtype(RAW_POINT_DTYPE.descr + [("score", "f8")])
+
+# The 2.x compound layout, written by `save_slp(..., legacy_format=True)`.
+LEGACY_POINT_DTYPE = np.dtype(
+    [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?")]
+)
+LEGACY_PRED_POINT_DTYPE = np.dtype(LEGACY_POINT_DTYPE.descr + [("score", "f8")])
 
 # Defaults for optional point columns missing from a table.
 _POINT_COLUMN_DEFAULTS = {
@@ -4256,6 +4278,42 @@ def _points_from_hdf5_data(
     return points
 
 
+def _write_columns(
+    f: h5py.File | h5py.Group,
+    name: str,
+    rows: np.ndarray,
+    *,
+    compression: str | None = None,
+) -> h5py.Group:
+    """Write a table as a group with one dataset per column.
+
+    Args:
+        f: The open file (or group) to write into.
+        name: Name of the group to create.
+        rows: A structured array of records; each field becomes a dataset of the
+            same name and dtype.
+        compression: `None` (the default) writes contiguous, uncompressed columns,
+            which read fastest. `"gzip"` or `"lzf"` writes chunked columns with the
+            shuffle filter.
+
+    Returns:
+        The created group.
+    """
+    grp = f.create_group(name)
+    for field in rows.dtype.names or ():
+        data = rows[field]
+        grp.create_dataset(
+            field, data=data, **_compression_kwargs(compression, data.shape)
+        )
+    return grp
+
+
+# Rows per chunk for compressed columns (see `_write_columns`).
+_COLUMN_CHUNK_ROWS = 65536
+
+_COMPRESSION_MODES = (None, "gzip", "lzf")
+
+
 def read_instances(
     labels_path: str,
     skeletons: list[Skeleton],
@@ -4363,7 +4421,8 @@ def _check_unlabeled_points(labels: Labels, unlabeled_as: str) -> None:
     Args:
         labels: The labels about to be written.
         unlabeled_as: `"error"` raises if any point is unlabeled. `"absent"` warns;
-            `write_lfs` then writes unlabeled points as hidden with no location.
+            the legacy writer then writes unlabeled points as hidden with no
+            location.
 
     Raises:
         ValueError: If `unlabeled_as` is `"error"` and an instance has unlabeled
@@ -4373,18 +4432,33 @@ def _check_unlabeled_points(labels: Labels, unlabeled_as: str) -> None:
     for inst in labels.instances:
         points = inst.points
         n_unlabeled += int(np.count_nonzero(~(points["labeled"] | points["visible"])))
+    _refuse_unlabeled_points(n_unlabeled, unlabeled_as)
+
+
+def _refuse_unlabeled_points(n_unlabeled: int, unlabeled_as: str) -> None:
+    """Raise or warn about unlabeled points the compound layout can't store.
+
+    Args:
+        n_unlabeled: Number of unlabeled points about to be written.
+        unlabeled_as: `"error"` raises; `"absent"` warns.
+
+    Raises:
+        ValueError: If `unlabeled_as` is `"error"` and `n_unlabeled` is not zero.
+    """
     if n_unlabeled == 0:
         return
     if unlabeled_as == "error":
         raise ValueError(
-            f"{n_unlabeled} point(s) are unlabeled, but this SLP layout can't store "
-            "unlabeled points: they would be read back as labeled hidden points. Pass "
-            'unlabeled_as="absent" to save them as hidden points instead.'
+            f"{n_unlabeled} point(s) are unlabeled, but the legacy SLP layout can't "
+            "store unlabeled points: they would be read back as labeled hidden "
+            'points. Pass unlabeled_as="absent" to save them as hidden points '
+            "instead, or save without legacy_format=True."
         )
     warnings.warn(
         f"Saving {n_unlabeled} unlabeled point(s) as hidden points with no location "
-        "(labeled, not visible), since this SLP layout can't store unlabeled points.",
-        stacklevel=3,
+        "(labeled, not visible), since the legacy SLP layout can't store unlabeled "
+        "points.",
+        stacklevel=4,
     )
 
 
@@ -4407,12 +4481,132 @@ def _check_dropped_metadata(labels: Labels) -> None:
         )
 
 
-def write_lfs(labels_path: str, labels: Labels):
+def _raw_points_from_instances(
+    instances: list[Instance | PredictedInstance], *, is_predicted: bool
+) -> np.ndarray:
+    """Gather the points of instances into raw point records.
+
+    Args:
+        instances: Instances whose points are concatenated, in order.
+        is_predicted: Whether to build `RAW_PRED_POINT_DTYPE` records (with
+            `score`) instead of `RAW_POINT_DTYPE` records.
+
+    Returns:
+        One record per point. `labeled` is stored as `labeled | visible`, and
+        unlabeled points have NaN coordinates.
+    """
+    dtype = RAW_PRED_POINT_DTYPE if is_predicted else RAW_POINT_DTYPE
+    if not instances:
+        return np.empty(0, dtype=dtype)
+    arrays = [inst.points for inst in instances]
+    visible = np.concatenate([a["visible"] for a in arrays])
+    labeled = np.concatenate([a["labeled"] for a in arrays]) | visible
+    xy = np.concatenate([a["xy"] for a in arrays])
+    xy[~labeled] = np.nan
+    rows = np.empty(len(visible), dtype=dtype)
+    rows["x"] = xy[:, 0]
+    rows["y"] = xy[:, 1]
+    rows["visible"] = visible
+    rows["verified"] = np.concatenate([a["verified"] for a in arrays])
+    rows["labeled"] = labeled
+    if is_predicted:
+        rows["score"] = np.concatenate([a["score"] for a in arrays])
+    return rows
+
+
+def _legacy_point_rows(rows: np.ndarray, *, is_predicted: bool) -> np.ndarray:
+    """Convert raw point records to the 2.x compound layout.
+
+    Args:
+        rows: Raw point records (see `RAW_POINT_DTYPE`).
+        is_predicted: Whether to build `LEGACY_PRED_POINT_DTYPE` records.
+
+    Returns:
+        Compound records with `verified` stored as `complete`. Unlabeled points
+        become hidden points with NaN coordinates; unknown columns are dropped.
+    """
+    dtype = LEGACY_PRED_POINT_DTYPE if is_predicted else LEGACY_POINT_DTYPE
+    legacy = np.empty(len(rows), dtype=dtype)
+    unlabeled = ~(rows["labeled"] | rows["visible"])
+    legacy["x"] = np.where(unlabeled, np.nan, rows["x"])
+    legacy["y"] = np.where(unlabeled, np.nan, rows["y"])
+    legacy["visible"] = rows["visible"]
+    legacy["complete"] = rows["verified"]
+    if is_predicted:
+        legacy["score"] = rows["score"]
+    return legacy
+
+
+def _compression_kwargs(compression: str | None, shape: tuple) -> dict:
+    """Return `create_dataset` keyword arguments for a table's compression.
+
+    Args:
+        compression: `None`, `"gzip"` or `"lzf"`.
+        shape: Shape of the dataset to write.
+
+    Returns:
+        An empty dict for `None` or an empty dataset (contiguous and uncompressed).
+        Otherwise chunked compression with the shuffle filter (gzip at level 1).
+    """
+    if compression is None or shape[0] == 0:
+        return {}
+    kwargs = dict(
+        compression=compression,
+        shuffle=True,
+        chunks=(min(shape[0], _COLUMN_CHUNK_ROWS), *shape[1:]),
+    )
+    if compression == "gzip":
+        kwargs["compression_opts"] = 1
+    return kwargs
+
+
+def _write_point_tables(
+    f: h5py.File,
+    points: np.ndarray,
+    pred_points: np.ndarray,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+) -> None:
+    """Write the `/points` and `/pred_points` tables.
+
+    Args:
+        f: The open file to write into.
+        points: Raw user point records (see `RAW_POINT_DTYPE`).
+        pred_points: Raw predicted point records (see `RAW_PRED_POINT_DTYPE`).
+        legacy_format: If `True`, write 2.x compound datasets (see
+            `_legacy_point_rows`); otherwise groups of columns.
+        compression: `None`, `"gzip"` or `"lzf"`.
+    """
+    for name, rows, is_predicted in (
+        ("points", points, False),
+        ("pred_points", pred_points, True),
+    ):
+        if legacy_format:
+            legacy = _legacy_point_rows(rows, is_predicted=is_predicted)
+            f.create_dataset(
+                name, data=legacy, **_compression_kwargs(compression, legacy.shape)
+            )
+        else:
+            _write_columns(f, name, rows, compression=compression)
+
+
+def write_lfs(
+    labels_path: str,
+    labels: Labels,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+):
     """Write labeled frames, instances and points to a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object to store the metadata for.
+        legacy_format: If `True`, write `/points` and `/pred_points` as 2.x compound
+            datasets, after `_check_unlabeled_points`. Otherwise (the default) write
+            them as groups of columns (SLP 3.0).
+        compression: Compression for the point tables: `None`, `"gzip"` or `"lzf"`.
     """
     # We store the data in structured arrays for performance, so we first define the
     # dtype fields.
@@ -4439,15 +4633,14 @@ def write_lfs(labels_path: str, labels: Labels):
             ("instance_id_end", "u8"),
         ]
     )
-    point_dtype = np.dtype(
-        [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?")]
-    )
-    predicted_point_dtype = np.dtype(
-        [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?"), ("score", "f8")]
-    )
 
-    # Next, we extract the data from the labels object into lists with the same fields.
-    frames, instances, points, predicted_points, to_link = [], [], [], [], []
+    # Next, we extract the data from the labels object into lists with the same
+    # fields. Points are kept as the instances' own points arrays and turned into
+    # columns in one go below.
+    frames, instances, to_link = [], [], []
+    user_points: list = []
+    pred_points: list = []
+    n_user_points, n_pred_points = 0, 0
     inst_to_id = {}
     # get sparse ids instead of list indices
     video_idx_id_map = {}
@@ -4494,29 +4687,19 @@ def write_lfs(labels_path: str, labels: Labels):
             if type(inst) is Instance:
                 instance_type = InstanceType.USER
                 tracking_score = inst.tracking_score
-                point_id_start = len(points)
-
-                # Unlabeled points (only present with unlabeled_as="absent") are
-                # written as hidden with no location.
-                xy = inst.numpy(invisible_as_nan=False)
-                for pt, (x, y) in zip(inst.points, xy):
-                    points.append([x, y, pt["visible"], pt["verified"]])
-
-                point_id_end = len(points)
+                point_id_start = n_user_points
+                user_points.append(inst)
+                n_user_points += len(inst.points)
+                point_id_end = n_user_points
 
             elif type(inst) is PredictedInstance:
                 instance_type = InstanceType.PREDICTED
                 score = inst.score
                 tracking_score = inst.tracking_score
-                point_id_start = len(predicted_points)
-
-                xy = inst.numpy(invisible_as_nan=False)
-                for pt, (x, y) in zip(inst.points, xy):
-                    predicted_points.append(
-                        [x, y, pt["visible"], pt["verified"], pt["score"]]
-                    )
-
-                point_id_end = len(predicted_points)
+                point_id_start = n_pred_points
+                pred_points.append(inst)
+                n_pred_points += len(inst.points)
+                point_id_end = n_pred_points
 
             else:
                 raise ValueError(f"Unknown instance type: {type(inst)}")
@@ -4558,20 +4741,19 @@ def write_lfs(labels_path: str, labels: Labels):
         instances[instance_id][5] = inst_to_id.get(id(from_predicted), -1)
 
     # Create structured arrays.
-    points = np.array([tuple(x) for x in points], dtype=point_dtype)
-    predicted_points = np.array(
-        [tuple(x) for x in predicted_points], dtype=predicted_point_dtype
-    )
+    points = _raw_points_from_instances(user_points, is_predicted=False)
+    predicted_points = _raw_points_from_instances(pred_points, is_predicted=True)
     instances = np.array([tuple(x) for x in instances], dtype=instance_dtype)
     frames = np.array([tuple(x) for x in frames], dtype=frame_dtype)
 
     # Write to file.
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("points", data=points, dtype=points.dtype)
-        f.create_dataset(
-            "pred_points",
-            data=predicted_points,
-            dtype=predicted_points.dtype,
+        _write_point_tables(
+            f,
+            points,
+            predicted_points,
+            legacy_format=legacy_format,
+            compression=compression,
         )
         f.create_dataset(
             "instances",
@@ -7768,7 +7950,7 @@ def write_label_images(
 
 def _write_metadata_standalone(
     labels_path: str,
-    format_id: float = 2.2,
+    format_id: float = SLP_FORMAT_ID,
     skeletons: list[Skeleton] | None = None,
     provenance: dict | None = None,
     videos: list[Video] | None = None,
@@ -7780,11 +7962,12 @@ def _write_metadata_standalone(
 
     Args:
         labels_path: Path to the SLP file.
-        format_id: Format version identifier.
+        format_id: Format version identifier. Defaults to ``SLP_FORMAT_ID`` (3.0),
+            matching the empty columnar point tables written here.
         skeletons: Optional list of skeletons to serialize.
         provenance: Optional provenance dict.
         videos: Optional list of videos; if any carries a virtual crop the
-            ``format_id`` is bumped to 2.3 (matching ``write_metadata``).
+            ``format_id`` is raised to at least 2.3 (matching ``write_metadata``).
     """
     skeletons = skeletons or []
     provenance = dict(provenance or {})
@@ -7808,12 +7991,6 @@ def _write_metadata_standalone(
     }
 
     # Dtypes for empty placeholder datasets required by read_labels
-    point_dtype = np.dtype(
-        [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?")]
-    )
-    pred_point_dtype = np.dtype(
-        [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?"), ("score", "f8")]
-    )
     instance_dtype = np.dtype(
         [
             ("instance_id", "i8"),
@@ -7855,9 +8032,9 @@ def _write_metadata_standalone(
 
         # Write empty placeholder datasets so read_labels can parse the file
         if "points" not in f:
-            f.create_dataset("points", data=np.array([], dtype=point_dtype))
+            _write_columns(f, "points", np.empty(0, dtype=RAW_POINT_DTYPE))
         if "pred_points" not in f:
-            f.create_dataset("pred_points", data=np.array([], dtype=pred_point_dtype))
+            _write_columns(f, "pred_points", np.empty(0, dtype=RAW_PRED_POINT_DTYPE))
         if "instances" not in f:
             f.create_dataset("instances", data=np.array([], dtype=instance_dtype))
         if "frames" not in f:
@@ -9241,6 +9418,9 @@ def _write_labels_lazy(
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
     save_embedding_vectors: bool = False,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    unlabeled_as: str = "error",
 ) -> None:
     """Write lazy Labels to SLP file using fast path.
 
@@ -9274,6 +9454,10 @@ def _write_labels_lazy(
         save_embedding_vectors: If `False` (the default), skip the `/embeddings`
             group while still writing identity links. Set `True` to also write the
             attached re-ID appearance embeddings. See `write_labels`.
+        legacy_format: If `True`, write the 2.x layout. See `write_labels`.
+        compression: Compression for the point tables. See `write_labels`.
+        unlabeled_as: How the legacy layout handles unlabeled points. See
+            `write_labels`.
 
     Raises:
         ValueError: If labels is not lazy.
@@ -9282,6 +9466,14 @@ def _write_labels_lazy(
         raise ValueError("_write_labels_lazy requires lazy Labels")
 
     lazy_store = labels._lazy_store
+
+    if legacy_format:
+        # Check before touching the output file so a refused save leaves it intact.
+        n_unlabeled = sum(
+            int(np.count_nonzero(~(rows["labeled"] | rows["visible"])))
+            for rows in (lazy_store.points_data, lazy_store.pred_points_data)
+        )
+        _refuse_unlabeled_points(n_unlabeled, unlabeled_as)
 
     # Capture unknown top-level members from the source file before it is
     # truncated, to carry them across the load/save cycle (see write_labels).
@@ -9441,19 +9633,17 @@ def _write_labels_lazy(
                 "`labels.materialize()` before saving to retain them."
             )
         write_sessions(labels_path, labels.sessions, labels.videos, [])
-    write_metadata(labels_path, labels)
+    write_metadata(labels_path, labels, legacy_format=legacy_format)
 
-    # Write raw arrays directly from lazy store (fast path)
+    # Write raw arrays directly from lazy store (fast path). The point tables are
+    # in the same row order as loaded, so unknown columns are carried through.
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset(
-            "points",
-            data=lazy_store.points_data,
-            dtype=lazy_store.points_data.dtype,
-        )
-        f.create_dataset(
-            "pred_points",
-            data=lazy_store.pred_points_data,
-            dtype=lazy_store.pred_points_data.dtype,
+        _write_point_tables(
+            f,
+            lazy_store.points_data,
+            lazy_store.pred_points_data,
+            legacy_format=legacy_format,
+            compression=compression,
         )
         f.create_dataset(
             "instances",
@@ -9549,6 +9739,8 @@ def write_labels(
     preserve_unknown: bool = False,
     save_embedding_vectors: bool = False,
     unlabeled_as: str = "error",
+    legacy_format: bool = False,
+    compression: str | None = None,
 ):
     """Write a SLEAP labels file.
 
@@ -9610,20 +9802,40 @@ def write_labels(
             keeping the vectors in memory. Set `True` to also write the attached
             re-ID appearance embeddings. Off by default, mirroring `embed` (which
             embeds *video frames*).
-        unlabeled_as: How to handle unlabeled points (`labeled=False`), which this
-            layout can't store. `"error"` (the default) raises a `ValueError` before
-            anything is written. `"absent"` saves them as hidden points (labeled, not
-            visible) and warns. Lazy-loaded labels can't hold unlabeled points.
+        unlabeled_as: How `legacy_format=True` handles unlabeled points
+            (`labeled=False`), which the 2.x layout can't store. `"error"` (the
+            default) raises a `ValueError` before anything is written. `"absent"`
+            saves them as hidden points (labeled, not visible, no location) and
+            warns. Ignored for the default (3.0) layout, which stores them.
+        legacy_format: If `True`, write the SLP 2.x layout (compound `/points` and
+            `/pred_points` datasets and the 2.x `format_id`) that older sleap-io and
+            SLEAP releases can read. Default `False` writes SLP format 3.0.
+        compression: Compression for the point tables (`/points` and
+            `/pred_points`): `None` (the default) for contiguous, uncompressed data
+            that reads fastest, or `"gzip"` or `"lzf"` (chunked, with the shuffle
+            filter) for smaller files. Datasets that are compressed by default
+            (segmentation, label image and 3D point data) stay compressed either
+            way.
 
     Notes:
-        Instance, frame and bounding box `metadata` can't be stored in this layout;
-        it is dropped with a warning. Metadata kinds are still checked first
+        Instance, frame and bounding box `metadata` can't be stored yet; it is
+        dropped with a warning. Metadata kinds are still checked first
         (`Labels.check_metadata`), so a key that mixes kinds across records raises
         a `TypeError` before anything is written.
+
+        Unknown point columns read from a file written by a newer sleap-io are
+        carried through the save as long as the point tables' rows are in their
+        loaded order: always for lazy labels, and for eager labels whose instances
+        (and their points arrays) are the ones loaded. Otherwise they are dropped
+        with a warning.
     """
     if unlabeled_as not in _UNLABELED_AS_MODES:
         raise ValueError(
             f"unlabeled_as must be one of {_UNLABELED_AS_MODES}, got {unlabeled_as!r}."
+        )
+    if compression not in _COMPRESSION_MODES:
+        raise ValueError(
+            f"compression must be one of {_COMPRESSION_MODES}, got {compression!r}."
         )
 
     # Fast path for lazy labels (avoids materializing frames/instances)
@@ -9656,11 +9868,15 @@ def write_labels(
                 prefer_metadata=prefer_metadata,
                 preserve_unknown=preserve_unknown,
                 save_embedding_vectors=save_embedding_vectors,
+                legacy_format=legacy_format,
+                compression=compression,
+                unlabeled_as=unlabeled_as,
             )
             return
 
     # Check before touching the output file so a refused save leaves it intact.
-    _check_unlabeled_points(labels, unlabeled_as)
+    if legacy_format:
+        _check_unlabeled_points(labels, unlabeled_as)
     _check_dropped_metadata(labels)
 
     # Capture unknown top-level members from the source file before it is
@@ -9774,8 +9990,8 @@ def write_labels(
         labels.labeled_frames,
         identities=labels.identities,
     )
-    write_metadata(labels_path, labels)
-    write_lfs(labels_path, labels)
+    write_metadata(labels_path, labels, legacy_format=legacy_format)
+    write_lfs(labels_path, labels, legacy_format=legacy_format, compression=compression)
     write_negative_frames(labels_path, labels)
 
     # Collect all instances and build annotation lists with routing contexts

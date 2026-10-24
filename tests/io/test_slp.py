@@ -1175,7 +1175,7 @@ def test_no_identity_keeps_low_format_and_no_dataset(tmp_path):
         ]
     )
     path = str(tmp_path / "no_identity.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] < 2.5
@@ -1594,7 +1594,7 @@ def test_no_embeddings_keeps_low_format_and_no_group(tmp_path):
         ]
     )
     path = str(tmp_path / "no_embeddings.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] < 2.5
@@ -1733,7 +1733,7 @@ def test_per_instance_category_round_trip(tmp_path):
     labels.update()
 
     path = str(tmp_path / "categories.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     # Format bumped to 2.7 and the /categories group + links dataset are present.
     with h5py.File(path, "r") as f:
@@ -1781,7 +1781,7 @@ def test_category_embedding_round_trip(tmp_path):
     labels.update()
 
     path = str(tmp_path / "category_embeddings.slp")
-    save_slp(labels, path, save_embedding_vectors=True)
+    save_slp(labels, path, save_embedding_vectors=True, legacy_format=True)
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] == 2.7
@@ -1884,7 +1884,7 @@ def test_no_category_keeps_low_format_and_no_group(tmp_path):
         ]
     )
     path = str(tmp_path / "no_category.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] < 2.7
@@ -3081,7 +3081,7 @@ def test_format_id_1_3_tracking_score(tmp_path):
 
     # Save with current FORMAT_ID
     test_path = tmp_path / "test_format_tracking_score.slp"
-    write_labels(test_path, labels)
+    write_labels(test_path, labels, legacy_format=True)
 
     # Verify FORMAT_ID is current (1.4)
     format_id = read_hdf5_attrs(test_path, "metadata", "format_id")
@@ -5530,7 +5530,7 @@ def test_slp_roi_roundtrip(tmp_path):
     )
 
     path = str(tmp_path / "test_rois.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     # Verify format_id bumped to 2.7 (ROIs carry a `Category`, i.e. category data).
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
@@ -5820,7 +5820,7 @@ def test_slp_no_rois_format_id(tmp_path):
     labels = Labels(videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "test_no_rois.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
     assert format_id == 1.4
@@ -6289,7 +6289,7 @@ def test_slp_format_id_1_7(tmp_path):
     )
 
     path = str(tmp_path / "test_format.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
     assert format_id == 2.0
@@ -6297,7 +6297,7 @@ def test_slp_format_id_1_7(tmp_path):
     # Verify that without bboxes, format_id is lower
     labels_no_bbox = Labels(videos=[video], skeletons=[skeleton])
     path_no_bbox = str(tmp_path / "test_no_bbox.slp")
-    save_slp(labels_no_bbox, path_no_bbox)
+    save_slp(labels_no_bbox, path_no_bbox, legacy_format=True)
 
     format_id_no_bbox = read_hdf5_attrs(path_no_bbox, "metadata", "format_id")
     assert format_id_no_bbox == 1.4
@@ -6396,7 +6396,7 @@ def test_label_image_slp_format_version(tmp_path):
     )
 
     path = str(tmp_path / "test_format_li.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
     assert format_id == 1.8
@@ -7289,7 +7289,7 @@ def test_format_version_bumps_with_identities(tmp_path):
         skeletons=[skeleton],
         identities=[Identity(name="mouse_A")],
     )
-    write_labels(labels_path, labels)
+    write_labels(labels_path, labels, legacy_format=True)
 
     format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
     assert format_id == 2.5
@@ -7301,7 +7301,7 @@ def test_format_version_no_identities(tmp_path):
 
     skeleton = Skeleton(["A", "B"])
     labels = Labels(skeletons=[skeleton])
-    write_labels(labels_path, labels)
+    write_labels(labels_path, labels, legacy_format=True)
 
     format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
     assert format_id < 2.5
@@ -7951,7 +7951,7 @@ def test_slp_28_session_data_group_and_version(tmp_path, camera_group_345):
         skeleton=skeleton,
     )
     path = str(tmp_path / "t.slp")
-    write_labels(path, labels)
+    write_labels(path, labels, legacy_format=True)
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] == pytest.approx(2.8)
@@ -7979,7 +7979,7 @@ def test_slp_no_frame_groups_no_session_data_group(tmp_path, camera_group_345):
     )
     labels = Labels(sessions=[session])
     path = str(tmp_path / "t.slp")
-    write_labels(path, labels)
+    write_labels(path, labels, legacy_format=True)
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] < 2.8
@@ -8151,7 +8151,7 @@ def test_slp_lazy_resave_preserves_3d(tmp_path, camera_group_345):
 
     lazy = load_slp(p1, lazy=True, open_videos=False)
     assert lazy.is_lazy
-    write_labels(p2, lazy)
+    write_labels(p2, lazy, legacy_format=True)
 
     with h5py.File(p2, "r") as f:
         assert f["metadata"].attrs["format_id"] == pytest.approx(2.8)
@@ -8538,7 +8538,7 @@ def test_slp_predicted_mask_roundtrip(tmp_path):
     )
 
     path = str(tmp_path / "pred_mask.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     loaded = load_slp(path, open_videos=False)
     assert len(loaded.masks) == 1
@@ -8615,7 +8615,7 @@ def test_slp_mask_from_predicted_none_roundtrip(tmp_path):
     labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "mask_unlinked.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     # No link present, so the format is not bumped to 2.4.
     assert read_hdf5_attrs(path, "metadata", "format_id") < 2.4
@@ -9257,7 +9257,7 @@ def test_slp_default_spatial_no_version_bump(tmp_path):
     labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton])
 
     path = str(tmp_path / "default_spatial.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
     assert format_id < 2.1
@@ -11140,7 +11140,7 @@ def test_uncropped_writes_no_video_crops_and_golden_videos_json(slp_minimal, tmp
     baseline = str(tmp_path / "baseline.slp")
     candidate = str(tmp_path / "candidate.slp")
     write_labels(baseline, labels)
-    write_labels(candidate, labels)
+    write_labels(candidate, labels, legacy_format=True)
 
     # No /video_crops dataset for an uncropped file.
     with pytest.raises(KeyError):
@@ -11269,7 +11269,7 @@ def test_crop_format_id_bumped_only_with_crop(
     """format_id becomes 2.3 only when a crop is present."""
     uncropped = read_labels(slp_minimal)
     uncropped_path = str(tmp_path / "uncropped.slp")
-    write_labels(uncropped_path, uncropped)
+    write_labels(uncropped_path, uncropped, legacy_format=True)
     with h5py.File(uncropped_path, "r") as f:
         assert f["metadata"].attrs["format_id"] < 2.3
 
@@ -11278,7 +11278,7 @@ def test_crop_format_id_bumped_only_with_crop(
     )
     cropped = Labels(videos=[cropped_video])
     cropped_path = str(tmp_path / "cropped.slp")
-    write_labels(cropped_path, cropped)
+    write_labels(cropped_path, cropped, legacy_format=True)
     with h5py.File(cropped_path, "r") as f:
         assert f["metadata"].attrs["format_id"] == 2.3
 
@@ -11755,7 +11755,7 @@ def test_slp_event_format_version(tmp_path):
     """Events bump the SLP format_id to 2.6."""
     labels = _event_labels()
     path = tmp_path / "events.slp"
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
     with h5py.File(path, "r") as f:
         assert float(f["metadata"].attrs["format_id"]) == pytest.approx(2.6)
 
@@ -11764,7 +11764,7 @@ def test_slp_event_no_events_omits_groups(tmp_path):
     """A Labels with no events writes neither group and stays below format 2.6."""
     labels = Labels(videos=[Video(filename="clip.mp4")])
     path = tmp_path / "noev.slp"
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
     with h5py.File(path, "r") as f:
         assert "events" not in f and "event_types" not in f
         assert float(f["metadata"].attrs["format_id"]) < 2.6
@@ -12130,9 +12130,9 @@ def test_merge_label_images_newer_format_raises(tmp_path, slp_minimal):
 def test_read_labels_format_2_8_still_loads(tmp_path, slp_minimal):
     """The newest 2.x format still loads, eagerly and lazily."""
     expected = read_labels(slp_minimal)
-    # Re-save with the current writer so the file has every field a 2.x reader reads.
+    # Re-save with the legacy writer so the file has every field a 2.x reader reads.
     resaved = tmp_path / "resaved.slp"
-    save_slp(expected, str(resaved))
+    save_slp(expected, str(resaved), legacy_format=True)
     path = _copy_with_format_id(str(resaved), tmp_path / "v2_8.slp", 2.8)
     labels = read_labels(path)
     assert len(labels) == len(expected)
@@ -12170,16 +12170,16 @@ def _labels_with_unlabeled_point():
 
 
 def test_save_slp_refuses_unlabeled_points(tmp_path):
-    """The compound writer raises on unlabeled points and leaves the file intact."""
+    """The legacy writer raises on unlabeled points and leaves the file intact."""
     path = tmp_path / "labels.slp"
     path.write_bytes(b"existing")
     labels = _labels_with_unlabeled_point()
     with pytest.raises(ValueError, match="2 point\\(s\\) are unlabeled"):
-        save_slp(labels, str(path))
+        save_slp(labels, str(path), legacy_format=True)
     assert path.read_bytes() == b"existing"
 
     with pytest.raises(ValueError, match="unlabeled"):
-        labels.save(str(tmp_path / "other.slp"))
+        labels.save(str(tmp_path / "other.slp"), legacy_format=True)
     assert not (tmp_path / "other.slp").exists()
 
 
@@ -12188,7 +12188,7 @@ def test_save_slp_unlabeled_as_absent(tmp_path):
     path = tmp_path / "labels.slp"
     labels = _labels_with_unlabeled_point()
     with pytest.warns(UserWarning, match="2 unlabeled point\\(s\\) as hidden"):
-        labels.save(str(path), unlabeled_as="absent")
+        labels.save(str(path), unlabeled_as="absent", legacy_format=True)
 
     loaded = load_slp(str(path))
     for inst in loaded[0].instances:
@@ -12203,7 +12203,7 @@ def test_save_slp_unlabeled_as_absent_clears_location(tmp_path):
     for inst in labels[0].instances:
         inst.points["xy"][1] = [5, 6]
     with pytest.warns(UserWarning, match="no location"):
-        save_slp(labels, str(path), unlabeled_as="absent")
+        save_slp(labels, str(path), unlabeled_as="absent", legacy_format=True)
 
     for inst in load_slp(str(path))[0].instances:
         assert_equal(inst.point_states, [PointState.VISIBLE, PointState.ABSENT])
@@ -12265,18 +12265,20 @@ def test_save_slp_rejects_mixed_metadata_kinds(tmp_path):
 
 
 @pytest.mark.parametrize("lazy", [False, True])
-def test_verified_round_trip(tmp_path, lazy):
-    """`verified` is stored in the on-disk `complete` column and read back."""
+@pytest.mark.parametrize("legacy_format", [False, True])
+def test_verified_round_trip(tmp_path, lazy, legacy_format):
+    """`verified` is stored (as `complete` in the legacy layout) and read back."""
     labels = _labels_with_unlabeled_point()
     for inst in labels[0].instances:
         inst.points["labeled"] = True
         inst.points["verified"] = [True, False]
     path = tmp_path / "verified.slp"
-    save_slp(labels, str(path))
+    save_slp(labels, str(path), legacy_format=legacy_format)
 
+    column = "complete" if legacy_format else "verified"
     with h5py.File(path, "r") as f:
-        assert_equal(f["points"]["complete"], [True, False])
-        assert_equal(f["pred_points"]["complete"], [True, False])
+        assert_equal(f["points"][column][()], [True, False])
+        assert_equal(f["pred_points"][column][()], [True, False])
 
     loaded = load_slp(str(path), lazy=lazy)
     for inst in loaded[0].instances:
@@ -12303,11 +12305,166 @@ LEGACY_SLP_FIXTURES = [
 ]
 
 
+def _labels_with_four_point_cases():
+    """Labels with one user and one predicted instance holding every point case.
+
+    The nodes are, in order, visible, occluded, absent and unlabeled.
+    """
+    skeleton = Skeleton(["visible", "occluded", "absent", "unlabeled"])
+    video = Video("test.mp4")
+    xy = np.array([[1.0, 2.0], [3.0, 4.0], [np.nan, np.nan], [np.nan, np.nan]])
+    flags = dict(
+        visible=[True, False, False, False],
+        labeled=[True, True, True, False],
+        verified=[True, True, False, False],
+    )
+    inst = Instance.from_numpy(xy, skeleton=skeleton, **flags)
+    pred = PredictedInstance.from_numpy(
+        xy, skeleton=skeleton, point_scores=np.array([0.9, 0.8, 0.7, 0.6]), **flags
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst, pred])
+    return Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+
+FOUR_POINT_STATES = [
+    PointState.VISIBLE,
+    PointState.OCCLUDED,
+    PointState.ABSENT,
+    PointState.UNLABELED,
+]
+
+
 def _old_numpy(raw: np.ndarray, format_id: float) -> np.ndarray:
     """`Instance.numpy()` as sleap-io 0.9 computed it from raw 2.x point records."""
     offset = 0.5 if format_id < 1.1 else 0.0
     xy = np.column_stack([raw["x"], raw["y"]]) - offset
     return np.where(raw["visible"].astype(bool)[:, None], xy, np.nan)
+
+
+def test_points_written_as_columns(tmp_path):
+    """The default writer stores point tables as groups of 1-D columns (3.0)."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_four_point_cases(), str(path))
+
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
+        assert "required_features" not in f["metadata"].attrs
+        for name, columns in (
+            ("points", ["labeled", "verified", "visible", "x", "y"]),
+            ("pred_points", ["labeled", "score", "verified", "visible", "x", "y"]),
+        ):
+            grp = f[name]
+            assert isinstance(grp, h5py.Group)
+            assert sorted(grp.keys()) == columns
+            for col in ("x", "y"):
+                assert grp[col].dtype == np.float64
+            for col in ("visible", "verified", "labeled"):
+                assert grp[col].dtype == bool
+            # Uncompressed and contiguous by default.
+            assert grp["x"].compression is None
+            assert grp["x"].chunks is None
+        assert_equal(f["points/labeled"][()], [True, True, True, False])
+        assert_equal(f["pred_points/score"][()], [0.9, 0.8, 0.7, 0.6])
+        # The unlabeled point has no location on disk.
+        assert np.isnan(f["points/x"][3])
+        # Instances and frames stay compound until they become columnar too.
+        assert isinstance(f["instances"], h5py.Dataset)
+        assert isinstance(f["frames"], h5py.Dataset)
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_four_point_cases_round_trip(tmp_path, lazy):
+    """Visible, occluded, absent and unlabeled points survive a save and load."""
+    labels = _labels_with_four_point_cases()
+    path = tmp_path / "labels.slp"
+    save_slp(labels, str(path))
+
+    loaded = load_slp(str(path), lazy=lazy)
+    for expected, inst in zip(labels[0].instances, loaded[0].instances):
+        assert type(inst) is type(expected)
+        assert_equal(inst.point_states, FOUR_POINT_STATES)
+        assert_equal(inst.points["xy"], expected.points["xy"])
+        assert_equal(inst.points["visible"], expected.points["visible"])
+        assert_equal(inst.points["labeled"], expected.points["labeled"])
+        assert_equal(inst.points["verified"], expected.points["verified"])
+    assert_equal(loaded[0].instances[1].points["score"], [0.9, 0.8, 0.7, 0.6])
+
+    points, states = loaded.numpy(return_states=True, user_instances=False)
+    assert_equal(states[0, 0], FOUR_POINT_STATES)
+    assert_equal(points[0, 0, :2], [[1, 2], [np.nan, np.nan]])
+
+
+def test_labeled_is_stored_with_visible(tmp_path):
+    """Visible points are stored as labeled, and unlabeled points without location."""
+    skeleton = Skeleton(["A", "B"])
+    video = Video("test.mp4")
+    inst = Instance.from_numpy(np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton)
+    # Bypass the setters: a visible point that claims to be unlabeled, and an
+    # unlabeled point with stale coordinates.
+    inst.points["labeled"] = False
+    inst.points["visible"] = [True, False]
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+    path = tmp_path / "labels.slp"
+    save_slp(labels, str(path))
+
+    with h5py.File(path, "r") as f:
+        assert_equal(f["points/labeled"][()], [True, False])
+        assert_equal(f["points/x"][()], [1.0, np.nan])
+    assert_equal(
+        load_slp(str(path))[0].instances[0].point_states,
+        [PointState.VISIBLE, PointState.UNLABELED],
+    )
+
+
+def test_missing_optional_point_columns_take_defaults(tmp_path):
+    """Optional columns missing from a 3.0 table read as their defaults."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_four_point_cases(), str(path))
+    with h5py.File(path, "r+") as f:
+        for name in ("points", "pred_points"):
+            del f[name]["labeled"]
+            del f[name]["verified"]
+        del f["pred_points"]["visible"]
+        del f["pred_points"]["score"]
+
+    user, pred = load_slp(str(path))[0].instances
+    assert user.points["labeled"].all()
+    assert not user.points["verified"].any()
+    assert_equal(user.points["visible"], [True, False, False, False])
+    assert not pred.points["visible"].any()
+    assert np.isnan(pred.points["score"]).all()
+
+
+def test_point_columns_of_any_numeric_type(tmp_path):
+    """Readers accept integer flags and narrower floats, as JS writers may store."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_four_point_cases(), str(path))
+    with h5py.File(path, "r+") as f:
+        grp = f["points"]
+        for col, dtype in (("visible", "i8"), ("labeled", "u1"), ("x", "f4")):
+            data = grp[col][()].astype(dtype)
+            del grp[col]
+            grp.create_dataset(col, data=data)
+
+    inst = load_slp(str(path))[0].instances[0]
+    assert inst.points["visible"].dtype == bool
+    assert_equal(inst.point_states, FOUR_POINT_STATES)
+
+
+def test_point_table_with_mismatched_columns_raises(tmp_path):
+    """A columnar point table whose columns differ in length is refused."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_four_point_cases(), str(path))
+    with h5py.File(path, "r+") as f:
+        del f["points/y"]
+        f["points"].create_dataset("y", data=np.zeros(2))
+    with pytest.raises(ValueError, match="column 'y' has 2 rows, expected 4"):
+        load_slp(str(path))
+
+    with h5py.File(path, "r+") as f:
+        del f["points/y"]
+    with pytest.raises(ValueError, match="missing its x or y column"):
+        load_slp(str(path))
 
 
 @pytest.mark.parametrize("path", LEGACY_SLP_FIXTURES)
@@ -12368,6 +12525,25 @@ def test_hidden_complete_point_reads_without_location(slp_legacy_hidden_complete
         assert_equal(pred.point_states, [PointState.VISIBLE, PointState.ABSENT])
         assert not pred.points["visible"][1]
         assert pred.n_visible == 1
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_h5wasm_legacy_file_reads(tmp_path, slp_legacy_h5wasm_flat, lazy):
+    """An h5wasm-written file (flat arrays + `field_names`) reads and re-saves."""
+    labels = load_slp(slp_legacy_h5wasm_flat, lazy=lazy)
+    reference = load_slp("tests/data/slp/typical.slp")
+    assert len(labels[0].instances) == 3
+    user = labels[0].instances[0]
+    assert_equal(user.point_states, [PointState.VISIBLE, PointState.ABSENT])
+    assert np.isnan(user.points["xy"][1]).all()
+    assert user.track.name == reference[0].instances[0].track.name
+    assert_equal(labels[0].instances[1].numpy(), reference[0].instances[1].numpy())
+
+    path = tmp_path / "resaved.slp"
+    save_slp(labels, str(path))
+    with h5py.File(path, "r") as f:
+        assert isinstance(f["points"], h5py.Group)
+    np.testing.assert_array_equal(load_slp(str(path)).numpy(), labels.numpy())
 
 
 @pytest.mark.parametrize(
@@ -12432,3 +12608,133 @@ def test_required_features_are_checked(tmp_path, slp_minimal):
     for lazy in (False, True):
         with pytest.raises(ValueError, match=r"features.*\(future_codec, other\)"):
             load_slp(str(path), lazy=lazy)
+
+
+@pytest.mark.parametrize("compression", ["gzip", "lzf"])
+@pytest.mark.parametrize("legacy_format", [False, True])
+def test_point_table_compression(tmp_path, centered_pair, compression, legacy_format):
+    """`compression=` compresses the point tables and reads back identically."""
+    labels = load_slp(centered_pair)
+    path = tmp_path / "compressed.slp"
+    save_slp(labels, str(path), compression=compression, legacy_format=legacy_format)
+
+    with h5py.File(path, "r") as f:
+        datasets = (
+            [f["pred_points"]] if legacy_format else list(f["pred_points"].values())
+        )
+        for ds in datasets:
+            assert ds.compression == compression
+            assert ds.shuffle
+        # The empty user point table can't be chunked, so it is stored as is.
+        empty = f["points"] if legacy_format else f["points/x"]
+        assert empty.compression is None
+    np.testing.assert_array_equal(load_slp(str(path)).numpy(), labels.numpy())
+    lazy_out = tmp_path / "lazy.slp"
+    save_slp(load_slp(str(path), lazy=True), str(lazy_out), compression=compression)
+    np.testing.assert_array_equal(load_slp(str(lazy_out)).numpy(), labels.numpy())
+
+
+def test_invalid_compression_raises(tmp_path, slp_minimal):
+    """An unknown `compression` value raises before anything is written."""
+    with pytest.raises(ValueError, match="compression must be one of"):
+        save_slp(load_slp(slp_minimal), str(tmp_path / "out.slp"), compression="zstd")
+    assert not (tmp_path / "out.slp").exists()
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_legacy_format_writes_compound_points(tmp_path, slp_typical, lazy):
+    """`legacy_format=True` writes the 2.x compound point layout and format_id."""
+    labels = load_slp(slp_typical, lazy=lazy)
+    path = tmp_path / "legacy.slp"
+    save_slp(labels, str(path), legacy_format=True)
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 3.0
+        assert f["points"].dtype.names == ("x", "y", "visible", "complete")
+        assert f["pred_points"].dtype.names == (
+            "x",
+            "y",
+            "visible",
+            "complete",
+            "score",
+        )
+    np.testing.assert_array_equal(load_slp(str(path)).numpy(), labels.numpy())
+
+
+def test_lazy_legacy_save_checks_unlabeled_points(tmp_path):
+    """A lazy legacy save refuses or downgrades unlabeled points like an eager one."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_four_point_cases(), str(path))
+    lazy = load_slp(str(path), lazy=True)
+    out = tmp_path / "legacy.slp"
+    with pytest.raises(ValueError, match="2 point\\(s\\) are unlabeled"):
+        save_slp(lazy, str(out), legacy_format=True)
+    assert not out.exists()
+
+    with pytest.warns(UserWarning, match="2 unlabeled point\\(s\\) as hidden"):
+        save_slp(lazy, str(out), legacy_format=True, unlabeled_as="absent")
+    for inst in load_slp(str(out))[0].instances:
+        assert_equal(inst.point_states[3], PointState.ABSENT)
+        assert inst.points["labeled"].all()
+
+
+def test_lazy_save_of_pre_1_1_file_keeps_coordinates(tmp_path, slp_legacy_grid_labels):
+    """A lazy re-save to 3.0 bakes in the pre-1.1 coordinate shift once."""
+    expected = load_slp(slp_legacy_grid_labels).numpy()
+    out = tmp_path / "resaved.slp"
+    save_slp(load_slp(slp_legacy_grid_labels, lazy=True), str(out))
+    for lazy in (False, True):
+        np.testing.assert_array_equal(load_slp(str(out), lazy=lazy).numpy(), expected)
+
+
+def test_embedded_package_round_trip_columns(tmp_path, slp_minimal_pkg):
+    """`.pkg.slp` files re-save as 3.0 with embedded frames and columnar points."""
+    labels = load_slp(slp_minimal_pkg)
+    out = tmp_path / "out.pkg.slp"
+    save_slp(labels, str(out), embed="user")
+    with h5py.File(out, "r") as f:
+        assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
+        assert isinstance(f["points"], h5py.Group)
+    loaded = load_slp(str(out))
+    assert loaded.video.backend is not None
+    np.testing.assert_array_equal(loaded.numpy(), labels.numpy())
+    assert loaded[0].image is not None
+
+
+def test_embed_new_package_from_video(tmp_path, slp_real_data):
+    """Embedding frames from a video writes a readable 3.0 package."""
+    labels = load_slp(slp_real_data)
+    out = tmp_path / "embedded.pkg.slp"
+    save_slp(labels, str(out), embed="user")
+    loaded = load_slp(str(out))
+    with h5py.File(out, "r") as f:
+        assert isinstance(f["points"], h5py.Group)
+    assert loaded.video.backend is not None
+    for expected, inst in zip(labels.instances, loaded.instances):
+        assert_equal(inst.numpy(), expected.numpy())
+
+
+def test_merged_labels_round_trip_columns(tmp_path, slp_legacy_hidden_complete):
+    """Merging labels read from a legacy file and a 3.0 file saves and reloads."""
+    resaved = tmp_path / "v3.slp"
+    save_slp(_labels_with_four_point_cases(), str(resaved))
+    base = load_slp(slp_legacy_hidden_complete)
+    base.merge(load_slp(str(resaved)))
+    out = tmp_path / "merged.slp"
+    save_slp(base, str(out))
+    loaded = load_slp(str(out))
+    assert len(loaded) == len(base)
+    for expected_lf, lf in zip(base, loaded):
+        for expected, inst in zip(expected_lf.instances, lf.instances):
+            assert_equal(inst.point_states, expected.point_states)
+            assert_equal(inst.points["xy"], expected.points["xy"])
+
+
+def test_label_image_writer_writes_column_placeholders(tmp_path):
+    """Standalone metadata writes empty columnar point tables and format 3.0."""
+    path = tmp_path / "standalone.slp"
+    _write_metadata_standalone(str(path))
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
+        assert isinstance(f["points"], h5py.Group)
+        assert len(f["pred_points/score"]) == 0
+    assert len(read_points(str(path))) == 0
