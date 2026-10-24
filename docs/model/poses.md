@@ -409,7 +409,8 @@ A few rules keep these consistent:
 3. **`labeled` defaults to `True`.** You only need to set it to mark nodes as
    unlabeled.
 4. **`verified` is provenance only.** It records that a human acted on the node in
-   the SLEAP GUI; sleap-io never interprets it.
+   the SLEAP GUI; sleap-io never interprets it. Importers of human annotations
+   (COCO, Ultralytics, NWB annotations) set it on every labeled point.
 
 [`Instance.from_numpy`][sleap_io.Instance.from_numpy] accepts `visible`,
 `labeled` and `verified` arrays (or scalars), and the instance has helpers to
@@ -492,6 +493,16 @@ argument decides how those nodes are filled:
     them as hidden points with no location instead (with a warning). See
     [Labels → Saving](labels.md#saving).
 
+### Point flags in other formats
+
+| Format | Reading | Writing |
+| --- | --- | --- |
+| [COCO](../formats/coco.md#keypoint-visibility), [Ultralytics](../formats/ultralytics.md#keypoint-visibility) | `v=2` visible, `v=1` occluded with coordinates, `v=0` unlabeled (`visibility_encoding`, `v0_as`) | visible `2`, occluded estimate `1`, otherwise `0` |
+| [NWB annotations](../formats/nwb.md#point-visibility-in-annotations) | `node_visibility=False` with a location is occluded | occluded estimates keep their location |
+| [Dictionary](../codecs.md#dictionary-codec) | `visible`, `verified`, `labeled` | all flags, `labeled` only when `False` |
+| [DataFrame](../codecs.md#points-format-default), [Analysis HDF5](../formats/analysis_h5.md#point_labeled) | NaN reads as hidden | NaN for hidden and unlabeled points, plus a `labeled` column or `point_labeled` dataset |
+| DLC, CSV, Label Studio, JABS, LEAP and other NaN-only formats | NaN reads as labeled and hidden | hidden and unlabeled points are both NaN |
+
 ---
 
 ## Metadata
@@ -528,6 +539,8 @@ source annotation id:
   which raises a `TypeError` before anything is written.
 - Metadata travels with copies and merges. When frames are merged, their metadata
   is combined key by key, with the target frame winning ties.
+- [COCO](../formats/coco.md#annotation-metadata) fills it on load (annotation and
+  image ids, `iscrowd`, `area`, `num_keypoints`) and writes it back on save.
 
 !!! note
     SLP format 3.0 stores instance, frame and bounding box metadata as typed

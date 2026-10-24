@@ -22,6 +22,9 @@ sleap-io supports multiple NWB format types through the `nwb_format` parameter:
   - Stores manual annotations for training data
   - Preserves skeleton structure and node names
   - Includes annotator information
+  - Keeps occluded estimates: a hidden point with coordinates is written with
+    its location and `node_visibility=False`, and reads back the same way (see
+    below)
 
 - **`"annotations_export"`**: Export annotations with embedded video frames
   - Creates self-contained NWB file with video data
@@ -32,6 +35,21 @@ sleap-io supports multiple NWB format types through the `nwb_format` parameter:
   - Stores predicted pose data from inference
   - Includes confidence scores
   - Supports multiple animals/tracks
+
+## Point visibility in annotations
+
+ndx-pose stores each annotated node as a location plus a `node_visibility` flag,
+which maps onto the [point flags](../model/poses.md#point-flags-and-states):
+
+| sleap-io point | Written as | Read back as |
+| --- | --- | --- |
+| visible | location, `node_visibility=True` | visible |
+| hidden, with coordinates (occluded estimate) | location, `node_visibility=False` | hidden, coordinates kept |
+| hidden, no location | `NaN`, `node_visibility=False` | hidden, no location |
+| unlabeled | `NaN`, `node_visibility=False` | hidden, no location |
+
+ndx-pose has no "unlabeled" flag, so unlabeled points read back as hidden.
+Points read from annotations are marked `verified`, since they are human labels.
 
 ## Examples
 
