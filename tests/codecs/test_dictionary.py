@@ -71,11 +71,11 @@ def test_to_dict_basic(slp_typical):
             assert "x" in point
             assert "y" in point
             assert "visible" in point
-            assert "complete" in point
+            assert "verified" in point
             assert isinstance(point["x"], float)
             assert isinstance(point["y"], float)
             assert isinstance(point["visible"], bool)
-            assert isinstance(point["complete"], bool)
+            assert isinstance(point["verified"], bool)
 
 
 def test_to_dict_json_serializable(slp_typical):

@@ -4048,7 +4048,8 @@ def _points_from_hdf5_data(
 
     Args:
         pts_data: Structured array from HDF5 with fields x, y, visible, complete,
-            and optionally score.
+            and optionally score. The on-disk `complete` flag is read into
+            `verified`.
         skeleton: The skeleton defining the node structure.
         is_predicted: If True, create a PredictedPointsArray with scores.
 
@@ -4069,7 +4070,7 @@ def _points_from_hdf5_data(
     points["xy"][:, 0] = pts_data["x"]
     points["xy"][:, 1] = pts_data["y"]
     points["visible"] = pts_data["visible"]
-    points["complete"] = pts_data["complete"]
+    points["verified"] = pts_data["complete"]
     points["name"] = skeleton.node_names
 
     return points
@@ -4288,7 +4289,7 @@ def write_lfs(labels_path: str, labels: Labels):
 
                 for pt in inst.points:
                     points.append(
-                        [pt["xy"][0], pt["xy"][1], pt["visible"], pt["complete"]]
+                        [pt["xy"][0], pt["xy"][1], pt["visible"], pt["verified"]]
                     )
 
                 point_id_end = len(points)
@@ -4305,7 +4306,7 @@ def write_lfs(labels_path: str, labels: Labels):
                             pt["xy"][0],
                             pt["xy"][1],
                             pt["visible"],
-                            pt["complete"],
+                            pt["verified"],
                             pt["score"],
                         ]
                     )

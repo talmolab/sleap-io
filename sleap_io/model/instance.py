@@ -9,7 +9,9 @@ estimated, such as confidence scores.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Iterable
+from enum import IntEnum
+from typing import TYPE_CHECKING, Any
 
 import attrs
 import numpy as np
@@ -17,6 +19,12 @@ import numpy as np
 from sleap_io.model.category import Category, to_category
 from sleap_io.model.embedding import Embedding
 from sleap_io.model.identity import Identity
+from sleap_io.model.record_metadata import (
+    RecordMetadata,
+    get_attrs_state,
+    set_attrs_state,
+    to_metadata,
+)
 from sleap_io.model.skeleton import Node, Skeleton
 
 if TYPE_CHECKING:
@@ -26,6 +34,53 @@ if TYPE_CHECKING:
     from sleap_io.model.roi import ROI
 
 
+class PointState(IntEnum):
+    """The state of a single point, derived from its flags and coordinates.
+
+    The numbering matches COCO's keypoint visibility `v` (mapping `ABSENT` to 0).
+
+    Attributes:
+        UNLABELED: The source said nothing about this node (not `labeled` and not
+            `visible`). Training should ignore it.
+        OCCLUDED: Labeled and not visible, with an estimated location (COCO `v=1`).
+        VISIBLE: Visible, with a location (COCO `v=2`).
+        ABSENT: Labeled and not visible, with no location (occluded at an unknown
+            position, out of view, or absent).
+    """
+
+    UNLABELED = 0
+    OCCLUDED = 1
+    VISIBLE = 2
+    ABSENT = 3
+
+
+def compute_point_states(
+    xy: np.ndarray, visible: np.ndarray, labeled: np.ndarray
+) -> np.ndarray:
+    """Derive the `PointState` of each point from its flags and coordinates.
+
+    Args:
+        xy: Coordinates of shape `(..., 2)`. NaN means "no location".
+        visible: Boolean `visible` flags of shape `(...)`.
+        labeled: Boolean `labeled` flags of shape `(...)`.
+
+    Returns:
+        An `int8` array of shape `(...)` holding `PointState` values.
+
+    Notes:
+        A visible point is always labeled (`labeled | visible`), and a visible point
+        without a location is treated as hidden (`ABSENT`).
+    """
+    visible = np.asarray(visible, dtype=bool)
+    labeled = np.asarray(labeled, dtype=bool) | visible
+    located = np.isfinite(xy).all(axis=-1)
+    states = np.full(visible.shape, PointState.ABSENT, dtype="int8")
+    states[located] = PointState.OCCLUDED
+    states[located & visible] = PointState.VISIBLE
+    states[~labeled] = PointState.UNLABELED
+    return states
+
+
 class PointsArray(np.ndarray):
     """A specialized array for storing instance points data.
 
@@ -33,11 +88,16 @@ class PointsArray(np.ndarray):
     convenience methods for working with point data.
 
     The structured dtype includes the following fields:
-        - xy: A float64 array of shape (2,) containing the x, y coordinates
-        - visible: A boolean indicating if the point is visible
-        - complete: A boolean set by the SLEAP GUI when a human placed, moved, or
+        - xy: A float64 array of shape (2,) containing the x, y coordinates. NaN means
+          the point has no location.
+        - visible: A boolean indicating if the point is visible in the image. `False`
+          covers both occluded and out-of-view points.
+        - verified: A boolean set by the SLEAP GUI when a human placed, moved, or
           toggled the visibility of this point. Stored but not interpreted by
-          sleap-io.
+          sleap-io. Named `complete` before sleap-io 0.10.
+        - labeled: A boolean indicating that the source annotated this node. `False`
+          means the point is unlabeled and should be ignored by training. Defaults
+          to `True`; a visible point is always treated as labeled.
         - name: An object dtype containing the name of the node
     """
 
@@ -47,7 +107,7 @@ class PointsArray(np.ndarray):
 
         Returns:
             np.dtype: A structured numpy dtype with fields for xy coordinates,
-                visible flag, complete flag, and node names.
+                visible, verified and labeled flags, and node names.
         """
         # Cache the dtype at the class level for performance
         # Use cls.__dict__ to check if defined on this class (not inherited)
@@ -56,7 +116,8 @@ class PointsArray(np.ndarray):
                 [
                     ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
                     ("visible", "bool"),
-                    ("complete", "bool"),
+                    ("verified", "bool"),
+                    ("labeled", "bool"),
                     (
                         "name",
                         "O",
@@ -73,11 +134,14 @@ class PointsArray(np.ndarray):
             length: The number of points (nodes) to allocate in the array.
 
         Returns:
-            PointsArray: An empty array of the specified length with the appropriate
-                dtype.
+            PointsArray: An array of the specified length where every point is labeled,
+                not visible, not verified and has no location (NaN coordinates).
         """
         dtype = cls._get_dtype()
-        arr = np.empty(length, dtype=dtype).view(cls)
+        arr = np.zeros(length, dtype=dtype).view(cls)
+        arr["xy"] = np.nan
+        arr["labeled"] = True
+        arr["name"] = None
         return arr
 
     @classmethod
@@ -87,7 +151,7 @@ class PointsArray(np.ndarray):
         Args:
             array: A numpy array to convert. Can be a structured array or a regular
                 array. If a regular array, it is assumed to have columns for x, y
-                coordinates and optionally visible and complete flags.
+                coordinates and optionally visible, verified and labeled flags.
 
         Returns:
             PointsArray: A structured array view of the input data with the appropriate
@@ -95,11 +159,14 @@ class PointsArray(np.ndarray):
 
         Notes:
             If the input is a structured array with fields matching the target dtype,
-            those fields will be copied. Otherwise, a best-effort conversion is made:
+            those fields will be copied. A legacy `complete` field is copied into
+            `verified`, and a missing `labeled` field defaults to `True`. Otherwise, a
+            best-effort conversion is made:
 
             - First two columns (or first 2D element) are interpreted as x, y coords
             - Third column (if present) is interpreted as visible flag
-            - Fourth column (if present) is interpreted as complete flag
+            - Fourth column (if present) is interpreted as verified flag
+            - Fifth column (if present) is interpreted as labeled flag
 
             If visibility is not provided, it is inferred from NaN values in the x
             coordinate.
@@ -111,14 +178,12 @@ class PointsArray(np.ndarray):
             return array.view(cls)
 
         # Otherwise, create a new array with the right dtype
-        new_array = np.empty(len(array), dtype=dtype).view(cls)
+        new_array = cls.empty(len(array))
 
         # Copy available fields
         if isinstance(array, np.ndarray) and array.dtype.fields is not None:
             # Structured array, copy matching fields
-            for field_name in dtype.names:
-                if field_name in array.dtype.names:
-                    new_array[field_name] = array[field_name]
+            _copy_point_fields(new_array, array)
         elif isinstance(array, np.ndarray):
             # Regular array, assume x, y coordinates
             new_array["xy"] = array[:, 0:2]
@@ -126,12 +191,15 @@ class PointsArray(np.ndarray):
             # Default visibility based on NaN
             new_array["visible"] = ~np.isnan(array[:, 0])
 
-            # If there are more columns, assume they are visible and complete
+            # If there are more columns, assume they are visible, verified, labeled
             if array.shape[1] >= 3:
                 new_array["visible"] = array[:, 2].astype(bool)
 
             if array.shape[1] >= 4:
-                new_array["complete"] = array[:, 3].astype(bool)
+                new_array["verified"] = array[:, 3].astype(bool)
+
+            if array.shape[1] >= 5:
+                new_array["labeled"] = array[:, 4].astype(bool)
 
         return new_array
 
@@ -142,8 +210,8 @@ class PointsArray(np.ndarray):
         Args:
             points_dict: A dictionary mapping nodes (as Node objects, indices, or
                 strings) to point data. Each point should be an array-like with at least
-                2 elements for x, y coordinates, and optionally visible and complete
-                flags.
+                2 elements for x, y coordinates, and optionally visible, verified and
+                labeled flags.
             skeleton: The Skeleton object that defines the nodes.
 
         Returns:
@@ -154,10 +222,12 @@ class PointsArray(np.ndarray):
             For each entry in the points_dict:
             - First two values are treated as x, y coordinates
             - Third value (if present) is treated as visible flag
-            - Fourth value (if present) is treated as complete flag
+            - Fourth value (if present) is treated as verified flag
+            - Fifth value (if present) is treated as labeled flag
 
             If visibility is not provided, it is inferred from NaN values in the x
-            coordinate.
+            coordinate. Nodes missing from the dictionary are labeled, not visible and
+            have no location (NaN coordinates).
         """
         points = cls.empty(len(skeleton))
 
@@ -175,9 +245,31 @@ class PointsArray(np.ndarray):
 
             idx += 1
             if len(data) > idx:
-                points[node]["complete"] = data[idx]
+                points[node]["verified"] = data[idx]
+
+            idx += 1
+            if len(data) > idx:
+                points[node]["labeled"] = data[idx]
 
         return points
+
+
+def _copy_point_fields(target: PointsArray, source: np.ndarray) -> None:
+    """Copy fields by name from a structured array into a points array.
+
+    A legacy `complete` field (sleap-io < 0.10) is copied into `verified`. Fields that
+    the source lacks keep the defaults of `PointsArray.empty`.
+
+    Args:
+        target: The points array to fill, with the current dtype.
+        source: A structured array with any subset of the point fields.
+    """
+    names = source.dtype.names
+    for field_name in target.dtype.names:
+        if field_name in names:
+            target[field_name] = source[field_name]
+    if "complete" in names and "verified" not in names:
+        target["verified"] = source["complete"]
 
 
 class PredictedPointsArray(PointsArray):
@@ -186,12 +278,16 @@ class PredictedPointsArray(PointsArray):
     This extends the PointsArray class to include score information for each point.
 
     The structured dtype includes the following fields:
-        - xy: A float64 array of shape (2,) containing the x, y coordinates
+        - xy: A float64 array of shape (2,) containing the x, y coordinates. NaN means
+          the point has no location.
         - score: A float64 containing the confidence score for the point
-        - visible: A boolean indicating if the point is visible
-        - complete: A boolean set by the SLEAP GUI when a human placed, moved, or
+        - visible: A boolean indicating if the point is visible in the image.
+        - verified: A boolean set by the SLEAP GUI when a human placed, moved, or
           toggled the visibility of this point. Stored but not interpreted by
-          sleap-io.
+          sleap-io. Named `complete` before sleap-io 0.10.
+        - labeled: A boolean indicating that the model produced an output for this
+          node. `False` marks nodes a partial-skeleton model has no output for.
+          Defaults to `True`.
         - name: An object dtype containing the name of the node
     """
 
@@ -201,7 +297,7 @@ class PredictedPointsArray(PointsArray):
 
         Returns:
             np.dtype: A structured numpy dtype with fields for xy coordinates,
-                score, visible flag, complete flag, and node names.
+                score, visible, verified and labeled flags, and node names.
         """
         # Cache the dtype at the class level for performance
         # Use cls.__dict__ to check if defined on this class (not inherited)
@@ -211,7 +307,8 @@ class PredictedPointsArray(PointsArray):
                     ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
                     ("score", "<f8"),  # 64-bit (8-byte) little-endian double
                     ("visible", "bool"),
-                    ("complete", "bool"),
+                    ("verified", "bool"),
+                    ("labeled", "bool"),
                     (
                         "name",
                         "O",
@@ -227,7 +324,8 @@ class PredictedPointsArray(PointsArray):
         Args:
             array: A numpy array to convert. Can be a structured array or a regular
                 array. If a regular array, it is assumed to have columns for x, y
-                coordinates, scores, and optionally visible and complete flags.
+                coordinates, scores, and optionally visible, verified and labeled
+                flags.
 
         Returns:
             PredictedPointsArray: A structured array view of the input data with the
@@ -235,12 +333,15 @@ class PredictedPointsArray(PointsArray):
 
         Notes:
             If the input is a structured array with fields matching the target dtype,
-            those fields will be copied. Otherwise, a best-effort conversion is made:
+            those fields will be copied. A legacy `complete` field is copied into
+            `verified`, and a missing `labeled` field defaults to `True`. Otherwise, a
+            best-effort conversion is made:
 
             - First two columns (or first 2D element) are interpreted as x, y coords
             - Third column (if present) is interpreted as the score
             - Fourth column (if present) is interpreted as visible flag
-            - Fifth column (if present) is interpreted as complete flag
+            - Fifth column (if present) is interpreted as verified flag
+            - Sixth column (if present) is interpreted as labeled flag
 
             If visibility is not provided, it is inferred from NaN values in the x
             coordinate.
@@ -252,14 +353,12 @@ class PredictedPointsArray(PointsArray):
             return array.view(cls)
 
         # Otherwise, create a new array with the right dtype
-        new_array = np.empty(len(array), dtype=dtype).view(cls)
+        new_array = cls.empty(len(array))
 
         # Copy available fields
         if isinstance(array, np.ndarray) and array.dtype.fields is not None:
             # Structured array, copy matching fields
-            for field_name in dtype.names:
-                if field_name in array.dtype.names:
-                    new_array[field_name] = array[field_name]
+            _copy_point_fields(new_array, array)
         elif isinstance(array, np.ndarray):
             # Regular array, assume x, y coordinates
             new_array["xy"] = array[:, 0:2]
@@ -271,12 +370,15 @@ class PredictedPointsArray(PointsArray):
             if array.shape[1] >= 3:
                 new_array["score"] = array[:, 2]
 
-            # If there are more columns, assume they are visible and complete
+            # If there are more columns, assume they are visible, verified, labeled
             if array.shape[1] >= 4:
                 new_array["visible"] = array[:, 3].astype(bool)
 
             if array.shape[1] >= 5:
-                new_array["complete"] = array[:, 4].astype(bool)
+                new_array["verified"] = array[:, 4].astype(bool)
+
+            if array.shape[1] >= 6:
+                new_array["labeled"] = array[:, 5].astype(bool)
 
         return new_array
 
@@ -287,8 +389,8 @@ class PredictedPointsArray(PointsArray):
         Args:
             points_dict: A dictionary mapping nodes (as Node objects, indices, or
                 strings) to point data. Each point should be an array-like with at least
-                2 elements for x, y coordinates, and optionally score, visible, and
-                complete flags.
+                2 elements for x, y coordinates, and optionally score, visible,
+                verified and labeled flags.
             skeleton: The Skeleton object that defines the nodes.
 
         Returns:
@@ -300,10 +402,12 @@ class PredictedPointsArray(PointsArray):
             - First two values are treated as x, y coordinates
             - Third value (if present) is treated as score
             - Fourth value (if present) is treated as visible flag
-            - Fifth value (if present) is treated as complete flag
+            - Fifth value (if present) is treated as verified flag
+            - Sixth value (if present) is treated as labeled flag
 
             If visibility is not provided, it is inferred from NaN values in the x
-            coordinate.
+            coordinate. Nodes missing from the dictionary are labeled, not visible and
+            have no location (NaN coordinates).
         """
         points = cls.empty(len(skeleton))
 
@@ -326,11 +430,61 @@ class PredictedPointsArray(PointsArray):
                 points[node]["visible"] = ~np.isnan(data[0])
 
             idx += 1
-            # Completeness is the fifth element (or fourth if no score)
+            # Verification is the fifth element
             if len(data) > idx:
-                points[node]["complete"] = data[idx]
+                points[node]["verified"] = data[idx]
+
+            idx += 1
+            # Labeled is the sixth element
+            if len(data) > idx:
+                points[node]["labeled"] = data[idx]
 
         return points
+
+
+_UNMAPPED_MODES = ("unlabeled", "absent")
+
+
+def _check_unmapped(unmapped: str) -> None:
+    """Validate the `unmapped` argument of the skeleton-changing methods.
+
+    Args:
+        unmapped: How to fill nodes without a source point: `"unlabeled"` or
+            `"absent"`.
+
+    Raises:
+        ValueError: If `unmapped` is not one of the supported values.
+    """
+    if unmapped not in _UNMAPPED_MODES:
+        raise ValueError(
+            f"unmapped must be one of {_UNMAPPED_MODES}, got {unmapped!r}."
+        )
+
+
+def _apply_point_flags(
+    points: PointsArray,
+    visible: np.ndarray | bool | None,
+    labeled: np.ndarray | bool | None,
+    verified: np.ndarray | bool | None,
+) -> None:
+    """Set the flag fields of a points array where values are given.
+
+    Args:
+        points: The points array to modify in place.
+        visible: Values for the `visible` field, or `None` to leave it unchanged.
+        labeled: Values for the `labeled` field, or `None` to leave it unchanged.
+        verified: Values for the `verified` field, or `None` to leave it unchanged.
+
+    Raises:
+        ValueError: If a value can't be broadcast to `(n_nodes,)`.
+    """
+    for name, value in (
+        ("visible", visible),
+        ("labeled", labeled),
+        ("verified", verified),
+    ):
+        if value is not None:
+            points[name] = np.broadcast_to(np.asarray(value, dtype=bool), points.shape)
 
 
 @attrs.define(eq=False)
@@ -404,15 +558,22 @@ class Instance:
 
     An `Instance` has a set of landmarks (points) that correspond to a `Skeleton`. Each
     point is associated with a `Node` in the skeleton. The points are stored in a
-    structured numpy array with columns for x, y, visible, complete and name.
+    structured numpy array with columns for x, y, visible, verified, labeled and name.
+
+    Each point carries two independent flags plus its coordinates (see `PointState`):
+    `visible` (visible in the image), `labeled` (the source annotated this node;
+    `False` means unlabeled), and coordinates where NaN means "no location". A
+    visible point is always treated as labeled. `verified` records that a human acted
+    on the node and is not interpreted by sleap-io.
 
     The `Instance` may also be associated with a `Track` which links multiple instances
     together across frames or videos.
 
     Attributes:
-        points: A numpy structured array with columns for xy, visible and complete. The
-            array should have shape `(n_nodes,)`. This representation is useful for
-            performance efficiency when working with large datasets.
+        points: A numpy structured array with columns for xy, visible, verified,
+            labeled and name. The array should have shape `(n_nodes,)`. This
+            representation is useful for performance efficiency when working with
+            large datasets.
         skeleton: The `Skeleton` that describes the `Node`s and `Edge`s associated with
             this instance.
         track: An optional `Track` associated with a unique animal/object across frames
@@ -444,6 +605,10 @@ class Instance:
         category_embedding: An optional `Embedding` describing this instance's
             appearance for classification (the vector the `category` was
             classified from). ``None`` by default.
+        metadata: A dictionary of per-instance values (for example COCO's
+            ``iscrowd`` or annotation id). Values must be ``bool``, ``int``,
+            ``float``, ``str`` or ``None`` (missing); see
+            `sleap_io.model.record_metadata`. Empty by default.
     """
 
     points: PointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
@@ -457,6 +622,9 @@ class Instance:
     from_predicted: "PredictedInstance | None" = None
     identity_embedding: Embedding | None = attrs.field(default=None, repr=False)
     category_embedding: Embedding | None = attrs.field(default=None, repr=False)
+    metadata: RecordMetadata = attrs.field(
+        factory=RecordMetadata, converter=to_metadata, repr=False
+    )
 
     @classmethod
     def empty(
@@ -493,7 +661,8 @@ class Instance:
                 initialized from. This is used with human-in-the-loop workflows.
 
         Returns:
-            An `Instance` with an empty numpy array of shape `(n_nodes,)`.
+            An `Instance` with a points array of shape `(n_nodes,)` where every point
+            is labeled, not visible and has no location (NaN coordinates).
         """
         points = PointsArray.empty(len(skeleton))
         points["name"] = skeleton.node_names
@@ -543,6 +712,10 @@ class Instance:
         identity_embedding: Embedding | None = None,
         category_embedding: Embedding | None = None,
         from_predicted: "PredictedInstance | None" = None,
+        *,
+        visible: np.ndarray | bool | None = None,
+        labeled: np.ndarray | bool | None = None,
+        verified: np.ndarray | bool | None = None,
     ) -> "Instance":
         """Create an instance object from a numpy array.
 
@@ -554,7 +727,9 @@ class Instance:
                 If `D == 2`, the array should have columns for x and y.
                 If `D == 3`, the array should have columns for x, y and visible.
                 If `D == 4`, the array should have columns for x, y, visible and
-                complete.
+                verified.
+                If `D == 5`, the array should have columns for x, y, visible,
+                verified and labeled.
 
                 If this is provided as a structured array, it will be used without copy
                 if it has the correct dtype. Otherwise, a new structured array will be
@@ -576,11 +751,19 @@ class Instance:
                 instance.
             from_predicted: The `PredictedInstance` (if any) that this instance was
                 initialized from. This is used with human-in-the-loop workflows.
+            visible: Optional boolean `visible` flags of shape `(n_nodes,)` (or a
+                scalar). If `None` (the default), visibility comes from `points_data`
+                (NaN coordinates are not visible). Pass `visible=False` with finite
+                coordinates to store occluded points with an estimated location.
+            labeled: Optional boolean `labeled` flags of shape `(n_nodes,)` (or a
+                scalar). If `None` (the default), every point is labeled.
+            verified: Optional boolean `verified` flags of shape `(n_nodes,)` (or a
+                scalar). If `None` (the default), no point is verified.
 
         Returns:
             An `Instance` object with the specified points.
         """
-        return cls(
+        inst = cls(
             points=points_data,
             skeleton=skeleton,
             track=track,
@@ -593,15 +776,47 @@ class Instance:
             category_embedding=category_embedding,
             from_predicted=from_predicted,
         )
+        _apply_point_flags(inst.points, visible, labeled, verified)
+        return inst
 
     def __attrs_post_init__(self):
         """Convert the points array after initialization."""
-        if not isinstance(self.points, PointsArray):
-            self.points = self._convert_points(self.points, self.skeleton)
+        self._upgrade_points()
 
         # Ensure points have node names
         if "name" in self.points.dtype.names and not all(self.points["name"]):
             self.points["name"] = self.skeleton.node_names
+
+    def _upgrade_points(self):
+        """Convert the points to the current structured dtype if needed.
+
+        This converts lists, plain arrays and dictionaries, and upgrades points arrays
+        with the dtype used before sleap-io 0.10 (`complete` instead of `verified`
+        and no `labeled` field), for example from an old pickle.
+        """
+        if (
+            not isinstance(self.points, PointsArray)
+            or "labeled" not in self.points.dtype.names
+        ):
+            self.points = self._convert_points(self.points, self.skeleton)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return the state for pickling and copying."""
+        return get_attrs_state(self)
+
+    def __setstate__(self, state: dict[str, Any] | tuple) -> None:
+        """Restore the state when unpickling or copying.
+
+        Unpickling doesn't call `__init__` (or `__attrs_post_init__`), so this also
+        fills fields missing from older pickles with their defaults and upgrades
+        points arrays saved with an older dtype.
+
+        Args:
+            state: A dictionary of field values, or a tuple in field order (pickles
+                made with attrs < 22.2).
+        """
+        set_attrs_state(self, state)
+        self._upgrade_points()
 
     def numpy(
         self,
@@ -966,7 +1181,8 @@ class Instance:
             value: A tuple or array-like of length 2 containing (x, y) coordinates.
 
         Notes:
-            This sets the point coordinates and marks the point as visible.
+            This sets the point coordinates and marks the point as visible and
+            labeled. It doesn't change `verified`.
         """
         if type(node) is not int:
             node = self.skeleton.index(node)
@@ -976,6 +1192,7 @@ class Instance:
 
         self.points[node]["xy"] = value[:2]
         self.points[node]["visible"] = True
+        self.points[node]["labeled"] = True
 
     def __len__(self) -> int:
         """Return the number of points in the instance."""
@@ -994,17 +1211,100 @@ class Instance:
         return sum(self.points["visible"])
 
     @property
-    def is_empty(self) -> bool:
-        """Return `True` if no points are visible on the instance."""
-        return ~(self.points["visible"].any())
+    def n_labeled(self) -> int:
+        """Return the number of labeled points in the instance.
 
-    def update_skeleton(self, names_only: bool = False):
+        A visible point always counts as labeled.
+        """
+        return int(np.count_nonzero(self.points["labeled"] | self.points["visible"]))
+
+    @property
+    def point_states(self) -> np.ndarray:
+        """Return the `PointState` of each point as an `int8` array of `(n_nodes,)`.
+
+        The states are derived from the `visible` and `labeled` flags and whether
+        the coordinates are finite; see `compute_point_states`.
+        """
+        return compute_point_states(
+            self.points["xy"], self.points["visible"], self.points["labeled"]
+        )
+
+    @property
+    def is_empty(self) -> bool:
+        """Return `True` if no labeled point on the instance has a location.
+
+        An instance whose points are all occluded with estimated locations is not
+        empty, while one whose points are all unlabeled or without a location is.
+        """
+        located = np.isfinite(self.points["xy"]).all(axis=1)
+        labeled = self.points["labeled"] | self.points["visible"]
+        return not bool((labeled & located).any())
+
+    def _node_indices(self, nodes: int | str | Node | Iterable) -> list[int]:
+        """Resolve one node or several nodes to indices into the points array.
+
+        Args:
+            nodes: A node index, name or `Node`, or an iterable of those.
+
+        Returns:
+            A list of node indices.
+        """
+        if isinstance(nodes, (int, np.integer, str, Node)):
+            nodes = [nodes]
+        return [
+            int(node)
+            if isinstance(node, (int, np.integer))
+            else self.skeleton.index(node)
+            for node in nodes
+        ]
+
+    def set_unlabeled(self, nodes: int | str | Node | Iterable) -> None:
+        """Mark points as unlabeled: not labeled, not visible, and no location.
+
+        Unlabeled points carry no information and are ignored by training.
+
+        Args:
+            nodes: A node index, name or `Node`, or an iterable of those.
+        """
+        inds = self._node_indices(nodes)
+        self.points["labeled"][inds] = False
+        self.points["visible"][inds] = False
+        self.points["xy"][inds] = np.nan
+
+    def set_hidden(
+        self, nodes: int | str | Node | Iterable, keep_location: bool = False
+    ) -> None:
+        """Mark points as labeled but not visible.
+
+        Args:
+            nodes: A node index, name or `Node`, or an iterable of those.
+            keep_location: If `False` (the default), the coordinates are cleared to
+                NaN ("hidden, no location"). If `True`, the current coordinates are
+                kept as an estimate of the occluded location.
+
+        Notes:
+            Code that sets `points["visible"] = False` directly should clear the
+            coordinates itself unless they are a real estimate, since finite
+            coordinates on a hidden point are used as an occluded location.
+        """
+        inds = self._node_indices(nodes)
+        self.points["labeled"][inds] = True
+        self.points["visible"][inds] = False
+        if not keep_location:
+            self.points["xy"][inds] = np.nan
+
+    def update_skeleton(self, names_only: bool = False, unmapped: str = "unlabeled"):
         """Update or replace the skeleton associated with the instance.
 
         Args:
             names_only: If `True`, only update the node names in the points array. If
                 `False`, the points array will be updated to match the new skeleton.
+            unmapped: How to fill nodes of the skeleton that have no point in the
+                instance (for example, newly added nodes). `"unlabeled"` (the default)
+                marks them as unlabeled. `"absent"` marks them as labeled but not
+                visible, with no location.
         """
+        _check_unmapped(unmapped)
         if names_only:
             # Update the node names.
             self.points["name"] = self.skeleton.node_names
@@ -1014,15 +1314,13 @@ class Instance:
         new_node_inds, old_node_inds = self.skeleton.match_nodes(self.points["name"])
 
         # Update the points.
-        new_points = PointsArray.empty(len(self.skeleton))
-        new_points[new_node_inds] = self.points[old_node_inds]
-        new_points["name"] = self.skeleton.node_names
-        self.points = new_points
+        self.points = self._remap_points(new_node_inds, old_node_inds, unmapped)
 
     def replace_skeleton(
         self,
         new_skeleton: Skeleton,
         node_names_map: dict[str, str] | None = None,
+        unmapped: str = "unlabeled",
     ):
         """Replace the skeleton associated with the instance.
 
@@ -1032,6 +1330,9 @@ class Instance:
                 new skeleton. Keys and values should be specified as lists of strings.
                 If not provided, only nodes with identical names will be mapped. Points
                 associated with unmapped nodes will be removed.
+            unmapped: How to fill nodes of the new skeleton that no old node maps to.
+                `"unlabeled"` (the default) marks them as unlabeled. `"absent"` marks
+                them as labeled but not visible, with no location.
 
         Notes:
             This method will update the `Instance.skeleton` attribute and the
@@ -1040,26 +1341,42 @@ class Instance:
             It is recommended to use `Labels.replace_skeleton` instead of this method if
             more flexible node mapping is required.
         """
+        _check_unmapped(unmapped)
+
         # Update skeleton object.
-        # old_skeleton = self.skeleton
         self.skeleton = new_skeleton
 
         # Get node names with replacements from node map if possible.
-        # old_node_names = old_skeleton.node_names
         old_node_names = self.points["name"].tolist()
         if node_names_map is not None:
             old_node_names = [node_names_map.get(node, node) for node in old_node_names]
 
         # Find correspondences.
         new_node_inds, old_node_inds = self.skeleton.match_nodes(old_node_names)
-        # old_node_inds = np.array(old_node_inds).reshape(-1, 1)
-        # new_node_inds = np.array(new_node_inds).reshape(-1, 1)
 
         # Update the points.
-        new_points = PointsArray.empty(len(self.skeleton))
+        self.points = self._remap_points(new_node_inds, old_node_inds, unmapped)
+
+    def _remap_points(
+        self, new_node_inds: list[int], old_node_inds: list[int], unmapped: str
+    ) -> PointsArray:
+        """Build a points array for the current skeleton from matched nodes.
+
+        Args:
+            new_node_inds: Indices of matched nodes in the current skeleton.
+            old_node_inds: Indices of the same nodes in the existing points array.
+            unmapped: `"unlabeled"` or `"absent"`; see `replace_skeleton`.
+
+        Returns:
+            A new points array of the same type, with the matched points copied over
+            and the remaining nodes filled according to `unmapped`.
+        """
+        new_points = type(self.points).empty(len(self.skeleton))
+        if unmapped == "unlabeled":
+            new_points["labeled"] = False
         new_points[new_node_inds] = self.points[old_node_inds]
-        self.points = new_points
-        self.points["name"] = self.skeleton.node_names
+        new_points["name"] = self.skeleton.node_names
+        return new_points
 
     def same_pose_as(self, other: "Instance", tolerance: float = None) -> bool:
         """Check if this instance has the same pose as another instance.
@@ -1219,7 +1536,7 @@ class Instance:
         )
 
 
-@attrs.define(eq=False)
+@attrs.define(eq=False, getstate_setstate=False)
 class PredictedInstance(Instance):
     """A `PredictedInstance` is an `Instance` that was predicted using a model.
 
@@ -1244,6 +1561,7 @@ class PredictedInstance(Instance):
             `Instance.category_score`).
         category_embedding: An optional classification `Embedding` (see
             `Instance.category_embedding`).
+        metadata: A dictionary of per-instance values (see `Instance.metadata`).
     """
 
     points: PredictedPointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
@@ -1258,6 +1576,9 @@ class PredictedInstance(Instance):
     from_predicted: "PredictedInstance | None" = None
     identity_embedding: Embedding | None = attrs.field(default=None, repr=False)
     category_embedding: Embedding | None = attrs.field(default=None, repr=False)
+    metadata: RecordMetadata = attrs.field(
+        factory=RecordMetadata, converter=to_metadata, repr=False
+    )
 
     def __repr__(self) -> str:
         """Return a readable representation of the instance."""
@@ -1290,7 +1611,10 @@ class PredictedInstance(Instance):
         category_embedding: Embedding | None = None,
         from_predicted: "PredictedInstance | None" = None,
     ) -> "PredictedInstance":
-        """Create an empty instance with no points."""
+        """Create an empty instance with no points.
+
+        Every point is labeled, not visible and has no location (NaN coordinates).
+        """
         points = PredictedPointsArray.empty(len(skeleton))
         points["name"] = skeleton.node_names
 
@@ -1342,11 +1666,41 @@ class PredictedInstance(Instance):
         identity_embedding: Embedding | None = None,
         category_embedding: Embedding | None = None,
         from_predicted: "PredictedInstance | None" = None,
+        *,
+        visible: np.ndarray | bool | None = None,
+        labeled: np.ndarray | bool | None = None,
+        verified: np.ndarray | bool | None = None,
     ) -> "PredictedInstance":
-        """Create a predicted instance object from a numpy array."""
+        """Create a predicted instance object from a numpy array.
+
+        Args:
+            points_data: A numpy array of shape `(n_nodes, D)` with columns for x, y
+                and optionally score, visible, verified and labeled (see
+                `PredictedPointsArray.from_array`). NaN coordinates are not visible.
+            skeleton: The `Skeleton` that this instance is associated with.
+            point_scores: Optional per-point scores of shape `(n_nodes,)`.
+            score: The instance score.
+            track: An optional `Track`.
+            tracking_score: The score associated with the `Track` assignment.
+            identity: An optional global `Identity`.
+            identity_score: The score associated with the `identity` assignment.
+            category: An optional `Category` (class).
+            category_score: The score associated with the `category` assignment.
+            identity_embedding: An optional re-ID `Embedding`.
+            category_embedding: An optional classification `Embedding`.
+            from_predicted: Not applicable to predicted instances.
+            visible: Optional `visible` flags (see `Instance.from_numpy`).
+            labeled: Optional `labeled` flags. Set `False` for nodes the model has no
+                output for (for example, a partial-skeleton model).
+            verified: Optional `verified` flags.
+
+        Returns:
+            A `PredictedInstance` with the specified points.
+        """
         points = cls._convert_points(points_data, skeleton)
         if point_scores is not None:
             points["score"] = point_scores
+        _apply_point_flags(points, visible, labeled, verified)
 
         return cls(
             points=points,
@@ -1403,66 +1757,6 @@ class PredictedInstance(Instance):
         else:
             return pts
 
-    def update_skeleton(self, names_only: bool = False):
-        """Update or replace the skeleton associated with the instance.
-
-        Args:
-            names_only: If `True`, only update the node names in the points array. If
-                `False`, the points array will be updated to match the new skeleton.
-        """
-        if names_only:
-            # Update the node names.
-            self.points["name"] = self.skeleton.node_names
-            return
-
-        # Find correspondences.
-        new_node_inds, old_node_inds = self.skeleton.match_nodes(self.points["name"])
-
-        # Update the points.
-        new_points = PredictedPointsArray.empty(len(self.skeleton))
-        new_points[new_node_inds] = self.points[old_node_inds]
-        new_points["name"] = self.skeleton.node_names
-        self.points = new_points
-
-    def replace_skeleton(
-        self,
-        new_skeleton: Skeleton,
-        node_names_map: dict[str, str] | None = None,
-    ):
-        """Replace the skeleton associated with the instance.
-
-        Args:
-            new_skeleton: The new `Skeleton` to associate with the instance.
-            node_names_map: Dictionary mapping nodes in the old skeleton to nodes in the
-                new skeleton. Keys and values should be specified as lists of strings.
-                If not provided, only nodes with identical names will be mapped. Points
-                associated with unmapped nodes will be removed.
-
-        Notes:
-            This method will update the `PredictedInstance.skeleton` attribute and the
-            `PredictedInstance.points` attribute in place (a copy is made of the points
-            array).
-
-            It is recommended to use `Labels.replace_skeleton` instead of this method if
-            more flexible node mapping is required.
-        """
-        # Update skeleton object.
-        self.skeleton = new_skeleton
-
-        # Get node names with replacements from node map if possible.
-        old_node_names = self.points["name"].tolist()
-        if node_names_map is not None:
-            old_node_names = [node_names_map.get(node, node) for node in old_node_names]
-
-        # Find correspondences.
-        new_node_inds, old_node_inds = self.skeleton.match_nodes(old_node_names)
-
-        # Update the points.
-        new_points = PredictedPointsArray.empty(len(self.skeleton))
-        new_points[new_node_inds] = self.points[old_node_inds]
-        self.points = new_points
-        self.points["name"] = self.skeleton.node_names
-
     def __getitem__(self, node: int | str | Node) -> np.ndarray:
         """Return the point associated with a node."""
         # Inherit from Instance.__getitem__
@@ -1479,7 +1773,8 @@ class PredictedInstance(Instance):
                 defaults to 1.0.
 
         Notes:
-            This sets the point coordinates, score, and marks the point as visible.
+            This sets the point coordinates and score, and marks the point as visible
+            and labeled.
         """
         if type(node) is not int:
             node = self.skeleton.index(node)
@@ -1496,6 +1791,7 @@ class PredictedInstance(Instance):
             self.points[node]["score"] = 1.0
 
         self.points[node]["visible"] = True
+        self.points[node]["labeled"] = True
 
 
 @attrs.define(eq=False)

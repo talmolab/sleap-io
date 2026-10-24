@@ -1,5 +1,8 @@
 """Tests for methods in the sleap_io.model.instance file."""
 
+import copy
+import pickle
+
 import numpy as np
 import pytest
 from numpy.testing import assert_array_equal, assert_equal
@@ -10,8 +13,12 @@ from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import (
     Instance,
+    PointsArray,
+    PointState,
     PredictedInstance,
+    PredictedPointsArray,
     Track,
+    compute_point_states,
 )
 from sleap_io.model.mask import PredictedSegmentationMask, UserSegmentationMask
 from sleap_io.model.roi import PredictedROI, UserROI
@@ -88,23 +95,23 @@ def test_instance_convert_points():
     assert_equal(points["xy"], [[1, 2], [np.nan, np.nan], [4, 5]])
     assert_equal(points["visible"], [True, False, True])
 
-    # Provide xy, visibility and completion
+    # Provide xy, visibility and verification
     points = Instance._convert_points(
         [[1, 2, True, False], [3, 4, False, False], [4, 5, True, False]],
         skeleton=Skeleton(["A", "B", "C"]),
     )
     assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
     assert_equal(points["visible"], [True, False, True])
-    assert_equal(points["complete"], [False, False, False])
+    assert_equal(points["verified"], [False, False, False])
 
-    # Provide xy, visibility and completion (as dict)
+    # Provide xy, visibility and verification (as dict)
     points = Instance._convert_points(
         {"A": [1, 2, True, False], "B": [3, 4, False, False], "C": [4, 5, True, False]},
         skeleton=Skeleton(["A", "B", "C"]),
     )
     assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
     assert_equal(points["visible"], [True, False, True])
-    assert_equal(points["complete"], [False, False, False])
+    assert_equal(points["verified"], [False, False, False])
 
     # Else case
     with pytest.raises(ValueError):
@@ -182,7 +189,7 @@ def test_predicted_instance_convert_points():
     assert_equal(points["xy"], [[1, 2], [np.nan, np.nan], [4, 5]])
     assert_equal(points["visible"], [True, False, True])
 
-    # Provide xy, scores, visibility and completion
+    # Provide xy, scores, visibility and verification
     points = PredictedInstance._convert_points(
         [
             [1, 2, 0.9, True, False],
@@ -194,9 +201,9 @@ def test_predicted_instance_convert_points():
     assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
     assert_equal(points["score"], [0.9, 0.8, 0.99])
     assert_equal(points["visible"], [True, False, True])
-    assert_equal(points["complete"], [False, False, False])
+    assert_equal(points["verified"], [False, False, False])
 
-    # Provide xy, score, visibility and completion (as dict)
+    # Provide xy, score, visibility and verification (as dict)
     points = PredictedInstance._convert_points(
         {
             "A": [1, 2, 0.9, True, False],
@@ -208,7 +215,7 @@ def test_predicted_instance_convert_points():
     assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
     assert_equal(points["score"], [0.9, 0.8, 0.99])
     assert_equal(points["visible"], [True, False, True])
-    assert_equal(points["complete"], [False, False, False])
+    assert_equal(points["verified"], [False, False, False])
 
     # Else case
     with pytest.raises(ValueError):
@@ -1087,3 +1094,396 @@ def test_instance_to_mask_predicted_empty_carries_score():
     assert isinstance(mask, PredictedSegmentationMask)
     assert mask.score == pytest.approx(0.3)
     assert mask.area == 0
+
+
+# The point dtypes used before sleap-io 0.10 (`complete`, no `labeled`).
+OLD_POINTS_DTYPE = np.dtype(
+    [("xy", "<f8", (2,)), ("visible", "bool"), ("complete", "bool"), ("name", "O")]
+)
+OLD_PRED_POINTS_DTYPE = np.dtype(
+    [
+        ("xy", "<f8", (2,)),
+        ("score", "<f8"),
+        ("visible", "bool"),
+        ("complete", "bool"),
+        ("name", "O"),
+    ]
+)
+
+
+def _assert_unplaced(points, inds):
+    """Assert that the given points are labeled, hidden and without a location."""
+    assert np.isnan(points["xy"][inds]).all()
+    assert points["labeled"][inds].all()
+    assert not points["visible"][inds].any()
+    assert not points["verified"][inds].any()
+
+
+@pytest.mark.parametrize("cls", [PointsArray, PredictedPointsArray])
+def test_points_array_empty_is_labeled_nan(cls):
+    """`empty` gives labeled, hidden, unverified points with NaN coordinates."""
+    points = cls.empty(3)
+    _assert_unplaced(points, slice(None))
+    assert list(points["name"]) == [None, None, None]
+
+
+@pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+def test_instance_empty_is_labeled_nan(cls):
+    """`Instance.empty` points are labeled, hidden and without a location."""
+    inst = cls.empty(Skeleton(["A", "B"]))
+    _assert_unplaced(inst.points, slice(None))
+    assert_equal(inst.point_states, [PointState.ABSENT] * 2)
+    assert inst.is_empty
+
+
+def test_from_dict_fills_missing_nodes():
+    """Nodes missing from a points dict are labeled, hidden and NaN."""
+    skel = Skeleton(["A", "B", "C"])
+    inst = Instance({"A": [1, 2]}, skeleton=skel)
+    assert_equal(inst.points["xy"][0], [1, 2])
+    assert inst.points["visible"][0] and inst.points["labeled"][0]
+    _assert_unplaced(inst.points, [1, 2])
+
+    pred = PredictedInstance({"B": [1, 2, 0.5]}, skeleton=skel)
+    assert pred.points["score"][1] == 0.5
+    _assert_unplaced(pred.points, [0, 2])
+
+
+def test_from_dict_verified_and_labeled_values():
+    """The fourth and fifth values of a points dict entry are verified and labeled."""
+    skel = Skeleton(["A", "B"])
+    inst = Instance(
+        {"A": [1, 2, True, True, True], "B": [np.nan, np.nan, False, False, False]},
+        skeleton=skel,
+    )
+    assert_equal(inst.points["verified"], [True, False])
+    assert_equal(inst.points["labeled"], [True, False])
+
+    pred = PredictedInstance(
+        {"A": [1, 2, 0.9, True, True, True], "B": [np.nan, np.nan, 0, 0, 0, 0]},
+        skeleton=skel,
+    )
+    assert_equal(pred.points["verified"], [True, False])
+    assert_equal(pred.points["labeled"], [True, False])
+
+
+def test_from_array_columns():
+    """Plain arrays map columns to visible, verified and labeled."""
+    points = PointsArray.from_array(
+        np.array([[1, 2, 1, 1, 1], [np.nan, np.nan, 0, 0, 0]], dtype=float)
+    )
+    assert_equal(points["visible"], [True, False])
+    assert_equal(points["verified"], [True, False])
+    assert_equal(points["labeled"], [True, False])
+
+    # Two columns: labeled defaults to True, not verified.
+    points = PointsArray.from_array(np.array([[1, 2], [np.nan, np.nan]]))
+    assert_equal(points["labeled"], [True, True])
+    assert_equal(points["verified"], [False, False])
+
+    pred = PredictedPointsArray.from_array(
+        np.array([[1, 2, 0.5, 1, 1, 0], [3, 4, 0.6, 1, 0, 1]], dtype=float)
+    )
+    assert_equal(pred["score"], [0.5, 0.6])
+    assert_equal(pred["verified"], [True, False])
+    assert_equal(pred["labeled"], [False, True])
+
+
+@pytest.mark.parametrize(
+    "cls,old_dtype", [(PointsArray, OLD_POINTS_DTYPE), (PredictedPointsArray, None)]
+)
+def test_from_array_upgrades_old_dtype(cls, old_dtype):
+    """A structured array with the old dtype is upgraded: complete -> verified."""
+    old_dtype = old_dtype or OLD_PRED_POINTS_DTYPE
+    old = np.zeros(2, dtype=old_dtype)
+    old["xy"] = [[1, 2], [3, 4]]
+    old["visible"] = [True, False]
+    old["complete"] = [True, False]
+    points = cls.from_array(old)
+    assert points.dtype == cls._get_dtype()
+    assert_equal(points["xy"], [[1, 2], [3, 4]])
+    assert_equal(points["visible"], [True, False])
+    assert_equal(points["verified"], [True, False])
+    assert_equal(points["labeled"], [True, True])
+
+
+def test_from_array_partial_structured_defaults():
+    """Fields missing from a structured array keep the `empty` defaults."""
+    points = PointsArray.from_array(np.array([([1, 2],)], dtype=[("xy", float, (2,))]))
+    assert_equal(points["xy"], [[1, 2]])
+    assert_equal(points["labeled"], [True])
+    assert_equal(points["visible"], [False])
+    assert_equal(points["verified"], [False])
+
+
+@pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+def test_from_numpy_defaults(cls):
+    """`from_numpy` without flags: NaN is labeled and hidden; nothing is verified."""
+    inst = cls.from_numpy(
+        np.array([[1, 2], [np.nan, np.nan]]), skeleton=Skeleton(["A", "B"])
+    )
+    assert_equal(inst.points["visible"], [True, False])
+    assert_equal(inst.points["labeled"], [True, True])
+    assert_equal(inst.points["verified"], [False, False])
+    assert_equal(inst.point_states, [PointState.VISIBLE, PointState.ABSENT])
+
+
+@pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+def test_from_numpy_flags(cls):
+    """`from_numpy` sets the visible, labeled and verified flags when given."""
+    xy = np.array([[1, 2], [3, 4], [np.nan, np.nan], [np.nan, np.nan]])
+    inst = cls.from_numpy(
+        xy,
+        skeleton=Skeleton(["A", "B", "C", "D"]),
+        visible=[True, False, False, False],
+        labeled=[True, True, True, False],
+        verified=True,
+    )
+    assert_equal(inst.points["verified"], [True] * 4)
+    assert_equal(
+        inst.point_states,
+        [
+            PointState.VISIBLE,
+            PointState.OCCLUDED,
+            PointState.ABSENT,
+            PointState.UNLABELED,
+        ],
+    )
+
+    with pytest.raises(ValueError):
+        cls.from_numpy(
+            xy, skeleton=Skeleton(["A", "B", "C", "D"]), visible=[True, False]
+        )
+
+
+def test_compute_point_states_rules():
+    """States follow rule 1 (visible implies labeled) and rule 2 (NaN = no location)."""
+    xy = np.array([[1, 2], [1, 2], [np.nan, np.nan], [np.nan, np.nan], [1, 2]])
+    visible = np.array([True, False, False, True, False])
+    labeled = np.array([False, True, True, True, False])
+    assert_equal(
+        compute_point_states(xy, visible, labeled),
+        [
+            PointState.VISIBLE,  # visible implies labeled
+            PointState.OCCLUDED,  # hidden with an estimate
+            PointState.ABSENT,  # hidden, no location
+            PointState.ABSENT,  # visible but NaN is treated as hidden
+            PointState.UNLABELED,  # unlabeled even with coordinates
+        ],
+    )
+    assert compute_point_states(xy, visible, labeled).dtype == np.int8
+
+    # Scalar `labeled` broadcasts.
+    assert_equal(
+        compute_point_states(xy[:2], visible[:2], True),
+        [PointState.VISIBLE, PointState.OCCLUDED],
+    )
+
+
+def test_point_state_coco_numbering():
+    """The numbering matches COCO `v`, with ABSENT mapping to 0."""
+    assert PointState.UNLABELED == 0
+    assert PointState.OCCLUDED == 1
+    assert PointState.VISIBLE == 2
+    assert PointState.ABSENT == 3
+
+
+@pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+def test_setitem_sets_visible_and_labeled(cls):
+    """Setting a point marks it visible and labeled but not verified."""
+    inst = cls.empty(Skeleton(["A", "B"]))
+    inst.set_unlabeled("A")
+    inst["A"] = [1, 2]
+    assert inst.points["visible"][0]
+    assert inst.points["labeled"][0]
+    assert not inst.points["verified"][0]
+    assert inst.point_states[0] == PointState.VISIBLE
+
+
+def test_set_unlabeled():
+    """`set_unlabeled` clears the flags and the location."""
+    skel = Skeleton(["A", "B", "C"])
+    inst = Instance.from_numpy(np.array([[1, 2], [3, 4], [5, 6]]), skeleton=skel)
+    inst.set_unlabeled(["A", skel.nodes[1]])
+    assert_equal(inst.points["labeled"], [False, False, True])
+    assert_equal(inst.points["visible"], [False, False, True])
+    assert np.isnan(inst.points["xy"][:2]).all()
+    assert inst.n_labeled == 1
+
+    inst.set_unlabeled(2)
+    assert inst.n_labeled == 0
+    assert inst.is_empty
+
+
+def test_set_hidden():
+    """`set_hidden` clears the location unless asked to keep it."""
+    skel = Skeleton(["A", "B", "C"])
+    inst = Instance.from_numpy(np.array([[1, 2], [3, 4], [5, 6]]), skeleton=skel)
+    inst.set_unlabeled("C")
+
+    inst.set_hidden("A")
+    assert inst.point_states[0] == PointState.ABSENT
+    assert np.isnan(inst.points["xy"][0]).all()
+
+    inst.set_hidden([1, "C"], keep_location=True)
+    assert_equal(inst.points["xy"][1], [3, 4])
+    assert inst.point_states[1] == PointState.OCCLUDED
+    # Hiding an unlabeled point labels it (it has no location to keep).
+    assert inst.point_states[2] == PointState.ABSENT
+    assert inst.n_labeled == 3
+    assert inst.n_visible == 0
+
+
+def test_n_labeled_counts_visible_as_labeled():
+    """A visible point always counts as labeled."""
+    inst = Instance.from_numpy(
+        np.array([[1, 2], [np.nan, np.nan]]),
+        skeleton=Skeleton(["A", "B"]),
+        labeled=False,
+    )
+    assert inst.n_labeled == 1
+
+
+def test_is_empty_all_occluded_is_not_empty():
+    """An instance whose points are all occluded estimates is not empty."""
+    inst = Instance.from_numpy(
+        np.array([[1, 2], [3, 4]]), skeleton=Skeleton(["A", "B"]), visible=False
+    )
+    assert inst.n_visible == 0
+    assert not inst.is_empty
+
+
+def test_is_empty_cases():
+    """Empty means no labeled point with a location."""
+    skel = Skeleton(["A", "B"])
+    # Unlabeled points with coordinates don't count.
+    inst = Instance.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=skel, labeled=False)
+    inst.points["visible"] = False
+    assert inst.is_empty
+    # Visible but NaN points don't count.
+    inst = Instance.from_numpy(np.full((2, 2), np.nan), skeleton=skel, visible=True)
+    assert inst.is_empty
+    assert isinstance(inst.is_empty, bool)
+
+
+@pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+def test_replace_skeleton_unmapped(cls):
+    """Nodes without a source point become unlabeled, or absent if asked."""
+    inst = cls.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=Skeleton(["A", "B"]))
+    inst.replace_skeleton(Skeleton(["B", "C"]))
+    assert_equal(inst.points["xy"][0], [3, 4])
+    assert_equal(inst.point_states, [PointState.VISIBLE, PointState.UNLABELED])
+    assert np.isnan(inst.points["xy"][1]).all()
+    assert type(inst.points) is type(cls.empty(Skeleton(["A"])).points)
+
+    inst = cls.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=Skeleton(["A", "B"]))
+    inst.replace_skeleton(Skeleton(["B", "C"]), unmapped="absent")
+    assert_equal(inst.point_states, [PointState.VISIBLE, PointState.ABSENT])
+
+
+@pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+def test_update_skeleton_unmapped(cls):
+    """Nodes added to the skeleton become unlabeled, or absent if asked."""
+    skel = Skeleton(["A", "B"])
+    inst = cls.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=skel)
+    other = cls.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=skel)
+    skel.add_node("C")
+
+    inst.update_skeleton()
+    assert inst.points["name"][2] == "C"
+    assert_equal(
+        inst.point_states,
+        [PointState.VISIBLE, PointState.VISIBLE, PointState.UNLABELED],
+    )
+
+    other.update_skeleton(unmapped="absent")
+    assert other.point_states[2] == PointState.ABSENT
+
+
+def test_skeleton_change_invalid_unmapped():
+    """An unknown `unmapped` value raises before anything changes."""
+    skel = Skeleton(["A", "B"])
+    inst = Instance.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=skel)
+    with pytest.raises(ValueError, match="unmapped"):
+        inst.replace_skeleton(Skeleton(["A"]), unmapped="nan")
+    assert inst.skeleton is skel
+    with pytest.raises(ValueError, match="unmapped"):
+        inst.update_skeleton(names_only=True, unmapped="nan")
+
+
+def test_replace_skeleton_keeps_metadata():
+    """Metadata travels with the instance through a skeleton change."""
+    inst = Instance.empty(Skeleton(["A"]))
+    inst.metadata["ann_id"] = 3
+    inst.replace_skeleton(Skeleton(["A", "B"]))
+    assert inst.metadata == {"ann_id": 3}
+
+
+def _old_dtype_instance(cls, old_dtype):
+    """Build an instance holding points with the pre-0.10 dtype."""
+    skel = Skeleton(["A", "B"])
+    old = np.zeros(2, dtype=old_dtype).view(
+        PredictedPointsArray if cls is PredictedInstance else PointsArray
+    )
+    old["xy"] = [[1, 2], [3, 4]]
+    old["visible"] = [True, False]
+    old["complete"] = [True, False]
+    old["name"] = skel.node_names
+    inst = cls.empty(skel)
+    object.__setattr__(inst, "points", old)
+    return inst
+
+
+@pytest.mark.parametrize(
+    "cls,old_dtype",
+    [(Instance, OLD_POINTS_DTYPE), (PredictedInstance, OLD_PRED_POINTS_DTYPE)],
+)
+def test_old_dtype_pickle_round_trip(cls, old_dtype):
+    """Unpickling points saved with the old dtype upgrades them."""
+    inst = _old_dtype_instance(cls, old_dtype)
+    assert "complete" in inst.points.dtype.names
+
+    restored = pickle.loads(pickle.dumps(inst))
+    assert type(restored) is cls
+    assert restored.points.dtype == type(cls.empty(Skeleton(["A"])).points)._get_dtype()
+    assert_equal(restored.points["xy"], [[1, 2], [3, 4]])
+    assert_equal(restored.points["visible"], [True, False])
+    assert_equal(restored.points["verified"], [True, False])
+    assert_equal(restored.points["labeled"], [True, True])
+    assert list(restored.points["name"]) == ["A", "B"]
+
+
+def test_old_dtype_upgraded_on_init():
+    """Constructing an instance from old-dtype points upgrades them."""
+    old = np.zeros(1, dtype=OLD_POINTS_DTYPE).view(PointsArray)
+    old["complete"] = True
+    inst = Instance(points=old, skeleton=Skeleton(["A"]))
+    assert inst.points["verified"][0]
+    assert inst.points["labeled"][0]
+
+
+@pytest.mark.parametrize("state_as_tuple", [False, True])
+def test_setstate_defaults_missing_fields(state_as_tuple):
+    """Pickles from before `metadata` existed restore it as empty."""
+    inst = _old_dtype_instance(Instance, OLD_POINTS_DTYPE)
+    state = inst.__getstate__()
+    del state["metadata"]
+    if state_as_tuple:
+        # attrs < 22.2 stored a tuple in field order (here without `metadata`).
+        state = tuple(state.values())
+
+    restored = Instance.__new__(Instance)
+    restored.__setstate__(state)
+    assert restored.metadata == {}
+    assert restored.tracking_score is None
+    assert restored.points["verified"][0]
+
+
+def test_instance_metadata_copy_and_pickle():
+    """Metadata survives pickling and copying."""
+    pred = PredictedInstance.empty(Skeleton(["A"]), score=0.5)
+    pred.metadata["iscrowd"] = False
+    for restored in (pickle.loads(pickle.dumps(pred)), copy.deepcopy(pred)):
+        assert restored.metadata == {"iscrowd": False}
+        assert restored.metadata is not pred.metadata
+        assert restored.score == 0.5

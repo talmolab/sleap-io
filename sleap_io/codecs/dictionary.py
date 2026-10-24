@@ -67,7 +67,7 @@ def to_dict(
     Notes:
         - Uses index-based references (e.g., skeleton_idx, video_idx) for compactness
         - Preserves all metadata including provenance
-        - Points are stored as list of dicts with x, y, visible, complete fields
+        - Points are stored as list of dicts with x, y, visible, verified fields
         - The output is fully compatible with JSON, YAML, or any format that handles
           Python primitives
     """
@@ -167,7 +167,7 @@ def to_dict(
                         "x": float(point["xy"][0]),
                         "y": float(point["xy"][1]),
                         "visible": bool(point["visible"]),
-                        "complete": bool(point["complete"]),
+                        "verified": bool(point["verified"]),
                     }
                     points_list.append(point_dict)
 
@@ -316,7 +316,7 @@ def _build_labeled_frames_lazy(
                     "x": float(pt["x"]) - coord_offset,
                     "y": float(pt["y"]) - coord_offset,
                     "visible": bool(pt["visible"]),
-                    "complete": bool(pt["complete"]),
+                    "verified": bool(pt["complete"]),
                 }
                 points_list.append(point_dict)
 

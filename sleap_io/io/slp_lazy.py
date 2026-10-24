@@ -416,7 +416,8 @@ class LazyDataStore:
         """Create PointsArray from raw point data.
 
         Args:
-            pts_data: Structured array with x, y, visible, complete fields.
+            pts_data: Structured array with x, y, visible, complete fields (the
+                on-disk `complete` flag is read into `verified`).
             skeleton: Skeleton defining node structure.
 
         Returns:
@@ -429,7 +430,7 @@ class LazyDataStore:
         points["xy"][:, 0] = pts_data["x"]
         points["xy"][:, 1] = pts_data["y"]
         points["visible"] = pts_data["visible"]
-        points["complete"] = pts_data["complete"]
+        points["verified"] = pts_data["complete"]
         points["name"] = skeleton.node_names
         return points
 
@@ -439,7 +440,8 @@ class LazyDataStore:
         """Create PredictedPointsArray from raw point data.
 
         Args:
-            pts_data: Structured array with x, y, visible, complete, score fields.
+            pts_data: Structured array with x, y, visible, complete, score fields
+                (the on-disk `complete` flag is read into `verified`).
             skeleton: Skeleton defining node structure.
 
         Returns:
@@ -452,7 +454,7 @@ class LazyDataStore:
         points["xy"][:, 0] = pts_data["x"]
         points["xy"][:, 1] = pts_data["y"]
         points["visible"] = pts_data["visible"]
-        points["complete"] = pts_data["complete"]
+        points["verified"] = pts_data["complete"]
         points["score"] = pts_data["score"]
         points["name"] = skeleton.node_names
         return points
