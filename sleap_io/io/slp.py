@@ -4198,6 +4198,61 @@ def read_instances(
     return instances
 
 
+_UNLABELED_AS_MODES = ("error", "absent")
+
+
+def _check_unlabeled_points(labels: Labels, unlabeled_as: str) -> None:
+    """Refuse or downgrade unlabeled points before writing the compound layout.
+
+    The compound `/points` and `/pred_points` datasets have no `labeled` column, so an
+    unlabeled point would be read back as a labeled, hidden point and trained as
+    absent. This check keeps that from happening silently.
+
+    Args:
+        labels: The labels about to be written.
+        unlabeled_as: `"error"` raises if any point is unlabeled. `"absent"` writes
+            unlabeled points as hidden (labeled, not visible) and warns.
+
+    Raises:
+        ValueError: If `unlabeled_as` is `"error"` and an instance has unlabeled
+            points.
+    """
+    n_unlabeled = 0
+    for inst in labels.instances:
+        points = inst.points
+        n_unlabeled += int(np.count_nonzero(~(points["labeled"] | points["visible"])))
+    if n_unlabeled == 0:
+        return
+    if unlabeled_as == "error":
+        raise ValueError(
+            f"{n_unlabeled} point(s) are unlabeled, but this SLP layout can't store "
+            "unlabeled points: they would be read back as labeled hidden points. Pass "
+            'unlabeled_as="absent" to save them as hidden points instead.'
+        )
+    warnings.warn(
+        f"Saving {n_unlabeled} unlabeled point(s) as hidden (labeled, not visible) "
+        "points, since this SLP layout can't store unlabeled points.",
+        stacklevel=3,
+    )
+
+
+def _warn_dropped_metadata(labels: Labels) -> None:
+    """Warn if record metadata would be lost by the compound layout.
+
+    Args:
+        labels: The labels about to be written.
+    """
+    for lf in labels.labeled_frames:
+        records = [lf, *lf.instances, *lf.bboxes]
+        if any(record.metadata for record in records):
+            warnings.warn(
+                "Instance, frame and bounding box metadata can't be stored in this "
+                "SLP layout and was not saved.",
+                stacklevel=3,
+            )
+            return
+
+
 def write_lfs(labels_path: str, labels: Labels):
     """Write labeled frames, instances and points to a SLEAP labels file.
 
@@ -9341,6 +9396,7 @@ def write_labels(
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
     save_embedding_vectors: bool = False,
+    unlabeled_as: str = "error",
 ):
     """Write a SLEAP labels file.
 
@@ -9402,7 +9458,20 @@ def write_labels(
             keeping the vectors in memory. Set `True` to also write the attached
             re-ID appearance embeddings. Off by default, mirroring `embed` (which
             embeds *video frames*).
+        unlabeled_as: How to handle unlabeled points (`labeled=False`), which this
+            layout can't store. `"error"` (the default) raises a `ValueError` before
+            anything is written. `"absent"` saves them as hidden points (labeled, not
+            visible) and warns. Lazy-loaded labels can't hold unlabeled points.
+
+    Notes:
+        Instance, frame and bounding box `metadata` can't be stored in this layout;
+        it is dropped with a warning.
     """
+    if unlabeled_as not in _UNLABELED_AS_MODES:
+        raise ValueError(
+            f"unlabeled_as must be one of {_UNLABELED_AS_MODES}, got {unlabeled_as!r}."
+        )
+
     # Fast path for lazy labels (avoids materializing frames/instances)
     # Supported for simple embed modes: None, False, "source"
     if labels.is_lazy:
@@ -9439,6 +9508,10 @@ def write_labels(
     # Capture unknown top-level members from the source file before it is
     # truncated, so additions made by a newer sleap-io version survive a
     # load/save cycle through this (potentially older) writer.
+    # Check before touching the output file so a refused save leaves it intact.
+    _check_unlabeled_points(labels, unlabeled_as)
+    _warn_dropped_metadata(labels)
+
     unknown_stash = (
         _stash_unknown_hdf5(labels.provenance.get("filename"))
         if preserve_unknown
