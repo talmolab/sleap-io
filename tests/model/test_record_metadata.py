@@ -189,3 +189,22 @@ def test_metadata_on_records():
     assert box.metadata == {"area": 1.0}
     with pytest.raises(TypeError):
         UserBoundingBox(x1=0, y1=0, x2=1, y2=1, metadata={"bbox": [1]})
+
+
+def test_record_metadata_shallow_copy():
+    """`copy.copy` returns an independent `RecordMetadata`."""
+    md = RecordMetadata(a=1)
+    md_copy = copy.copy(md)
+    md_copy["b"] = 2
+    assert isinstance(md_copy, RecordMetadata)
+    assert md == {"a": 1}
+
+
+def test_set_attrs_state_defaults_plain_fields():
+    """Fields missing from a state get their plain (non-factory) defaults too."""
+    inst = Instance.empty(Skeleton(["A"]), tracking_score=0.5)
+    state = inst.__getstate__()
+    del state["tracking_score"]
+    restored = Instance.__new__(Instance)
+    restored.__setstate__(state)
+    assert restored.tracking_score is None

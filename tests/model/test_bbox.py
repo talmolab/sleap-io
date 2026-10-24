@@ -549,3 +549,15 @@ def test_bbox_metadata_pickle(cls):
     restored.__setstate__(state)
     assert restored.metadata == {}
     assert restored.x2 == 10
+
+
+def test_bbox_tuple_state_without_metadata():
+    """A tuple-form state from before `metadata` existed still lines up."""
+    bbox = UserBoundingBox(x1=0, y1=0, x2=10, y2=10, name="a")
+    state = bbox.__getstate__()
+    del state["metadata"]
+    restored = UserBoundingBox.__new__(UserBoundingBox)
+    restored.__setstate__(tuple(state.values()))
+    assert restored.name == "a"
+    assert restored._instance_idx == -1
+    assert restored.metadata == {}

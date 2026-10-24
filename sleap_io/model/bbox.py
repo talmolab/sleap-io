@@ -99,12 +99,15 @@ class BoundingBox:
     identity_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
     category_score: float | None = attrs.field(default=None)
     category_embedding: "Embedding | None" = attrs.field(default=None, repr=False)
-    metadata: RecordMetadata = attrs.field(
-        factory=RecordMetadata, converter=to_metadata, repr=False
-    )
 
     # Private: deferred instance index for lazy loading.
     _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
+
+    # Added in 0.10, after the existing fields so older tuple-form pickle states
+    # still line up.
+    metadata: RecordMetadata = attrs.field(
+        factory=RecordMetadata, converter=to_metadata, repr=False
+    )
 
     def __getstate__(self) -> dict[str, Any]:
         """Return the state for pickling and copying."""
