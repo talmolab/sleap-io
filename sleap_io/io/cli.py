@@ -2608,6 +2608,43 @@ def _infer_output_format(path: Path) -> str | None:
     ),
 )
 @click.option(
+    "--unlabeled-as",
+    "unlabeled_as",
+    type=click.Choice(["error", "absent"]),
+    default=None,
+    help=(
+        "How --legacy-format handles unlabeled points, which the 2.x layout can't "
+        "store: error (the default) or absent (save them as hidden points). "
+        "SLP output with --legacy-format only."
+    ),
+)
+@click.option(
+    "--compression",
+    type=click.Choice(["gzip", "lzf"]),
+    default=None,
+    help="Compress the SLP table columns (default: uncompressed). SLP output only.",
+)
+@click.option(
+    "--visibility-encoding",
+    "visibility_encoding",
+    type=click.Choice(["auto", "ternary", "binary"]),
+    default=None,
+    help=(
+        "How to read keypoint visibility codes: auto (the default), ternary "
+        "(0/1/2) or binary (0/1, e.g. CrowdPose). coco and ultralytics input only."
+    ),
+)
+@click.option(
+    "--v0-as",
+    "v0_as",
+    type=click.Choice(["unlabeled", "absent"]),
+    default=None,
+    help=(
+        "How to read keypoints with v=0: unlabeled or absent (the pre-0.10 "
+        "reading). coco and ultralytics input only."
+    ),
+)
+@click.option(
     "--csv-format",
     "csv_format",
     type=click.Choice(["sleap", "dlc", "points", "instances", "frames"]),
@@ -2663,6 +2700,10 @@ def convert(
     output_format: str | None,
     embed: str | None,
     legacy_format: bool,
+    unlabeled_as: str | None,
+    compression: str | None,
+    visibility_encoding: str | None,
+    v0_as: str | None,
     csv_format: str,
     scorer: str,
     save_metadata: bool,
@@ -2687,7 +2728,10 @@ def convert(
     A DeepLabCut project (a directory with config.yaml + labeled-data/, or its
     config.yaml directly) is auto-detected as dlc_project. For COCO input,
     --coco-category-as-track and --coco-segmentation control identity tracks and
-    polygon handling.
+    polygon handling. For COCO and Ultralytics input, --visibility-encoding and
+    --v0-as control how keypoint visibility codes are read. For SLP output,
+    --compression compresses the tables and --unlabeled-as sets how
+    --legacy-format handles unlabeled points.
 
     [dim]Examples:[/]
 
@@ -2698,6 +2742,8 @@ def convert(
         $ sio convert seg.json -o labels.slp --from coco --coco-category-as-track
         $ sio convert labels.slp -o labels.pkg.slp --embed user
         $ sio convert labels.slp -o labels.v2.slp --legacy-format
+        $ sio convert coco.json -o labels.v2.slp --legacy-format --unlabeled-as absent
+        $ sio convert crowdpose.json -o labels.slp --visibility-encoding binary
         $ sio convert labels.slp -o dataset/ --to ultralytics
         $ sio convert labels.slp -o analysis.h5 --to analysis_h5
         $ sio convert labels.slp -o output.csv --csv-format frames
@@ -2749,6 +2795,29 @@ def convert(
     if embed is not None and resolved_output_format != "slp":
         raise click.ClickException("--embed is only valid for SLP output format.")
 
+    # Validate SLP output options
+    for flag, value in [
+        ("--unlabeled-as", unlabeled_as),
+        ("--compression", compression),
+    ]:
+        if value is not None and resolved_output_format != "slp":
+            raise click.ClickException(f"{flag} is only valid for SLP output format.")
+    if unlabeled_as is not None and not legacy_format:
+        raise click.ClickException(
+            "--unlabeled-as only applies with --legacy-format (the default SLP "
+            "layout stores unlabeled points)."
+        )
+
+    # Validate keypoint visibility options
+    for flag, value in [
+        ("--visibility-encoding", visibility_encoding),
+        ("--v0-as", v0_as),
+    ]:
+        if value is not None and resolved_input_format not in ("coco", "ultralytics"):
+            raise click.ClickException(
+                f"{flag} is only valid for coco and ultralytics input formats."
+            )
+
     # Determine if we need video access:
     # - Embedding frames requires video access
     # - Ultralytics output exports images, requires video access
@@ -2768,6 +2837,12 @@ def convert(
         elif resolved_input_format == "coco":
             load_kwargs["category_as_track"] = coco_category_as_track
             load_kwargs["segmentation_format"] = coco_segmentation
+        # Only pass the visibility options the user gave, so the loaders' own
+        # defaults apply otherwise.
+        if visibility_encoding is not None:
+            load_kwargs["visibility_encoding"] = visibility_encoding
+        if v0_as is not None:
+            load_kwargs["v0_as"] = v0_as
         labels = io_main.load_file(str(input_path), **load_kwargs)
     except Exception as e:
         raise click.ClickException(f"Failed to load input file: {e}")
@@ -2806,6 +2881,10 @@ def convert(
                 save_kwargs["embed"] = None
             if legacy_format:
                 save_kwargs["legacy_format"] = True
+            if unlabeled_as is not None:
+                save_kwargs["unlabeled_as"] = unlabeled_as
+            if compression is not None:
+                save_kwargs["compression"] = compression
         # Handle CSV-specific options
         if resolved_output_format == "csv":
             io_main.save_csv(

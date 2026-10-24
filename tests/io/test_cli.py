@@ -2474,6 +2474,197 @@ def test_convert_slp_legacy_format(tmp_path, slp_typical):
     )
 
 
+def _unlabeled_slp(tmp_path: Path) -> Path:
+    """Write an SLP file with one labeled and one unlabeled point."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="fake.mp4")
+    inst = Instance.from_numpy(np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton)
+    inst.points["visible"][1] = False
+    inst.points["labeled"][1] = False
+    labels = Labels(
+        [LabeledFrame(video=video, frame_idx=0, instances=[inst])],
+        videos=[video],
+        skeletons=[skeleton],
+    )
+    path = tmp_path / "unlabeled.slp"
+    save_slp(labels, str(path))
+    return path
+
+
+def test_convert_legacy_format_unlabeled_fails_nonzero(tmp_path):
+    """A legacy save that refuses unlabeled points exits non-zero with CLI advice."""
+    input_path = _unlabeled_slp(tmp_path)
+    output_path = tmp_path / "out.slp"
+    result = CliRunner().invoke(
+        cli, ["convert", str(input_path), "-o", str(output_path), "--legacy-format"]
+    )
+    assert result.exit_code != 0
+    output = " ".join(_strip_ansi(result.output).replace("│", " ").split())
+    assert "Failed to save" in output
+    assert "--unlabeled-as absent" in output
+    assert not output_path.exists()
+
+
+def test_convert_legacy_format_unlabeled_as_absent(tmp_path):
+    """`--unlabeled-as absent` saves unlabeled points as hidden in the 2.x layout."""
+    input_path = _unlabeled_slp(tmp_path)
+    output_path = tmp_path / "out.slp"
+    with pytest.warns(UserWarning, match="unlabeled point"):
+        result = CliRunner().invoke(
+            cli,
+            [
+                "convert",
+                str(input_path),
+                "-o",
+                str(output_path),
+                "--legacy-format",
+                "--unlabeled-as",
+                "absent",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    with h5py.File(output_path, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 3.0
+    points = load_slp(str(output_path))[0].instances[0].points
+    assert points["labeled"].tolist() == [True, True]
+    assert points["visible"].tolist() == [True, False]
+
+
+def test_convert_unlabeled_as_requires_legacy_format(tmp_path, slp_typical):
+    """`--unlabeled-as` without `--legacy-format` errors."""
+    result = CliRunner().invoke(
+        cli,
+        [
+            "convert",
+            slp_typical,
+            "-o",
+            str(tmp_path / "out.slp"),
+            "--unlabeled-as",
+            "absent",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "--legacy-format" in _strip_ansi(result.output)
+
+
+@pytest.mark.parametrize("compression", ["gzip", "lzf"])
+def test_convert_compression(tmp_path, slp_typical, compression):
+    """`--compression` sets the filter on the SLP table columns."""
+    output_path = tmp_path / "out.slp"
+    result = CliRunner().invoke(
+        cli,
+        ["convert", slp_typical, "-o", str(output_path), "--compression", compression],
+    )
+    assert result.exit_code == 0, result.output
+    with h5py.File(output_path, "r") as f:
+        assert f["points/x"].compression == compression
+    np.testing.assert_array_equal(
+        load_slp(str(output_path)).numpy(), load_slp(slp_typical).numpy()
+    )
+
+
+@pytest.mark.parametrize(
+    "option",
+    [["--compression", "gzip"], ["--unlabeled-as", "absent", "--legacy-format"]],
+)
+def test_convert_slp_options_require_slp_output(tmp_path, slp_typical, option):
+    """SLP save options error for other output formats."""
+    result = CliRunner().invoke(
+        cli, ["convert", slp_typical, "-o", str(tmp_path / "out.json"), *option]
+    )
+    assert result.exit_code != 0
+    assert f"{option[0]} is only valid for SLP output" in _strip_ansi(result.output)
+
+
+@pytest.mark.parametrize(
+    "encoding, visible",
+    [("binary", [True, True, False]), ("ternary", [False, False, False])],
+)
+def test_convert_coco_visibility_encoding(
+    tmp_path, coco_binary_encoded, encoding, visible
+):
+    """`--visibility-encoding` reaches the COCO reader."""
+    output_path = tmp_path / "out.slp"
+    result = CliRunner().invoke(
+        cli,
+        [
+            "convert",
+            f"{coco_binary_encoded}/annotations.json",
+            "--from",
+            "coco",
+            "-o",
+            str(output_path),
+            "--visibility-encoding",
+            encoding,
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    points = load_slp(str(output_path))[0].instances[0].points
+    assert points["visible"].tolist() == visible
+
+
+@pytest.mark.parametrize("v0_as, labeled", [("unlabeled", False), ("absent", True)])
+def test_convert_coco_v0_as(tmp_path, coco_binary_encoded, v0_as, labeled):
+    """`--v0-as` reaches the COCO reader."""
+    output_path = tmp_path / "out.slp"
+    result = CliRunner().invoke(
+        cli,
+        [
+            "convert",
+            f"{coco_binary_encoded}/annotations.json",
+            "--from",
+            "coco",
+            "-o",
+            str(output_path),
+            "--visibility-encoding",
+            "binary",
+            "--v0-as",
+            v0_as,
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    points = load_slp(str(output_path))[0].instances[0].points
+    assert points["labeled"].tolist() == [True, True, labeled]
+
+
+@pytest.mark.parametrize("v0_as, n_unlabeled", [("unlabeled", 1), ("absent", 0)])
+def test_convert_ultralytics_v0_as(tmp_path, ultralytics_dataset, v0_as, n_unlabeled):
+    """`--v0-as` reaches the Ultralytics reader."""
+    output_path = tmp_path / "out.slp"
+    result = CliRunner().invoke(
+        cli,
+        [
+            "convert",
+            ultralytics_dataset,
+            "--from",
+            "ultralytics",
+            "-o",
+            str(output_path),
+            "--v0-as",
+            v0_as,
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    labels = load_slp(str(output_path))
+    assert (
+        sum(int((~inst.points["labeled"]).sum()) for lf in labels for inst in lf)
+        == n_unlabeled
+    )
+
+
+@pytest.mark.parametrize(
+    "option", [["--visibility-encoding", "binary"], ["--v0-as", "absent"]]
+)
+def test_convert_visibility_options_require_coco_input(tmp_path, slp_typical, option):
+    """Keypoint visibility options error for input formats other than COCO."""
+    result = CliRunner().invoke(
+        cli, ["convert", slp_typical, "-o", str(tmp_path / "out.slp"), *option]
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert f"{option[0]} is only valid for coco and ultralytics input" in output
+
+
 def test_convert_slp_to_labelstudio(tmp_path, slp_typical):
     """Test SLP to Label Studio JSON conversion."""
     runner = CliRunner()

@@ -579,6 +579,10 @@ sio convert spots.csv -o labels.slp --from trackmate
 | `--to` | Output format (inferred from extension if not specified) |
 | `--embed` | Embed video frames in output (`user`, `all`, `suggestions`, `source`) |
 | `--legacy-format` | Write the SLP 2.x layout that sleap-io < 0.10 and SLEAP can open (SLP output only) |
+| `--unlabeled-as` | How `--legacy-format` handles unlabeled points: `error` (default) or `absent` (save them as hidden points) (SLP output with `--legacy-format` only) |
+| `--compression` | Compress the SLP table columns: `gzip` or `lzf` (default: uncompressed) (SLP output only) |
+| `--visibility-encoding` | How to read keypoint visibility codes: `auto` (default), `ternary` or `binary` (coco and ultralytics input only) |
+| `--v0-as` | How to read `v=0` keypoints: `unlabeled` or `absent` (coco and ultralytics input only) |
 | `--csv-format` | CSV output format: `sleap`, `dlc`, `points`, `instances`, `frames` |
 | `--scorer` | Scorer name for DLC CSV output (default: `sleap-io`) |
 | `--save-metadata` | Save JSON metadata file for CSV round-trip support |
@@ -631,6 +635,16 @@ sio convert annotations.json -o labels.slp --from coco \
     --coco-category-as-track --coco-segmentation roi
 ```
 
+COCO and Ultralytics keypoints carry a visibility code per point. `--visibility-encoding` and `--v0-as` set how those codes are read (see [Keypoint visibility](formats/coco.md#keypoint-visibility)). `auto` detects binary files, but CrowdPose and other binary datasets are safer to read with an explicit `binary`:
+
+```bash
+# CrowdPose uses binary visibility (0/1)
+sio convert crowdpose_train.json -o labels.slp --from coco --visibility-encoding binary
+
+# Pre-0.10 reading: v=0 keypoints are hidden points, not unlabeled ones
+sio convert annotations.json -o labels.slp --from coco --v0-as absent
+```
+
 **Ambiguous extensions** (`.json`, `.h5`) require explicit `--from`:
 
 ```bash
@@ -650,6 +664,23 @@ sleap-io < 0.10 and SLEAP can't open. Write the older layout with `--legacy-form
 
 ```bash
 sio convert labels.slp -o labels.v2.slp --legacy-format
+```
+
+The 2.x layout can't store unlabeled points, which COCO and Ultralytics imports can
+produce from `v=0` keypoints, so the conversion fails (with a non-zero exit code)
+when there are any. Pass `--unlabeled-as absent` to save them as hidden points
+instead:
+
+```bash
+sio convert annotations.json -o labels.v2.slp --from coco \
+    --legacy-format --unlabeled-as absent
+```
+
+`--compression gzip` or `--compression lzf` writes smaller SLP files (in either
+layout) at some cost in read speed; see [Compression](formats/slp.md#compression):
+
+```bash
+sio convert labels.slp -o labels.small.slp --compression gzip
 ```
 
 ### Embedding Frames
