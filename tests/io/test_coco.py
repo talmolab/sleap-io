@@ -75,13 +75,16 @@ class TestCOCOBasicLoading:
 
         points_array = coco.decode_keypoints(keypoints, len(skeleton.nodes), skeleton)
 
-        assert points_array.shape == (17, 3)  # 17 keypoints, 3 values each
-        assert points_array.dtype == np.float32
+        # x, y, visible, verified, labeled for each of the 17 keypoints
+        assert points_array.shape == (17, 5)
+        assert points_array.dtype == np.float64
 
         # Check first point (should be at coordinates 100, 100 with visibility 2)
         assert points_array[0, 0] == 100.0  # x
         assert points_array[0, 1] == 100.0  # y
         assert points_array[0, 2] == 1.0  # visible (converted from visibility=2)
+        assert points_array[0, 3] == 1.0  # verified
+        assert points_array[0, 4] == 1.0  # labeled
 
 
 class TestCOCODatasetVariants:
@@ -159,7 +162,8 @@ class TestCOCODatasetVariants:
 
     def test_visibility_binary(self, coco_visibility_binary):
         """Test loading binary visibility encoding."""
-        labels = coco.read_labels(Path(coco_visibility_binary) / "annotations.json")
+        with pytest.warns(UserWarning, match="read as binary"):
+            labels = coco.read_labels(Path(coco_visibility_binary) / "annotations.json")
 
         assert len(labels.labeled_frames) == 3
         instance = labels.labeled_frames[0].instances[0]
@@ -184,6 +188,13 @@ class TestCOCODatasetVariants:
 
         assert visible_count < total_points  # Some points should be invisible
         assert visible_count > 0  # Some points should be visible
+
+        # The fixture cycles v=0, 1, 2 across its 17 keypoints.
+        states = instance.point_states
+        assert states[0] == sio.PointState.UNLABELED
+        assert states[1] == sio.PointState.OCCLUDED
+        assert states[2] == sio.PointState.VISIBLE
+        np.testing.assert_array_equal(instance.points["xy"][1], [119.0, 145.0])
 
     def test_nested_paths(self, coco_nested_paths):
         """Test loading nested directory structure."""
@@ -368,7 +379,10 @@ class TestCOCODataStructures:
 
     def test_point_visibility_handling(self, coco_visibility_binary):
         """Test that point visibility is handled correctly."""
-        labels = coco.read_labels(Path(coco_visibility_binary) / "annotations.json")
+        labels = coco.read_labels(
+            Path(coco_visibility_binary) / "annotations.json",
+            visibility_encoding="binary",
+        )
         instance = labels.labeled_frames[0].instances[0]
 
         # Should have mix of visible and invisible points
@@ -488,7 +502,7 @@ def test_unknown_visibility_value(tmp_path):
 
     # Should treat unknown visibility as visible
     points = coco.decode_keypoints(keypoints, num_keypoints=1, skeleton=skeleton)
-    assert points.shape == (1, 3)
+    assert points.shape == (1, 5)
     assert points[0, 0] == 100.0
     assert points[0, 1] == 50.0
     assert points[0, 2]  # Treated as visible
@@ -3503,3 +3517,416 @@ def test_resolve_image_path_reuses_file_index(tmp_path):
     # ...but a fresh lookup without the index finds them.
     found = coco.resolve_image_path("second.png", tmp_path)
     assert found == tmp_path / "sub" / "second.png"
+
+
+# ---------------------------------------------------------------------------
+# Visibility flags and record metadata (SLP 3.0)
+# ---------------------------------------------------------------------------
+
+
+def _write_keypoint_coco(
+    tmp_path: Path,
+    keypoints: list[list[float]],
+    name: str = "annotations.json",
+    image_name: str = "img.png",
+    **annotation_fields,
+) -> Path:
+    """Write a one-image COCO keypoint file with one annotation per keypoint list."""
+    iio.imwrite(tmp_path / image_name, np.zeros((50, 60, 3), dtype=np.uint8))
+    coco_data = {
+        "images": [{"id": 1, "file_name": image_name, "height": 50, "width": 60}],
+        "annotations": [
+            {
+                "id": i + 1,
+                "image_id": 1,
+                "category_id": 1,
+                "keypoints": kpts,
+                **annotation_fields,
+            }
+            for i, kpts in enumerate(keypoints)
+        ],
+        "categories": [
+            {"id": 1, "name": "animal", "keypoints": ["a", "b", "c", "d"]},
+        ],
+    }
+    json_path = tmp_path / name
+    json_path.write_text(json.dumps(coco_data))
+    return json_path
+
+
+def test_decode_visibility_ternary():
+    """Ternary codes map onto the flags; v<0 is unlabeled, other values visible."""
+    xy = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0], [9.0, 10.0]])
+    points = coco.decode_visibility(xy, [0, 1, 2, -1, 0.7])
+
+    # Columns: x, y, visible, verified, labeled.
+    np.testing.assert_array_equal(points[:, 2], [0, 0, 1, 0, 1])
+    np.testing.assert_array_equal(points[:, 3], [0, 1, 1, 0, 1])
+    np.testing.assert_array_equal(points[:, 4], [0, 1, 1, 0, 1])
+    assert np.isnan(points[[0, 3], :2]).all()
+    np.testing.assert_array_equal(points[[1, 2, 4], :2], xy[[1, 2, 4]])
+
+
+def test_decode_visibility_binary():
+    """Binary codes read v>0 as visible."""
+    xy = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+    points = coco.decode_visibility(xy, [0, 1, -1], visibility_encoding="binary")
+
+    np.testing.assert_array_equal(points[:, 2], [0, 1, 0])
+    np.testing.assert_array_equal(points[:, 4], [0, 1, 0])
+    np.testing.assert_array_equal(points[1, :2], [3.0, 4.0])
+
+
+def test_decode_visibility_v0_as_absent():
+    """`v0_as="absent"` reads v=0 as labeled, hidden and without a location."""
+    xy = np.array([[1.0, 2.0], [3.0, 4.0]])
+    points = coco.decode_visibility(xy, [0, -1], v0_as="absent")
+
+    np.testing.assert_array_equal(points[:, 2], [0, 0])
+    np.testing.assert_array_equal(points[:, 4], [1, 0])
+    assert np.isnan(points[:, :2]).all()
+
+
+def test_decode_visibility_auto():
+    """`"auto"` resolves from the codes it is given."""
+    xy = np.array([[1.0, 2.0], [3.0, 4.0]])
+    with pytest.warns(UserWarning, match="read as binary"):
+        points = coco.decode_visibility(xy, [1, 0], visibility_encoding="auto")
+    np.testing.assert_array_equal(points[:, 2], [1, 0])
+
+    points = coco.decode_visibility(xy, [1, 2], visibility_encoding="auto")
+    np.testing.assert_array_equal(points[:, 2], [0, 1])
+
+
+def test_visibility_options_rejected(tmp_path):
+    """Unknown `visibility_encoding` and `v0_as` values raise."""
+    xy = np.zeros((1, 2))
+    with pytest.raises(ValueError, match="visibility_encoding must be one of"):
+        coco.decode_visibility(xy, [2], visibility_encoding="quaternary")
+    with pytest.raises(ValueError, match="v0_as must be one of"):
+        coco.decode_visibility(xy, [2], v0_as="hidden")
+
+    json_path = _write_keypoint_coco(tmp_path, [[1, 1, 2, 2, 2, 2, 3, 3, 2, 4, 4, 2]])
+    with pytest.raises(ValueError, match="v0_as must be one of"):
+        coco.read_labels(json_path, v0_as="hidden")
+
+
+def test_resolve_visibility_encoding():
+    """Auto picks binary only when some v=1 appears and no v=2 does."""
+    assert coco.resolve_visibility_encoding("binary", [[2]]) == "binary"
+    assert coco.resolve_visibility_encoding("ternary", [[1]]) == "ternary"
+    assert coco.resolve_visibility_encoding("auto", [[1, 0], [2]]) == "ternary"
+    assert coco.resolve_visibility_encoding("auto", [[0, 0], [-1]]) == "ternary"
+    assert coco.resolve_visibility_encoding("auto", []) == "ternary"
+    with pytest.warns(UserWarning, match="No keypoint in my file"):
+        assert (
+            coco.resolve_visibility_encoding("auto", [[0, 1]], source="my file")
+            == "binary"
+        )
+
+
+def test_encode_visibility():
+    """Points map onto ternary or binary codes, with (0, 0) for v=0."""
+    skeleton = sio.Skeleton(["a", "b", "c", "d"])
+    inst = sio.Instance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0], [np.nan, np.nan], [7.0, 8.0]]),
+        skeleton=skeleton,
+        visible=[True, False, False, False],
+        labeled=[True, True, True, False],
+    )
+
+    xy, v = coco.encode_visibility(inst.points, "ternary")
+    np.testing.assert_array_equal(v, [2, 1, 0, 0])
+    np.testing.assert_array_equal(xy, [[1, 2], [3, 4], [0, 0], [0, 0]])
+
+    xy, v = coco.encode_visibility(inst.points, "binary")
+    np.testing.assert_array_equal(v, [1, 0, 0, 0])
+    np.testing.assert_array_equal(xy, [[1, 2], [0, 0], [0, 0], [0, 0]])
+
+    with pytest.raises(ValueError, match="'ternary' or 'binary' for writing"):
+        coco.encode_visibility(inst.points, "auto")
+
+
+def test_coco_ternary_round_trip(tmp_path):
+    """v=0/1/2/-1 read as unlabeled/occluded/visible/unlabeled and write back."""
+    json_path = _write_keypoint_coco(
+        tmp_path, [[10, 11, 0, 20, 21, 1, 30, 31, 2, 40, 41, -1]]
+    )
+    labels = coco.read_labels(json_path)
+
+    inst = labels[0].instances[0]
+    states = sio.PointState
+    np.testing.assert_array_equal(
+        inst.point_states,
+        [states.UNLABELED, states.OCCLUDED, states.VISIBLE, states.UNLABELED],
+    )
+    np.testing.assert_array_equal(inst.points["xy"][1:3], [[20, 21], [30, 31]])
+    np.testing.assert_array_equal(inst.points["verified"], [False, True, True, False])
+
+    out_path = tmp_path / "out.json"
+    coco.write_labels(labels, out_path)
+    written = json.loads(out_path.read_text())["annotations"][0]
+    assert written["keypoints"][:9] == [0.0, 0.0, 0, 20.0, 21.0, 1, 30.0, 31.0, 2]
+    assert written["keypoints"][9:] == [0.0, 0.0, 0]
+    assert written["num_keypoints"] == 2
+    assert written["bbox"] == [20.0, 21.0, 10.0, 10.0]
+
+    iio.imwrite(tmp_path / "img.png", np.zeros((50, 60, 3), dtype=np.uint8))
+    reread = coco.read_labels(out_path, dataset_root=tmp_path)
+    np.testing.assert_array_equal(
+        reread[0].instances[0].point_states, inst.point_states
+    )
+    np.testing.assert_array_equal(reread[0].instances[0].points["xy"][1], [20, 21])
+
+
+def test_coco_v0_as_absent(tmp_path):
+    """`v0_as="absent"` keeps the pre-0.10 reading of v=0."""
+    json_path = _write_keypoint_coco(
+        tmp_path, [[10, 11, 0, 20, 21, 2, 0, 0, 0, 1, 1, 2]]
+    )
+    inst = coco.read_labels(json_path, v0_as="absent")[0].instances[0]
+    assert inst.point_states.tolist() == [3, 2, 3, 2]
+    assert inst.points["verified"].all()
+
+
+def test_coco_binary_fixture_auto_detects(coco_annotations_binary_encoded):
+    """A binary file is detected, with a warning, and read with v>0 visible."""
+    with pytest.warns(UserWarning, match="read as binary"):
+        labels = coco.read_labels(coco_annotations_binary_encoded)
+
+    first = labels[0].instances[0]
+    np.testing.assert_array_equal(first.points["visible"], [True, True, False])
+    np.testing.assert_array_equal(first.points["labeled"], [True, True, False])
+    assert first.n_visible == 2
+
+    # Asking for ternary reads v=1 as occluded instead.
+    labels = coco.read_labels(
+        coco_annotations_binary_encoded, visibility_encoding="ternary"
+    )
+    assert labels[0].instances[0].point_states.tolist() == [1, 1, 0]
+
+
+def test_coco_binary_write_read_round_trip(tmp_path, coco_binary_encoded):
+    """A binary export reads back the same visible points."""
+    json_path = Path(coco_binary_encoded) / "annotations.json"
+    labels = coco.read_labels(json_path, visibility_encoding="binary")
+
+    out_path = tmp_path / "binary.json"
+    coco.write_labels(labels, out_path, visibility_encoding="binary")
+    written = json.loads(out_path.read_text())
+    assert {v for a in written["annotations"] for v in a["keypoints"][2::3]} == {0, 1}
+
+    with pytest.warns(UserWarning, match="read as binary"):
+        reread = coco.read_labels(out_path, dataset_root=coco_binary_encoded)
+    for lf, lf_reread in zip(labels, reread):
+        for inst, inst_reread in zip(lf.instances, lf_reread.instances):
+            np.testing.assert_array_equal(
+                inst_reread.points["visible"], inst.points["visible"]
+            )
+            np.testing.assert_array_equal(
+                inst_reread.numpy(), inst.numpy(), strict=True
+            )
+
+
+def test_coco_binary_export_drops_occluded_estimates(tmp_path):
+    """Binary has no occluded code, so occluded estimates are written as v=0."""
+    skeleton = sio.Skeleton(["a", "b"])
+    inst = sio.Instance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton, visible=[True, False]
+    )
+    video = sio.Video.from_filename(["img.png"])
+    labels = sio.Labels([sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+
+    ternary = coco.convert_labels(labels)["annotations"][0]["keypoints"]
+    binary = coco.convert_labels(labels, visibility_encoding="binary")["annotations"]
+    assert ternary == [1.0, 2.0, 2, 3.0, 4.0, 1]
+    assert binary[0]["keypoints"] == [1.0, 2.0, 1, 0.0, 0.0, 0]
+
+
+def test_coco_read_metadata(coco_annotations_binary_encoded):
+    """Annotation and image fields are kept as record metadata."""
+    labels = coco.read_labels(
+        coco_annotations_binary_encoded, visibility_encoding="binary"
+    )
+
+    assert labels[0].metadata == {"image_id": 11, "file_name": "frame_a.png"}
+    assert labels[1].metadata == {"image_id": 12, "file_name": "frame_b.png"}
+    assert labels[0].instances[1].metadata == {
+        "ann_id": 205,
+        "category_id": 1,
+        "iscrowd": 0,
+        "area": 100.0,
+        "num_keypoints": 2,
+    }
+    # The linked box holds no copy; the instance carries the metadata.
+    assert all(not box.metadata for box in labels.bboxes)
+    assert labels.check_metadata()["instances"]["ann_id"] == "int"
+
+
+def test_coco_read_metadata_skips_non_scalar_fields(tmp_path):
+    """Fields that aren't scalars (null, lists) are not kept."""
+    json_path = _write_keypoint_coco(
+        tmp_path, [[1, 1, 2, 2, 2, 2, 3, 3, 2, 4, 4, 2]], area=None, iscrowd=0
+    )
+    inst = coco.read_labels(json_path)[0].instances[0]
+    assert inst.metadata == {"ann_id": 1, "category_id": 1, "iscrowd": 0}
+
+
+def test_coco_detection_box_metadata(tmp_path):
+    """Annotations read without keypoints keep their metadata on the box."""
+    iio.imwrite(tmp_path / "img.png", np.zeros((50, 60, 3), dtype=np.uint8))
+    coco_data = {
+        "images": [{"id": 7, "file_name": "img.png", "height": 50, "width": 60}],
+        "annotations": [
+            {
+                "id": 42,
+                "image_id": 7,
+                "category_id": 3,
+                "bbox": [1, 2, 10, 20],
+                "area": 150,
+                "iscrowd": 0,
+            }
+        ],
+        "categories": [{"id": 3, "name": "cell"}],
+    }
+    json_path = tmp_path / "boxes.json"
+    json_path.write_text(json.dumps(coco_data))
+
+    labels = coco.read_labels(json_path)
+    box = labels.bboxes[0]
+    assert box.metadata == {"ann_id": 42, "category_id": 3, "iscrowd": 0, "area": 150}
+
+    # The stored area and id are written back, not the box's own area (200).
+    written = coco.convert_labels(labels)
+    assert written["annotations"][0]["area"] == 150
+    assert written["annotations"][0]["id"] == 42
+    assert written["images"][0]["id"] == 7
+
+
+def test_coco_crowd_annotation_round_trip(tmp_path):
+    """A crowd annotation keeps `iscrowd` through a read and write."""
+    json_path = _write_keypoint_coco(
+        tmp_path, [[0, 0, 0] * 4], iscrowd=1, num_keypoints=0, area=300
+    )
+    labels = coco.read_labels(json_path)
+    inst = labels[0].instances[0]
+    assert inst.metadata["iscrowd"] == 1
+    assert (inst.point_states == sio.PointState.UNLABELED).all()
+
+    written = coco.convert_labels(labels)["annotations"][0]
+    assert written["iscrowd"] == 1
+    assert written["area"] == 300
+    assert written["num_keypoints"] == 0
+
+
+def test_coco_export_reuses_unique_ids(coco_annotations_binary_encoded):
+    """Stored ids are reused when unique; new records get ids above them."""
+    labels = coco.read_labels(
+        coco_annotations_binary_encoded, visibility_encoding="binary"
+    )
+    skeleton = labels.skeletons[0]
+    labels[1].instances.append(
+        sio.Instance.from_numpy(np.array([[1.0, 1.0]] * 3), skeleton=skeleton)
+    )
+    labels.append(sio.LabeledFrame(video=labels.videos[0], frame_idx=5))
+
+    written = coco.convert_labels(labels)
+    assert [ann["id"] for ann in written["annotations"]] == [101, 205, 307, 308]
+    assert [img["id"] for img in written["images"]] == [11, 12, 13]
+    assert [ann["image_id"] for ann in written["annotations"]] == [11, 11, 12, 12]
+
+
+def test_coco_merged_export_renumbers_ids(tmp_path):
+    """Merging two COCO files makes ids collide, so the export renumbers them."""
+    a_dir = tmp_path / "a"
+    b_dir = tmp_path / "b"
+    a_dir.mkdir()
+    b_dir.mkdir()
+    keypoints = [[1, 1, 2, 2, 2, 2, 3, 3, 2, 4, 4, 2]]
+    labels = coco.read_labels(
+        _write_keypoint_coco(a_dir, keypoints, image_name="a.png")
+    )
+    other = coco.read_labels(_write_keypoint_coco(b_dir, keypoints, image_name="b.png"))
+    labels.merge(other, video="path")
+    assert len(labels) == 2
+
+    with pytest.warns(UserWarning, match="ids") as record:
+        written = coco.convert_labels(labels)
+    messages = " ".join(str(w.message) for w in record)
+    assert "image ids" in messages and "annotation ids" in messages
+    assert [ann["id"] for ann in written["annotations"]] == [1, 2]
+    assert [img["id"] for img in written["images"]] == [1, 2]
+    assert [ann["image_id"] for ann in written["annotations"]] == [1, 2]
+
+
+def test_coco_export_renumbers_non_integer_ids(tmp_path):
+    """Stored ids that aren't integers are renumbered with a warning."""
+    skeleton = sio.Skeleton(["a"])
+    inst = sio.Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skeleton)
+    inst.metadata["ann_id"] = "abc"
+    video = sio.Video.from_filename(["img.png"])
+    labels = sio.Labels([sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+
+    with pytest.warns(UserWarning, match="annotation ids"):
+        written = coco.convert_labels(labels)
+    assert written["annotations"][0]["id"] == 1
+
+
+def test_coco_export_prefers_computed_area(tmp_path):
+    """A linked mask or ROI gives the area; then the stored one; then keypoints."""
+    skeleton = sio.Skeleton(["a", "b"])
+    video = sio.Video.from_filename(["img.png"])
+
+    def make_instance(area=None):
+        inst = sio.Instance.from_numpy(
+            np.array([[0.0, 0.0], [4.0, 5.0]]), skeleton=skeleton
+        )
+        if area is not None:
+            inst.metadata["area"] = area
+        return inst
+
+    with_mask = make_instance(area=999)
+    with_roi = make_instance(area=999)
+    stored = make_instance(area=7.5)
+    computed = make_instance()
+    lf = sio.LabeledFrame(
+        video=video, frame_idx=0, instances=[with_mask, with_roi, stored, computed]
+    )
+    mask = np.zeros((10, 10), dtype=bool)
+    mask[:3, :4] = True
+    lf.masks.append(UserSegmentationMask.from_numpy(mask, instance=with_mask))
+    lf.rois.append(UserROI.from_bbox(0, 0, 2, 3, instance=with_roi))
+    labels = sio.Labels([lf])
+
+    areas = [ann["area"] for ann in coco.convert_labels(labels)["annotations"][:4]]
+    assert areas == [12.0, 6.0, 7.5, 20.0]
+
+
+def test_coco_metadata_survives_slp_round_trip(tmp_path, coco_binary_encoded):
+    """COCO metadata saved to SLP comes back unchanged."""
+    labels = coco.read_labels(
+        Path(coco_binary_encoded) / "annotations.json", visibility_encoding="binary"
+    )
+    slp_path = tmp_path / "coco.slp"
+    labels.save(slp_path)
+    reloaded = sio.load_slp(slp_path)
+
+    assert reloaded[0].metadata == labels[0].metadata
+    assert reloaded[0].instances[1].metadata == labels[0].instances[1].metadata
+    np.testing.assert_array_equal(
+        reloaded[0].instances[0].points["labeled"], [True, True, False]
+    )
+
+
+def test_load_coco_forwards_visibility_options(tmp_path):
+    """`load_coco` passes `visibility_encoding` and `v0_as` to the reader."""
+    json_path = _write_keypoint_coco(tmp_path, [[1, 1, 1, 2, 2, 0, 3, 3, 1, 4, 4, 1]])
+    inst = sio.load_coco(str(json_path), visibility_encoding="ternary", v0_as="absent")[
+        0
+    ].instances[0]
+    assert inst.point_states.tolist() == [1, 3, 1, 1]
+
+    split = coco.read_labels_set(
+        str(tmp_path), visibility_encoding="binary", v0_as="unlabeled"
+    )
+    assert split["annotations"][0].instances[0].point_states.tolist() == [2, 0, 2, 2]
