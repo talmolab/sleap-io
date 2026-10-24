@@ -2444,6 +2444,24 @@ def test_convert_slp_to_slp(tmp_path, slp_typical):
     original = load_slp(slp_typical)
     converted = load_slp(str(output_path))
     assert len(converted.labeled_frames) == len(original.labeled_frames)
+    with h5py.File(output_path, "r") as f:
+        assert f["metadata"].attrs["format_id"] == 3.0
+        assert isinstance(f["points"], h5py.Group)
+
+
+def test_convert_slp_legacy_format(tmp_path, slp_typical):
+    """`--legacy-format` writes the 2.x layout that older readers open."""
+    output_path = tmp_path / "output.slp"
+    result = CliRunner().invoke(
+        cli, ["convert", slp_typical, "-o", str(output_path), "--legacy-format"]
+    )
+    assert result.exit_code == 0, result.output
+    with h5py.File(output_path, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 3.0
+        assert isinstance(f["points"], h5py.Dataset)
+    np.testing.assert_array_equal(
+        load_slp(str(output_path)).numpy(), load_slp(slp_typical).numpy()
+    )
 
 
 def test_convert_slp_to_labelstudio(tmp_path, slp_typical):

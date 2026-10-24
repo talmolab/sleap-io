@@ -2598,6 +2598,16 @@ def _infer_output_format(path: Path) -> str | None:
     help="Embed frames in output (SLP format only).",
 )
 @click.option(
+    "--legacy-format",
+    "legacy_format",
+    is_flag=True,
+    default=False,
+    help=(
+        "Write the SLP 2.x layout that sleap-io < 0.10 and SLEAP can open "
+        "(SLP output only)."
+    ),
+)
+@click.option(
     "--csv-format",
     "csv_format",
     type=click.Choice(["sleap", "dlc", "points", "instances", "frames"]),
@@ -2652,6 +2662,7 @@ def convert(
     input_format: str | None,
     output_format: str | None,
     embed: str | None,
+    legacy_format: bool,
     csv_format: str,
     scorer: str,
     save_metadata: bool,
@@ -2686,6 +2697,7 @@ def convert(
         $ sio convert dlc_project/ -o labels.slp
         $ sio convert seg.json -o labels.slp --from coco --coco-category-as-track
         $ sio convert labels.slp -o labels.pkg.slp --embed user
+        $ sio convert labels.slp -o labels.v2.slp --legacy-format
         $ sio convert labels.slp -o dataset/ --to ultralytics
         $ sio convert labels.slp -o analysis.h5 --to analysis_h5
         $ sio convert labels.slp -o output.csv --csv-format frames
@@ -2792,6 +2804,8 @@ def convert(
             else:
                 # Preserve any existing embedded images
                 save_kwargs["embed"] = None
+            if legacy_format:
+                save_kwargs["legacy_format"] = True
         # Handle CSV-specific options
         if resolved_output_format == "csv":
             io_main.save_csv(
