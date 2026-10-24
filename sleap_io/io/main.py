@@ -623,6 +623,11 @@ def load_ultralytics(
             - image_size: Tuple of (height, width) for coordinate denormalization.
               Defaults to
               (480, 640). Will attempt to infer from actual images if available.
+            - visibility_encoding: "auto" (default), "ternary" or "binary". With
+              "ternary", v=0 is unlabeled, v=1 occluded with its coordinates kept,
+              and v=2 visible. "auto" picks binary, with a warning, when some
+              keypoint has v=1 and none has v=2.
+            - v0_as: "unlabeled" (default) or "absent" (the pre-0.10 reading).
 
     Returns:
         The dataset as a `Labels` object.
@@ -661,6 +666,9 @@ def save_ultralytics(
             - n_workers: Number of worker processes. If None, uses CPU count - 1.
               Only used if
               use_multiprocessing=True.
+            - visibility_encoding: "ternary" (default) writes visible points as 2,
+              occluded points with coordinates as 1 and others as 0. "binary"
+              writes visible points as 1 and others as 0.
     """
     from sleap_io.io import ultralytics
 
@@ -1912,6 +1920,8 @@ def load_labels_set(
         splits = kwargs.pop("splits", None)
         skeleton = kwargs.pop("skeleton", None)
         image_size = kwargs.pop("image_size", (480, 640))
+        visibility_encoding = kwargs.pop("visibility_encoding", "auto")
+        v0_as = kwargs.pop("v0_as", "unlabeled")
         # Remove verbose from kwargs if present (for backward compatibility)
         kwargs.pop("verbose", None)
 
@@ -1928,6 +1938,8 @@ def load_labels_set(
             splits=splits,
             skeleton=skeleton,
             image_size=image_size,
+            visibility_encoding=visibility_encoding,
+            v0_as=v0_as,
         )
     else:
         raise ValueError(

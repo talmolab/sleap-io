@@ -8,14 +8,16 @@ Ultralytics YOLO format specification:
   - Detection: class_id x_center y_center width height [confidence]
   - Segmentation: class_id x1 y1 x2 y2 ... xn yn
 - Coordinates: Normalized to [0,1] range, origin at top-left
-- Visibility (pose only): 0=not visible, 1=visible but occluded, 2=visible and not
-  occluded
+- Visibility (pose only): 0=not labeled, 1=labeled but occluded (coordinates are an
+  estimate), 2=visible, mapped onto the `visible` and `labeled` point flags the same
+  way as COCO keypoints (see `sleap_io.io.coco.decode_visibility`)
 """
 
 from __future__ import annotations
 
 import multiprocessing
 import warnings
+from collections.abc import Iterator
 from multiprocessing import Pool
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -25,6 +27,12 @@ import numpy as np
 import yaml
 from tqdm import tqdm
 
+from sleap_io.io.coco import (
+    _check_visibility_options,
+    decode_visibility,
+    encode_visibility,
+    resolve_visibility_encoding,
+)
 from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
@@ -42,11 +50,18 @@ def read_labels(
     split: str = "train",
     skeleton: Skeleton | None = None,
     image_size: tuple[int, int] = (480, 640),
+    visibility_encoding: str = "auto",
+    v0_as: str = "unlabeled",
 ) -> Labels:
     """Read Ultralytics YOLO dataset and return a `Labels` object.
 
     Automatically detects the annotation format (pose, detection, or segmentation)
     from the label file content.
+
+    Keypoint visibility codes map onto the point flags as for COCO (see
+    `sleap_io.io.coco.decode_visibility`): with the ternary encoding, `v=0` reads as
+    unlabeled, `v=1` as occluded with its coordinates kept, and `v=2` as visible.
+    Every labeled keypoint is marked `verified`.
 
     Args:
         dataset_path: Path to the Ultralytics dataset root directory containing
@@ -57,10 +72,21 @@ def read_labels(
         image_size: Image dimensions (height, width) for coordinate denormalization.
                    Defaults to (480, 640). Will attempt to infer from actual images if
                    available.
+        visibility_encoding: How to read keypoint visibility codes: ``"ternary"``
+            (0/1/2), ``"binary"`` (``v>0`` is visible), or ``"auto"`` (the default),
+            which picks binary, with a warning, when some keypoint in the split has
+            ``v=1`` and none has ``v=2``.
+        v0_as: ``"unlabeled"`` (the default) reads ``v=0`` keypoints as unlabeled.
+            ``"absent"`` reads them as labeled and not visible with no location, as
+            sleap-io did before 0.10.
 
     Returns:
         Parsed labels as a `Labels` instance.
+
+    Raises:
+        ValueError: If ``visibility_encoding`` or ``v0_as`` is not an accepted value.
     """
+    _check_visibility_options(visibility_encoding, v0_as)
     dataset_path = Path(dataset_path)
 
     # Parse data.yaml configuration
@@ -99,6 +125,13 @@ def read_labels(
     if not labels_dir.exists():
         raise FileNotFoundError(f"Labels directory not found: {labels_dir}")
 
+    # Pick one visibility encoding for the whole split.
+    visibility_encoding = resolve_visibility_encoding(
+        visibility_encoding,
+        _iter_visibility_codes(sorted(labels_dir.glob("*.txt"))),
+        source=str(labels_dir),
+    )
+
     # Process all image/label pairs
     labeled_frames = []
     tracks = {}  # Track synthetic tracks by instance order
@@ -133,6 +166,8 @@ def read_labels(
                     class_names=class_names,
                     video=video,
                     frame_idx=0,
+                    visibility_encoding=visibility_encoding,
+                    v0_as=v0_as,
                 )
 
                 # Assign tracks to instances based on order
@@ -163,6 +198,8 @@ def read_labels_set(
     splits: list[str] | None = None,
     skeleton: Skeleton | None = None,
     image_size: tuple[int, int] = (480, 640),
+    visibility_encoding: str = "auto",
+    v0_as: str = "unlabeled",
 ) -> LabelsSet:
     """Read multiple splits from an Ultralytics dataset as a LabelsSet.
 
@@ -174,6 +211,9 @@ def read_labels_set(
             load from data.yaml file in the dataset root.
         image_size: Default image size (height, width) to use if unable to
             determine from the actual images. Default: (480, 640).
+        visibility_encoding: ``"auto"`` (the default), ``"ternary"`` or
+            ``"binary"``. ``"auto"`` is resolved per split. See `read_labels`.
+        v0_as: ``"unlabeled"`` (the default) or ``"absent"``. See `read_labels`.
 
     Returns:
         A LabelsSet containing Labels objects for each split.
@@ -244,6 +284,8 @@ def read_labels_set(
                 split=split,
                 skeleton=skeleton,
                 image_size=image_size,
+                visibility_encoding=visibility_encoding,
+                v0_as=v0_as,
             )
             labels_dict[split] = labels
         except Exception:
@@ -313,6 +355,7 @@ def write_labels(
     use_multiprocessing: bool = False,
     n_workers: int | None = None,
     task: str = "pose",
+    visibility_encoding: str = "ternary",
     **kwargs,
 ) -> None:
     """Write Labels to Ultralytics YOLO format.
@@ -335,7 +378,16 @@ def write_labels(
         task: YOLO task type. One of ``"pose"`` (default), ``"detect"``, or
             ``"segment"``. For ``"detect"`` and ``"segment"``, ROIs from the Labels
             object are written instead of pose instances.
+        visibility_encoding: Keypoint visibility codes to write for the pose task.
+            ``"ternary"`` (the default) writes visible points as 2, occluded points
+            with coordinates as 1 and every other point as 0. ``"binary"`` writes
+            visible points as 1 and every other point as 0.
         **kwargs: Additional arguments (unused, for compatibility).
+
+    Notes:
+        Pose instances without any labeled point that has coordinates
+        (`Instance.is_empty`) are skipped. Instances whose points are all occluded
+        estimates are kept.
     """
     dataset_path = Path(dataset_path)
     dataset_path.mkdir(parents=True, exist_ok=True)
@@ -456,7 +508,12 @@ def write_labels(
                     label_filename = f"{frame_data['lf_idx']:07d}.txt"
                     label_path = labels_dir / label_filename
                     write_label_file(
-                        label_path, frame, skeleton, img.shape[:2], class_id
+                        label_path,
+                        frame,
+                        skeleton,
+                        img.shape[:2],
+                        class_id,
+                        visibility_encoding=visibility_encoding,
                     )
         else:
             # Sequential processing (original implementation)
@@ -509,7 +566,12 @@ def write_labels(
                     label_filename = f"{lf_idx:07d}.txt"
                     label_path = labels_dir / label_filename
                     write_label_file(
-                        label_path, frame, skeleton, frame_img.shape[:2], class_id
+                        label_path,
+                        frame,
+                        skeleton,
+                        frame_img.shape[:2],
+                        class_id,
+                        visibility_encoding=visibility_encoding,
                     )
 
                 except Exception as e:
@@ -827,6 +889,8 @@ def parse_label_file(
     class_names: dict[int, str] | None = None,
     video: Video | None = None,
     frame_idx: int = 0,
+    visibility_encoding: str = "ternary",
+    v0_as: str = "unlabeled",
 ) -> tuple[list[Instance], list[ROI], list[BoundingBox]]:
     """Parse a single Ultralytics label file and return instances, ROIs, and bboxes.
 
@@ -845,6 +909,11 @@ def parse_label_file(
         class_names: Optional mapping from class ID to category name.
         video: Optional ``Video`` to associate with ROIs and bounding boxes.
         frame_idx: Frame index for ROIs and bounding boxes. Defaults to 0.
+        visibility_encoding: ``"ternary"`` (the default), ``"binary"`` or
+            ``"auto"`` (resolved per line). See
+            `sleap_io.io.coco.decode_visibility`.
+        v0_as: ``"unlabeled"`` (the default) or ``"absent"``. See
+            `sleap_io.io.coco.decode_visibility`.
 
     Returns:
         A tuple of ``(instances, rois, bboxes)`` parsed from the file.
@@ -944,22 +1013,14 @@ def parse_label_file(
                         )
                         continue
 
-                    points = []
-                    for i in range(num_keypoints):
-                        x_norm = float(keypoint_data[i * 3])
-                        y_norm = float(keypoint_data[i * 3 + 1])
-                        visibility = int(keypoint_data[i * 3 + 2])
-
-                        x_px = x_norm * width_px
-                        y_px = y_norm * height_px
-
-                        is_visible = visibility > 0
-                        if visibility == 0:
-                            points.append([np.nan, np.nan, False])
-                        else:
-                            points.append([x_px, y_px, is_visible])
-
-                    points_array = np.array(points, dtype=np.float32)
+                    values = np.array(keypoint_data, dtype="float64").reshape(-1, 3)
+                    xy = values[:, :2] * [width_px, height_px]
+                    points_array = decode_visibility(
+                        xy,
+                        values[:, 2],
+                        visibility_encoding=visibility_encoding,
+                        v0_as=v0_as,
+                    )
                     instance = Instance.from_numpy(
                         points_data=points_array, skeleton=skeleton
                     )
@@ -978,8 +1039,24 @@ def write_label_file(
     skeleton: Skeleton,
     image_shape: tuple[int, int],
     class_id: int = 0,
+    visibility_encoding: str = "ternary",
 ) -> None:
-    """Write a single Ultralytics pose label file for a frame."""
+    """Write a single Ultralytics pose label file for a frame.
+
+    Args:
+        label_path: Path of the ``.txt`` label file to write.
+        frame: The frame whose instances to write.
+        skeleton: The skeleton the instances must match.
+        image_shape: Image dimensions ``(height, width)`` for normalization.
+        class_id: Class ID to write for every instance.
+        visibility_encoding: ``"ternary"`` (the default) or ``"binary"``. See
+            `sleap_io.io.coco.encode_visibility`.
+
+    Notes:
+        Instances without any labeled point that has coordinates are skipped. The
+        bounding box covers every labeled point with coordinates, occluded
+        estimates included.
+    """
     height_px, width_px = image_shape
 
     with open(label_path, "w") as f:
@@ -991,16 +1068,14 @@ def write_label_file(
                 )
                 continue
 
-            # Calculate bounding box from visible keypoints
-            visible_mask = instance.points["visible"] & ~np.isnan(
-                instance.points["xy"][:, 0]
-            )
-            if not visible_mask.any():
-                continue  # Skip instances with no visible points
+            if instance.is_empty:
+                continue  # Skip instances with no labeled point that has a location
 
-            visible_xy = instance.points["xy"][visible_mask]
-            x_coords = visible_xy[:, 0]
-            y_coords = visible_xy[:, 1]
+            # Calculate bounding box from labeled points with a location
+            located_xy = instance.numpy(invisible_as_nan=False)
+            located_xy = located_xy[np.isfinite(located_xy).all(axis=1)]
+            x_coords = located_xy[:, 0]
+            y_coords = located_xy[:, 1]
 
             x_min, x_max = min(x_coords), max(x_coords)
             y_min, y_max = min(y_coords), max(y_coords)
@@ -1028,17 +1103,9 @@ def write_label_file(
             ]
 
             # Add keypoints
-            for point in instance.points:
-                x, y = point["xy"]
-                if point["visible"] and not np.isnan(x):
-                    x_norm = x / width_px
-                    y_norm = y / height_px
-                    visibility = 2  # visible and not occluded
-                else:
-                    x_norm = 0.0
-                    y_norm = 0.0
-                    visibility = 0  # not visible
-
+            for x_norm, y_norm, visibility in normalize_coordinates(
+                instance, image_shape, visibility_encoding=visibility_encoding
+            ):
                 line_parts.extend([f"{x_norm:.6f}", f"{y_norm:.6f}", str(visibility)])
 
             f.write(" ".join(line_parts) + "\n")
@@ -1233,49 +1300,76 @@ def create_splits_from_labels(
 
 
 def normalize_coordinates(
-    instance: Instance, image_shape: tuple[int, int]
+    instance: Instance,
+    image_shape: tuple[int, int],
+    visibility_encoding: str = "ternary",
 ) -> list[tuple[float, float, int]]:
-    """Normalize instance point coordinates to [0,1] range."""
+    """Normalize instance point coordinates to [0,1] range.
+
+    Args:
+        instance: The instance to normalize.
+        image_shape: Image dimensions ``(height, width)``.
+        visibility_encoding: ``"ternary"`` (the default) or ``"binary"``. See
+            `sleap_io.io.coco.encode_visibility`.
+
+    Returns:
+        One ``(x_norm, y_norm, visibility)`` tuple per point. Points written with
+        visibility 0 have ``(0.0, 0.0)`` coordinates.
+    """
     height, width = image_shape
-    normalized = []
-
-    for point in instance.points:
-        x, y = point["xy"]
-        if point["visible"] and not np.isnan(x):
-            x_norm = x / width
-            y_norm = y / height
-            visibility = 2  # visible
-        else:
-            x_norm = 0.0
-            y_norm = 0.0
-            visibility = 0  # not visible
-
-        normalized.append((x_norm, y_norm, visibility))
-
-    return normalized
+    xy, visibility = encode_visibility(instance.points, visibility_encoding)
+    xy = xy / [width, height]
+    return [(x, y, v) for (x, y), v in zip(xy.tolist(), visibility.tolist())]
 
 
 def denormalize_coordinates(
-    normalized_points: list[tuple[float, float, int]], image_shape: tuple[int, int]
+    normalized_points: list[tuple[float, float, int]],
+    image_shape: tuple[int, int],
+    visibility_encoding: str = "ternary",
+    v0_as: str = "unlabeled",
 ) -> np.ndarray:
     """Denormalize coordinates from [0,1] range to pixel coordinates.
 
+    Args:
+        normalized_points: One ``(x_norm, y_norm, visibility)`` tuple per point.
+        image_shape: Image dimensions ``(height, width)``.
+        visibility_encoding: ``"ternary"`` (the default), ``"binary"`` or
+            ``"auto"``. See `sleap_io.io.coco.decode_visibility`.
+        v0_as: ``"unlabeled"`` (the default) or ``"absent"``. See
+            `sleap_io.io.coco.decode_visibility`.
+
     Returns:
-        A numpy array of shape (n_points, 3) with columns [x, y, visible].
+        A numpy array of shape (n_points, 5) with columns x, y, visible, verified
+        and labeled, ready for `Instance.from_numpy`.
     """
     height, width = image_shape
-    points = []
+    values = np.array(normalized_points, dtype="float64").reshape(-1, 3)
+    return decode_visibility(
+        values[:, :2] * [width, height],
+        values[:, 2],
+        visibility_encoding=visibility_encoding,
+        v0_as=v0_as,
+    )
 
-    for x_norm, y_norm, visibility in normalized_points:
-        if visibility > 0:
-            x_px = x_norm * width
-            y_px = y_norm * height
-            is_visible = True
-        else:
-            x_px = np.nan
-            y_px = np.nan
-            is_visible = False
 
-        points.append([x_px, y_px, is_visible])
+def _iter_visibility_codes(label_files: list[Path]) -> Iterator[list[float]]:
+    """Yield the keypoint visibility codes of every pose line in some label files.
 
-    return np.array(points, dtype=np.float32)
+    Args:
+        label_files: Ultralytics ``.txt`` label files.
+
+    Yields:
+        The visibility codes of one pose line. Comments, lines that aren't pose
+        lines, and lines with values that aren't numbers are skipped (the parser
+        warns about the latter).
+    """
+    for label_file in label_files:
+        for line in label_file.read_text().splitlines():
+            parts = line.split()
+            if not parts or parts[0].startswith("#"):
+                continue
+            if detect_line_format(parts) == "pose":
+                try:
+                    yield [float(v) for v in parts[7::3]]
+                except ValueError:
+                    continue
