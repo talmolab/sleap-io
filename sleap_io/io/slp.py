@@ -151,13 +151,21 @@ except ImportError:
 
 
 # Files whose `/metadata` `format_id` is at or above this value use a layout this
-# version of sleap-io can't read (e.g., the columnar 3.0 tables), so readers refuse
-# them up front instead of failing partway through with an h5py error.
-SLP_FORMAT_ID_LIMIT = 3.0
+# version of sleap-io can't read, so readers refuse them up front instead of failing
+# partway through with an h5py error.
+SLP_FORMAT_ID_LIMIT = 4.0
+
+# The `format_id` written by default. Files below it use the compound (2.x) layout.
+SLP_FORMAT_ID = 3.0
+
+# Features listed in a file's `/metadata` `required_features` attribute that this
+# version of sleap-io understands. A file that requires anything else is refused,
+# since reading it without understanding the feature could silently misread it.
+SLP_SUPPORTED_FEATURES: frozenset[str] = frozenset()
 
 
 def _check_format_id(labels_path: str, f: h5py.File) -> None:
-    """Raise if an SLP file's format is newer than this sleap-io can read.
+    """Raise if an SLP file is newer than this sleap-io can read.
 
     Files without a `/metadata` group or `format_id` attribute pass, as before.
 
@@ -166,16 +174,30 @@ def _check_format_id(labels_path: str, f: h5py.File) -> None:
         f: An already-open `h5py.File` handle for the SLP file.
 
     Raises:
-        ValueError: If the file's `format_id` is at or above `SLP_FORMAT_ID_LIMIT`.
+        ValueError: If the file's `format_id` is at or above `SLP_FORMAT_ID_LIMIT`,
+            or its `required_features` lists a feature this sleap-io doesn't
+            support.
     """
-    if "metadata" not in f or "format_id" not in f["metadata"].attrs:
+    if "metadata" not in f:
         return
-    format_id = float(f["metadata"].attrs["format_id"])
-    if format_id >= SLP_FORMAT_ID_LIMIT:
+    attrs = f["metadata"].attrs
+    if "format_id" in attrs:
+        format_id = float(attrs["format_id"])
+        if format_id >= SLP_FORMAT_ID_LIMIT:
+            raise ValueError(
+                f"{labels_path} uses SLP format {format_id:g}, which is newer than "
+                "this version of sleap-io supports (max "
+                f"{int(SLP_FORMAT_ID_LIMIT) - 1}.x); upgrade sleap-io to read it."
+            )
+    required = [
+        r.decode() if isinstance(r, bytes) else str(r)
+        for r in np.atleast_1d(attrs.get("required_features", []))
+    ]
+    unsupported = sorted(set(required) - SLP_SUPPORTED_FEATURES)
+    if unsupported:
         raise ValueError(
-            f"{labels_path} uses SLP format {format_id:g}, which is newer than this "
-            f"version of sleap-io supports (max {int(SLP_FORMAT_ID_LIMIT) - 1}.x); "
-            "upgrade sleap-io to read it."
+            f"{labels_path} requires SLP features this version of sleap-io doesn't "
+            f"support ({', '.join(unsupported)}); upgrade sleap-io to read it."
         )
 
 

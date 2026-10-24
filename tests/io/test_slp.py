@@ -51,6 +51,7 @@ from sleap_io.io.slp import (
     OWNER_INSTANCE,
     OWNER_MASK,
     OWNER_ROI,
+    SLP_FORMAT_ID,
     SLP_FORMAT_ID_LIMIT,
     ExportCancelled,
     LabelImageWriter,
@@ -12073,15 +12074,16 @@ def _copy_with_format_id(src: str, dst: Path, format_id: float) -> str:
     return str(dst)
 
 
-def test_format_id_limit_is_3():
-    """Format 3.0 (columnar tables) is the first one this release refuses."""
-    assert SLP_FORMAT_ID_LIMIT == 3.0
+def test_format_id_limit_is_4():
+    """Format 4.0 is the first one this release refuses; 3.0 is written."""
+    assert SLP_FORMAT_ID_LIMIT == 4.0
+    assert SLP_FORMAT_ID == 3.0
 
 
 def test_read_labels_newer_format_raises(tmp_path, slp_minimal):
     """Eager loading refuses a file whose format is newer than supported."""
-    path = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 3.0)
-    with pytest.raises(ValueError, match=r"SLP format 3, which is newer.*max 2\.x"):
+    path = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 4.0)
+    with pytest.raises(ValueError, match=r"SLP format 4, which is newer.*max 3\.x"):
         read_labels(path)
     with pytest.raises(ValueError, match="upgrade sleap-io"):
         load_slp(path)
@@ -12089,19 +12091,19 @@ def test_read_labels_newer_format_raises(tmp_path, slp_minimal):
 
 def test_read_labels_lazy_newer_format_raises(tmp_path, slp_minimal):
     """Lazy loading refuses a file whose format is newer than supported."""
-    path = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 3.1)
-    with pytest.raises(ValueError, match=r"SLP format 3\.1, which is newer"):
+    path = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 4.1)
+    with pytest.raises(ValueError, match=r"SLP format 4\.1, which is newer"):
         load_slp(path, lazy=True)
 
 
 def test_read_labels_newer_format_checked_before_tables(tmp_path, slp_minimal):
     """The format check runs before any table is read."""
-    path = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 3.0)
+    path = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 4.0)
     with h5py.File(path, "r+") as f:
-        # A 3.0 file stores `/points` as a group of columns, which the 2.x readers
-        # can't slice. The clear error must come before that h5py failure.
+        # A future layout this release can't parse. The clear error must come
+        # before the failure to read it.
         del f["points"]
-        f.create_group("points")
+        f.create_dataset("points", data=np.zeros(3))
     with pytest.raises(ValueError, match="newer than this version of sleap-io"):
         read_labels(path)
     with pytest.raises(ValueError, match="newer than this version of sleap-io"):
@@ -12111,14 +12113,14 @@ def test_read_labels_newer_format_checked_before_tables(tmp_path, slp_minimal):
 def test_read_labels_set_newer_format_raises(tmp_path, slp_minimal):
     """`read_labels_set` refuses a file whose format is newer than supported."""
     shutil.copy(slp_minimal, tmp_path / "train.slp")
-    _copy_with_format_id(slp_minimal, tmp_path / "val.slp", 3.0)
-    with pytest.raises(ValueError, match="val.slp uses SLP format 3"):
+    _copy_with_format_id(slp_minimal, tmp_path / "val.slp", 4.0)
+    with pytest.raises(ValueError, match="val.slp uses SLP format 4"):
         read_labels_set(tmp_path)
 
 
 def test_merge_label_images_newer_format_raises(tmp_path, slp_minimal):
     """`merge_label_images` refuses a source whose format is newer than supported."""
-    src = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 3.0)
+    src = _copy_with_format_id(slp_minimal, tmp_path / "future.slp", 4.0)
     with pytest.raises(ValueError, match="newer than this version of sleap-io"):
         merge_label_images([src], tmp_path / "merged.slp")
 
@@ -12278,3 +12280,18 @@ def test_verified_round_trip(tmp_path, lazy):
     for inst in loaded[0].instances:
         assert_equal(inst.points["verified"], [True, False])
         assert inst.points["labeled"].all()
+
+
+def test_required_features_are_checked(tmp_path, slp_minimal):
+    """Files requiring a feature this sleap-io doesn't know are refused."""
+    path = tmp_path / "labels.slp"
+    save_slp(load_slp(slp_minimal), str(path))
+    with h5py.File(path, "r+") as f:
+        f["metadata"].attrs["required_features"] = []
+    assert len(load_slp(str(path))) == 1
+
+    with h5py.File(path, "r+") as f:
+        f["metadata"].attrs["required_features"] = ["future_codec", "other"]
+    for lazy in (False, True):
+        with pytest.raises(ValueError, match=r"features.*\(future_codec, other\)"):
+            load_slp(str(path), lazy=lazy)
