@@ -171,6 +171,8 @@ def save_slp(
     preserve_unknown: bool = False,
     save_embedding_vectors: bool = False,
     unlabeled_as: str = "error",
+    legacy_format: bool = False,
+    compression: str | None = None,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -227,10 +229,18 @@ def save_slp(
             off by default for video frames. Set `True` to also write the
             `/embeddings` group. Identity links (`/identity/links`) are written
             regardless.
-        unlabeled_as: How to handle unlabeled points (`labeled=False`), which the
-            current SLP layout can't store. `"error"` (the default) raises a
-            `ValueError` before anything is written. `"absent"` saves them as hidden
-            points (labeled, not visible) and warns.
+        unlabeled_as: How `legacy_format=True` handles unlabeled points
+            (`labeled=False`), which the 2.x layout can't store. `"error"` (the
+            default) raises a `ValueError` before anything is written. `"absent"`
+            saves them as hidden points (labeled, not visible, no location) and
+            warns. Ignored for the default (3.0) layout, which stores them.
+        legacy_format: If `True`, write the SLP 2.x layout that older sleap-io
+            (< 0.10) and SLEAP releases can read. Default `False` writes SLP format
+            3.0, which they refuse to open.
+        compression: Compression for the point tables: `None` (the default) for
+            uncompressed data that reads fastest, or `"gzip"` or `"lzf"` for
+            smaller files. Segmentation, label image and 3D point data are
+            compressed regardless.
     """
     from sleap_io.io import slp
 
@@ -247,6 +257,8 @@ def save_slp(
         preserve_unknown=preserve_unknown,
         save_embedding_vectors=save_embedding_vectors,
         unlabeled_as=unlabeled_as,
+        legacy_format=legacy_format,
+        compression=compression,
     )
 
 

@@ -26,7 +26,8 @@ SLP files have the following hierarchical structure:
 ```
 file.slp
 ├── /metadata                    # Group: Format and skeleton metadata
-│   ├── @format_id               # Attribute: Format version (float, e.g., 1.4)
+│   ├── @format_id               # Attribute: Format version (float, e.g., 3.0)
+│   ├── @required_features       # Attribute: Features a reader must understand (optional)
 │   └── @json                    # Attribute: JSON metadata string (skeletons, nodes; ≤64 KB)
 │
 ├── /videos_json                 # Dataset: Video metadata (variable-length bytes)
@@ -45,8 +46,12 @@ file.slp
 │
 ├── /frames                      # Dataset: Labeled frame metadata (structured array)
 ├── /instances                   # Dataset: Instance metadata (structured array)
-├── /points                      # Dataset: User-labeled points (structured array)
-├── /pred_points                 # Dataset: Predicted points (structured array)
+├── /points/                     # Group: User-labeled points, one dataset per column (3.0+)
+│   ├── x, y                     # Dataset: float64 coordinates (NaN = no location)
+│   ├── visible                  # Dataset: bool, visible in the image
+│   ├── verified                 # Dataset: bool, a human acted on the point (was `complete`)
+│   └── labeled                  # Dataset: bool, stored as labeled | visible
+├── /pred_points/                # Group: Predicted points, columns as /points plus `score` (3.0+)
 ├── /negative_frames             # Dataset: Negative frame markers (optional)
 │
 ├── /bboxes/                     # Group: Columnar bounding box storage (Format 2.0+)
@@ -195,8 +200,8 @@ file.slp
 
 | Dataset | Shape | Dtype | Description |
 |---------|-------|-------|-------------|
-| `points` | `(N,)` | structured | User-labeled point coordinates |
-| `pred_points` | `(N,)` | structured | Predicted point coordinates with scores |
+| `points/` | group of `(N,)` columns | `f8`, `bool` | User-labeled points (a compound dataset before 3.0) |
+| `pred_points/` | group of `(N,)` columns | `f8`, `bool` | Predicted points with scores (a compound dataset before 3.0) |
 | `instances` | `(N,)` | structured | Instance metadata linking to points |
 | `frames` | `(N,)` | structured | Frame metadata linking to instances |
 
@@ -264,6 +269,12 @@ known sections are written (regenerated data always wins on a name clash). It is
 exist and be readable HDF5. Per-video embedded groups (`video0`, `video1`, ...)
 and all datasets listed above are part of the known schema and are regenerated,
 not carried over.
+
+Unknown *columns* inside a known table (for example a new per-point column in
+`/points`) are handled separately and need no opt-in; see
+[Unknown columns](#unknown-columns). A newer writer can also list features in the
+`/metadata` `required_features` attribute: a reader that doesn't support every
+listed feature refuses the file instead of misreading it.
 
 ## Videos
 
@@ -501,7 +512,8 @@ The `/metadata` group stores format information and serialized metadata about th
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `format_id` | `float` | Format version (e.g., `1.4`) |
+| `format_id` | `float` | Format version (e.g., `3.0`) |
+| `required_features` | `str[]` | Features a reader must support to read the file (optional; none are defined yet) |
 | `json` | `bytes` | JSON-encoded metadata string |
 
 ### JSON Structure
@@ -963,41 +975,111 @@ The `from_predicted` field links user [`Instance`][sleap_io.Instance]s to their 
 
 ## Points
 
-Point coordinates are stored in separate datasets for user-labeled and predicted instances.
+Points are stored in two tables, one for user-labeled and one for predicted
+instances. `/instances` rows point into one of them through `point_id_start` and
+`point_id_end`, chosen by `instance_type`.
 
 ### User Points (`/points`)
+
+From format 3.0, `/points` is a group with one 1-D dataset per column:
+
+| Column | Dtype | Description |
+|--------|-------|-------------|
+| `x`, `y` | `f8` | Coordinates. NaN means the point has no location. |
+| `visible` | `bool` | Visible in the image. `False` covers occluded and out-of-view points. |
+| `verified` | `bool` | A human placed, moved or toggled the point (the SLEAP GUI sets it). Stored but not interpreted. Named `complete` before 3.0. |
+| `labeled` | `bool` | The source annotated this node. Written as `labeled \| visible`, since a visible point is always labeled. |
+
+Together the flags and coordinates give the four
+[point states](../model/poses.md#point-flags-and-states): visible, occluded (hidden
+with an estimated location), absent (hidden, no location) and unlabeled.
+
+### Predicted Points (`/pred_points`)
+
+The same columns as `/points`, plus:
+
+| Column | Dtype | Description |
+|--------|-------|-------------|
+| `score` | `f8` | Prediction confidence |
+
+### Reading rules
+
+* **Missing optional columns** take a default: `visible` and `verified` read as
+  `False`, `labeled` as `True`, and `score` as NaN. `x` and `y` are required.
+* **Any numeric dtype is accepted** in any column, so writers without a native
+  `bool` type (for example h5wasm) can store flags as integers.
+* **Unknown columns** are kept; see [Unknown columns](#unknown-columns).
+* The reader checks each table separately: a group is read as columns, a dataset as
+  the 2.x layout below. Every column of a table is read in one pass.
+
+### Unknown columns
+
+Columns that this version of sleap-io doesn't know (for example a per-point column
+added by a newer release) are carried through a save as long as the table's rows
+are still in their loaded order:
+
+* lazy-loaded labels always keep them;
+* eagerly loaded labels keep them when the instances, and their points arrays, are
+  the ones loaded and in the same order. Editing coordinates or flags in place is
+  fine; adding, removing, replacing or reordering instances is not;
+* otherwise, and with `legacy_format=True`, the columns are dropped with a warning.
+
+### Compression
+
+Point columns are written contiguous and uncompressed by default, which reads
+fastest, including for lazy loading and remote files. Pass `compression="gzip"` or
+`"lzf"` to [`save_slp`][sleap_io.save_slp] (also accepted by
+[`Labels.save`][sleap_io.Labels.save] and [`save_file`][sleap_io.save_file]) to
+write chunked columns with the shuffle filter instead:
+
+```python
+sio.save_slp(labels, "labels.slp", compression="gzip")
+```
+
+Datasets that are compressed by default (mask RLE buffers, score maps, label image
+data, 3D points and embeddings) stay compressed regardless.
+
+### Files before 3.0
+
+Older files store each table as one compound dataset:
 
 ```python
 point_dtype = np.dtype([
     ("x", "f8"),        # X coordinate
     ("y", "f8"),        # Y coordinate
     ("visible", "?"),   # Is point visible
-    ("complete", "?"),  # Human-edited in SLEAP GUI (not interpreted)
+    ("complete", "?"),  # Human-edited in SLEAP GUI (read as `verified`)
 ])
+predicted_point_dtype = np.dtype(point_dtype.descr + [("score", "f8")])
 ```
 
-### Predicted Points (`/pred_points`)
+They are cleaned up when read, so that they train exactly as before:
+
+* every point is labeled, and `complete` is read as `verified`;
+* **hidden points lose their coordinates** (NaN). The SLEAP GUI keeps stale
+  coordinates on hidden nodes, and `complete` can't tell them apart because the
+  hide toggle sets it. Un-hiding a node of an old project therefore no longer
+  restores its previous position;
+* **visible points with NaN coordinates become hidden.** This changes old
+  prediction files: `n_visible`, `is_empty`, `remove_empty_instances` and the
+  dictionary and dataframe exports now count these points as hidden.
+
+### Writing the 2.x layout
+
+Files written with format 3.0 can't be opened by sleap-io < 0.10 or by SLEAP. To
+share files with them, pass `legacy_format=True`:
 
 ```python
-predicted_point_dtype = np.dtype([
-    ("x", "f8"),        # X coordinate
-    ("y", "f8"),        # Y coordinate
-    ("visible", "?"),   # Is point visible
-    ("complete", "?"),  # Human-edited in SLEAP GUI (not interpreted)
-    ("score", "f8"),    # Prediction confidence
-])
+sio.save_slp(labels, "labels.slp", legacy_format=True)
 ```
 
-!!! note "Mapping to the in-memory points"
-    The on-disk `complete` column is read into the in-memory
-    [`verified`](../model/poses.md#points-array) field (and written back from it).
-    This layout has no `labeled` column and no storage for instance, frame or
-    bounding box `metadata`, so [unlabeled points](../model/poses.md#point-flags-and-states)
-    can't be saved as such: [`save_slp`][sleap_io.save_slp] raises a `ValueError` by
-    default, or writes them as hidden points with no location (labeled, not
-    visible, NaN coordinates) with a warning
-    when called with `unlabeled_as="absent"`. Metadata is dropped with a warning.
-    Points read from these files are always labeled.
+This writes compound point tables and the 2.x `format_id` for the features used. The
+2.x layout can't store unlabeled points, so they raise a `ValueError` by default;
+`unlabeled_as="absent"` saves them as hidden points with no location (labeled, not
+visible, NaN coordinates) with a warning. Hidden points keep whatever coordinates
+they hold in memory. Instance, frame and bounding box `metadata` can't be stored yet
+in either layout and is dropped with a warning. From the command line, use
+`sio convert --legacy-format`.
 
 ### Coordinate System
 
@@ -1009,7 +1091,9 @@ predicted_point_dtype = np.dtype([
 | < 1.1 | Top-left corner of pixel at (0, 0) | Legacy |
 | >= 1.1 | Center of pixel at (0, 0) | Current |
 
-When reading format < 1.1 files, the reader applies a -0.5 offset to convert coordinates.
+When reading format < 1.1 files, the reader applies a -0.5 offset to convert
+coordinates. The shift happens when the point table is read, so a lazy re-save writes
+the converted coordinates.
 
 ## Labeled Frames
 
@@ -1524,7 +1608,7 @@ The label image datasets are only written when the [`Labels`][sleap_io.Labels] o
 
 ## Storage Representation Matrix
 
-Different data structures use different on-disk representations, chosen per subsystem (fixed-width structural rows, bulk numeric data that must stream, and open-ended metadata each get a different form). This section consolidates, for every data structure at the current format (**2.8**), its representation, the format version that introduced it, and its read/write support.
+Different data structures use different on-disk representations, chosen per subsystem (fixed-width structural rows, bulk numeric data that must stream, and open-ended metadata each get a different form). This section consolidates, for every data structure at the current format (**3.0**), its representation, the format version that introduced it, and its read/write support.
 
 ### Representation kinds
 
@@ -1541,7 +1625,7 @@ Different data structures use different on-disk representations, chosen per subs
 
 ### Write is single-method; read is broader
 
-- **Write (the default, and only, method):** the Python library writes **exactly one native representation per data structure** — there is no toggle. In particular it always writes genuine HDF5 **compound** datasets for the compound rows; it never writes the h5wasm flat-2D substitute.
+- **Write:** the Python library writes **exactly one native representation per data structure** by default. `legacy_format=True` writes the 2.x layout instead (compound `/points` and `/pred_points`) for older readers. It never writes the h5wasm flat-2D substitute.
 - **Read:** the **compound** readers *also* accept the flat-2D + `field_names` encoding that [sleap-io.js](https://github.com/talmolab/sleap-io.js) writes (h5wasm cannot create compound datasets), routed through `utils._read_dataset_from_open_file`. Every other kind (columnar / matrix / string / JSON) is read directly and is already h5wasm-native, so no conversion is needed. **`compound` is therefore the only kind with a browser-interop dependency** (see [Browser-side compatibility](#browser-side-compatibility-h5wasm-sleap-iojs)).
 
 ### Matrix
@@ -1550,7 +1634,8 @@ Different data structures use different on-disk representations, chosen per subs
 
 | Data structure | HDF5 path(s) | Representation | Ver | Reads JS flat-2D |
 |---|---|---|---|---|
-| Labeled frames / instances / 2D points | `/frames`, `/instances`, `/points`, `/pred_points` | compound | 1.0 | ✅ |
+| Labeled frames / instances | `/frames`, `/instances` | compound | 1.0 | ✅ |
+| 2D points | `/points`, `/pred_points` | columnar group (compound before 3.0) | **3.0** | ✅ (2.x files) |
 | Negative frames | `/negative_frames` | compound | 1.x | ✅ |
 | Segmentation masks (table) | `/masks` | compound | 1.5 | ✅ |
 | Mask RLE geometry | `/mask_rle` | ragged CSR | 1.5 | ✅ |
@@ -1589,7 +1674,9 @@ Different data structures use different on-disk representations, chosen per subs
 
 The SLP format has evolved through several versions, tracked by the `format_id` attribute in `/metadata`.
 
-sleap-io refuses files whose `format_id` is at or above `SLP_FORMAT_ID_LIMIT` (currently `3.0`), raising a `ValueError` that asks you to upgrade sleap-io before any table is read. Files without a `format_id` are not affected by this check.
+sleap-io refuses files whose `format_id` is at or above `SLP_FORMAT_ID_LIMIT` (currently `4.0`), raising a `ValueError` that asks you to upgrade sleap-io before any table is read. Files without a `format_id` are not affected by this check. It also refuses files whose `/metadata` `required_features` attribute lists a feature it doesn't support.
+
+sleap-io 0.10 writes format 3.0 by default. `save_slp(..., legacy_format=True)` writes the 2.x layout and the 2.x `format_id` that the features in use call for (see below); sleap-io 0.9.x and SLEAP refuse 3.0 files.
 
 ### Format 1.0
 
@@ -1751,7 +1838,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Triggered automatically when any detection carries a [`Category`][sleap_io.Category] or a category embedding; category-free files stay at `format_id <= 2.6`. Pass `save_slp(..., save_embedding_vectors=False)` to write the category `links` but skip the (large) category vectors
 - Backward compatible and byte-identical for unused features: the `/categories` group and the `category_*` embedding datasets are only written when present, so identity-only files stay unchanged
 
-### Format 2.8 (Current)
+### Format 2.8
 
 **Columnar RecordingSession storage: frame groups and 3D points moved out of the `sessions_json` string.**
 
@@ -1762,9 +1849,20 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Backward compatible: the reader dispatches on `/session_data` presence and still parses the legacy inline `frame_group_dicts` (with inline `points`) of ≤ 2.7 files. Lazy loads copy the raw `sessions_json` + `/session_data` verbatim on save, so a lazy re-save preserves frame groups and 3D losslessly (previously the lazy path dropped them)
 - Coordinated cross-port change: the [`sleap-io.js`](https://github.com/talmolab/sleap-io.js) browser port adopts the same `/session_data` layout in a companion release. Because h5wasm cannot create HDF5 compound datasets, it writes the `frame_groups` / `instance_groups` / `instance_group_members` struct tables as flat 2D arrays with a `field_names` attribute (exactly as it already does for `points` / `instances` / `frames`); the Python reader converts them on read. The `points_3d` / `pred_points_3d` float matrices are plain 2D arrays and need no conversion in either direction
 
+### Format 3.0 (Current)
+
+**Breaking: tables are stored one dataset per column.**
+
+- `/points` and `/pred_points` are groups of 1-D columns (`x`, `y`, `visible`, `verified`, `labeled`, plus `score` for predictions) instead of compound datasets (see [Points](#points)). `/instances`, `/frames` and the other compound tables follow in the same release
+- New per-point `labeled` column, so unlabeled points round-trip; `complete` is renamed `verified`
+- Unknown columns are carried through re-saves, and `/metadata` gains an optional `required_features` attribute
+- Older files are cleaned up on read: hidden points lose their coordinates and visible points without coordinates become hidden
+- Point columns are uncompressed by default; `compression="gzip"` or `"lzf"` compresses them
+- sleap-io 0.9.x and SLEAP refuse to open 3.0 files; write `legacy_format=True` for them
+
 ## Browser-side compatibility (h5wasm / sleap-io.js)
 
-[`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so it stores compound datasets — `points`, `pred_points`, `instances`, `frames`, and (Format 2.8+) the `/session_data` struct tables (`frame_groups`, `instance_groups`, `instance_group_members`) — as **flat 2D arrays** with the same per-row field layout as the structured dtype, tagged with a `field_names` attribute. The Python reader detects this representation (via shape and the `field_names` attribute) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
+[`sleap-io.js`](https://github.com/talmolab/sleap-io.js) is the browser port of this library and writes SLP files via [h5wasm](https://github.com/usnistgov/h5wasm). h5wasm cannot create HDF5 compound (structured) datasets, so it stores compound datasets — `points` and `pred_points` (before 3.0), `instances`, `frames`, and (Format 2.8+) the `/session_data` struct tables (`frame_groups`, `instance_groups`, `instance_group_members`) — as **flat 2D arrays** with the same per-row field layout as the structured dtype, tagged with a `field_names` attribute. The Python reader detects this representation (via shape and the `field_names` attribute) and auto-converts on the fly, so files written by sleap-io.js round-trip cleanly through the Python library without a manual conversion step. Multiple HDF5 string encodings are also tolerated (PR #378).
 
 The `/mask_rle` dataset is stored with the HDF5 gzip (deflate) filter. Readers must support deflate to read masks — this is already required for the SLP format's embedded video frames (and the v2.2 chunked `/label_image_data`), and h5wasm bundles zlib, so no additional reader capability is introduced.
 

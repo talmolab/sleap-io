@@ -793,8 +793,8 @@ labels.replace_skeleton(
     }
 )
 
-# The current SLP layout can't store unlabeled points, so save them as hidden
-labels.save("labels_with_new_skeleton.slp", unlabeled_as="absent")
+# Unlabeled points are saved as such (SLP format 3.0)
+labels.save("labels_with_new_skeleton.slp")
 ```
 
 !!! warning

@@ -6,7 +6,12 @@ import pytest
 
 import sleap_io as sio
 from sleap_io import Instance, PredictedInstance, Skeleton, Track, Video
-from sleap_io.io.slp import InstanceType, write_labels
+from sleap_io.io.slp import (
+    RAW_POINT_DTYPE,
+    RAW_PRED_POINT_DTYPE,
+    InstanceType,
+    write_labels,
+)
 from sleap_io.io.slp_lazy import LazyDataStore, LazyFrameList
 from sleap_io.model.labeled_frame import LabeledFrame  # noqa: F401
 
@@ -79,26 +84,14 @@ class TestLazyDataStoreValidation:
             )
 
         # Create points_data
-        points_dtype = np.dtype(
-            [("x", "<f8"), ("y", "<f8"), ("visible", "?"), ("complete", "?")]
-        )
-        points_data = np.zeros(n_points, dtype=points_dtype)
+        points_data = np.zeros(n_points, dtype=RAW_POINT_DTYPE)
         for i in range(n_points):
-            points_data[i] = (float(i), float(i), True, True)
+            points_data[i] = (float(i), float(i), True, True, True)
 
         # Create pred_points_data
-        pred_points_dtype = np.dtype(
-            [
-                ("x", "<f8"),
-                ("y", "<f8"),
-                ("visible", "?"),
-                ("complete", "?"),
-                ("score", "<f8"),
-            ]
-        )
-        pred_points_data = np.zeros(n_pred_points, dtype=pred_points_dtype)
+        pred_points_data = np.zeros(n_pred_points, dtype=RAW_PRED_POINT_DTYPE)
         for i in range(n_pred_points):
-            pred_points_data[i] = (float(i), float(i), True, True, 1.0)
+            pred_points_data[i] = (float(i), float(i), True, True, True, 1.0)
 
         return LazyDataStore(
             frames_data=frames_data,
@@ -517,6 +510,78 @@ class TestLazyNumpyEquivalence:
         _, lazy_states = lazy.numpy(return_states=True, return_confidence=True)
         _, eager_states = eager.numpy(return_states=True, return_confidence=True)
         np.testing.assert_array_equal(lazy_states, eager_states)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "tests/data/slp/centered_pair_predictions.slp",
+            "tests/data/slp/legacy_h5wasm_flat.slp",
+            "tests/data/slp/legacy_hidden_complete.slp",
+            "tests/data/slp/multiview.slp",
+            "tests/data/slp/test_grid_labels.legacy.slp",
+            "tests/data/slp/typical.slp",
+        ],
+    )
+    @pytest.mark.parametrize("return_confidence", [False, True])
+    def test_numpy_matches_eager_for_legacy_files(self, path, return_confidence):
+        """Lazy numpy() equals eager for old files, including hidden points."""
+        lazy = sio.load_slp(path, lazy=True)
+        eager = sio.load_slp(path, lazy=False)
+        for video in range(len(eager.videos)):
+            for untracked in (False, True):
+                kwargs = dict(
+                    video=video,
+                    untracked=untracked,
+                    return_confidence=return_confidence,
+                    return_states=True,
+                )
+                lazy_arr, lazy_states = lazy.numpy(**kwargs)
+                eager_arr, eager_states = eager.numpy(**kwargs)
+                np.testing.assert_array_equal(lazy_arr, eager_arr)
+                np.testing.assert_array_equal(lazy_states, eager_states)
+
+    @pytest.mark.parametrize("return_confidence", [False, True])
+    def test_numpy_masks_hidden_points(self, tmp_path, return_confidence):
+        """Hidden points with an estimated location are NaN, like eager numpy()."""
+        skeleton = Skeleton(["visible", "occluded", "absent", "unlabeled"])
+        video = Video("test.mp4")
+        track = Track("t")
+        xy = np.array([[1.0, 2.0], [3.0, 4.0], [np.nan, np.nan], [np.nan, np.nan]])
+        flags = dict(visible=[True, False, False, False], labeled=[1, 1, 1, 0])
+        user = Instance.from_numpy(xy, skeleton=skeleton, track=track, **flags)
+        pred = PredictedInstance.from_numpy(
+            xy, skeleton=skeleton, point_scores=np.ones(4), track=track, **flags
+        )
+        labels = sio.Labels(
+            [
+                LabeledFrame(video=video, frame_idx=0, instances=[user]),
+                LabeledFrame(video=video, frame_idx=1, instances=[pred]),
+            ]
+        )
+        path = tmp_path / "labels.slp"
+        sio.save_slp(labels, str(path))
+
+        lazy = sio.load_slp(str(path), lazy=True)
+        eager = sio.load_slp(str(path))
+        lazy_arr, lazy_states = lazy.numpy(
+            return_confidence=return_confidence, return_states=True
+        )
+        eager_arr, eager_states = eager.numpy(
+            return_confidence=return_confidence, return_states=True
+        )
+        np.testing.assert_array_equal(lazy_arr, eager_arr)
+        np.testing.assert_array_equal(lazy_states, eager_states)
+        expected_states = [
+            sio.PointState.VISIBLE,
+            sio.PointState.OCCLUDED,
+            sio.PointState.ABSENT,
+            sio.PointState.UNLABELED,
+        ]
+        for frame in range(2):
+            np.testing.assert_array_equal(lazy_states[frame, 0], expected_states)
+            np.testing.assert_array_equal(
+                lazy_arr[frame, 0, :, :2], [[1, 2]] + [[np.nan, np.nan]] * 3
+            )
 
     def test_numpy_untracked(self, slp_real_data):
         """untracked=True produces identical output."""
@@ -1229,7 +1294,7 @@ class TestLazyLegacyFormats:
 
         # Save the file
         test_path = tmp_path / f"test_format_{format_id}.slp"
-        write_labels(test_path, labels)
+        write_labels(test_path, labels, legacy_format=True)
 
         # Modify the format_id and optionally remove tracking_score
         with h5py.File(test_path, "r+") as f:
@@ -1310,7 +1375,7 @@ class TestLazyLegacyFormats:
 
         # Save the file
         test_path = tmp_path / "test_format_1_0.slp"
-        write_labels(test_path, labels)
+        write_labels(test_path, labels, legacy_format=True)
 
         # Modify to format_id 1.0 and remove tracking_score
         with h5py.File(test_path, "r+") as f:
@@ -1383,7 +1448,7 @@ class TestLazyLegacyFormats:
 
         # Save and modify to format_id 1.0
         test_path = tmp_path / "test_format_1_0_numpy.slp"
-        write_labels(test_path, labels)
+        write_labels(test_path, labels, legacy_format=True)
 
         with h5py.File(test_path, "r+") as f:
             f["metadata"].attrs["format_id"] = 1.0
@@ -1570,7 +1635,7 @@ class TestLazyLegacyFormatWithConfidence:
 
         # Save and modify to format_id 1.0
         test_path = tmp_path / "legacy_conf.slp"
-        write_labels(test_path, labels)
+        write_labels(test_path, labels, legacy_format=True)
 
         with h5py.File(test_path, "r+") as f:
             f["metadata"].attrs["format_id"] = 1.0
@@ -1633,7 +1698,7 @@ class TestLazyLegacyFormatWithConfidence:
 
         # Save and modify to format_id 1.0
         test_path = tmp_path / "legacy_pred.slp"
-        write_labels(test_path, labels)
+        write_labels(test_path, labels, legacy_format=True)
 
         with h5py.File(test_path, "r+") as f:
             f["metadata"].attrs["format_id"] = 1.0
@@ -1914,7 +1979,7 @@ def test_lazy_save_persists_categories_and_embeddings(tmp_path):
     assert lazy.is_lazy  # fast path must not have materialized
 
     with h5py.File(b, "r") as f:
-        assert f["metadata"].attrs["format_id"] == 2.7
+        assert f["metadata"].attrs["format_id"] == 3.0
         assert "name" in f["categories"]
         assert "links" in f["categories"]
         assert "meta_owner" in f["categories"]  # cat_a carries metadata
