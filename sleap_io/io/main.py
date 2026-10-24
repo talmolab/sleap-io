@@ -627,7 +627,8 @@ def load_ultralytics(
               "ternary", v=0 is unlabeled, v=1 occluded with its coordinates kept,
               and v=2 visible. "auto" picks binary, with a warning, when some
               keypoint has v=1 and none has v=2.
-            - v0_as: "unlabeled" (default) or "absent" (the pre-0.10 reading).
+            - v0_as: "unlabeled", "absent" (the pre-0.10 reading) or None (the
+              default): "absent" for the binary encoding, "unlabeled" otherwise.
 
     Returns:
         The dataset as a `Labels` object.
@@ -938,7 +939,7 @@ def load_coco(
     segmentation_format: str = "mask",
     category_as_track: bool = False,
     visibility_encoding: str = "auto",
-    v0_as: str = "unlabeled",
+    v0_as: str | None = None,
     **kwargs,
 ) -> Labels:
     """Load a COCO-style dataset and return a Labels object.
@@ -967,9 +968,12 @@ def load_coco(
             ``save_coco(..., visibility_encoding="binary")`` and for CrowdPose.
             ``"auto"`` (the default) picks binary, with a warning, when some
             keypoint has ``v=1`` and none in the file has ``v=2``.
-        v0_as: ``"unlabeled"`` (the default) reads ``v=0`` keypoints as unlabeled.
-            ``"absent"`` reads them as labeled and not visible with no location, as
-            sleap-io did before 0.10.
+        v0_as: ``"unlabeled"`` reads ``v=0`` keypoints as unlabeled. ``"absent"``
+            reads them as labeled and not visible with no location, as sleap-io did
+            before 0.10. ``None`` (the default) picks ``"absent"`` when the encoding
+            is (or ``"auto"`` resolves to) binary, since
+            ``save_coco(..., visibility_encoding="binary")`` writes every hidden
+            keypoint as ``v=0``, and ``"unlabeled"`` otherwise.
         **kwargs: Additional arguments (currently unused).
 
     Returns:
@@ -1201,8 +1205,9 @@ def load_file(
               "roi" keeps them as vector `ROI` objects. category_as_track (bool): If
               True, treat each COCO category as a persistent identity, creating one
               `Track` per category. Default is False. visibility_encoding (str):
-              "auto" (default), "ternary" or "binary". v0_as (str): "unlabeled"
-              (default) or "absent". See `load_coco`.
+              "auto" (default), "ternary" or "binary". v0_as (str): "unlabeled",
+              "absent" or None (default; depends on the encoding). See
+              `load_coco`.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
             - For "analysis_h5" format: video (Optional[Video | str]): Video to
@@ -1921,7 +1926,7 @@ def load_labels_set(
         skeleton = kwargs.pop("skeleton", None)
         image_size = kwargs.pop("image_size", (480, 640))
         visibility_encoding = kwargs.pop("visibility_encoding", "auto")
-        v0_as = kwargs.pop("v0_as", "unlabeled")
+        v0_as = kwargs.pop("v0_as", None)
         # Remove verbose from kwargs if present (for backward compatibility)
         kwargs.pop("verbose", None)
 

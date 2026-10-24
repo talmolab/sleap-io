@@ -56,9 +56,11 @@ annotations.
       are effectively reversed.
     - `"auto"` (the **default**): binary when some keypoint has `v=1` and none in
       the file has `v=2`, with a warning; ternary otherwise.
-- `v0_as`: `"unlabeled"` (the **default**) reads `v=0` as unlabeled. `"absent"`
-  reads it as labeled and not visible with no location, which is what sleap-io did
-  before 0.10.
+- `v0_as`: `"unlabeled"` reads `v=0` as unlabeled. `"absent"` reads it as labeled
+  and not visible with no location, which is what sleap-io did before 0.10. The
+  **default** (`None`) depends on the encoding: `"unlabeled"` for ternary and
+  `"absent"` for binary (including when `"auto"` picks binary), since a binary file
+  writes every hidden keypoint as `v=0`. An explicit `v0_as` always wins.
 
 ```python
 import sleap_io as sio
@@ -81,9 +83,19 @@ On write, `save_coco` encodes each point from its state:
 | hidden, no location | `0, 0, 0` | `0, 0, 0` |
 | unlabeled | `0, 0, 0` | `0, 0, 0` |
 
-`num_keypoints` counts the keypoints written with `v > 0`, and the annotation
-`bbox` covers them. COCO has no code for "hidden with no location", so those points
+`num_keypoints` counts the keypoints written with `v > 0`. Without a linked
+bounding box (see [below](#annotation-metadata)), the annotation `bbox` covers
+them. COCO has no code for "hidden with no location", so those points
 read back as unlabeled.
+
+The binary encoding has no code for occluded keypoints either, so every hidden
+point is written as `v=0`, and reading a binary file reads `v=0` as hidden with no
+location (`ABSENT`). A binary round trip therefore keeps hidden points hidden but
+drops the estimated coordinates of occluded ones, and unlabeled points come back
+as `ABSENT` too; pass `v0_as="unlabeled"` to read them as unlabeled instead.
+`"auto"` can only spot a binary file that has some `v=1`, so pass
+`visibility_encoding="binary"` explicitly for a binary file with no visible
+keypoints.
 
 !!! warning "Changed in 0.10"
     Before 0.10, `v=0` read as a hidden keypoint and `v=1` as *visible*, so
@@ -132,14 +144,28 @@ labels.save("coco_val.slp")      # metadata is stored in the SLP file
   integers across the export; records without one get new ids above the largest
   stored id. If they collide, for example after merging labels loaded from two
   COCO files, every image (or annotation) is renumbered from 1 with a warning.
-- **`area`.** The area of a mask or ROI linked to the instance is preferred, then
-  the stored `area`, then the area of the keypoints' bounding box. For bounding
+- **`bbox`.** The bounding box linked to the instance is written as is. Without
+  one, the `bbox` covers the keypoints written with `v > 0`.
+- **`segmentation`.** The first mask linked to the instance is written as RLE;
+  without a mask, every ROI linked to it is written as one polygon ring (in
+  `segmentation_format="roi"`, each ring of a COCO polygon is read as its own ROI).
+  Linked geometry is written once, inside the pose annotation. Masks, ROIs and
+  boxes not linked to an instance are written as annotations of their own.
+- **`area`.** The stored `area` is preferred, then the area of the instance's
+  segmentation (the union of its ROIs), then the area of its `bbox`. For bounding
   boxes, the stored `area` is preferred over the box's own area.
 - **`iscrowd`** is written from metadata (0 when missing).
 
+A COCO file read with `load_coco` and saved with `save_coco` keeps its keypoints,
+`bbox`, `area`, `iscrowd` and ids exactly, so COCO keypoint evaluation (which uses
+the ground-truth `area` as the OKS scale) gives the same results on both.
+
 `sio transform` (and [`transform_labels`][sleap_io.transform_labels])
 drops `area` from the metadata of transformed instances and boxes, since it no
-longer matches the transformed image.
+longer matches the transformed image; `save_coco` then computes it from the
+transformed geometry. Stored `area` and linked boxes aren't updated when you edit
+keypoints yourself, so drop `area` from `instance.metadata` (and update or remove
+the linked box) if the stored values no longer fit.
 
 ## Segmentation handling
 

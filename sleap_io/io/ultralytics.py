@@ -51,7 +51,7 @@ def read_labels(
     skeleton: Skeleton | None = None,
     image_size: tuple[int, int] = (480, 640),
     visibility_encoding: str = "auto",
-    v0_as: str = "unlabeled",
+    v0_as: str | None = None,
 ) -> Labels:
     """Read Ultralytics YOLO dataset and return a `Labels` object.
 
@@ -76,9 +76,11 @@ def read_labels(
             (0/1/2), ``"binary"`` (``v>0`` is visible), or ``"auto"`` (the default),
             which picks binary, with a warning, when some keypoint in the split has
             ``v=1`` and none has ``v=2``.
-        v0_as: ``"unlabeled"`` (the default) reads ``v=0`` keypoints as unlabeled.
-            ``"absent"`` reads them as labeled and not visible with no location, as
-            sleap-io did before 0.10.
+        v0_as: ``"unlabeled"`` reads ``v=0`` keypoints as unlabeled. ``"absent"``
+            reads them as labeled and not visible with no location, as sleap-io did
+            before 0.10. ``None`` (the default) picks ``"absent"`` when the encoding
+            is (or ``"auto"`` resolves to) binary, since binary files write every
+            hidden keypoint as ``v=0``, and ``"unlabeled"`` otherwise.
 
     Returns:
         Parsed labels as a `Labels` instance.
@@ -199,7 +201,7 @@ def read_labels_set(
     skeleton: Skeleton | None = None,
     image_size: tuple[int, int] = (480, 640),
     visibility_encoding: str = "auto",
-    v0_as: str = "unlabeled",
+    v0_as: str | None = None,
 ) -> LabelsSet:
     """Read multiple splits from an Ultralytics dataset as a LabelsSet.
 
@@ -213,7 +215,8 @@ def read_labels_set(
             determine from the actual images. Default: (480, 640).
         visibility_encoding: ``"auto"`` (the default), ``"ternary"`` or
             ``"binary"``. ``"auto"`` is resolved per split. See `read_labels`.
-        v0_as: ``"unlabeled"`` (the default) or ``"absent"``. See `read_labels`.
+        v0_as: ``"unlabeled"``, ``"absent"`` or ``None`` (the default, which
+            depends on the encoding). See `read_labels`.
 
     Returns:
         A LabelsSet containing Labels objects for each split.
@@ -890,7 +893,7 @@ def parse_label_file(
     video: Video | None = None,
     frame_idx: int = 0,
     visibility_encoding: str = "ternary",
-    v0_as: str = "unlabeled",
+    v0_as: str | None = None,
 ) -> tuple[list[Instance], list[ROI], list[BoundingBox]]:
     """Parse a single Ultralytics label file and return instances, ROIs, and bboxes.
 
@@ -912,8 +915,8 @@ def parse_label_file(
         visibility_encoding: ``"ternary"`` (the default), ``"binary"`` or
             ``"auto"`` (resolved per line). See
             `sleap_io.io.coco.decode_visibility`.
-        v0_as: ``"unlabeled"`` (the default) or ``"absent"``. See
-            `sleap_io.io.coco.decode_visibility`.
+        v0_as: ``"unlabeled"``, ``"absent"`` or ``None`` (the default, which
+            depends on the encoding). See `sleap_io.io.coco.decode_visibility`.
 
     Returns:
         A tuple of ``(instances, rois, bboxes)`` parsed from the file.
@@ -1326,7 +1329,7 @@ def denormalize_coordinates(
     normalized_points: list[tuple[float, float, int]],
     image_shape: tuple[int, int],
     visibility_encoding: str = "ternary",
-    v0_as: str = "unlabeled",
+    v0_as: str | None = None,
 ) -> np.ndarray:
     """Denormalize coordinates from [0,1] range to pixel coordinates.
 
@@ -1335,8 +1338,8 @@ def denormalize_coordinates(
         image_shape: Image dimensions ``(height, width)``.
         visibility_encoding: ``"ternary"`` (the default), ``"binary"`` or
             ``"auto"``. See `sleap_io.io.coco.decode_visibility`.
-        v0_as: ``"unlabeled"`` (the default) or ``"absent"``. See
-            `sleap_io.io.coco.decode_visibility`.
+        v0_as: ``"unlabeled"``, ``"absent"`` or ``None`` (the default, which
+            depends on the encoding). See `sleap_io.io.coco.decode_visibility`.
 
     Returns:
         A numpy array of shape (n_points, 5) with columns x, y, visible, verified

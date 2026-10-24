@@ -15,7 +15,10 @@ codes as COCO, and sleap-io maps them onto the
 - `visibility_encoding="binary"` reads `v>0` as visible. The default, `"auto"`,
   picks binary with a warning when some keypoint in the split has `v=1` and none has
   `v=2`.
-- `v0_as="absent"` reads `v=0` as hidden with no location, as before 0.10.
+- `v0_as` sets how `v=0` reads. By default it is unlabeled for the ternary
+  encoding and hidden with no location (`ABSENT`) for the binary one, including
+  when `"auto"` picks binary. Pass `v0_as="absent"` or `v0_as="unlabeled"` to
+  choose explicitly; `"absent"` is how sleap-io read `v=0` before 0.10.
 
 !!! warning "Changed in 0.10"
     Before 0.10, `v=0` read as a hidden keypoint and `v=1` as *visible*, so
@@ -39,6 +42,11 @@ On write, `save_ultralytics` writes visible points as `2`, occluded estimates as
 they have no labeled point with coordinates (`Instance.is_empty`), so instances
 whose points are all occluded estimates are kept, and their box covers every
 labeled point with coordinates.
+
+A binary export writes every hidden point as `0 0 0`, so an instance whose points
+are all occluded estimates is written with all-zero keypoints. Read back with the
+binary encoding, those points are hidden (`ABSENT`), not unlabeled; their
+estimated coordinates are lost, since binary has no code to carry them.
 
 ```python
 import sleap_io as sio
