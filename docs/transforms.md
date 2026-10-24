@@ -29,8 +29,28 @@ Both approaches automatically:
 - Preserve alignment between poses and video
 - Drop a stored `area` (for example from COCO) from instance and bounding box
   `metadata`, since it no longer matches the transformed image
+- Hide points that land outside the output frame, keeping their transformed
+  coordinates (see [Points outside the frame](#points-outside-the-frame))
 
 ![Original frame](assets/transforms/original.png)
+
+### Points outside the frame
+
+A point that falls outside the output frame after a transform (for example,
+after a crop) is marked not visible but stays **labeled**, with its transformed
+coordinates kept. Its [state](model/poses.md#point-flags-and-states) becomes
+`OCCLUDED`: the point was annotated and its location is known, it is just out of
+view, so training can still supervise against it.
+
+This is a deliberate exception to the rule that helpers which hide a node clear
+its coordinates (see [Rule 2](model/poses.md#point-flags-and-states)). Points
+that were unlabeled, or had no location, are left as they were.
+
+Exporters that write occluded estimates keep these coordinates too: COCO and
+Ultralytics ternary export write them as `v=1` with coordinates outside the
+image. To drop them instead, clear them after transforming, for example with
+[`set_hidden`][sleap_io.Instance.set_hidden] or
+[`set_unlabeled`][sleap_io.Instance.set_unlabeled].
 
 ---
 

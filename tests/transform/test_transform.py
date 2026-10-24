@@ -1240,6 +1240,60 @@ class TestVideoTransforms:
         assert inst.metadata["area"] == 12.0
         assert box.metadata["area"] == 12
 
+    def test_transform_labels_oob_point_states(self, tmp_path):
+        """Out-of-bounds points become occluded estimates; others keep states."""
+        skeleton = sio.Skeleton(
+            ["in", "out", "unlabeled", "absent", "occluded", "out_unflagged"]
+        )
+        video = sio.Video(
+            filename="fake_video.mp4", backend_metadata={"shape": (1, 100, 100, 1)}
+        )
+        inst = sio.Instance.from_numpy(
+            np.array(
+                [[20.0, 20.0], [80.0, 80.0], [90.0, 90.0], [np.nan, np.nan]]
+                + [[70.0, 10.0], [10.0, 60.0]]
+            ),
+            skeleton=skeleton,
+            visible=[True, True, False, False, False, True],
+            # The last point is visible, so it counts as labeled (Rule 1) even
+            # though its `labeled` flag is not set.
+            labeled=[True, True, False, True, True, False],
+        )
+        # A stale location on an unlabeled point is left alone.
+        assert inst.point_states.tolist() == [2, 2, 0, 3, 1, 2]
+        lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+        labels = sio.Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+        result = transform_labels(
+            labels=labels,
+            transforms=Transform(crop=(0, 0, 50, 50)),
+            output_path=tmp_path / "output.slp",
+            dry_run=True,
+        )
+
+        result_inst = result[0].instances[0]
+        states = result_inst.point_states
+        assert states.tolist() == [
+            sio.PointState.VISIBLE,
+            sio.PointState.OCCLUDED,
+            sio.PointState.UNLABELED,
+            sio.PointState.ABSENT,
+            sio.PointState.OCCLUDED,
+            sio.PointState.OCCLUDED,
+        ]
+        np.testing.assert_array_equal(result_inst.points["xy"][0], [20.0, 20.0])
+        np.testing.assert_array_equal(result_inst.points["xy"][1], [80.0, 80.0])
+        np.testing.assert_array_equal(result_inst.points["xy"][4], [70.0, 10.0])
+        np.testing.assert_array_equal(result_inst.points["xy"][5], [10.0, 60.0])
+        assert result_inst.points["labeled"].tolist() == [
+            True,
+            True,
+            False,
+            True,
+            True,
+            True,
+        ]
+
     def test_compute_transform_summary_single_transform(self, slp_real_data):
         """Test compute_transform_summary with a single Transform."""
         import sleap_io as sio

@@ -407,7 +407,10 @@ A few rules keep these consistent:
    `update_skeleton`) or a [merge](../merging.md#skeleton-matching) are filled as
    unlabeled instead. If you set `points["visible"] = False` directly, clear
    `points["xy"]` too unless the coordinates are a real estimate, or use
-   [`set_hidden`][sleap_io.Instance.set_hidden].
+   [`set_hidden`][sleap_io.Instance.set_hidden]. One helper keeps coordinates on
+   purpose: [`transform_labels`](../transforms.md#points-outside-the-frame)
+   (`sio transform`) hides points that land outside the output frame but keeps
+   them labeled with their transformed coordinates, as occluded estimates.
 3. **`labeled` defaults to `True`.** You only need to set it to mark nodes as
    unlabeled.
 4. **`verified` is provenance only.** It records that a human acted on the node in

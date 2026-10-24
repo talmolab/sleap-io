@@ -405,6 +405,10 @@ def transform_labels(
         The `"area"` key (for example COCO's annotation area) is dropped from the
         `metadata` of instances and bounding boxes in transformed frames, since it
         no longer matches the transformed image.
+
+        Points that land outside the output frame are marked not visible but stay
+        labeled, keeping their transformed coordinates as an occluded estimate.
+        Unlabeled points are left as they are.
     """
     from sleap_io.model.video import Video
 
@@ -520,9 +524,16 @@ def transform_labels(
                 transformed_points = transform.apply_to_points(points, input_size)
                 instance.points["xy"] = transformed_points
 
-                # Mark out-of-bounds points as not visible
-                oob_mask = get_out_of_bounds_mask(transformed_points, output_bounds)
+                # Out-of-bounds points are hidden but keep their transformed
+                # coordinates: the location is known, just outside the frame, so
+                # they stay labeled as occluded estimates. Unlabeled points are
+                # left as they are.
+                labeled = instance.points["labeled"] | instance.points["visible"]
+                oob_mask = (
+                    get_out_of_bounds_mask(transformed_points, output_bounds) & labeled
+                )
                 instance.points["visible"][oob_mask] = False
+                instance.points["labeled"][oob_mask] = True
 
                 # A stored COCO `area` no longer matches the transformed frame.
                 instance.metadata.pop("area", None)
