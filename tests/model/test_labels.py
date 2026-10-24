@@ -2682,7 +2682,7 @@ def test_update_from_numpy_nan_handling():
     arr[0, 0, 0, 1] = 25.0  # updated y
     arr[0, 0, 0, 2] = 0.95  # updated confidence
 
-    # Second point has NaN (should not update the existing point)
+    # Second point has NaN (hides the existing point)
     arr[0, 0, 1, 0] = np.nan
     arr[0, 0, 1, 1] = np.nan
     arr[0, 0, 1, 2] = np.nan
@@ -2702,8 +2702,10 @@ def test_update_from_numpy_nan_handling():
     # First point should be updated
     assert np.allclose(points[0], [15.0, 25.0]), "First point should be updated"
 
-    # Second point should remain unchanged
-    assert np.allclose(points[1], [30.0, 40.0]), "Second point should remain unchanged"
+    # Second point was visible and is now NaN, so it becomes hidden with no location
+    assert np.isnan(points[1]).all(), "Second point should be hidden"
+    assert not updated_inst.points["visible"][1]
+    assert np.isnan(updated_inst.points["xy"][1]).all()
 
     # Third point should be updated
     assert np.allclose(points[2], [55.0, 65.0]), "Third point should be updated"
@@ -2971,7 +2973,7 @@ def test_update_from_numpy_nan_handling_v2():
     arr[0, 0, 0, 1] = 25.0  # updated y
     arr[0, 0, 0, 2] = 0.95  # updated confidence
 
-    # Second point has NaN (should not update the existing point)
+    # Second point has NaN (hides the existing point)
     arr[0, 0, 1, 0] = np.nan
     arr[0, 0, 1, 1] = np.nan
     arr[0, 0, 1, 2] = np.nan
@@ -2991,8 +2993,10 @@ def test_update_from_numpy_nan_handling_v2():
     # First point should be updated
     assert np.allclose(points[0], [15.0, 25.0]), "First point should be updated"
 
-    # Second point should remain unchanged
-    assert np.allclose(points[1], [30.0, 40.0]), "Second point should remain unchanged"
+    # Second point was visible and is now NaN, so it becomes hidden with no location
+    assert np.isnan(points[1]).all(), "Second point should be hidden"
+    assert not updated_inst.points["visible"][1]
+    assert np.isnan(updated_inst.points["xy"][1]).all()
 
     # Third point should be updated
     assert np.allclose(points[2], [55.0, 65.0]), "Third point should be updated"
@@ -9502,6 +9506,123 @@ def test_labels_event_types_dedup_pre_supplied_duplicates():
     assert [et.name for et in labels.event_types] == ["groom"]
     assert labels.event_types[0] is d1
     assert labels.events[0].type is d1
+
+
+def _flag_labels():
+    """Labels with two frames and tracks, and points in every state."""
+    skeleton = Skeleton(["A", "B", "C", "D"])
+    video = Video("test.mp4")
+    tracks = [Track("t0"), Track("t1")]
+    inst = Instance.from_numpy(
+        np.array([[1, 2], [3, 4], [np.nan, np.nan], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        track=tracks[0],
+        visible=[True, False, False, False],
+        labeled=[True, True, True, False],
+    )
+    other = Instance.from_numpy(
+        np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), skeleton=skeleton, track=tracks[1]
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst, other])
+    lf2 = LabeledFrame(video=video, frame_idx=1, instances=[])
+    labels = Labels(
+        videos=[video], skeletons=[skeleton], tracks=tracks, labeled_frames=[lf, lf2]
+    )
+    return labels, inst
+
+
+ALL_STATES = [
+    sleap_io.PointState.VISIBLE,
+    sleap_io.PointState.OCCLUDED,
+    sleap_io.PointState.ABSENT,
+    sleap_io.PointState.UNLABELED,
+]
+
+
+def test_labels_numpy_return_states():
+    """`numpy(return_states=True)` returns points and per-point states."""
+    labels, _ = _flag_labels()
+    arr, states = labels.numpy(return_states=True)
+    assert arr.shape == (2, 2, 4, 2)
+    assert states.shape == (2, 2, 4)
+    assert states.dtype == np.int8
+    assert_equal(states[0, 0], ALL_STATES)
+    assert (states[0, 1] == sleap_io.PointState.VISIBLE).all()
+    # Slots without an instance are unlabeled.
+    assert (states[1] == sleap_io.PointState.UNLABELED).all()
+    # The points array is unchanged by return_states.
+    assert_equal(arr, labels.numpy())
+
+
+def test_labels_numpy_return_states_untracked_with_confidence():
+    """States are returned for untracked arrays and with confidence."""
+    labels, inst = _flag_labels()
+    arr, states = labels.numpy(
+        untracked=True, return_confidence=True, return_states=True
+    )
+    assert arr.shape == (2, 2, 4, 3)
+    assert_equal(states[0, 0], ALL_STATES)
+    assert (states[0, 1] == sleap_io.PointState.VISIBLE).all()
+
+
+def test_labels_replace_skeleton_unmapped():
+    """New nodes become unlabeled by default, or absent with unmapped="absent"."""
+    labels, inst = _flag_labels()
+    new_skeleton = Skeleton(["A", "B", "E"])
+    labels.replace_skeleton(new_skeleton)
+    assert labels.skeleton is new_skeleton
+    assert_equal(
+        inst.point_states,
+        [
+            sleap_io.PointState.VISIBLE,
+            sleap_io.PointState.OCCLUDED,
+            sleap_io.PointState.UNLABELED,
+        ],
+    )
+
+    labels, inst = _flag_labels()
+    labels.replace_skeleton(Skeleton(["A", "E"]), unmapped="absent")
+    assert inst.point_states[1] == sleap_io.PointState.ABSENT
+
+
+def test_labels_replace_skeleton_invalid_unmapped():
+    """An invalid `unmapped` raises before anything changes."""
+    labels, inst = _flag_labels()
+    old_skeleton = labels.skeleton
+    with pytest.raises(ValueError, match="unmapped"):
+        labels.replace_skeleton(Skeleton(["A"]), unmapped="nan")
+    assert labels.skeleton is old_skeleton
+    assert inst.skeleton is old_skeleton
+
+
+def test_update_from_numpy_sets_visible_and_labeled():
+    """Finite coordinates mark points visible and labeled."""
+    labels, inst = _flag_labels()
+    arr = labels.numpy()
+    arr[0, 0, 1] = [5, 6]  # occluded -> visible
+    arr[0, 0, 3] = [7, 8]  # unlabeled -> visible
+    labels.update_from_numpy(arr, create_missing=False)
+
+    assert_equal(inst.points["xy"][[1, 3]], [[5, 6], [7, 8]])
+    assert inst.points["visible"][[0, 1, 3]].all()
+    assert inst.points["labeled"][[1, 3]].all()
+
+
+def test_update_from_numpy_nan_keeps_hidden_points():
+    """A round trip through numpy() keeps occluded estimates and unlabeled points."""
+    labels, inst = _flag_labels()
+    labels.update_from_numpy(labels.numpy(), create_missing=False)
+    assert_equal(inst.point_states, ALL_STATES)
+    assert_equal(inst.points["xy"][1], [3, 4])
+
+    # NaN on a visible point hides it and clears its location.
+    other = labels[0].instances[1]
+    arr = labels.numpy()
+    arr[0, 1, 0] = np.nan
+    labels.update_from_numpy(arr, create_missing=False)
+    assert other.point_states[0] == sleap_io.PointState.ABSENT
+    assert np.isnan(other.points["xy"][0]).all()
+    assert other.point_states[1] == sleap_io.PointState.VISIBLE
 
 
 def test_map_instance_fills_nan_and_copies_metadata():

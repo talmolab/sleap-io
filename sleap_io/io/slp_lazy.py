@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from sleap_io.model.video import Video
 
 from sleap_io.io.slp import InstanceType
+from sleap_io.model.instance import PointState, compute_point_states
 
 
 @attrs.define
@@ -520,7 +521,8 @@ class LazyDataStore:
         untracked: bool = False,
         return_confidence: bool = False,
         user_instances: bool = True,
-    ) -> np.ndarray:
+        return_states: bool = False,
+    ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         """Build numpy array directly from raw data (fast path).
 
         This method builds the output array directly from raw HDF5 data without
@@ -535,11 +537,14 @@ class LazyDataStore:
                 For user instances, confidence is set to 1.0.
             user_instances: If True (default), prefer user instances over predicted
                 instances. If False, only include predicted instances.
+            return_states: If True, also return an `int8` array of shape
+                (n_frames, n_tracks, n_nodes) with the `PointState` of every point.
 
         Returns:
             Array of shape (n_frames, n_tracks, n_nodes, 2) or
             (n_frames, n_tracks, n_nodes, 3) if return_confidence is True.
-            Missing data is filled with np.nan.
+            Missing data is filled with np.nan. If return_states is True, a tuple
+            `(points, states)`.
         """
         # Step 1: Determine video_id to filter
         if video is None:
@@ -558,7 +563,10 @@ class LazyDataStore:
             skeleton = self.skeletons[0] if self.skeletons else None
             n_nodes = len(skeleton.nodes) if skeleton else 0
             n_coords = 3 if return_confidence else 2
-            return np.full((0, 0, n_nodes, n_coords), np.nan, dtype="float32")
+            output = np.full((0, 0, n_nodes, n_coords), np.nan, dtype="float32")
+            if return_states:
+                return output, np.zeros((0, 0, n_nodes), dtype="int8")
+            return output
 
         # Get frame index range for this video
         frame_indices = video_frame_data["frame_idx"]
@@ -603,6 +611,9 @@ class LazyDataStore:
         output = np.full(
             (n_frames, n_tracks, n_nodes, n_coords), np.nan, dtype="float32"
         )
+        states = np.full(
+            (n_frames, n_tracks, n_nodes), PointState.UNLABELED, dtype="int8"
+        )
 
         # Step 5: Build frame_idx to data index mapping
         frame_idx_to_data = {}
@@ -622,8 +633,11 @@ class LazyDataStore:
                 untracked=untracked,
                 return_confidence=return_confidence,
                 user_instances=user_instances,
+                states=states[out_idx],
             )
 
+        if return_states:
+            return output, states
         return output
 
     def _count_max_instances_per_frame(
@@ -676,6 +690,7 @@ class LazyDataStore:
         untracked: bool,
         return_confidence: bool,
         user_instances: bool,
+        states: np.ndarray,
     ) -> None:
         """Fill a single frame's slice of the output array.
 
@@ -685,6 +700,8 @@ class LazyDataStore:
             untracked: Whether to use untracked (arbitrary order) indexing.
             return_confidence: Whether to include confidence scores.
             user_instances: Whether to prefer user instances.
+            states: `int8` array slice of shape (n_tracks, n_nodes) to fill with
+                the `PointState` of each point.
         """
         inst_start = int(frame_row["instance_id_start"])
         inst_end = int(frame_row["instance_id_end"])
@@ -752,7 +769,12 @@ class LazyDataStore:
             for inst_idx in instances_to_process:
                 if j >= output.shape[0]:
                     break
-                self._fill_instance_numpy(output[j], inst_idx, return_confidence)
+                self._fill_instance_numpy(
+                    output[j],
+                    inst_idx,
+                    return_confidence,
+                    states[j],
+                )
                 j += 1
         else:
             # Organize by track
@@ -780,7 +802,10 @@ class LazyDataStore:
             for track_id, inst_idx in track_to_inst.items():
                 if track_id < output.shape[0]:
                     self._fill_instance_numpy(
-                        output[track_id], inst_idx, return_confidence
+                        output[track_id],
+                        inst_idx,
+                        return_confidence,
+                        states[track_id],
                     )
 
     def _fill_instance_numpy(
@@ -788,6 +813,7 @@ class LazyDataStore:
         output: np.ndarray,
         inst_idx: int,
         return_confidence: bool,
+        states: np.ndarray,
     ) -> None:
         """Fill instance points into output array.
 
@@ -795,6 +821,8 @@ class LazyDataStore:
             output: Output array slice of shape (n_nodes, n_coords).
             inst_idx: Index into instances_data.
             return_confidence: Whether to include confidence scores.
+            states: `int8` array slice of shape (n_nodes,) to fill with the
+                `PointState` of each point.
         """
         inst_row = self.instances_data[inst_idx]
 
@@ -853,6 +881,12 @@ class LazyDataStore:
             output[:, 1] = y
             if return_confidence:
                 output[:, 2] = pts_data["score"]
+
+        # Files in the compound (2.x) layout have no `labeled` column, so every point
+        # reads as labeled.
+        states[:] = compute_point_states(
+            output[:, :2], pts_data["visible"], labeled=True
+        )
 
 
 class LazyFrameList:
