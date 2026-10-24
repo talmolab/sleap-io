@@ -205,6 +205,29 @@ Convert all tracked instances to a NumPy array for numerical analysis:
 
 In v0.7.0, the frame dimension equals `len(video)` instead of `last_labeled_frame + 1` (PR #368). Frames past the last labeled frame are NaN-padded. Code that previously sized downstream arrays from this shape may need updating.
 
+NaN coordinates alone can't tell an unlabeled node from one annotated as hidden. Pass `return_states=True` to also get the [`PointState`](poses.md#point-flags-and-states) of every point as an `int8` array of shape `(n_frames, n_tracks, n_nodes)`; slots without an instance are `UNLABELED`:
+
+```pycon
+>>> import sleap_io as sio
+>>> import numpy as np
+>>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
+>>> video = sio.Video("test.mp4", open_backend=False)
+>>> track = sio.Track("animal")
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 20], [5, 15], [np.nan, np.nan]]),
+...     skeleton=skeleton,
+...     track=track,
+...     labeled=[True, True, False],
+... )
+>>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+>>> labels = sio.Labels(labeled_frames=[lf])
+>>> trx, states = labels.numpy(return_states=True)
+>>> print(states.shape, states.dtype)
+>>> print([sio.PointState(s).name for s in states[0, 0]])
+```
+
+[`Labels.update_from_numpy()`](#sleap_io.Labels.update_from_numpy) writes an array back into existing instances. Finite coordinates set the point and mark it visible and labeled. A NaN hides a point that was visible and clears its coordinates (before sleap-io 0.10, NaN left the point unchanged); NaN for a point that is already hidden or unlabeled leaves it alone, so a `numpy()` round trip keeps occluded estimates and unlabeled points intact.
+
 !!! note "See also"
 
     The [Codecs guide](../codecs.md) covers `to_dict()`, `to_dataframe()`, and other conversion methods in detail.
@@ -238,6 +261,12 @@ labels.remove_nodes(["node_to_remove"])
 ```python
 new_skeleton = sio.Skeleton(["HEAD", "BODY", "TAIL"])
 labels.replace_skeleton(new_skeleton)
+```
+
+Nodes of the new skeleton that no old node maps to become unlabeled by default. Pass `unmapped="absent"` to mark them as labeled but hidden with no location instead (see [Changing the skeleton](poses.md#changing-the-skeleton)):
+
+```python
+labels.replace_skeleton(new_skeleton, unmapped="absent")
 ```
 
 **Adding spatial annotations** to a frame by appending to its annotation lists. `LabeledFrame.append()` dispatches by type, routing each annotation into the correct list (`instances`, `centroids`, `bboxes`, `masks`, `label_images`, or `rois`):
@@ -286,6 +315,12 @@ To embed images directly into an SLP file (creating a self-contained package):
 
 ```python
 labels.save("output.pkg.slp", embed=True)
+```
+
+The current SLP layout can't store [unlabeled points](poses.md#point-flags-and-states) or record `metadata`. By default, saving labels with unlabeled points raises a `ValueError` before anything is written; pass `unlabeled_as="absent"` to save them as hidden points with no location (labeled, not visible, NaN coordinates) with a warning. Instance, frame and bounding box metadata is dropped with a warning.
+
+```python
+labels.save("output.slp", unlabeled_as="absent")
 ```
 
 ---
@@ -341,6 +376,13 @@ A frame can also be converted to a NumPy array:
 ... )
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
 >>> print(lf.numpy().shape)  # (n_instances, n_nodes, 2)
+```
+
+Frames have a `metadata` dictionary for per-frame values such as a source image id or file name. It follows the same rules as [instance metadata](poses.md#metadata) (scalar values only, validated when set). When frames are merged, their metadata is combined key by key, with the target frame winning ties.
+
+```python
+lf.metadata["image_id"] = 42
+lf.metadata["file_name"] = "img_0042.png"
 ```
 
 !!! note "See also"
@@ -432,6 +474,7 @@ classDiagram
         +List~SegmentationMask~ masks
         +List~LabelImage~ label_images
         +List~ROI~ rois
+        +dict metadata
     }
 
     class Instance {
@@ -441,6 +484,7 @@ classDiagram
         +Identity identity
         +float identity_score
         +Embedding identity_embedding
+        +dict metadata
     }
 
     class Video {

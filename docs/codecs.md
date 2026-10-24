@@ -96,9 +96,9 @@ data = labels.to_dict()
                     "type": "predicted_instance",
                     "skeleton_idx": 0,
                     "points": [
-                        {"x": 100.0, "y": 200.0, "visible": true, "complete": false},
-                        {"x": 150.0, "y": 250.0, "visible": true, "complete": false},
-                        {"x": 200.0, "y": 300.0, "visible": true, "complete": false}
+                        {"x": 100.0, "y": 200.0, "visible": true, "verified": false},
+                        {"x": 150.0, "y": 250.0, "visible": true, "verified": false},
+                        {"x": 200.0, "y": 300.0, "visible": true, "verified": false}
                     ],
                     "track_idx": 0,
                     "score": 0.91

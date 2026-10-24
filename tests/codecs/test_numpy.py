@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from numpy.testing import assert_array_equal
 
 from sleap_io import (
     Instance,
@@ -1172,3 +1173,15 @@ def test_to_analysis_arrays_extra_instances_dropped():
     # User instances are slotted first; the extra predicted ones are dropped.
     np.testing.assert_array_equal(locations[0, 0], [[1.0, 1.0]])
     np.testing.assert_array_equal(locations[0, 1], [[2.0, 2.0]])
+
+
+def test_to_numpy_return_states(slp_typical):
+    """`to_numpy(return_states=True)` returns states matching the instances."""
+    labels = load_slp(slp_typical)
+    arr, states = to_numpy(labels, untracked=True, return_states=True)
+    assert_array_equal(arr, to_numpy(labels, untracked=True))
+    assert states.shape == arr.shape[:3]
+    assert states.dtype == np.int8
+
+    lf = labels.labeled_frames[0]
+    assert_array_equal(states[lf.frame_idx, 0], lf.instances[0].point_states)

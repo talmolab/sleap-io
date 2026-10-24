@@ -1,5 +1,8 @@
 """Tests for methods in sleap_io.model.labeled_frame file."""
 
+import copy
+import pickle
+
 import numpy as np
 import pytest
 from numpy.testing import assert_equal
@@ -2323,3 +2326,39 @@ def test_convert_missing_verb_raises():
     lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0, rois=[r])
     with pytest.raises(ValueError, match="has no to_roi"):
         lf.convert("roi", source="roi")
+
+
+@pytest.mark.parametrize(
+    "strategy",
+    [
+        "auto",
+        "keep_original",
+        "keep_new",
+        "keep_both",
+        "update_tracks",
+        "replace_predictions",
+    ],
+)
+def test_labeled_frame_merge_combines_metadata(strategy):
+    """Merging frames combines metadata key by key, this frame winning ties."""
+    video = Video("test.mp4")
+    lf1 = LabeledFrame(video=video, frame_idx=0, metadata={"a": 1, "b": "x"})
+    lf2 = LabeledFrame(video=video, frame_idx=0, metadata={"b": "y", "c": 2.5})
+    lf1.merge(lf2, frame=strategy)
+    assert lf1.metadata == {"a": 1, "b": "x", "c": 2.5}
+    assert lf2.metadata == {"b": "y", "c": 2.5}
+
+
+def test_labeled_frame_metadata_pickle():
+    """Frame metadata survives pickling and defaults when missing from old state."""
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=3, metadata={"image_id": 7})
+    for restored in (pickle.loads(pickle.dumps(lf)), copy.deepcopy(lf)):
+        assert restored.metadata == {"image_id": 7}
+        assert restored.frame_idx == 3
+
+    state = lf.__getstate__()
+    del state["metadata"]
+    restored = LabeledFrame.__new__(LabeledFrame)
+    restored.__setstate__(state)
+    assert restored.metadata == {}
+    assert restored.instances == []

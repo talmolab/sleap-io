@@ -170,6 +170,7 @@ def save_slp(
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
     save_embedding_vectors: bool = False,
+    unlabeled_as: str = "error",
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -226,6 +227,10 @@ def save_slp(
             off by default for video frames. Set `True` to also write the
             `/embeddings` group. Identity links (`/identity/links`) are written
             regardless.
+        unlabeled_as: How to handle unlabeled points (`labeled=False`), which the
+            current SLP layout can't store. `"error"` (the default) raises a
+            `ValueError` before anything is written. `"absent"` saves them as hidden
+            points (labeled, not visible) and warns.
     """
     from sleap_io.io import slp
 
@@ -241,6 +246,7 @@ def save_slp(
         prefer_metadata=prefer_metadata,
         preserve_unknown=preserve_unknown,
         save_embedding_vectors=save_embedding_vectors,
+        unlabeled_as=unlabeled_as,
     )
 
 

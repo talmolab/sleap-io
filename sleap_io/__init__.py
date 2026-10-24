@@ -96,6 +96,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "model.instance": [
             "Instance",
             "Instance3D",
+            "PointState",
             "PredictedInstance",
             "PredictedInstance3D",
             "Track",

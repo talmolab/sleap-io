@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.instance import Instance, PointState, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
@@ -170,7 +170,8 @@ def to_numpy(
     return_confidence: bool = False,
     user_instances: bool = True,
     predicted_instances: bool = True,
-) -> np.ndarray:
+    return_states: bool = False,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Convert Labels to a numpy array.
 
     This is a more flexible version of Labels.numpy() with enhanced options.
@@ -189,6 +190,7 @@ def to_numpy(
             only include predicted instances.
         predicted_instances: If True (the default), include predicted instances.
             If False, only include user instances.
+        return_states: If True, also return the `PointState` of every point.
 
     Returns:
         An array of tracks of shape `(n_frames, n_tracks, n_nodes, 2)` if
@@ -196,6 +198,11 @@ def to_numpy(
         `(n_frames, n_tracks, n_nodes, 3)` if `return_confidence` is True.
 
         Missing data will be replaced with `np.nan`.
+
+        If `return_states` is True, a tuple `(points, states)` is returned instead,
+        where `states` is an `int8` array of shape `(n_frames, n_tracks, n_nodes)`
+        holding `PointState` values. Slots without an instance are
+        `PointState.UNLABELED`.
 
         If this is a single instance project, a track does not need to be assigned.
 
@@ -235,6 +242,7 @@ def to_numpy(
             untracked=untracked,
             return_confidence=return_confidence,
             user_instances=user_instances,
+            return_states=return_states,
         )
 
     # Eager path: filter labeled frames by video
@@ -274,6 +282,7 @@ def to_numpy(
         tracks = np.full((n_frames, n_tracks, n_nodes, 3), np.nan, dtype="float32")
     else:
         tracks = np.full((n_frames, n_tracks, n_nodes, 2), np.nan, dtype="float32")
+    states = np.full((n_frames, n_tracks, n_nodes), PointState.UNLABELED, dtype="int8")
 
     for lf in lfs:
         i = int(lf.frame_idx - first_frame)
@@ -288,6 +297,7 @@ def to_numpy(
             )
             for j, inst in enumerate(frame_instances):
                 if j < n_tracks:
+                    states[i, j] = inst.point_states
                     if return_confidence:
                         if isinstance(inst, PredictedInstance):
                             tracks[i, j] = inst.numpy(scores=True)
@@ -309,6 +319,7 @@ def to_numpy(
             )
             for track, inst in track_to_instance.items():
                 j = labels.tracks.index(track)
+                states[i, j] = inst.point_states
 
                 if type(inst) is PredictedInstance:
                     tracks[i, j] = inst.numpy(scores=return_confidence)
@@ -319,6 +330,8 @@ def to_numpy(
                     if return_confidence:
                         tracks[i, j, :, 2] = 1.0
 
+    if return_states:
+        return tracks, states
     return tracks
 
 

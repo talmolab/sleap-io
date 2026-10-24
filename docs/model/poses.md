@@ -186,7 +186,8 @@ If you prefer to specify coordinates by node name:
 
 ### Empty instances
 
-Create an instance with no visible points (all coordinates are unset):
+Create an instance where every point is labeled but hidden, with no location (NaN
+coordinates):
 
 ```pycon
 >>> import sleap_io as sio
@@ -195,6 +196,10 @@ Create an instance with no visible points (all coordinates are unset):
 >>> print(empty_inst.is_empty)
 
 ```
+
+See [Point flags and states](#point-flags-and-states) for what `visible`,
+`labeled` and NaN coordinates mean, and [Emptiness](#emptiness) for when an
+instance counts as empty.
 
 !!! note "See also"
     Instances are organized into frames and datasets through
@@ -355,16 +360,177 @@ metadata.
 
 | Field      | Type         | Description                        |
 | ---------- | ------------ | ---------------------------------- |
-| `xy`       | `float64[2]` | (x, y) coordinates                 |
+| `xy`       | `float64[2]` | (x, y) coordinates; NaN means the point has no location |
 | `score`    | `float64`    | Per-point confidence (predicted only) |
-| `visible`  | `bool`       | Whether the point is labeled/visible |
-| `complete` | `bool`       | Set by the SLEAP GUI when a human placed, moved, or toggled visibility of the point (stored, not interpreted) |
+| `visible`  | `bool`       | Whether the point is visible in the image (`False` covers occluded and out of view) |
+| `verified` | `bool`       | Set by the SLEAP GUI when a human placed, moved, or toggled visibility of the point (stored, not interpreted). Named `complete` before sleap-io 0.10 |
+| `labeled`  | `bool`       | Whether the source annotated this node (`False` means unlabeled). Defaults to `True` |
 | `name`     | `object`     | Node name string                    |
 
 !!! tip "Performance"
     Accessing `inst.points["xy"]` directly returns a view into the underlying
     array without copying. Use this when working with large datasets where
     `inst.numpy()` (which copies) would be too slow.
+
+---
+
+## Point flags and states
+
+Each point carries two independent flags plus its coordinates:
+
+- `visible`: the point is visible in the image. `False` covers both occluded and
+  out-of-view points.
+- `labeled`: the source annotated this node. `False` means *unlabeled*: the
+  annotator (or model) said nothing about it, so training should give it zero
+  weight.
+- `xy`: NaN means "no location". Finite coordinates on a hidden point are an
+  estimate of where the occluded landmark is.
+
+Together they give four [`PointState`][sleap_io.PointState]s, numbered to match
+COCO's keypoint visibility `v` (map `ABSENT` to `0` to get COCO's value):
+
+| `PointState`    | `visible` | `labeled` | `xy`   | Meaning                                    |
+| --------------- | --------- | --------- | ------ | ------------------------------------------ |
+| `VISIBLE` (2)   | `True`    | `True`    | finite | Visible at this location                   |
+| `OCCLUDED` (1)  | `False`   | `True`    | finite | Hidden, with an estimated location          |
+| `ABSENT` (3)    | `False`   | `True`    | NaN    | Hidden with no location (occluded somewhere unknown, out of view, or absent) |
+| `UNLABELED` (0) | `False`   | `False`   | NaN    | Not annotated; ignore in training          |
+
+A few rules keep these consistent:
+
+1. **Visible implies labeled.** Helpers read the flag as `labeled | visible`, so a
+   visible point always counts as labeled.
+2. **NaN means no location.** Everything that creates points
+   ([`Instance.empty`][sleap_io.Instance.empty], dictionaries with missing nodes,
+   skeleton changes, merging) fills them as labeled, hidden and NaN. If you set
+   `points["visible"] = False` directly, clear `points["xy"]` too unless the
+   coordinates are a real estimate, or use
+   [`set_hidden`][sleap_io.Instance.set_hidden].
+3. **`labeled` defaults to `True`.** You only need to set it to mark nodes as
+   unlabeled.
+4. **`verified` is provenance only.** It records that a human acted on the node in
+   the SLEAP GUI; sleap-io never interprets it.
+
+[`Instance.from_numpy`][sleap_io.Instance.from_numpy] accepts `visible`,
+`labeled` and `verified` arrays (or scalars), and the instance has helpers to
+change and inspect states:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skeleton = sio.Skeleton(["head", "thorax", "abdomen", "tail"])
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 20], [30, 40], [50, 60], [np.nan, np.nan]]),
+...     skeleton=skeleton,
+...     visible=[True, True, False, False],  # abdomen: occluded estimate
+...     labeled=[True, True, True, False],  # tail: unlabeled
+... )
+>>> print([sio.PointState(s).name for s in inst.point_states])
+>>> print(inst.n_visible, inst.n_labeled)
+>>> inst.set_hidden("thorax")  # labeled, hidden, NaN
+>>> inst.set_hidden("head", keep_location=True)  # keep xy as an occluded estimate
+>>> inst.set_unlabeled("abdomen")
+>>> inst["tail"] = (70, 80)  # assigning a point marks it visible and labeled
+>>> print([sio.PointState(s).name for s in inst.point_states])
+
+```
+
+[`Instance.point_states`][sleap_io.Instance.point_states] returns an `int8`
+array, and [`Labels.numpy(return_states=True)`](labels.md#array-conversion)
+returns the same states for a whole dataset.
+[`PredictedInstance.from_numpy`][sleap_io.PredictedInstance.from_numpy] takes the
+same flags; there, `labeled=False` marks nodes a partial-skeleton model has no
+output for.
+
+### Emptiness
+
+[`Instance.is_empty`][sleap_io.Instance.is_empty] is `True` when no labeled point
+has finite coordinates. An instance whose points are all occluded with estimated
+locations is **not** empty (even though `n_visible == 0`), so it survives
+`Labels.remove_empty_instances()` and `Labels.clean()`:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skeleton = sio.Skeleton(["head", "thorax"])
+>>> occluded = sio.Instance.from_numpy(
+...     np.array([[10, 20], [30, 40]]), skeleton=skeleton, visible=False
+... )
+>>> print(occluded.n_visible, occluded.is_empty)
+>>> print(sio.Instance.empty(skeleton=skeleton).is_empty)
+
+```
+
+### Changing the skeleton
+
+When an instance moves to a skeleton with nodes it has no data for
+([`Instance.replace_skeleton`][sleap_io.Instance.replace_skeleton],
+[`Instance.update_skeleton`][sleap_io.Instance.update_skeleton], or
+[`Labels.replace_skeleton`][sleap_io.Labels.replace_skeleton]), the `unmapped`
+argument decides how those nodes are filled:
+
+- `unmapped="unlabeled"` (default): the new nodes are unlabeled, so training
+  ignores them.
+- `unmapped="absent"`: the new nodes are labeled, hidden and NaN, i.e. annotated
+  as not present (the behavior before sleap-io 0.10).
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skeleton = sio.Skeleton(["head", "thorax"])
+>>> inst = sio.Instance.from_numpy(np.array([[10, 20], [30, 40]]), skeleton=skeleton)
+>>> inst.replace_skeleton(sio.Skeleton(["head", "thorax", "tail"]))
+>>> print([sio.PointState(s).name for s in inst.point_states])
+
+```
+
+!!! warning "Saving unlabeled points to SLP"
+    The current SLP layout has no `labeled` column, so
+    [`save_slp`][sleap_io.save_slp] refuses to write unlabeled points by default
+    (`unlabeled_as="error"`). Pass `unlabeled_as="absent"` to save them as hidden
+    points with no location instead (with a warning). See
+    [Labels → Saving](labels.md#saving).
+
+---
+
+## Metadata
+
+`Instance` and `PredictedInstance` (as well as
+[`LabeledFrame`](labels.md#labeled-frames) and [bounding boxes](boxes.md#metadata-fields))
+have a `metadata` dictionary for per-record values such as COCO's `iscrowd` or a
+source annotation id:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skeleton = sio.Skeleton(["head", "thorax"])
+>>> inst = sio.Instance.from_numpy(np.array([[10, 20], [30, 40]]), skeleton=skeleton)
+>>> inst.metadata["iscrowd"] = 0
+>>> inst.metadata["area"] = np.float32(12.5)  # numpy scalars become Python types
+>>> print(inst.metadata)
+>>> try:
+...     inst.metadata["keypoint_ids"] = [1, 2]
+... except TypeError as err:
+...     print(err)
+
+```
+
+- Values must be `bool`, `int`, `float` or `str`; `None` means missing. Nested
+  values raise `TypeError`, so JSON-encode them into a `str`.
+- Keys are non-empty strings without `/`.
+- Values are validated when they are set (on assignment, `update`, or when
+  replacing the whole dictionary).
+- Each key must hold one kind of value across a table (e.g. all instances): `int`
+  and `float` mix as `float`, but integers beyond 2^53 can't be mixed with floats.
+  A single record can't see the rest of its table, so this is checked by
+  [`Labels.check_metadata()`][sleap_io.Labels.check_metadata] and when saving,
+  which raises a `TypeError` before anything is written.
+- Metadata travels with copies and merges. When frames are merged, their metadata
+  is combined key by key, with the target frame winning ties.
+
+!!! note
+    The current SLP layout doesn't store metadata yet: `save_slp` drops it with a
+    warning.
 
 ---
 
@@ -403,9 +569,14 @@ classDiagram
         +Identity identity
         +float identity_score
         +Embedding identity_embedding
+        +dict metadata
         +numpy() ndarray
         +n_visible: int
+        +n_labeled: int
+        +point_states: ndarray
         +is_empty: bool
+        +set_hidden(nodes, keep_location)
+        +set_unlabeled(nodes)
     }
 
     class PredictedInstance {
@@ -443,5 +614,7 @@ classDiagram
 ::: sleap_io.Instance
 
 ::: sleap_io.PredictedInstance
+
+::: sleap_io.PointState
 
 ::: sleap_io.Track

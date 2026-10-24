@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+import warnings
 import zlib
 from pathlib import Path
 from unittest import mock
@@ -13,6 +14,7 @@ import numpy as np
 import pytest
 import shapely
 import simplejson as json
+from numpy.testing import assert_equal
 from PIL import Image
 
 from sleap_io import (
@@ -26,6 +28,7 @@ from sleap_io import (
     Labels,
     LabelsSet,
     Node,
+    PointState,
     PredictedInstance,
     RecordingSession,
     Skeleton,
@@ -12143,3 +12146,135 @@ def test_check_format_id_without_format_id(tmp_path, slp_minimal):
         _check_format_id(str(path), f)
         del f["metadata"]
         _check_format_id(str(path), f)
+
+
+def _labels_with_unlabeled_point():
+    """Labels with one user and one predicted instance, each with an unlabeled node."""
+    skeleton = Skeleton(["A", "B"])
+    video = Video("test.mp4")
+    inst = Instance.from_numpy(
+        np.array([[1, 2], [np.nan, np.nan]]), skeleton=skeleton, labeled=[True, False]
+    )
+    pred = PredictedInstance.from_numpy(
+        np.array([[3, 4], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.9, 0.0]),
+        labeled=[True, False],
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst, pred])
+    return Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+
+def test_save_slp_refuses_unlabeled_points(tmp_path):
+    """The compound writer raises on unlabeled points and leaves the file intact."""
+    path = tmp_path / "labels.slp"
+    path.write_bytes(b"existing")
+    labels = _labels_with_unlabeled_point()
+    with pytest.raises(ValueError, match="2 point\\(s\\) are unlabeled"):
+        save_slp(labels, str(path))
+    assert path.read_bytes() == b"existing"
+
+    with pytest.raises(ValueError, match="unlabeled"):
+        labels.save(str(tmp_path / "other.slp"))
+    assert not (tmp_path / "other.slp").exists()
+
+
+def test_save_slp_unlabeled_as_absent(tmp_path):
+    """`unlabeled_as="absent"` saves unlabeled points as hidden, with a warning."""
+    path = tmp_path / "labels.slp"
+    labels = _labels_with_unlabeled_point()
+    with pytest.warns(UserWarning, match="2 unlabeled point\\(s\\) as hidden"):
+        labels.save(str(path), unlabeled_as="absent")
+
+    loaded = load_slp(str(path))
+    for inst in loaded[0].instances:
+        assert_equal(inst.point_states, [PointState.VISIBLE, PointState.ABSENT])
+        assert inst.points["labeled"].all()
+
+
+def test_save_slp_unlabeled_as_absent_clears_location(tmp_path):
+    """Unlabeled points with stale coordinates are saved with no location."""
+    path = tmp_path / "labels.slp"
+    labels = _labels_with_unlabeled_point()
+    for inst in labels[0].instances:
+        inst.points["xy"][1] = [5, 6]
+    with pytest.warns(UserWarning, match="no location"):
+        save_slp(labels, str(path), unlabeled_as="absent")
+
+    for inst in load_slp(str(path))[0].instances:
+        assert_equal(inst.point_states, [PointState.VISIBLE, PointState.ABSENT])
+        assert np.isnan(inst.points["xy"][1]).all()
+    # The in-memory labels are unchanged.
+    assert not labels[0].instances[0].points["labeled"][1]
+    assert_equal(labels[0].instances[0].points["xy"][1], [5, 6])
+
+
+def test_save_slp_invalid_unlabeled_as(tmp_path, slp_minimal):
+    """An unknown `unlabeled_as` value raises, for eager and lazy labels."""
+    for lazy in (False, True):
+        labels = load_slp(slp_minimal, lazy=lazy)
+        with pytest.raises(ValueError, match="unlabeled_as"):
+            save_slp(labels, str(tmp_path / "out.slp"), unlabeled_as="drop")
+
+
+def test_save_slp_warns_dropped_metadata(tmp_path):
+    """Metadata on instances, frames or boxes is dropped with a warning."""
+    skeleton = Skeleton(["A"])
+    video = Video("test.mp4")
+
+    def make_labels():
+        inst = Instance.from_numpy(np.array([[1, 2]]), skeleton=skeleton)
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+        lf.bboxes.append(UserBoundingBox(x1=0, y1=0, x2=1, y2=1))
+        return Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf]), lf
+
+    labels, _ = make_labels()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(labels, str(tmp_path / "plain.slp"))
+
+    for set_metadata in (
+        lambda lf: lf.metadata.update(image_id=1),
+        lambda lf: lf.instances[0].metadata.update(ann_id=1),
+        lambda lf: lf.bboxes[0].metadata.update(area=1.0),
+    ):
+        labels, lf = make_labels()
+        set_metadata(lf)
+        with pytest.warns(UserWarning, match="metadata"):
+            save_slp(labels, str(tmp_path / "meta.slp"))
+
+
+def test_save_slp_rejects_mixed_metadata_kinds(tmp_path):
+    """A metadata key that mixes kinds across records raises before writing."""
+    skeleton = Skeleton(["A"])
+    video = Video("test.mp4")
+    lfs = [
+        LabeledFrame(video=video, frame_idx=i, metadata={"image_id": value})
+        for i, value in enumerate([1, "one"])
+    ]
+    labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=lfs)
+    path = tmp_path / "labels.slp"
+    path.write_bytes(b"existing")
+    with pytest.raises(TypeError, match="across frames"):
+        save_slp(labels, str(path))
+    assert path.read_bytes() == b"existing"
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_verified_round_trip(tmp_path, lazy):
+    """`verified` is stored in the on-disk `complete` column and read back."""
+    labels = _labels_with_unlabeled_point()
+    for inst in labels[0].instances:
+        inst.points["labeled"] = True
+        inst.points["verified"] = [True, False]
+    path = tmp_path / "verified.slp"
+    save_slp(labels, str(path))
+
+    with h5py.File(path, "r") as f:
+        assert_equal(f["points"]["complete"], [True, False])
+        assert_equal(f["pred_points"]["complete"], [True, False])
+
+    loaded = load_slp(str(path), lazy=lazy)
+    for inst in loaded[0].instances:
+        assert_equal(inst.points["verified"], [True, False])
+        assert inst.points["labeled"].all()

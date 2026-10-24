@@ -789,16 +789,16 @@ labels.replace_skeleton(
         "head": "HEAD",
         "trunk": "CENTROID",
         "tti": "TAIL_BASE"
-        # "TAIL_TIP" will have NaN values since there's no correspondence
+        # "TAIL_TIP" has no correspondence, so it becomes unlabeled
     }
 )
 
-# Save with the new skeleton format
-labels.save("labels_with_new_skeleton.slp")
+# The current SLP layout can't store unlabeled points, so save them as hidden
+labels.save("labels_with_new_skeleton.slp", unlabeled_as="absent")
 ```
 
 !!! warning
-    Nodes without correspondence in the `node_map` will have NaN values in the resulting instances.
+    Nodes without correspondence in the `node_map` become [unlabeled](model/poses.md#point-flags-and-states) (NaN coordinates, `labeled=False`) in the resulting instances. Pass `unmapped="absent"` to `replace_skeleton` to mark them as labeled but hidden instead.
 
 !!! tip
     This is particularly useful when converting between different annotation tools or skeleton conventions.
@@ -841,6 +841,8 @@ labels.save("predictions.smoothed.slp")
 
 !!! warning
     When updating from numpy, the array shape must match the original data structure exactly.
+    A NaN in the updated array hides a previously visible point and clears its coordinates, so
+    filters that spread NaNs (like the moving average above) also hide points next to gaps.
 
 !!! note "See also"
     - [`Labels.numpy`](model/labels.md#sleap_io.Labels.numpy): Array conversion options

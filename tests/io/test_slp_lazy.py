@@ -492,6 +492,32 @@ class TestLazyNumpyEquivalence:
             lazy_arr, eager_arr, equal_nan=True, err_msg="numpy() output mismatch"
         )
 
+    @pytest.mark.parametrize("untracked", [False, True])
+    def test_numpy_return_states(self, slp_real_data, untracked):
+        """return_states=True gives the same points and states as eager."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        lazy_arr, lazy_states = lazy.numpy(untracked=untracked, return_states=True)
+        eager_arr, eager_states = eager.numpy(untracked=untracked, return_states=True)
+
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+        assert lazy_states.dtype == np.int8
+        np.testing.assert_array_equal(lazy_states, eager_states)
+        assert lazy_states.shape == lazy_arr.shape[:3]
+        if untracked:
+            # This file has no tracks, so only the untracked array has slots.
+            assert (eager_states == sio.PointState.VISIBLE).any()
+
+    def test_numpy_return_states_predictions(self, centered_pair):
+        """return_states=True matches eager for tracked predictions."""
+        lazy = sio.load_slp(centered_pair, lazy=True)
+        eager = sio.load_slp(centered_pair, lazy=False)
+
+        _, lazy_states = lazy.numpy(return_states=True, return_confidence=True)
+        _, eager_states = eager.numpy(return_states=True, return_confidence=True)
+        np.testing.assert_array_equal(lazy_states, eager_states)
+
     def test_numpy_untracked(self, slp_real_data):
         """untracked=True produces identical output."""
         lazy = sio.load_slp(slp_real_data, lazy=True)
@@ -1476,6 +1502,11 @@ class TestLazyNumpyEmptyVideo:
         assert arr.shape[0] == 0  # No frames
         assert arr.shape[2] == 2  # n_nodes
         assert arr.shape[3] == 2  # x, y
+
+        arr, states = labels.numpy(video=1, return_states=True)
+        assert arr.shape[0] == 0
+        assert states.shape == (0, 0, 2)
+        assert states.dtype == np.int8
 
 
 # === Track Overlap Tests ===

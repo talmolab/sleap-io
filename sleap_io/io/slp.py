@@ -4048,7 +4048,8 @@ def _points_from_hdf5_data(
 
     Args:
         pts_data: Structured array from HDF5 with fields x, y, visible, complete,
-            and optionally score.
+            and optionally score. The on-disk `complete` flag is read into
+            `verified`.
         skeleton: The skeleton defining the node structure.
         is_predicted: If True, create a PredictedPointsArray with scores.
 
@@ -4069,7 +4070,7 @@ def _points_from_hdf5_data(
     points["xy"][:, 0] = pts_data["x"]
     points["xy"][:, 1] = pts_data["y"]
     points["visible"] = pts_data["visible"]
-    points["complete"] = pts_data["complete"]
+    points["verified"] = pts_data["complete"]
     points["name"] = skeleton.node_names
 
     return points
@@ -4197,6 +4198,63 @@ def read_instances(
     return instances
 
 
+_UNLABELED_AS_MODES = ("error", "absent")
+
+
+def _check_unlabeled_points(labels: Labels, unlabeled_as: str) -> None:
+    """Refuse or downgrade unlabeled points before writing the compound layout.
+
+    The compound `/points` and `/pred_points` datasets have no `labeled` column, so an
+    unlabeled point would be read back as a labeled, hidden point and trained as
+    absent. This check keeps that from happening silently.
+
+    Args:
+        labels: The labels about to be written.
+        unlabeled_as: `"error"` raises if any point is unlabeled. `"absent"` warns;
+            `write_lfs` then writes unlabeled points as hidden with no location.
+
+    Raises:
+        ValueError: If `unlabeled_as` is `"error"` and an instance has unlabeled
+            points.
+    """
+    n_unlabeled = 0
+    for inst in labels.instances:
+        points = inst.points
+        n_unlabeled += int(np.count_nonzero(~(points["labeled"] | points["visible"])))
+    if n_unlabeled == 0:
+        return
+    if unlabeled_as == "error":
+        raise ValueError(
+            f"{n_unlabeled} point(s) are unlabeled, but this SLP layout can't store "
+            "unlabeled points: they would be read back as labeled hidden points. Pass "
+            'unlabeled_as="absent" to save them as hidden points instead.'
+        )
+    warnings.warn(
+        f"Saving {n_unlabeled} unlabeled point(s) as hidden points with no location "
+        "(labeled, not visible), since this SLP layout can't store unlabeled points.",
+        stacklevel=3,
+    )
+
+
+def _check_dropped_metadata(labels: Labels) -> None:
+    """Check record metadata kinds, then warn that this layout drops metadata.
+
+    Args:
+        labels: The labels about to be written.
+
+    Raises:
+        TypeError: If a metadata key mixes kinds across a table's records (see
+            `Labels.check_metadata`).
+    """
+    kinds = labels.check_metadata()
+    if any(kinds.values()):
+        warnings.warn(
+            "Instance, frame and bounding box metadata can't be stored in this "
+            "SLP layout and was not saved.",
+            stacklevel=3,
+        )
+
+
 def write_lfs(labels_path: str, labels: Labels):
     """Write labeled frames, instances and points to a SLEAP labels file.
 
@@ -4286,10 +4344,11 @@ def write_lfs(labels_path: str, labels: Labels):
                 tracking_score = inst.tracking_score
                 point_id_start = len(points)
 
-                for pt in inst.points:
-                    points.append(
-                        [pt["xy"][0], pt["xy"][1], pt["visible"], pt["complete"]]
-                    )
+                # Unlabeled points (only present with unlabeled_as="absent") are
+                # written as hidden with no location.
+                xy = inst.numpy(invisible_as_nan=False)
+                for pt, (x, y) in zip(inst.points, xy):
+                    points.append([x, y, pt["visible"], pt["verified"]])
 
                 point_id_end = len(points)
 
@@ -4299,15 +4358,10 @@ def write_lfs(labels_path: str, labels: Labels):
                 tracking_score = inst.tracking_score
                 point_id_start = len(predicted_points)
 
-                for pt in inst.points:
+                xy = inst.numpy(invisible_as_nan=False)
+                for pt, (x, y) in zip(inst.points, xy):
                     predicted_points.append(
-                        [
-                            pt["xy"][0],
-                            pt["xy"][1],
-                            pt["visible"],
-                            pt["complete"],
-                            pt["score"],
-                        ]
+                        [x, y, pt["visible"], pt["verified"], pt["score"]]
                     )
 
                 point_id_end = len(predicted_points)
@@ -9340,6 +9394,7 @@ def write_labels(
     prefer_metadata: bool = True,
     preserve_unknown: bool = False,
     save_embedding_vectors: bool = False,
+    unlabeled_as: str = "error",
 ):
     """Write a SLEAP labels file.
 
@@ -9401,7 +9456,22 @@ def write_labels(
             keeping the vectors in memory. Set `True` to also write the attached
             re-ID appearance embeddings. Off by default, mirroring `embed` (which
             embeds *video frames*).
+        unlabeled_as: How to handle unlabeled points (`labeled=False`), which this
+            layout can't store. `"error"` (the default) raises a `ValueError` before
+            anything is written. `"absent"` saves them as hidden points (labeled, not
+            visible) and warns. Lazy-loaded labels can't hold unlabeled points.
+
+    Notes:
+        Instance, frame and bounding box `metadata` can't be stored in this layout;
+        it is dropped with a warning. Metadata kinds are still checked first
+        (`Labels.check_metadata`), so a key that mixes kinds across records raises
+        a `TypeError` before anything is written.
     """
+    if unlabeled_as not in _UNLABELED_AS_MODES:
+        raise ValueError(
+            f"unlabeled_as must be one of {_UNLABELED_AS_MODES}, got {unlabeled_as!r}."
+        )
+
     # Fast path for lazy labels (avoids materializing frames/instances)
     # Supported for simple embed modes: None, False, "source"
     if labels.is_lazy:
@@ -9434,6 +9504,10 @@ def write_labels(
                 save_embedding_vectors=save_embedding_vectors,
             )
             return
+
+    # Check before touching the output file so a refused save leaves it intact.
+    _check_unlabeled_points(labels, unlabeled_as)
+    _check_dropped_metadata(labels)
 
     # Capture unknown top-level members from the source file before it is
     # truncated, so additions made by a newer sleap-io version survive a

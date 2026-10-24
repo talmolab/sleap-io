@@ -25,7 +25,13 @@ from sleap_io.model.camera import RecordingSession
 from sleap_io.model.category import Category
 from sleap_io.model.event import Event, EventType
 from sleap_io.model.identity import Identity
-from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.instance import (
+    Instance,
+    PointsArray,
+    PredictedInstance,
+    Track,
+    _check_unmapped,
+)
 from sleap_io.model.labeled_frame import (
     LabeledFrame,
     _relink_from_predicted,
@@ -61,6 +67,25 @@ if TYPE_CHECKING:
 # bloating provenance. The cap keeps the most recent records. Pass
 # ``max_merge_history=None`` to ``merge()`` to retain the full history.
 DEFAULT_MERGE_HISTORY_LIMIT = 1000
+
+
+def _update_points_from_numpy(points: PointsArray, xy: np.ndarray) -> None:
+    """Update a points array in place from `(n_nodes, 2)` coordinates.
+
+    Finite rows set the coordinates and mark the point visible and labeled. NaN rows
+    hide points that were visible and clear their coordinates. NaN rows for points
+    that are already hidden or unlabeled leave them unchanged, so a round trip through
+    `Labels.numpy()` keeps occluded estimates and unlabeled points intact.
+
+    Args:
+        points: The points array to update.
+        xy: Coordinates of shape `(n_nodes, 2)`. NaN means "no location".
+    """
+    located = ~np.isnan(xy[:, 0])
+    points["xy"][~located & points["visible"]] = np.nan
+    points["xy"][located] = xy[located]
+    points["labeled"][located] = True
+    points["visible"] = located
 
 
 class _IdentitySet:
@@ -1256,7 +1281,8 @@ class Labels:
         untracked: bool = False,
         return_confidence: bool = False,
         user_instances: bool = True,
-    ) -> np.ndarray:
+        return_states: bool = False,
+    ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         """Construct a numpy array from instance points.
 
         Args:
@@ -1273,6 +1299,8 @@ class Labels:
                 available, preferring them over predicted instances with the same track.
                 If `False`,
                 only include predicted instances.
+            return_states: If `True`, also return the `PointState` of every point,
+                which tells unlabeled, occluded, visible and absent points apart.
 
         Returns:
             An array of tracks of shape `(n_frames, n_tracks, n_nodes, 2)` if
@@ -1280,6 +1308,11 @@ class Labels:
             `(n_frames, n_tracks, n_nodes, 3)` if `return_confidence` is `True`.
 
             Missing data will be replaced with `np.nan`.
+
+            If `return_states` is `True`, a tuple `(points, states)` is returned,
+            where `states` is an `int8` array of shape
+            `(n_frames, n_tracks, n_nodes)` holding `PointState` values. Slots
+            without an instance are `PointState.UNLABELED`.
 
             If this is a single instance project, a track does not need to be assigned.
 
@@ -1305,6 +1338,7 @@ class Labels:
                 untracked=untracked,
                 return_confidence=return_confidence,
                 user_instances=user_instances,
+                return_states=return_states,
             )
 
         from sleap_io.codecs.numpy import to_numpy
@@ -1315,6 +1349,7 @@ class Labels:
             untracked=untracked,
             return_confidence=return_confidence,
             user_instances=user_instances,
+            return_states=return_states,
         )
 
     def to_dict(
@@ -2169,6 +2204,37 @@ class Labels:
         """Return an iterator over all instances within all labeled frames."""
         return (instance for lf in self.labeled_frames for instance in lf.instances)
 
+    def check_metadata(self) -> dict[str, dict[str, str]]:
+        """Check that record metadata uses one kind of value per key in each table.
+
+        Each record validates its own metadata values when they are set, but
+        whether a key mixes kinds across records (for example `bool` on one
+        instance and `str` on another) can only be checked over the whole table.
+        Saving runs this check before anything is written.
+
+        Returns:
+            A dictionary with keys `"instances"`, `"frames"` and `"bboxes"`, each
+            mapping a metadata key to its kind (`"bool"`, `"int"`, `"float"` or
+            `"str"`). Keys whose values are all `None` are omitted.
+
+        Raises:
+            TypeError: If a key mixes kinds across a table's records, other than
+                `int` with `float`, or mixes floats with integers beyond 2^53.
+
+        Notes:
+            On lazy-loaded labels this materializes every frame.
+        """
+        from sleap_io.model.record_metadata import metadata_column_kinds
+
+        frames = self.labeled_frames
+        return {
+            "instances": metadata_column_kinds(self.instances, "instances"),
+            "frames": metadata_column_kinds(frames, "frames"),
+            "bboxes": metadata_column_kinds(
+                (box for lf in frames for box in lf.bboxes), "bboxes"
+            ),
+        }
+
     @property
     def temporal_rois(self) -> list["ROI"]:
         """Return ROIs that are tied to specific frames (on LabeledFrames)."""
@@ -2715,6 +2781,7 @@ class Labels:
         new_skeleton: Skeleton,
         old_skeleton: Skeleton | None = None,
         node_map: dict[NodeOrIndex, NodeOrIndex] | None = None,
+        unmapped: str = "unlabeled",
     ):
         """Replace the skeleton in the labels.
 
@@ -2728,16 +2795,22 @@ class Labels:
                 indices, or string names. If not provided, only nodes with identical
                 names will be mapped. Points associated with unmapped nodes will be
                 removed.
+            unmapped: How to fill nodes of the new skeleton that no old node maps to
+                (for example, newly added nodes). `"unlabeled"` (the default) marks
+                them as unlabeled, so training ignores them. `"absent"` marks them as
+                labeled but not visible, with no location (the behavior before
+                sleap-io 0.10).
 
         Raises:
             ValueError: If there is more than one skeleton in the `Labels` but it is not
-                specified.
+                specified, or if `unmapped` is not a supported value.
 
         Warning:
             This method will replace the skeleton in all instances in the labels that
             have the old skeleton. **All point data associated with nodes not in the
             `node_map` will be lost.**
         """
+        _check_unmapped(unmapped)
         if old_skeleton is None:
             if len(self.skeletons) != 1:
                 raise ValueError(
@@ -2768,7 +2841,9 @@ class Labels:
         for inst in self.instances:
             if inst.skeleton == old_skeleton:
                 inst.replace_skeleton(
-                    new_skeleton=new_skeleton, node_names_map=node_names_map
+                    new_skeleton=new_skeleton,
+                    node_names_map=node_names_map,
+                    unmapped=unmapped,
                 )
 
         # Replace the skeleton in the labels.
@@ -3444,6 +3519,10 @@ class Labels:
 
             If the array has a third dimension with shape 3 (tracks_arr.shape[-1] == 3),
             the last channel is assumed to be confidence scores.
+
+            Finite coordinates mark a point visible and labeled. NaN coordinates hide
+            a point that was visible and clear its location; points that are already
+            hidden or unlabeled are left unchanged.
         """
         # Check dimensions
         if len(tracks_arr.shape) != 4:
@@ -3578,10 +3657,7 @@ class Labels:
 
                 # Update existing instance points
                 if found_instance is not None:
-                    points = track_data[:, :2]
-                    mask = ~np.isnan(points[:, 0])
-                    for node_idx in np.where(mask)[0]:
-                        found_instance.points[node_idx]["xy"] = points[node_idx]
+                    _update_points_from_numpy(found_instance.points, track_data[:, :2])
 
                     # Update confidence scores if available
                     if has_confidence and isinstance(found_instance, PredictedInstance):
@@ -4243,6 +4319,7 @@ class Labels:
                         frame_idx=mapped_frame_idx,
                         instances=[],
                         is_negative=other_frame.is_negative,
+                        metadata=other_frame.metadata.copy(),
                     )
 
                     # Map instances to new skeleton/track
@@ -4676,6 +4753,7 @@ class Labels:
                 category=mapped_category,
                 category_score=instance.category_score,
                 category_embedding=instance.category_embedding,
+                metadata=instance.metadata.copy(),
             )
         else:
             new_instance = Instance(
@@ -4690,6 +4768,7 @@ class Labels:
                 category=mapped_category,
                 category_score=instance.category_score,
                 category_embedding=instance.category_embedding,
+                metadata=instance.metadata.copy(),
             )
         if memo is not None:
             memo[id(instance)] = new_instance
