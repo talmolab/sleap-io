@@ -236,6 +236,12 @@ class Labels:
         default=None, repr=False, eq=False, init=False, hash=False
     )
 
+    # Unknown point columns read from a newer SLP file, carried through a re-save
+    # while the instances are unchanged (see `sleap_io.io.slp._PointColumnCarry`).
+    _point_columns: "Any" = field(
+        default=None, init=False, repr=False, eq=False, hash=False
+    )
+
     # Frame index: (id(video), frame_idx) -> LabeledFrame. Rebuilt on demand.
     _frame_index: "dict[tuple[int, int], LabeledFrame] | None" = field(
         default=None, init=False, repr=False, eq=False
@@ -460,7 +466,8 @@ class Labels:
 
         # Materialize frames and relink to new metadata objects
         labeled_frames = []
-        for lf in self._lazy_store.materialize_all():
+        materialized = self._lazy_store.materialize_all()
+        for lf in materialized:
             # Relink video
             lf.video = video_map.get(id(lf.video), lf.video)
             # Relink instances
@@ -520,7 +527,7 @@ class Labels:
                 new.track = track_map.get(id(orig.track), new.track)
             static_rois.append(new)
 
-        return Labels(
+        materialized_labels = Labels(
             labeled_frames=labeled_frames,
             videos=new_videos,
             skeletons=new_skeletons,
@@ -529,6 +536,10 @@ class Labels:
             provenance=dict(self.provenance),
             rois=static_rois,
         )
+        materialized_labels._point_columns = self._lazy_store.point_column_carry(
+            materialized
+        )
+        return materialized_labels
 
     def __attrs_post_init__(self):
         """Update metadata lists."""
@@ -3246,6 +3257,10 @@ class Labels:
 
         labels.provenance = deepcopy(labels.provenance)
         labels.provenance["source_labels"] = self.provenance.get("filename", None)
+
+        # Unknown point columns can't follow a subset of the rows, so saving the
+        # extracted labels drops them with a warning instead of silently.
+        labels._point_columns = self._point_columns
 
         return labels
 

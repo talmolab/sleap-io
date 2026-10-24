@@ -4323,6 +4323,7 @@ def read_instances(
     format_id: float,
     *,
     _hdf5_file: h5py.File | None = None,
+    _point_owners: list | None = None,
 ) -> list[Instance | PredictedInstance]:
     """Read `Instance` dataset in a SLEAP labels file.
 
@@ -4338,6 +4339,9 @@ def read_instances(
             the data is read from this handle (left open for the caller to close);
             otherwise `labels_path` is opened and closed internally. This is a
             private argument used to thread a single open handle through reads.
+        _point_owners: If given, a list that each instance is appended to as a
+            `(point_id_start, point_id_end, instance)` tuple (see
+            `_PointColumnCarry`).
 
     Returns:
         A list of `Instance` and/or `PredictedInstance` objects.
@@ -4394,6 +4398,9 @@ def read_instances(
 
         else:
             continue
+
+        if _point_owners is not None:
+            _point_owners.append((point_id_start, point_id_end, inst))
 
         if from_predicted >= 0:
             from_predicted_pairs.append((instance_id, from_predicted))
@@ -4591,6 +4598,140 @@ def _write_point_tables(
             _write_columns(f, name, rows, compression=compression)
 
 
+class _PointColumnCarry:
+    """Unknown point columns read from a file, kept to carry them through a save.
+
+    A newer sleap-io may add point columns this version doesn't know. They are kept
+    alongside the loaded `Labels` and written back if the rows of their table still
+    line up with the instances when saving: the same instances, with the same points
+    arrays, in the same order. Otherwise they are dropped with a warning.
+
+    Attributes:
+        tables: Maps a table name (`"points"` or `"pred_points"`) to a tuple
+            `(owners, columns)`. `owners` is a tuple of `(instance, points)` pairs
+            owning the table's rows in order, or `None` if the rows couldn't be
+            attributed to instances. `columns` is a structured array of the unknown
+            columns, one record per row.
+    """
+
+    def __init__(self, tables: dict[str, tuple[tuple | None, np.ndarray]]):
+        """Initialize from the carried tables (see class attributes)."""
+        self.tables = tables
+
+
+def _point_column_carry(
+    points: np.ndarray,
+    pred_points: np.ndarray,
+    owners: list[tuple[int, int, Instance | PredictedInstance]],
+) -> _PointColumnCarry | None:
+    """Collect unknown point columns to carry through a later save.
+
+    Args:
+        points: Normalised user point records, as read.
+        pred_points: Normalised predicted point records, as read.
+        owners: `(point_id_start, point_id_end, instance)` for every instance read.
+
+    Returns:
+        A `_PointColumnCarry`, or `None` if neither table has unknown columns.
+    """
+    tables = {}
+    for name, rows, base, inst_type in (
+        ("points", points, RAW_POINT_DTYPE, Instance),
+        ("pred_points", pred_points, RAW_PRED_POINT_DTYPE, PredictedInstance),
+    ):
+        extra = [n for n in rows.dtype.names if n not in base.names]
+        if not extra:
+            continue
+        columns = np.empty(
+            len(rows), dtype=[(n, rows.dtype.fields[n][0]) for n in extra]
+        )
+        for n in extra:
+            columns[n] = rows[n]
+        spans = sorted(
+            (span for span in owners if type(span[2]) is inst_type),
+            key=lambda span: span[0],
+        )
+        # The rows can only follow their instances if the instances own them
+        # back to back, from the first row to the last.
+        position = 0
+        for start, end, _ in spans:
+            if start != position:
+                position = -1
+                break
+            position = end
+        contiguous = position == len(rows)
+        table_owners = (
+            tuple((inst, inst.points) for _, _, inst in spans) if contiguous else None
+        )
+        tables[name] = (table_owners, columns)
+    return _PointColumnCarry(tables) if tables else None
+
+
+def _warn_dropped_point_columns(
+    carry: _PointColumnCarry, names: Iterable[str], reason: str
+) -> None:
+    """Warn that carried point columns are not being saved.
+
+    Args:
+        carry: The carried columns.
+        names: Names of tables in `carry.tables` whose columns are dropped.
+        reason: `"legacy"` (the legacy layout can't store them) or `"changed"` (the
+            instances changed since loading, so the rows no longer line up).
+    """
+    for name in names:
+        cols = ", ".join(carry.tables[name][1].dtype.names)
+        why = (
+            "the legacy SLP layout can't store them"
+            if reason == "legacy"
+            else "the instances changed since the file was loaded, so its rows no "
+            "longer line up"
+        )
+        warnings.warn(
+            f"Unknown column(s) {cols} of /{name} were not saved: {why}.",
+            stacklevel=4,
+        )
+
+
+def _with_carried_columns(
+    rows: np.ndarray,
+    carry: _PointColumnCarry | None,
+    name: str,
+    instances: list[Instance | PredictedInstance],
+) -> np.ndarray:
+    """Append carried unknown columns to freshly built point records.
+
+    Args:
+        rows: Raw point records built from `instances`.
+        carry: Unknown columns kept from loading, or `None`.
+        name: The table name, `"points"` or `"pred_points"`.
+        instances: The instances owning `rows`, in order.
+
+    Returns:
+        `rows` with the carried columns appended when the instances (and their
+        points arrays) are the ones loaded, in the same order. Otherwise `rows`
+        unchanged, with a warning if columns had to be dropped.
+    """
+    if carry is None or name not in carry.tables:
+        return rows
+    owners, columns = carry.tables[name]
+    if (
+        owners is not None
+        and len(owners) == len(instances)
+        and all(
+            inst is owner and inst.points is points
+            for inst, (owner, points) in zip(instances, owners)
+        )
+    ):
+        merged = np.empty(len(rows), dtype=rows.dtype.descr + columns.dtype.descr)
+        for n in rows.dtype.names:
+            merged[n] = rows[n]
+        for n in columns.dtype.names:
+            merged[n] = columns[n]
+        return merged
+    _warn_dropped_point_columns(carry, [name], "changed")
+    return rows
+
+
 def write_lfs(
     labels_path: str,
     labels: Labels,
@@ -4745,6 +4886,16 @@ def write_lfs(
     predicted_points = _raw_points_from_instances(pred_points, is_predicted=True)
     instances = np.array([tuple(x) for x in instances], dtype=instance_dtype)
     frames = np.array([tuple(x) for x in frames], dtype=frame_dtype)
+
+    carry = getattr(labels, "_point_columns", None)
+    if legacy_format:
+        if carry is not None:
+            _warn_dropped_point_columns(carry, carry.tables, "legacy")
+    else:
+        points = _with_carried_columns(points, carry, "points", user_points)
+        predicted_points = _with_carried_columns(
+            predicted_points, carry, "pred_points", pred_points
+        )
 
     # Write to file.
     with h5py.File(labels_path, "a") as f:
@@ -8920,9 +9071,18 @@ def _read_labels_from_open_file(
     points = read_points(labels_path, _hdf5_file=f)
     pred_points = read_pred_points(labels_path, _hdf5_file=f)
     format_id = read_hdf5_attrs(labels_path, "metadata", "format_id", _hdf5_file=f)
+    point_owners: list = []
     instances = read_instances(
-        labels_path, skeletons, tracks, points, pred_points, format_id, _hdf5_file=f
+        labels_path,
+        skeletons,
+        tracks,
+        points,
+        pred_points,
+        format_id,
+        _hdf5_file=f,
+        _point_owners=point_owners,
     )
+    point_columns = _point_column_carry(points, pred_points, point_owners)
     suggestions = read_suggestions(labels_path, videos, _hdf5_file=f)
     metadata = read_metadata(labels_path, _hdf5_file=f)
     provenance = read_provenance(labels_path, metadata, _hdf5_file=f)
@@ -9210,6 +9370,7 @@ def _read_labels_from_open_file(
     # Store the HDF5 file handle for lazy label image data (keeps it alive)
     if _li_file is not None:
         labels._label_image_file = _li_file
+    labels._point_columns = point_columns
 
     return labels
 
@@ -9474,6 +9635,11 @@ def _write_labels_lazy(
             for rows in (lazy_store.points_data, lazy_store.pred_points_data)
         )
         _refuse_unlabeled_points(n_unlabeled, unlabeled_as)
+        carry = _point_column_carry(
+            lazy_store.points_data, lazy_store.pred_points_data, []
+        )
+        if carry is not None:
+            _warn_dropped_point_columns(carry, carry.tables, "legacy")
 
     # Capture unknown top-level members from the source file before it is
     # truncated, to carry them across the load/save cycle (see write_labels).

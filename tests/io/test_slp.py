@@ -12581,6 +12581,157 @@ def test_legacy_prediction_files_hide_points_without_location(path, n_cleared):
         assert eager_df.equals(lazy_df)
 
 
+def _add_unknown_point_columns(path) -> tuple[np.ndarray, np.ndarray]:
+    """Add unknown columns to both point tables of a 3.0 file and return them.
+
+    This is what a newer sleap-io adding a point column would write.
+    """
+    with h5py.File(path, "r+") as f:
+        n, n_pred = len(f["points/x"]), len(f["pred_points/x"])
+        extra = np.arange(n, dtype="f4") * 0.5
+        extra_pred = np.arange(2 * n_pred, dtype="i8").reshape(n_pred, 2)
+        f["points"].create_dataset("future_weight", data=extra)
+        f["pred_points"].create_dataset("future_pair", data=extra_pred)
+    return extra, extra_pred
+
+
+def _assert_unknown_point_columns(path, extra, extra_pred):
+    """Check the unknown columns from `_add_unknown_point_columns` are in a file."""
+    with h5py.File(path, "r") as f:
+        assert f["points/future_weight"].dtype == np.float32
+        assert_equal(f["points/future_weight"][()], extra)
+        assert_equal(f["pred_points/future_pair"][()], extra_pred)
+
+
+@pytest.fixture
+def slp_with_unknown_point_columns(tmp_path, centered_pair):
+    """A 3.0 file with user and predicted points and unknown point columns."""
+    labels = load_slp(centered_pair)
+    labels.labeled_frames = labels.labeled_frames[:5]
+    for lf in labels.labeled_frames[:2]:
+        pred = lf.instances[0]
+        lf.instances.append(
+            Instance.from_numpy(pred.numpy(), skeleton=pred.skeleton, track=pred.track)
+        )
+    path = tmp_path / "unknown_columns.slp"
+    save_slp(labels, str(path))
+    extra, extra_pred = _add_unknown_point_columns(path)
+    return str(path), extra, extra_pred
+
+
+def test_unknown_point_columns_survive_lazy_save(
+    tmp_path, slp_with_unknown_point_columns
+):
+    """A lazy save carries unknown point columns through unchanged."""
+    path, extra, extra_pred = slp_with_unknown_point_columns
+    lazy = load_slp(path, lazy=True)
+    np.testing.assert_array_equal(lazy.numpy(), load_slp(path).numpy())
+    out = tmp_path / "out.slp"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(lazy, str(out))
+    assert lazy.is_lazy
+    _assert_unknown_point_columns(out, extra, extra_pred)
+
+
+def test_unknown_point_columns_survive_unedited_eager_save(
+    tmp_path, slp_with_unknown_point_columns
+):
+    """Eager saves carry unknown columns while the instances are the ones loaded."""
+    path, extra, extra_pred = slp_with_unknown_point_columns
+    labels = load_slp(path)
+    # Editing coordinates in place keeps the rows in order.
+    labels[0].instances[0].points["xy"] += 1.0
+    out = tmp_path / "out.slp"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(labels, str(out))
+    _assert_unknown_point_columns(out, extra, extra_pred)
+
+    # So do copies and materialized lazy labels.
+    for source in (labels.copy(), load_slp(path, lazy=True).materialize()):
+        out = tmp_path / "copy.slp"
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            save_slp(source, str(out))
+        _assert_unknown_point_columns(out, extra, extra_pred)
+
+
+@pytest.mark.parametrize("edit", ["remove", "replace"])
+def test_unknown_point_columns_dropped_when_instances_change(
+    tmp_path, slp_with_unknown_point_columns, edit
+):
+    """Unknown columns are dropped with a warning once their rows no longer line up."""
+    path, _, extra_pred = slp_with_unknown_point_columns
+    labels = load_slp(path)
+    # Removing or replacing a user instance means the stored user point rows no
+    # longer follow the instances; predictions are intact.
+    if edit == "remove":
+        labels[0].instances.pop()
+    else:
+        inst = labels[0].instances[-1]
+        labels[0].instances[-1] = Instance.from_numpy(
+            inst.numpy(), skeleton=inst.skeleton
+        )
+    out = tmp_path / "out.slp"
+    with pytest.warns(UserWarning, match="future_weight of /points were not saved"):
+        save_slp(labels, str(out))
+    with h5py.File(out, "r") as f:
+        assert "future_weight" not in f["points"]
+        assert_equal(f["pred_points/future_pair"][()], extra_pred)
+
+
+def test_unknown_point_columns_dropped_by_extract(
+    tmp_path, slp_with_unknown_point_columns
+):
+    """Extracted labels warn that the unknown columns can't follow them."""
+    path, _, _ = slp_with_unknown_point_columns
+    labels = load_slp(path).extract([0, 1])
+    with pytest.warns(UserWarning, match="future_pair of /pred_points were not"):
+        save_slp(labels, str(tmp_path / "out.slp"))
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_unknown_point_columns_dropped_by_legacy_format(
+    tmp_path, slp_with_unknown_point_columns, lazy
+):
+    """The legacy layout can't store unknown columns, so they are dropped."""
+    path, _, _ = slp_with_unknown_point_columns
+    out = tmp_path / "out.slp"
+    with pytest.warns(UserWarning, match="legacy SLP layout can't store them"):
+        save_slp(load_slp(path, lazy=lazy), str(out), legacy_format=True)
+    with h5py.File(out, "r") as f:
+        assert f["points"].dtype.names == ("x", "y", "visible", "complete")
+
+
+@pytest.mark.parametrize("where", ["first", "last"])
+def test_unknown_point_columns_with_unowned_rows_are_dropped(
+    tmp_path, slp_with_unknown_point_columns, where
+):
+    """Rows not owned by any instance can't be followed, so the columns drop."""
+    path, _, _ = slp_with_unknown_point_columns
+    with h5py.File(path, "r+") as f:
+        # Add a row to every user point column that no instance points at.
+        for name, col in list(f["points"].items()):
+            data = col[()]
+            data = (
+                np.concatenate([data[:1], data])
+                if where == "first"
+                else np.concatenate([data, data[-1:]])
+            )
+            del f["points"][name]
+            f["points"].create_dataset(name, data=data)
+        if where == "first":
+            instances = f["instances"][()]
+            user = instances["instance_type"] == 0
+            instances["point_id_start"][user] += 1
+            instances["point_id_end"][user] += 1
+            f["instances"][...] = instances
+    labels = load_slp(path)
+    with pytest.warns(UserWarning, match="future_weight of /points were not saved"):
+        save_slp(labels, str(tmp_path / "out.slp"))
+
+
 def test_unknown_instance_type_is_skipped(tmp_path, slp_typical):
     """Instance rows of an unknown type are skipped, as before."""
     path = tmp_path / "labels.slp"

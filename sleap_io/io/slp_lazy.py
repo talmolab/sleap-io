@@ -22,7 +22,13 @@ if TYPE_CHECKING:
     from sleap_io.model.skeleton import Skeleton
     from sleap_io.model.video import Video
 
-from sleap_io.io.slp import InstanceType
+from sleap_io.io.slp import (
+    RAW_POINT_DTYPE,
+    RAW_PRED_POINT_DTYPE,
+    InstanceType,
+    _point_column_carry,
+    _PointColumnCarry,
+)
 from sleap_io.model.instance import PointState, compute_point_states
 
 
@@ -435,6 +441,32 @@ class LazyDataStore:
         points["score"] = pts_data["score"]
         points["name"] = skeleton.node_names
         return points
+
+    def point_column_carry(
+        self, frames: list["LabeledFrame"]
+    ) -> "_PointColumnCarry | None":
+        """Collect unknown point columns to carry through a save of materialized frames.
+
+        Args:
+            frames: The frames returned by `materialize_all`, one per row of
+                `frames_data`.
+
+        Returns:
+            A `_PointColumnCarry` for the frames' instances, or `None` if the point
+            tables have no unknown columns.
+        """
+        if len(self.points_data.dtype.names) == len(RAW_POINT_DTYPE.names) and len(
+            self.pred_points_data.dtype.names
+        ) == len(RAW_PRED_POINT_DTYPE.names):
+            return None
+        owners = []
+        for frame_row, lf in zip(self.frames_data, frames):
+            first = int(frame_row["instance_id_start"])
+            for offset, inst in enumerate(lf.instances):
+                inst_row = self.instances_data[first + offset]
+                start = int(inst_row["point_id_start"])
+                owners.append((start, int(inst_row["point_id_end"]), inst))
+        return _point_column_carry(self.points_data, self.pred_points_data, owners)
 
     def materialize_all(self) -> list["LabeledFrame"]:
         """Materialize all frames.
