@@ -35,6 +35,8 @@ sleap-io supports multiple NWB format types through the `nwb_format` parameter:
   - Stores predicted pose data from inference
   - Includes confidence scores
   - Supports multiple animals/tracks
+  - Writes only visible points: hidden points, including occluded estimates,
+    are written as `NaN` and read back as hidden with no location
 
 ## Point visibility in annotations
 

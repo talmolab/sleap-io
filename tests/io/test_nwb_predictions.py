@@ -7,8 +7,21 @@ import numpy as np
 import pytest
 from pynwb import NWBHDF5IO, NWBFile
 
-from sleap_io import load_slp
-from sleap_io.io.nwb_predictions import append_nwb_data, get_timestamps, write_nwb
+from sleap_io import (
+    LabeledFrame,
+    Labels,
+    PredictedInstance,
+    Skeleton,
+    Video,
+    load_nwb,
+    load_slp,
+)
+from sleap_io.io.nwb_predictions import (
+    append_nwb_data,
+    convert_predictions_to_dataframe,
+    get_timestamps,
+    write_nwb,
+)
 
 
 @pytest.fixture
@@ -294,3 +307,38 @@ def test_get_timestamps(nwbfile, centered_pair):
     assert len(ts) == 10
     assert ts[0] == 0
     assert ts[-1] == 9
+
+
+def _occluded_predictions() -> Labels:
+    """Labels with one predicted instance whose point states are `[2, 1, 3, 0]`."""
+    skeleton = Skeleton(["a", "b", "c", "d"], name="skeleton")
+    video = Video(filename="test_video.mp4")
+    instance = PredictedInstance.from_numpy(
+        np.array([[10.0, 20.0], [30.0, 40.0], [np.nan, np.nan], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        point_scores=np.ones(4),
+        score=1.0,
+        visible=[True, False, False, False],
+        labeled=[True, True, True, False],
+    )
+    assert instance.point_states.tolist() == [2, 1, 3, 0]
+    return Labels([LabeledFrame(video=video, frame_idx=0, instances=[instance])])
+
+
+def test_occluded_points_written_as_nan():
+    """Hidden points with an estimated location are exported without a location."""
+    df = convert_predictions_to_dataframe(_occluded_predictions())
+    row = df.iloc[0]
+    xs = [row[("test_video.mp4", "skeleton", "untracked", n, "x")] for n in "abcd"]
+    assert xs[0] == 10.0
+    assert np.isnan(xs[1:]).all()
+
+
+def test_occluded_points_round_trip_not_visible(tmp_path):
+    """An occluded point does not come back from NWB predictions as visible."""
+    path = tmp_path / "occluded.nwb"
+    write_nwb(labels=_occluded_predictions(), nwbfile_path=path)
+    rt_inst = load_nwb(path)[0][0]
+    assert rt_inst.points["visible"].tolist() == [True, False, False, False]
+    np.testing.assert_array_equal(rt_inst.numpy()[0], [10.0, 20.0])
+    assert np.isnan(rt_inst.numpy()[1:]).all()

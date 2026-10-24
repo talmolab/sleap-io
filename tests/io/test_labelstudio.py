@@ -87,3 +87,52 @@ def test_write_labels_with_nan_points(tmp_path):
         if annot["type"] == "keypointlabels"
     ]
     assert len(keypoint_annots) == 2  # Only node1 and node3, node2 was skipped
+
+
+def _occluded_labels() -> tuple[Labels, Skeleton]:
+    """Labels with one instance whose point states are `[2, 1, 3, 0]`."""
+    skeleton = Skeleton(["a", "b", "c", "d"])
+    video = Video(filename="test_video.mp4")
+    video.backend_metadata["shape"] = (10, 100, 100, 3)
+    instance = Instance.from_numpy(
+        np.array([[10.0, 20.0], [30.0, 40.0], [np.nan, np.nan], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        visible=[True, False, False, False],
+        labeled=[True, True, True, False],
+    )
+    assert instance.point_states.tolist() == [2, 1, 3, 0]
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[instance])])
+    return labels, skeleton
+
+
+def test_write_labels_skips_occluded_points():
+    """Hidden points with an estimated location are not exported as keypoints."""
+    labels, _ = _occluded_labels()
+    keypoint_annots = [
+        annot
+        for annot in convert_labels(labels)[0]["annotations"][0]["result"]
+        if annot["type"] == "keypointlabels"
+    ]
+    assert [annot["value"]["keypointlabels"] for annot in keypoint_annots] == [["a"]]
+
+
+def test_occluded_points_round_trip_not_visible():
+    """An occluded point does not come back from Label Studio as visible."""
+    labels, skeleton = _occluded_labels()
+    rt_inst = parse_tasks(convert_labels(labels), skeleton)[0][0]
+    assert rt_inst.points["visible"].tolist() == [True, False, False, False]
+    np.testing.assert_array_equal(rt_inst.numpy()[0], [10.0, 20.0])
+    assert np.isnan(rt_inst.numpy()[1:]).all()
+
+
+def test_write_labels_skips_visible_nan_points():
+    """A visible point without a location is skipped, since NaN isn't valid JSON."""
+    labels, _ = _occluded_labels()
+    instance = labels[0][0]
+    instance.points["visible"][2] = True
+    keypoint_annots = [
+        annot
+        for annot in convert_labels(labels)[0]["annotations"][0]["result"]
+        if annot["type"] == "keypointlabels"
+    ]
+    assert [annot["value"]["keypointlabels"] for annot in keypoint_annots] == [["a"]]

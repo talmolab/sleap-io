@@ -61,11 +61,15 @@ def convert_predictions_to_dataframe(labels: Labels) -> pd.DataFrame:
         # Traverse the nodes of the instances's skeleton
         skeleton = instance.skeleton
         for node in skeleton.nodes:
+            point = instance[node]
+            # Only visible points have a location in the export: hidden points
+            # (including occluded estimates) are written as NaN.
+            x, y = point["xy"] if point["visible"] else (np.nan, np.nan)
             row_dict = dict(
                 frame_idx=labeled_frame.frame_idx,
-                x=instance[node]["xy"][0],
-                y=instance[node]["xy"][1],
-                score=instance[node]["score"],
+                x=x,
+                y=y,
+                score=point["score"],
                 node_name=node.name,
                 skeleton_name=skeleton.name,
                 track_name=instance.track.name if instance.track else "untracked",
