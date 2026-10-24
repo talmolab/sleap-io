@@ -137,7 +137,7 @@ Every bounding box can carry optional metadata:
 The `metadata` dictionary follows the same rules as
 [instance metadata](poses.md#metadata): values are `bool`, `int`, `float` or `str`
 (`None` means missing), validated when set, and each key holds one kind of value
-across all boxes. `pad()` keeps it on the new box. The current SLP layout
+across all boxes (checked by `Labels.check_metadata()` and when saving). `pad()` keeps it on the new box. The current SLP layout
 doesn't store it yet (`save_slp` drops it with a warning).
 
 ```pycon

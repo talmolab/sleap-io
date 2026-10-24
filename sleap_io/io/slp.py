@@ -4236,21 +4236,23 @@ def _check_unlabeled_points(labels: Labels, unlabeled_as: str) -> None:
     )
 
 
-def _warn_dropped_metadata(labels: Labels) -> None:
-    """Warn if record metadata would be lost by the compound layout.
+def _check_dropped_metadata(labels: Labels) -> None:
+    """Check record metadata kinds, then warn that this layout drops metadata.
 
     Args:
         labels: The labels about to be written.
+
+    Raises:
+        TypeError: If a metadata key mixes kinds across a table's records (see
+            `Labels.check_metadata`).
     """
-    for lf in labels.labeled_frames:
-        records = [lf, *lf.instances, *lf.bboxes]
-        if any(record.metadata for record in records):
-            warnings.warn(
-                "Instance, frame and bounding box metadata can't be stored in this "
-                "SLP layout and was not saved.",
-                stacklevel=3,
-            )
-            return
+    kinds = labels.check_metadata()
+    if any(kinds.values()):
+        warnings.warn(
+            "Instance, frame and bounding box metadata can't be stored in this "
+            "SLP layout and was not saved.",
+            stacklevel=3,
+        )
 
 
 def write_lfs(labels_path: str, labels: Labels):
@@ -9461,7 +9463,9 @@ def write_labels(
 
     Notes:
         Instance, frame and bounding box `metadata` can't be stored in this layout;
-        it is dropped with a warning.
+        it is dropped with a warning. Metadata kinds are still checked first
+        (`Labels.check_metadata`), so a key that mixes kinds across records raises
+        a `TypeError` before anything is written.
     """
     if unlabeled_as not in _UNLABELED_AS_MODES:
         raise ValueError(
@@ -9503,7 +9507,7 @@ def write_labels(
 
     # Check before touching the output file so a refused save leaves it intact.
     _check_unlabeled_points(labels, unlabeled_as)
-    _warn_dropped_metadata(labels)
+    _check_dropped_metadata(labels)
 
     # Capture unknown top-level members from the source file before it is
     # truncated, so additions made by a newer sleap-io version survive a

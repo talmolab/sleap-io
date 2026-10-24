@@ -12244,6 +12244,22 @@ def test_save_slp_warns_dropped_metadata(tmp_path):
             save_slp(labels, str(tmp_path / "meta.slp"))
 
 
+def test_save_slp_rejects_mixed_metadata_kinds(tmp_path):
+    """A metadata key that mixes kinds across records raises before writing."""
+    skeleton = Skeleton(["A"])
+    video = Video("test.mp4")
+    lfs = [
+        LabeledFrame(video=video, frame_idx=i, metadata={"image_id": value})
+        for i, value in enumerate([1, "one"])
+    ]
+    labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=lfs)
+    path = tmp_path / "labels.slp"
+    path.write_bytes(b"existing")
+    with pytest.raises(TypeError, match="across frames"):
+        save_slp(labels, str(path))
+    assert path.read_bytes() == b"existing"
+
+
 @pytest.mark.parametrize("lazy", [False, True])
 def test_verified_round_trip(tmp_path, lazy):
     """`verified` is stored in the on-disk `complete` column and read back."""

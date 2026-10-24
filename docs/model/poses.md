@@ -522,6 +522,9 @@ source annotation id:
   replacing the whole dictionary).
 - Each key must hold one kind of value across a table (e.g. all instances): `int`
   and `float` mix as `float`, but integers beyond 2^53 can't be mixed with floats.
+  A single record can't see the rest of its table, so this is checked by
+  [`Labels.check_metadata()`][sleap_io.Labels.check_metadata] and when saving,
+  which raises a `TypeError` before anything is written.
 - Metadata travels with copies and merges. When frames are merged, their metadata
   is combined key by key, with the target frame winning ties.
 

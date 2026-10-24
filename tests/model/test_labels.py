@@ -9658,3 +9658,48 @@ def test_merge_copies_new_frame_metadata():
     labels.merge(other)
     assert labels[0].metadata == {"image_id": 3}
     assert labels[0].metadata is not other_lf.metadata
+
+
+def _metadata_labels():
+    """Labels with two frames, each with an instance and a bounding box."""
+    skeleton = Skeleton(["A"])
+    video = Video("test.mp4")
+    lfs = []
+    for frame_idx in range(2):
+        inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skeleton)
+        lf = LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+        lf.bboxes.append(UserBoundingBox(x1=0, y1=0, x2=1, y2=1))
+        lfs.append(lf)
+    return Labels(videos=[video], skeletons=[skeleton], labeled_frames=lfs)
+
+
+def test_labels_check_metadata_kinds():
+    """`check_metadata` reports one kind per key for each table."""
+    labels = _metadata_labels()
+    assert labels.check_metadata() == {"instances": {}, "frames": {}, "bboxes": {}}
+
+    lf0, lf1 = labels.labeled_frames
+    lf0.instances[0].metadata.update(ann_id=1, area=2)
+    lf1.instances[0].metadata.update(ann_id=2, area=2.5, note=None)
+    lf0.metadata["file"] = "a.png"
+    lf1.bboxes[0].metadata["iscrowd"] = False
+    assert labels.check_metadata() == {
+        "instances": {"ann_id": "int", "area": "float"},
+        "frames": {"file": "str"},
+        "bboxes": {"iscrowd": "bool"},
+    }
+
+
+@pytest.mark.parametrize("table", ["instances", "frames", "bboxes"])
+def test_labels_check_metadata_rejects_mixes(table):
+    """A key that mixes kinds across a table's records raises."""
+    labels = _metadata_labels()
+    for lf, value in zip(labels.labeled_frames, [True, "yes"]):
+        record = {
+            "instances": lf.instances[0],
+            "frames": lf,
+            "bboxes": lf.bboxes[0],
+        }[table]
+        record.metadata["flag"] = value
+    with pytest.raises(TypeError, match=f"across {table}"):
+        labels.check_metadata()

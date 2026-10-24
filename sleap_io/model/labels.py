@@ -2204,6 +2204,37 @@ class Labels:
         """Return an iterator over all instances within all labeled frames."""
         return (instance for lf in self.labeled_frames for instance in lf.instances)
 
+    def check_metadata(self) -> dict[str, dict[str, str]]:
+        """Check that record metadata uses one kind of value per key in each table.
+
+        Each record validates its own metadata values when they are set, but
+        whether a key mixes kinds across records (for example `bool` on one
+        instance and `str` on another) can only be checked over the whole table.
+        Saving runs this check before anything is written.
+
+        Returns:
+            A dictionary with keys `"instances"`, `"frames"` and `"bboxes"`, each
+            mapping a metadata key to its kind (`"bool"`, `"int"`, `"float"` or
+            `"str"`). Keys whose values are all `None` are omitted.
+
+        Raises:
+            TypeError: If a key mixes kinds across a table's records, other than
+                `int` with `float`, or mixes floats with integers beyond 2^53.
+
+        Notes:
+            On lazy-loaded labels this materializes every frame.
+        """
+        from sleap_io.model.record_metadata import metadata_column_kinds
+
+        frames = self.labeled_frames
+        return {
+            "instances": metadata_column_kinds(self.instances, "instances"),
+            "frames": metadata_column_kinds(frames, "frames"),
+            "bboxes": metadata_column_kinds(
+                (box for lf in frames for box in lf.bboxes), "bboxes"
+            ),
+        }
+
     @property
     def temporal_rois(self) -> list["ROI"]:
         """Return ROIs that are tied to specific frames (on LabeledFrames)."""
