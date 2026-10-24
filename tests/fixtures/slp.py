@@ -254,6 +254,50 @@ def slp_legacy_hidden_complete():
 
 
 @pytest.fixture
+def slp_legacy_negative_frames():
+    """SLP 1.4 package with negative frames in `/negative_frames`.
+
+    Two embedded videos of two 8x8 frames each, stored as `video0` and `video4` (the
+    sparse embedded ids older SLEAP writes, which `/frames` and `/negative_frames`
+    use as video ids). Frames, in order:
+    - video 0, frame 0: one user instance;
+    - video 0, frame 1: negative;
+    - video 1 (`video4`), frame 0: a predicted instance and a user instance whose
+      `from_predicted` is that prediction;
+    - video 1 (`video4`), frame 1: negative.
+    """
+    return "tests/data/slp/legacy_negative_frames.pkg.slp"
+
+
+@pytest.fixture
+def slp_legacy_sparse_instance_ids():
+    """SLP 2.7 file whose stored `instance_id` and `frame_id` aren't row numbers.
+
+    Instance row `r` is stored with `instance_id = 10 * r + 3` and frame row `r` with
+    `frame_id = r + 100`; every link to an instance uses the stored ids. Frames:
+    - frame 0: predicted instance A (score 0.9);
+    - frame 3: predicted instances B (0.8) and C (0.7), then a user instance U with
+      `from_predicted` B, identity `mouse_a` (score 0.75), category `female`
+      (score 0.5), a 4-d identity embedding and a 3-d category embedding. The
+      frame has a box and an ROI linked to U, a centroid linked to C, a mask linked
+      to B, and a label image whose object 1 is linked to U and object 2 to A.
+    """
+    return "tests/data/slp/legacy_sparse_instance_ids.slp"
+
+
+@pytest.fixture
+def slp_mixed_layout():
+    """SLP 3.0 file with columnar points but compound instances and frames.
+
+    The layout written between PRs 2a and 2b of SLP 3.0. One video and two frames:
+    - frame 0: a predicted instance (score 0.8, tracking score 0.25) and a user
+      instance with `from_predicted` set to it, whose second point is unlabeled;
+    - frame 2: negative (stored in `/negative_frames`).
+    """
+    return "tests/data/slp/mixed_layout.slp"
+
+
+@pytest.fixture
 def slp_legacy_h5wasm_flat():
     """SLP 1.2 file in the layout written by h5wasm (sleap-io.js).
 
