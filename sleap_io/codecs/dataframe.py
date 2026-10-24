@@ -614,20 +614,19 @@ def _point_coord(point, axis: int) -> float:
     return float(point["xy"][axis])
 
 
-def _raw_point_coord(pt, field: str, coord_offset: float) -> float:
+def _raw_point_coord(pt, field: str) -> float:
     """Lazy-path counterpart of `_point_coord` for a raw stored point record.
 
     Args:
-        pt: One record of the stored points dataset (fields "x", "y", "visible").
+        pt: One normalised point record (see `sleap_io.io.slp.read_points`).
         field: "x" or "y".
-        coord_offset: Offset subtracted from stored coordinates (legacy files).
 
     Returns:
         The coordinate, or NaN for a point that is not visible.
     """
     if not pt["visible"]:
         return float("nan")
-    return float(pt[field]) - coord_offset
+    return float(pt[field])
 
 
 # =============================================================================
@@ -1286,9 +1285,6 @@ def _to_points_df_lazy(
         frame_idx = int(frame_row["frame_idx"])
         frame_lookup[frame_id] = (vid_id, frame_idx)
 
-    # Determine coordinate adjustment for legacy format
-    coord_offset = 0.5 if store.format_id < 1.1 else 0.0
-
     # Iterate over instances
     for inst_idx, inst_row in enumerate(store.instances_data):
         instance_type = int(inst_row["instance_type"])
@@ -1335,8 +1331,8 @@ def _to_points_df_lazy(
                 continue  # Safety check
 
             pt = pts_data[node_idx]
-            x = _raw_point_coord(pt, "x", coord_offset)
-            y = _raw_point_coord(pt, "y", coord_offset)
+            x = _raw_point_coord(pt, "x")
+            y = _raw_point_coord(pt, "y")
 
             row: dict = {
                 "frame_idx": frame_idx,
@@ -1408,9 +1404,6 @@ def _to_instances_df_lazy(
         vid_id = int(frame_row["video"])
         frame_idx = int(frame_row["frame_idx"])
         frame_lookup[frame_id] = (vid_id, frame_idx)
-
-    # Determine coordinate adjustment for legacy format
-    coord_offset = 0.5 if store.format_id < 1.1 else 0.0
 
     # Iterate over instances
     for inst_idx, inst_row in enumerate(store.instances_data):
@@ -1484,8 +1477,8 @@ def _to_instances_df_lazy(
                 continue
 
             pt = pts_data[node_idx]
-            row[f"{node_name}.x"] = _raw_point_coord(pt, "x", coord_offset)
-            row[f"{node_name}.y"] = _raw_point_coord(pt, "y", coord_offset)
+            row[f"{node_name}.x"] = _raw_point_coord(pt, "x")
+            row[f"{node_name}.y"] = _raw_point_coord(pt, "y")
 
             if include_score and is_predicted:
                 row[f"{node_name}.score"] = float(pt["score"])

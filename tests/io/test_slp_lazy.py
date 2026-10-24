@@ -6,7 +6,12 @@ import pytest
 
 import sleap_io as sio
 from sleap_io import Instance, PredictedInstance, Skeleton, Track, Video
-from sleap_io.io.slp import InstanceType, write_labels
+from sleap_io.io.slp import (
+    RAW_POINT_DTYPE,
+    RAW_PRED_POINT_DTYPE,
+    InstanceType,
+    write_labels,
+)
 from sleap_io.io.slp_lazy import LazyDataStore, LazyFrameList
 from sleap_io.model.labeled_frame import LabeledFrame  # noqa: F401
 
@@ -79,26 +84,14 @@ class TestLazyDataStoreValidation:
             )
 
         # Create points_data
-        points_dtype = np.dtype(
-            [("x", "<f8"), ("y", "<f8"), ("visible", "?"), ("complete", "?")]
-        )
-        points_data = np.zeros(n_points, dtype=points_dtype)
+        points_data = np.zeros(n_points, dtype=RAW_POINT_DTYPE)
         for i in range(n_points):
-            points_data[i] = (float(i), float(i), True, True)
+            points_data[i] = (float(i), float(i), True, True, True)
 
         # Create pred_points_data
-        pred_points_dtype = np.dtype(
-            [
-                ("x", "<f8"),
-                ("y", "<f8"),
-                ("visible", "?"),
-                ("complete", "?"),
-                ("score", "<f8"),
-            ]
-        )
-        pred_points_data = np.zeros(n_pred_points, dtype=pred_points_dtype)
+        pred_points_data = np.zeros(n_pred_points, dtype=RAW_PRED_POINT_DTYPE)
         for i in range(n_pred_points):
-            pred_points_data[i] = (float(i), float(i), True, True, 1.0)
+            pred_points_data[i] = (float(i), float(i), True, True, True, 1.0)
 
         return LazyDataStore(
             frames_data=frames_data,
@@ -517,6 +510,35 @@ class TestLazyNumpyEquivalence:
         _, lazy_states = lazy.numpy(return_states=True, return_confidence=True)
         _, eager_states = eager.numpy(return_states=True, return_confidence=True)
         np.testing.assert_array_equal(lazy_states, eager_states)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "tests/data/slp/centered_pair_predictions.slp",
+            "tests/data/slp/legacy_h5wasm_flat.slp",
+            "tests/data/slp/legacy_hidden_complete.slp",
+            "tests/data/slp/multiview.slp",
+            "tests/data/slp/test_grid_labels.legacy.slp",
+            "tests/data/slp/typical.slp",
+        ],
+    )
+    @pytest.mark.parametrize("return_confidence", [False, True])
+    def test_numpy_matches_eager_for_legacy_files(self, path, return_confidence):
+        """Lazy numpy() equals eager for old files, including hidden points."""
+        lazy = sio.load_slp(path, lazy=True)
+        eager = sio.load_slp(path, lazy=False)
+        for video in range(len(eager.videos)):
+            for untracked in (False, True):
+                kwargs = dict(
+                    video=video,
+                    untracked=untracked,
+                    return_confidence=return_confidence,
+                    return_states=True,
+                )
+                lazy_arr, lazy_states = lazy.numpy(**kwargs)
+                eager_arr, eager_states = eager.numpy(**kwargs)
+                np.testing.assert_array_equal(lazy_arr, eager_arr)
+                np.testing.assert_array_equal(lazy_states, eager_states)
 
     def test_numpy_untracked(self, slp_real_data):
         """untracked=True produces identical output."""

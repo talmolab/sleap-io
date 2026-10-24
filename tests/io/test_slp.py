@@ -6719,16 +6719,18 @@ def test_read_h5wasm_points(tmp_path):
         ds = f.create_dataset("points", data=pts)
         ds.attrs["field_names"] = json.dumps(["x", "y", "visible", "complete"])
 
-    pts_data = read_hdf5_dataset(path, "points")
+    pts_data = read_points(path)
     skeleton = Skeleton(nodes=["A", "B"])
     points_array = _points_from_hdf5_data(pts_data, skeleton, is_predicted=False)
 
     assert points_array["xy"][0, 0] == 100.0
     assert points_array["xy"][0, 1] == 200.0
-    assert points_array["xy"][1, 0] == 150.0
-    assert points_array["xy"][1, 1] == 250.0
+    # The second point is hidden, so the legacy cleanup clears its coordinates.
+    assert np.isnan(points_array["xy"][1]).all()
     assert points_array["visible"][0] == 1.0
     assert points_array["visible"][1] == 0.0
+    assert_equal(points_array["verified"], [False, True])
+    assert points_array["labeled"].all()
 
 
 def test_read_h5wasm_pred_points(tmp_path):
@@ -6743,7 +6745,7 @@ def test_read_h5wasm_pred_points(tmp_path):
         ds = f.create_dataset("pred_points", data=pts)
         ds.attrs["field_names"] = json.dumps(["x", "y", "visible", "complete", "score"])
 
-    pts_data = read_hdf5_dataset(path, "pred_points")
+    pts_data = read_pred_points(path)
     skeleton = Skeleton(nodes=["A", "B"])
     points_array = _points_from_hdf5_data(pts_data, skeleton, is_predicted=True)
 
@@ -7198,8 +7200,8 @@ def test_read_h5wasm_instances_float64_indices(tmp_path):
         )
         f.create_dataset("pred_points", data=np.array([], dtype=pred_dtype))
 
-    points = read_hdf5_dataset(path, "points")
-    pred_points = read_hdf5_dataset(path, "pred_points")
+    points = read_points(path)
+    pred_points = read_pred_points(path)
 
     instances = read_instances(
         path,
@@ -12280,6 +12282,141 @@ def test_verified_round_trip(tmp_path, lazy):
     for inst in loaded[0].instances:
         assert_equal(inst.points["verified"], [True, False])
         assert inst.points["labeled"].all()
+
+
+# -- SLP 3.0 point tables --------------------------------------------------------------
+
+# Every checked-in SLP file in the 2.x (compound or h5wasm flat) layout.
+LEGACY_SLP_FIXTURES = [
+    "tests/data/slp/centered_pair_predictions.slp",
+    "tests/data/slp/clip.2node.slp",
+    "tests/data/slp/labels.v002.slp",
+    "tests/data/slp/legacy_h5wasm_flat.slp",
+    "tests/data/slp/legacy_hidden_complete.slp",
+    "tests/data/slp/minimal_instance.slp",
+    "tests/data/slp/minimal_instance.pkg.slp",
+    "tests/data/slp/multiview.slp",
+    "tests/data/slp/predictions_1.2.7_provenance_and_tracking.slp",
+    "tests/data/slp/reduce.slp",
+    "tests/data/slp/test_grid_labels.legacy.slp",
+    "tests/data/slp/typical.slp",
+]
+
+
+def _old_numpy(raw: np.ndarray, format_id: float) -> np.ndarray:
+    """`Instance.numpy()` as sleap-io 0.9 computed it from raw 2.x point records."""
+    offset = 0.5 if format_id < 1.1 else 0.0
+    xy = np.column_stack([raw["x"], raw["y"]]) - offset
+    return np.where(raw["visible"].astype(bool)[:, None], xy, np.nan)
+
+
+@pytest.mark.parametrize("path", LEGACY_SLP_FIXTURES)
+def test_legacy_fixtures_train_identically(tmp_path, path):
+    """Old files give the same `numpy()` as before, eagerly, lazily and re-saved."""
+    with h5py.File(path, "r") as f:
+        format_id = float(f["metadata"].attrs["format_id"])
+        frames = read_hdf5_dataset(path, "frames", _hdf5_file=f)
+        instances = read_hdf5_dataset(path, "instances", _hdf5_file=f)
+        raw = {
+            name: read_hdf5_dataset(path, name, _hdf5_file=f)
+            for name in ("points", "pred_points")
+        }
+    expected = []
+    for frame in frames:
+        frame_instances = []
+        for row in instances[
+            int(frame["instance_id_start"]) : int(frame["instance_id_end"])
+        ]:
+            table = raw["points" if int(row["instance_type"]) == 0 else "pred_points"]
+            start, end = int(row["point_id_start"]), int(row["point_id_end"])
+            frame_instances.append(_old_numpy(table[start:end], format_id))
+        expected.append(frame_instances)
+
+    resaved = tmp_path / "resaved.slp"
+    save_slp(load_slp(path), str(resaved))
+    for labels in (
+        load_slp(path),
+        load_slp(path, lazy=True),
+        load_slp(str(resaved)),
+        load_slp(str(resaved), lazy=True),
+    ):
+        assert len(labels) == len(expected)
+        for lf, frame_instances in zip(labels, expected):
+            assert len(lf.instances) == len(frame_instances)
+            for inst, xy in zip(lf.instances, frame_instances):
+                assert_equal(inst.numpy(), xy)
+                assert inst.points["labeled"].all()
+                # Hidden points have no location after the cleanup.
+                hidden = ~inst.points["visible"]
+                assert np.isnan(inst.points["xy"][hidden]).all()
+
+
+def test_hidden_complete_point_reads_without_location(slp_legacy_hidden_complete):
+    """A hidden point flagged `complete` loses its stale coordinates on read."""
+    with h5py.File(slp_legacy_hidden_complete, "r") as f:
+        raw = f["points"][1]
+        assert not raw["visible"] and raw["complete"]
+        assert np.isfinite([raw["x"], raw["y"]]).all()
+
+    for lazy in (False, True):
+        user, _, pred = load_slp(slp_legacy_hidden_complete, lazy=lazy)[0].instances
+        assert_equal(user.point_states, [PointState.VISIBLE, PointState.ABSENT])
+        assert np.isnan(user.points["xy"][1]).all()
+        assert user.points["verified"][1]
+        assert user.points["labeled"].all()
+        # The visible predicted point with no location becomes hidden.
+        assert_equal(pred.point_states, [PointState.VISIBLE, PointState.ABSENT])
+        assert not pred.points["visible"][1]
+        assert pred.n_visible == 1
+
+
+@pytest.mark.parametrize(
+    "path, n_cleared",
+    [
+        ("tests/data/slp/centered_pair_predictions.slp", 5956),
+        ("tests/data/slp/predictions_1.2.7_provenance_and_tracking.slp", 21),
+    ],
+)
+def test_legacy_prediction_files_hide_points_without_location(path, n_cleared):
+    """Visible predicted points with NaN coordinates read as hidden."""
+    raw = read_hdf5_dataset(path, "pred_points")
+    visible = raw["visible"].astype(bool)
+    no_location = np.isnan(raw["x"]) | np.isnan(raw["y"])
+    assert np.count_nonzero(visible & no_location) == n_cleared
+
+    for lazy in (False, True):
+        labels = load_slp(path, lazy=lazy)
+        n_visible = sum(inst.n_visible for lf in labels for inst in lf.instances)
+        assert n_visible == np.count_nonzero(visible) - n_cleared
+
+    # The exports agree: the cleared points are not visible.
+    eager, lazy = load_slp(path), load_slp(path, lazy=True)
+    for labels in (eager, lazy):
+        n_dict_visible = sum(
+            pt["visible"]
+            for lf in labels.to_dict()["labeled_frames"]
+            for inst in lf["instances"]
+            for pt in inst["points"]
+        )
+        assert n_dict_visible == np.count_nonzero(visible) - n_cleared
+    for fmt in ("points", "instances"):
+        eager_df = eager.to_dataframe(format=fmt)
+        lazy_df = lazy.to_dataframe(format=fmt)
+        assert eager_df.equals(lazy_df)
+
+
+def test_unknown_instance_type_is_skipped(tmp_path, slp_typical):
+    """Instance rows of an unknown type are skipped, as before."""
+    path = tmp_path / "labels.slp"
+    save_slp(load_slp(slp_typical), str(path))
+    with h5py.File(path, "r+") as f:
+        instances = f["instances"][()]
+        instances["instance_type"][2] = 7
+        f["instances"][...] = instances
+    assert [type(inst) for inst in load_slp(str(path))[0].instances] == [
+        Instance,
+        Instance,
+    ]
 
 
 def test_required_features_are_checked(tmp_path, slp_minimal):

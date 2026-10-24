@@ -263,9 +263,6 @@ def _build_labeled_frames_lazy(
 
     labeled_frames_list = []
 
-    # Determine coordinate adjustment for legacy format
-    coord_offset = 0.5 if store.format_id < 1.1 else 0.0
-
     # Build instance lookup by frame_id for O(1) access
     # Group instances by frame_id
     frame_instances: dict[int, list[int]] = {}
@@ -313,10 +310,10 @@ def _build_labeled_frames_lazy(
             points_list = []
             for pt in pts_data:
                 point_dict = {
-                    "x": float(pt["x"]) - coord_offset,
-                    "y": float(pt["y"]) - coord_offset,
+                    "x": float(pt["x"]),
+                    "y": float(pt["y"]),
                     "visible": bool(pt["visible"]),
-                    "verified": bool(pt["complete"]),
+                    "verified": bool(pt["verified"]),
                 }
                 points_list.append(point_dict)
 

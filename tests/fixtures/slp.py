@@ -241,6 +241,31 @@ def slp_legacy_grid_labels():
 
 
 @pytest.fixture
+def slp_legacy_hidden_complete():
+    """SLP 1.2 file with points that the 3.0 reader cleans up.
+
+    A copy of `typical.slp` (one frame: two user instances and one predicted
+    instance of a 2-node skeleton) where:
+    - the second point of the first user instance is hidden with `complete=True`
+      and keeps its stale coordinates, as the SLEAP GUI's hide toggle leaves it;
+    - the second point of the predicted instance is visible with NaN coordinates.
+    """
+    return "tests/data/slp/legacy_hidden_complete.slp"
+
+
+@pytest.fixture
+def slp_legacy_h5wasm_flat():
+    """SLP 1.2 file in the layout written by h5wasm (sleap-io.js).
+
+    A copy of `typical.slp` where `/points`, `/pred_points`, `/instances` and
+    `/frames` are flat float64 2-D datasets with their column names in a JSON
+    `field_names` attribute, instead of compound datasets. The second point of the
+    first user instance is hidden but keeps its coordinates.
+    """
+    return "tests/data/slp/legacy_h5wasm_flat.slp"
+
+
+@pytest.fixture
 def skeleton_json_mice_hc():
     """Minimal mouse head-centered skeleton JSON file with 5 nodes and 4 edges.
 

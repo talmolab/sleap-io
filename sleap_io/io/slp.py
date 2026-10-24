@@ -4022,8 +4022,163 @@ def write_metadata(labels_path: str, labels: Labels):
         grp.attrs["json"] = _encode_metadata_attr(md)
 
 
+# In-memory layout of the raw point records that every reader normalises to,
+# whatever the on-disk layout (2.x compound, h5wasm flat 2-D, or 3.0 columns).
+# Unknown columns found in a 3.0 table follow these fields.
+RAW_POINT_DTYPE = np.dtype(
+    [
+        ("x", "f8"),
+        ("y", "f8"),
+        ("visible", "?"),
+        ("verified", "?"),
+        ("labeled", "?"),
+    ]
+)
+RAW_PRED_POINT_DTYPE = np.dtype(RAW_POINT_DTYPE.descr + [("score", "f8")])
+
+# Defaults for optional point columns missing from a table.
+_POINT_COLUMN_DEFAULTS = {
+    "visible": False,
+    "verified": False,
+    "labeled": True,
+    "score": np.nan,
+}
+
+
+def _read_columns(node: h5py.Group | h5py.Dataset) -> tuple[dict, bool]:
+    """Read every column of a table, whatever its on-disk layout.
+
+    Args:
+        node: A columnar table (a group with one 1-D dataset per column, SLP 3.0+),
+            a compound dataset, or an h5wasm-style flat 2-D dataset with a
+            `field_names` attribute (SLP 2.x).
+
+    Returns:
+        A tuple `(columns, is_legacy)` where `columns` maps column names to arrays
+        and `is_legacy` is `True` for the 2.x (non-columnar) layouts.
+
+    Notes:
+        All of a columnar table's datasets are read in one pass, so a remote file
+        is not revisited per column.
+    """
+    if isinstance(node, h5py.Group):
+        columns = {
+            name: member[()]
+            for name, member in node.items()
+            if isinstance(member, h5py.Dataset)
+        }
+        return columns, False
+    data = _read_dataset_from_open_file(node.file, node.name)
+    return {name: data[name] for name in (data.dtype.names or ())}, True
+
+
+def _normalize_points(
+    columns: dict[str, np.ndarray],
+    *,
+    is_predicted: bool,
+    is_legacy: bool,
+    format_id: float | None,
+) -> np.ndarray:
+    """Normalise a point table's columns into the raw in-memory record layout.
+
+    Args:
+        columns: The table's columns by name (see `_read_columns`).
+        is_predicted: If `True`, build `RAW_PRED_POINT_DTYPE` records (with
+            `score`); otherwise `RAW_POINT_DTYPE` records.
+        is_legacy: If `True`, the columns come from a 2.x file and are cleaned up:
+            `complete` is read as `verified`, every point is labeled, hidden points
+            lose their coordinates (SLEAP keeps stale coordinates on hidden nodes),
+            and visible points without coordinates become hidden.
+        format_id: The file's `format_id`, or `None` if it has none. Files older
+            than 1.1 used a coordinate system with the top-left of the first pixel
+            at (0, 0), which is shifted here to the current pixel-center convention.
+
+    Returns:
+        A structured array with the fields of `RAW_POINT_DTYPE` (or
+        `RAW_PRED_POINT_DTYPE`), followed by any unknown columns. Stored `labeled`
+        values are combined with `visible`, since a visible point is always labeled.
+
+    Raises:
+        ValueError: If the `x` or `y` column is missing, or a column doesn't have
+            one row per point.
+    """
+    base = RAW_PRED_POINT_DTYPE if is_predicted else RAW_POINT_DTYPE
+    columns = dict(columns)
+    if is_legacy and "complete" in columns:
+        columns.setdefault("verified", columns.pop("complete"))
+    if "x" not in columns or "y" not in columns:
+        raise ValueError("Point table is missing its x or y column.")
+    n = len(columns["x"])
+    for name, col in columns.items():
+        if len(col) != n:
+            raise ValueError(
+                f"Point table column {name!r} has {len(col)} rows, expected {n}."
+            )
+    extra = [
+        (name, col.dtype, col.shape[1:])
+        for name, col in columns.items()
+        if name not in base.names
+    ]
+    points = np.empty(n, dtype=base.descr + extra)
+    for name in base.names:
+        if name in columns:
+            points[name] = columns[name]
+        else:
+            points[name] = _POINT_COLUMN_DEFAULTS[name]
+    for name, _, _ in extra:
+        points[name] = columns[name]
+
+    if is_legacy:
+        points["labeled"] = True
+        points["visible"] &= ~(np.isnan(points["x"]) | np.isnan(points["y"]))
+        hidden = ~points["visible"]
+        points["x"][hidden] = np.nan
+        points["y"][hidden] = np.nan
+        if format_id is not None and format_id < 1.1:
+            points["x"] -= 0.5
+            points["y"] -= 0.5
+    points["labeled"] |= points["visible"]
+    return points
+
+
+def _read_point_table(
+    labels_path: str,
+    name: str,
+    *,
+    is_predicted: bool,
+    _hdf5_file: h5py.File | None = None,
+) -> np.ndarray:
+    """Read and normalise one point table from a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        name: The table name, `"points"` or `"pred_points"`.
+        is_predicted: Whether the table holds predicted points (with `score`).
+        _hdf5_file: An already-open `h5py.File` handle to read from (see
+            `read_points`).
+
+    Returns:
+        The normalised records (see `_normalize_points`).
+    """
+    with (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    ) as f:
+        format_id = None
+        if "metadata" in f and "format_id" in f["metadata"].attrs:
+            format_id = float(f["metadata"].attrs["format_id"])
+        columns, is_legacy = _read_columns(f[name])
+        return _normalize_points(
+            columns,
+            is_predicted=is_predicted,
+            is_legacy=is_legacy,
+            format_id=format_id,
+        )
+
+
 def read_points(labels_path: str, *, _hdf5_file: h5py.File | None = None) -> np.ndarray:
-    """Read points dataset from a SLEAP labels file.
+    """Read the user points table from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -4033,16 +4188,19 @@ def read_points(labels_path: str, *, _hdf5_file: h5py.File | None = None) -> np.
             private argument used to thread a single open handle through reads.
 
     Returns:
-        A structured array of point data.
+        A structured array of point records with the fields of `RAW_POINT_DTYPE`
+        (plus any unknown columns), whatever the file's layout. See
+        `_normalize_points` for the cleanup applied to files older than 3.0.
     """
-    pts = read_hdf5_dataset(labels_path, "points", _hdf5_file=_hdf5_file)
-    return pts
+    return _read_point_table(
+        labels_path, "points", is_predicted=False, _hdf5_file=_hdf5_file
+    )
 
 
 def read_pred_points(
     labels_path: str, *, _hdf5_file: h5py.File | None = None
 ) -> np.ndarray:
-    """Read predicted points dataset from a SLEAP labels file.
+    """Read the predicted points table from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -4052,10 +4210,13 @@ def read_pred_points(
             private argument used to thread a single open handle through reads.
 
     Returns:
-        A structured array of predicted point data.
+        A structured array of predicted point records with the fields of
+        `RAW_PRED_POINT_DTYPE` (plus any unknown columns), whatever the file's
+        layout.
     """
-    pred_pts = read_hdf5_dataset(labels_path, "pred_points", _hdf5_file=_hdf5_file)
-    return pred_pts
+    return _read_point_table(
+        labels_path, "pred_points", is_predicted=True, _hdf5_file=_hdf5_file
+    )
 
 
 def _points_from_hdf5_data(
@@ -4063,15 +4224,11 @@ def _points_from_hdf5_data(
     skeleton: Skeleton,
     is_predicted: bool = False,
 ) -> "PointsArray | PredictedPointsArray":
-    """Build PointsArray directly from HDF5 structured array data.
-
-    This is a fast path that avoids column_stack and intermediate array creation
-    by directly constructing the target PointsArray structure from HDF5 data.
+    """Build a points array from normalised point records.
 
     Args:
-        pts_data: Structured array from HDF5 with fields x, y, visible, complete,
-            and optionally score. The on-disk `complete` flag is read into
-            `verified`.
+        pts_data: Point records in the `RAW_POINT_DTYPE` (or
+            `RAW_PRED_POINT_DTYPE`) layout, as returned by `read_points`.
         skeleton: The skeleton defining the node structure.
         is_predicted: If True, create a PredictedPointsArray with scores.
 
@@ -4092,7 +4249,8 @@ def _points_from_hdf5_data(
     points["xy"][:, 0] = pts_data["x"]
     points["xy"][:, 1] = pts_data["y"]
     points["visible"] = pts_data["visible"]
-    points["verified"] = pts_data["complete"]
+    points["verified"] = pts_data["verified"]
+    points["labeled"] = pts_data["labeled"]
     points["name"] = skeleton.node_names
 
     return points
@@ -4114,9 +4272,8 @@ def read_instances(
         labels_path: A string path to the SLEAP labels file.
         skeletons: A list of `Skeleton` objects (see `read_skeletons`).
         tracks: A list of `Track` objects (see `read_tracks`).
-        points: A structured array of point data (see `read_points`).
-        pred_points: A structured array of predicted point data (see
-            `read_pred_points`).
+        points: Normalised user point records (see `read_points`).
+        pred_points: Normalised predicted point records (see `read_pred_points`).
         format_id: The format version identifier used to specify the format of the input
             file.
         _hdf5_file: An already-open `h5py.File` handle to read from. If provided,
@@ -4128,46 +4285,24 @@ def read_instances(
         A list of `Instance` and/or `PredictedInstance` objects.
     """
     instances_data = read_hdf5_dataset(labels_path, "instances", _hdf5_file=_hdf5_file)
+    # Files older than 1.2 have no tracking_score column.
+    has_tracking_score = "tracking_score" in (instances_data.dtype.names or ())
 
     instances = {}
     from_predicted_pairs = []
     for instance_data in instances_data:
-        if format_id < 1.2:
-            (
-                instance_id,
-                instance_type,
-                frame_id,
-                skeleton_id,
-                track_id,
-                from_predicted,
-                instance_score,
-                point_id_start,
-                point_id_end,
-            ) = instance_data
-            tracking_score = 0.0
-        elif format_id >= 1.2:
-            (
-                instance_id,
-                instance_type,
-                frame_id,
-                skeleton_id,
-                track_id,
-                from_predicted,
-                instance_score,
-                point_id_start,
-                point_id_end,
-                tracking_score,
-            ) = instance_data
-
         # Cast index values to int for h5wasm compatibility. h5wasm may write
         # all columns as float64, which can't be used as list indices or slice
         # bounds. Safe for compound dtypes too: int(numpy.int64(x)) -> int.
-        instance_id = int(instance_id)
-        skeleton_id = int(skeleton_id)
-        track_id = int(track_id)
-        from_predicted = int(from_predicted)
-        point_id_start = int(point_id_start)
-        point_id_end = int(point_id_end)
+        instance_id = int(instance_data["instance_id"])
+        instance_type = int(instance_data["instance_type"])
+        skeleton_id = int(instance_data["skeleton"])
+        track_id = int(instance_data["track"])
+        from_predicted = int(instance_data["from_predicted"])
+        instance_score = instance_data["score"]
+        point_id_start = int(instance_data["point_id_start"])
+        point_id_end = int(instance_data["point_id_end"])
+        tracking_score = instance_data["tracking_score"] if has_tracking_score else 0.0
 
         skeleton = skeletons[skeleton_id]
         track = tracks[track_id] if track_id >= 0 else None
@@ -4178,10 +4313,6 @@ def read_instances(
             points_array = _points_from_hdf5_data(
                 pts_data, skeleton, is_predicted=False
             )
-            if format_id < 1.1:
-                # Legacy coordinate system: top-left of pixel is (0, 0)
-                # Adjust to new system: center of pixel is (0, 0)
-                points_array["xy"] -= 0.5
             inst = Instance(
                 points_array,
                 skeleton=skeleton,
@@ -4194,10 +4325,6 @@ def read_instances(
             pts_data = pred_points[point_id_start:point_id_end]
             # Fast path: Build PredictedPointsArray directly from HDF5 data
             points_array = _points_from_hdf5_data(pts_data, skeleton, is_predicted=True)
-            if format_id < 1.1:
-                # Legacy coordinate system: top-left of pixel is (0, 0)
-                # Adjust to new system: center of pixel is (0, 0)
-                points_array["xy"] -= 0.5
             inst = PredictedInstance(
                 points_array,
                 skeleton=skeleton,
@@ -4206,6 +4333,9 @@ def read_instances(
                 tracking_score=tracking_score,
             )
             instances[instance_id] = inst
+
+        else:
+            continue
 
         if from_predicted >= 0:
             from_predicted_pairs.append((instance_id, from_predicted))
@@ -8667,17 +8797,19 @@ def _read_labels_from_open_file(
 
     labeled_frames = []
     for _, video_id, frame_idx, instance_id_start, instance_id_end in frames:
+        # Cast to int for h5wasm files, which store every column as float64.
+        video_id, frame_idx = int(video_id), int(frame_idx)
         # Map sparse video_id to sequential list index
         video_index = video_id_to_index.get(video_id, video_id)
 
         # Check if this frame is marked as negative (using sparse video_id)
-        is_negative = (int(video_id), int(frame_idx)) in negative_markers
+        is_negative = (video_id, frame_idx) in negative_markers
 
         labeled_frames.append(
             LabeledFrame(
                 video=videos[video_index],
-                frame_idx=int(frame_idx),
-                instances=instances[instance_id_start:instance_id_end],
+                frame_idx=frame_idx,
+                instances=instances[int(instance_id_start) : int(instance_id_end)],
                 is_negative=is_negative,
             )
         )

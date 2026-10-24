@@ -37,10 +37,13 @@ class LazyDataStore:
             Fields vary by format_id but include: instance_id, instance_type, frame_id,
             skeleton_id, track_id, from_predicted, instance_score, point_id_start,
             point_id_end, and optionally tracking_score.
-        pred_points_data: Structured array from /pred_points HDF5 dataset.
-            Fields: x, y, visible, complete, score.
-        points_data: Structured array from /points HDF5 dataset.
-            Fields: x, y, visible, complete.
+        pred_points_data: Normalised predicted point records (see
+            `sleap_io.io.slp.read_pred_points`). Fields: x, y, visible, verified,
+            labeled, score, then any unknown columns. Coordinates are already in the
+            current convention and cleaned up for older files.
+        points_data: Normalised user point records (see
+            `sleap_io.io.slp.read_points`). Fields: x, y, visible, verified,
+            labeled, then any unknown columns.
         videos: List of eagerly loaded Video objects.
         skeletons: List of eagerly loaded Skeleton objects.
         tracks: List of eagerly loaded Track objects.
@@ -302,41 +305,20 @@ class LazyDataStore:
 
         inst_row = self.instances_data[idx]
 
-        # Parse instance data - handle format differences
-        if self.format_id < 1.2:
-            (
-                instance_id,
-                instance_type,
-                frame_id,
-                skeleton_id,
-                track_id,
-                from_predicted,
-                instance_score,
-                point_id_start,
-                point_id_end,
-            ) = inst_row
-            tracking_score = 0.0
-        else:
-            (
-                instance_id,
-                instance_type,
-                frame_id,
-                skeleton_id,
-                track_id,
-                from_predicted,
-                instance_score,
-                point_id_start,
-                point_id_end,
-                tracking_score,
-            ) = inst_row
-
         # Cast index values to int for h5wasm compatibility (float64 columns).
-        instance_id = int(instance_id)
-        skeleton_id = int(skeleton_id)
-        track_id = int(track_id)
-        from_predicted = int(from_predicted)
-        point_id_start = int(point_id_start)
-        point_id_end = int(point_id_end)
+        instance_id = int(inst_row["instance_id"])
+        instance_type = int(inst_row["instance_type"])
+        skeleton_id = int(inst_row["skeleton"])
+        track_id = int(inst_row["track"])
+        instance_score = inst_row["score"]
+        point_id_start = int(inst_row["point_id_start"])
+        point_id_end = int(inst_row["point_id_end"])
+        # Files older than 1.2 have no tracking_score column.
+        tracking_score = (
+            inst_row["tracking_score"]
+            if "tracking_score" in self.instances_data.dtype.names
+            else 0.0
+        )
 
         skeleton = self.skeletons[skeleton_id]
         track = self.tracks[track_id] if track_id >= 0 else None
@@ -376,9 +358,6 @@ class LazyDataStore:
         if instance_type == InstanceType.USER:
             pts_data = self.points_data[point_id_start:point_id_end]
             points_array = self._make_points_array(pts_data, skeleton)
-            if self.format_id < 1.1:
-                # Legacy coordinate system adjustment
-                points_array["xy"] -= 0.5
             return Instance(
                 points=points_array,
                 skeleton=skeleton,
@@ -394,9 +373,6 @@ class LazyDataStore:
         else:  # PREDICTED
             pts_data = self.pred_points_data[point_id_start:point_id_end]
             points_array = self._make_predicted_points_array(pts_data, skeleton)
-            if self.format_id < 1.1:
-                # Legacy coordinate system adjustment
-                points_array["xy"] -= 0.5
             return PredictedInstance(
                 points=points_array,
                 skeleton=skeleton,
@@ -417,8 +393,7 @@ class LazyDataStore:
         """Create PointsArray from raw point data.
 
         Args:
-            pts_data: Structured array with x, y, visible, complete fields (the
-                on-disk `complete` flag is read into `verified`).
+            pts_data: Normalised point records (see `points_data`).
             skeleton: Skeleton defining node structure.
 
         Returns:
@@ -431,7 +406,8 @@ class LazyDataStore:
         points["xy"][:, 0] = pts_data["x"]
         points["xy"][:, 1] = pts_data["y"]
         points["visible"] = pts_data["visible"]
-        points["verified"] = pts_data["complete"]
+        points["verified"] = pts_data["verified"]
+        points["labeled"] = pts_data["labeled"]
         points["name"] = skeleton.node_names
         return points
 
@@ -441,8 +417,7 @@ class LazyDataStore:
         """Create PredictedPointsArray from raw point data.
 
         Args:
-            pts_data: Structured array with x, y, visible, complete, score fields
-                (the on-disk `complete` flag is read into `verified`).
+            pts_data: Normalised predicted point records (see `pred_points_data`).
             skeleton: Skeleton defining node structure.
 
         Returns:
@@ -455,7 +430,8 @@ class LazyDataStore:
         points["xy"][:, 0] = pts_data["x"]
         points["xy"][:, 1] = pts_data["y"]
         points["visible"] = pts_data["visible"]
-        points["verified"] = pts_data["complete"]
+        points["verified"] = pts_data["verified"]
+        points["labeled"] = pts_data["labeled"]
         points["score"] = pts_data["score"]
         points["name"] = skeleton.node_names
         return points
@@ -825,68 +801,24 @@ class LazyDataStore:
                 `PointState` of each point.
         """
         inst_row = self.instances_data[inst_idx]
+        point_id_start = int(inst_row["point_id_start"])
+        point_id_end = int(inst_row["point_id_end"])
 
-        # Parse instance data - handle format differences
-        if self.format_id < 1.2:
-            (
-                _instance_id,
-                instance_type,
-                _frame_id,
-                _skeleton_id,
-                _track_id,
-                _from_predicted,
-                _instance_score,
-                point_id_start,
-                point_id_end,
-            ) = inst_row
-        else:
-            (
-                _instance_id,
-                instance_type,
-                _frame_id,
-                _skeleton_id,
-                _track_id,
-                _from_predicted,
-                _instance_score,
-                point_id_start,
-                point_id_end,
-                _tracking_score,
-            ) = inst_row
-
-        point_id_start = int(point_id_start)
-        point_id_end = int(point_id_end)
-
-        if instance_type == InstanceType.USER:
+        if int(inst_row["instance_type"]) == InstanceType.USER:
             pts_data = self.points_data[point_id_start:point_id_end]
-            x = pts_data["x"]
-            y = pts_data["y"]
-            # Apply legacy coordinate adjustment if needed
-            if self.format_id < 1.1:
-                x = x - 0.5
-                y = y - 0.5
-            output[:, 0] = x
-            output[:, 1] = y
             if return_confidence:
                 # User instances have confidence of 1.0
                 output[:, 2] = 1.0
         else:  # PREDICTED
             pts_data = self.pred_points_data[point_id_start:point_id_end]
-            x = pts_data["x"]
-            y = pts_data["y"]
-            # Apply legacy coordinate adjustment if needed
-            if self.format_id < 1.1:
-                x = x - 0.5
-                y = y - 0.5
-            output[:, 0] = x
-            output[:, 1] = y
             if return_confidence:
                 output[:, 2] = pts_data["score"]
 
-        # Files in the compound (2.x) layout have no `labeled` column, so every point
-        # reads as labeled.
-        states[:] = compute_point_states(
-            output[:, :2], pts_data["visible"], labeled=True
-        )
+        # Hidden points have no location in the output, as in `Instance.numpy()`.
+        xy = np.column_stack([pts_data["x"], pts_data["y"]])
+        visible = pts_data["visible"]
+        output[:, :2] = np.where(visible[:, None], xy, np.nan)
+        states[:] = compute_point_states(xy, visible, pts_data["labeled"])
 
 
 class LazyFrameList:
