@@ -1149,7 +1149,12 @@ sio.save_slp(labels, "labels.slp", legacy_format=True)
 ```
 
 This writes compound `/points`, `/pred_points`, `/instances` and `/frames` tables,
-`/negative_frames`, and the 2.x `format_id` for the features used. In `/frames`,
+`/negative_frames`, and the 2.x `format_id` for the features used. The other
+tables are written in their 2.x layout too: the compound ROI, mask, label image,
+score map, identity and category link, and session tables, with the separate
+`roi_*`, `mask_*` and `label_image_*` string datasets (see
+[ROIs before 3.0](#rois-before-30), [Masks before 3.0](#masks-before-30) and
+[Label images before 3.0](#label-images-before-30)). In `/frames`,
 each embedded video is stored under its `videoN` number, as older readers expect;
 lazy labels are written from their raw tables without materializing frames. The
 2.x layout can't store unlabeled points, so they raise a `ValueError` by default;
@@ -1158,8 +1163,9 @@ visible, NaN coordinates) with a warning. Hidden points keep whatever coordinate
 they hold in memory. It can't store metadata or unknown columns either, which are
 dropped with a warning. From the command line, use `sio convert --legacy-format`.
 
-Format 3.0 stores instance and frame metadata; bounding box `metadata` can't be
-stored yet and is dropped with a warning.
+Format 3.0 stores instance, frame and bounding box metadata (in
+`/instances/metadata/`, `/frames/metadata/` and `/bboxes/metadata/`; see
+[Record Metadata](#record-metadata)). Only `legacy_format=True` drops it.
 
 ### Coordinate System
 

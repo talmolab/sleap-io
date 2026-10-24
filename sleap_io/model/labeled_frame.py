@@ -610,7 +610,11 @@ class LabeledFrame:
         self.rois = [r for r in self.rois if not isinstance(r, PredictedROI)]
 
     def remove_empty_instances(self):
-        """Remove all instances with no visible points."""
+        """Remove empty instances (see `Instance.is_empty`).
+
+        An instance is empty when no point is labeled with a location, so instances
+        whose points are all occluded estimates are kept.
+        """
         self.instances = [inst for inst in self.instances if not inst.is_empty]
 
     def convert(

@@ -7556,7 +7556,7 @@ def write_sessions(
     compression: str | None = None,
     carry: "_ColumnCarry | None" = None,
 ):
-    """Write `RecordingSession` metadata to a SLEAP labels file (SLP 2.8 columnar).
+    """Write `RecordingSession` metadata to a SLEAP labels file.
 
     Always creates the ``sessions_json`` dataset holding one *slim* JSON blob per
     session: only calibration + ``camcorder_to_video_idx_map`` + session-level
@@ -7570,8 +7570,9 @@ def write_sessions(
     ``pred_points_3d`` (N,4 = xyz+score) chunked float matrices (appended one
     session at a time), and presence-guarded per-row
     ``frame_group_meta`` / ``instance_group_meta`` JSON blobs. The group is omitted
-    entirely (and the format stays <= 2.7) when there are no frame groups, so files
-    without multi-view frame groups are byte-identical to before.
+    entirely when there are no frame groups. With ``legacy_format=True``, writing
+    the group bumps the file to format 2.8; without frame groups, the 2.x format
+    stays at 2.7 or below.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -9822,11 +9823,12 @@ def write_label_images(
 
     When all label images share the same ``(height, width)``, pixel data is
     written as a chunked ``(T, H, W)`` int32 dataset with gzip compression
-    and ``write_direct_chunk`` for maximum throughput (format v2.2). This
-    avoids accumulating all compressed data in memory.
+    and ``write_direct_chunk`` for maximum throughput (the chunked layout, in both
+    SLP 3.0 and the 2.x layout). This avoids accumulating all compressed data in
+    memory.
 
-    When frame sizes differ, falls back to the legacy blob format (flat uint8
-    array with per-frame byte-range offsets) for backward compatibility.
+    When frame sizes differ, falls back to the blob layout (flat uint8 array with
+    per-frame byte-range offsets).
 
     Args:
         labels_path: A string path to the SLEAP labels file.
