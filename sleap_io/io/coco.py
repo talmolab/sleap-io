@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.category import Category
 from sleap_io.model.instance import (
     Instance,
@@ -36,7 +36,7 @@ from sleap_io.model.mask import (
     SegmentationMask,
     UserSegmentationMask,
 )
-from sleap_io.model.roi import PredictedROI, UserROI
+from sleap_io.model.roi import ROI, PredictedROI, UserROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
@@ -1142,6 +1142,15 @@ def convert_labels(
         COCO annotation dictionary with "images", "annotations", and "categories"
         fields.
 
+    Each pose instance becomes one annotation. Its `bbox` is the bounding box linked
+    to the instance, or else the extent of its labeled keypoints. Its `segmentation`
+    is the first mask linked to it (as RLE), or else every ROI linked to it (one
+    polygon ring per ROI). Its `area` is the `area` stored in its `metadata`, or
+    else the area of that segmentation, or else the area of its `bbox`. `iscrowd`
+    and the annotation `id` also come from `metadata`. Masks, ROIs and bounding
+    boxes that aren't part of a pose annotation are written as annotations of their
+    own.
+
     Note:
         Rotated bounding boxes are not supported by the COCO format. Exporting
         ``BoundingBox`` objects that have a non-zero ``angle`` will raise
@@ -1213,6 +1222,9 @@ def convert_labels(
     # Build mapping from (video, frame_idx) to image_id for ROI/mask export
     video_frame_to_image_id = {}
 
+    # Ids of the masks and ROIs written as a pose annotation's segmentation.
+    exported_geometry = set()
+
     for frame_idx, labeled_frame in enumerate(labels.labeled_frames):
         # Determine image filename
         if image_filenames is not None:
@@ -1254,6 +1266,11 @@ def convert_labels(
         vf_key = (id(labeled_frame.video), labeled_frame.frame_idx)
         video_frame_to_image_id[vf_key] = image_id
 
+        # Masks, ROIs and boxes linked to an instance go into its annotation.
+        linked_masks = _group_by_instance(labeled_frame.masks)
+        linked_rois = _group_by_instance(labeled_frame.rois)
+        linked_bboxes = _group_by_instance(labeled_frame.bboxes)
+
         # Process instances
         for instance in labeled_frame.instances:
             # Get category ID
@@ -1268,26 +1285,34 @@ def convert_labels(
             # Count labeled keypoints (v > 0)
             num_keypoints = int(np.count_nonzero(visibility))
 
-            # Compute bounding box from labeled keypoints
+            # Prefer the linked bounding box, then the extent of the labeled
+            # keypoints.
+            instance_bboxes = linked_bboxes.get(id(instance), [])
             labeled_xy = xy[visibility > 0]
-            if len(labeled_xy) > 0:
+            if instance_bboxes:
+                bbox = _coco_bbox(instance_bboxes[0])
+            elif len(labeled_xy) > 0:
                 x_min, y_min = labeled_xy.min(axis=0).tolist()
                 x_max, y_max = labeled_xy.max(axis=0).tolist()
-
-                # Bbox in COCO format: [x, y, width, height]
                 bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
-                area = (x_max - x_min) * (y_max - y_min)
             else:
                 # No labeled keypoints - use zero bbox
                 bbox = [0.0, 0.0, 0.0, 0.0]
-                area = 0.0
 
-            # Prefer the area of a linked mask or ROI, then the stored area.
-            geometry_area = _linked_geometry_area(labeled_frame, instance)
-            if geometry_area is not None:
-                area = geometry_area
-            elif isinstance(instance.metadata.get("area"), (int, float)):
-                area = instance.metadata["area"]
+            segmentation, geometry_area, used = _linked_segmentation(
+                linked_masks.get(id(instance), []),
+                linked_rois.get(id(instance), []),
+            )
+            exported_geometry.update(id(x) for x in used)
+
+            # Prefer the stored area, then the area of the linked geometry, then
+            # the area of the bounding box.
+            area = instance.metadata.get("area")
+            if not isinstance(area, (int, float)):
+                if geometry_area is not None:
+                    area = geometry_area
+                else:
+                    area = bbox[2] * bbox[3]
 
             # Create annotation
             annotation = {
@@ -1299,6 +1324,8 @@ def convert_labels(
                 "area": area,
                 "iscrowd": _stored_iscrowd(instance.metadata),
             }
+            if segmentation is not None:
+                annotation["segmentation"] = segmentation
 
             # Add track ID if present
             if instance.track is not None:
@@ -1307,9 +1334,12 @@ def convert_labels(
             coco_data["annotations"].append(annotation)
             stored_ann_ids.append(instance.metadata.get("ann_id"))
 
-    # Export ROIs, masks, and bboxes as COCO annotations (iterate by frame)
+    # Export the remaining ROIs, masks, and bboxes as COCO annotations (iterate by
+    # frame)
     for lf in labels.labeled_frames:
         for roi in lf.rois:
+            if id(roi) in exported_geometry:
+                continue
             # Get or create category
             cat_name = roi.category.name if roi.category else "object"
             if cat_name not in category_name_to_id:
@@ -1340,11 +1370,7 @@ def convert_labels(
             }
 
             # Write ROI as polygon segmentation with bounding box
-            coords = list(roi.geometry.exterior.coords)
-            flat = []
-            for x, y in coords[:-1]:  # Exclude closing vertex
-                flat.extend([float(x), float(y)])
-            annotation["segmentation"] = [flat]
+            annotation["segmentation"] = _roi_rings(roi)
             minx, miny, maxx, maxy = roi.bounds
             annotation["bbox"] = [
                 minx,
@@ -1363,6 +1389,8 @@ def convert_labels(
 
         # Export masks as COCO RLE annotations
         for seg_mask in lf.masks:
+            if id(seg_mask) in exported_geometry:
+                continue
             cat_name = seg_mask.category.name if seg_mask.category else "object"
             if cat_name not in category_name_to_id:
                 category = {
@@ -1386,16 +1414,11 @@ def convert_labels(
 
             # COCO expects full-frame masks; resample if scaled/offset
             export_mask = _full_frame_mask(seg_mask)
-
-            mask_data = export_mask.data
-            rle = _encode_coco_rle(mask_data)
-
-            bbox_xywh = export_mask.bbox
             annotation = {
                 "image_id": image_id,
                 "category_id": category_id,
-                "segmentation": rle,
-                "bbox": list(bbox_xywh),
+                "segmentation": _encode_coco_rle(export_mask.data),
+                "bbox": list(export_mask.bbox),
                 "area": float(export_mask.area),
                 "iscrowd": 1,
             }
@@ -1435,14 +1458,13 @@ def convert_labels(
             if image_id >= image_id_counter:
                 image_id_counter = image_id + 1
 
-            x, y, w, h = bbox_obj.xywh
             area = bbox_obj.metadata.get("area")
             if not isinstance(area, (int, float)):
                 area = float(bbox_obj.area)
             annotation = {
                 "image_id": image_id,
                 "category_id": category_id,
-                "bbox": [float(x), float(y), float(w), float(h)],
+                "bbox": _coco_bbox(bbox_obj),
                 "area": area,
                 "iscrowd": _stored_iscrowd(bbox_obj.metadata),
             }
@@ -1530,24 +1552,90 @@ def _full_frame_mask(seg_mask: SegmentationMask) -> SegmentationMask:
     return seg_mask
 
 
-def _linked_geometry_area(lf: LabeledFrame, instance: Instance) -> float | None:
-    """Return the area of the first mask or ROI linked to an instance.
+def _group_by_instance(records: list) -> dict[int, list]:
+    """Group a frame's masks, ROIs or bounding boxes by their linked instance.
 
     Args:
-        lf: The frame holding the instance.
-        instance: The pose instance.
+        records: The masks, ROIs or bounding boxes of one frame.
 
     Returns:
-        The area in image pixels of the first mask (preferred) or ROI in the frame
-        whose `instance` is this instance, or `None` if there is none.
+        A dictionary from `id(instance)` to the records linked to that instance, in
+        their order in the frame. Records without an instance are left out.
     """
-    for seg_mask in lf.masks:
-        if seg_mask.instance is instance:
-            return float(_full_frame_mask(seg_mask).area)
-    for roi in lf.rois:
-        if roi.instance is instance:
-            return float(roi.area)
-    return None
+    groups: dict[int, list] = {}
+    for record in records:
+        if record.instance is not None:
+            groups.setdefault(id(record.instance), []).append(record)
+    return groups
+
+
+def _coco_bbox(bbox: BoundingBox) -> list[float]:
+    """Return a bounding box as a COCO `[x, y, width, height]` list.
+
+    Boxes store their corners, so a box read from COCO gives back `(x + w) - x`
+    rather than `w`, which can be off by a rounding error (about 1e-13 pixels).
+    Width and height are rounded to 10 decimals to give back the stored values.
+
+    Args:
+        bbox: An axis-aligned bounding box.
+
+    Returns:
+        The box as `[x, y, width, height]`.
+
+    Raises:
+        ValueError: If the box is rotated.
+    """
+    x, y, w, h = bbox.xywh
+    return [float(x), float(y), round(float(w), 10), round(float(h), 10)]
+
+
+def _roi_rings(roi: ROI) -> list[list[float]]:
+    """Return the exterior rings of an ROI as COCO polygon coordinates.
+
+    Args:
+        roi: An ROI whose geometry is a polygon or a multi-polygon.
+
+    Returns:
+        One flat `[x1, y1, x2, y2, ...]` list per polygon, without the closing
+        vertex. Holes are dropped, since COCO polygons can't express them.
+    """
+    rings = []
+    for polygon in getattr(roi.geometry, "geoms", [roi.geometry]):
+        coords = list(polygon.exterior.coords)[:-1]
+        rings.append([float(v) for xy in coords for v in xy])
+    return rings
+
+
+def _linked_segmentation(
+    masks: list[SegmentationMask], rois: list[ROI]
+) -> tuple[dict | list | None, float | None, list]:
+    """Build a pose annotation's segmentation from its linked masks or ROIs.
+
+    The first linked mask is written as RLE. Without a mask, every linked ROI is
+    written as a polygon ring, since `read_labels(..., segmentation_format="roi")`
+    reads each ring of a COCO polygon as its own ROI. Linked geometry that isn't
+    used here is exported as a separate annotation.
+
+    Args:
+        masks: The masks linked to the instance.
+        rois: The ROIs linked to the instance.
+
+    Returns:
+        A tuple `(segmentation, area, used)` of the COCO `segmentation` (`None`
+        when nothing is linked), its area in image pixels (`None` when nothing is
+        linked), and the masks or ROIs it was built from.
+    """
+    if masks:
+        export_mask = _full_frame_mask(masks[0])
+        rle = _encode_coco_rle(export_mask.data)
+        return rle, float(export_mask.area), masks[:1]
+    if rois:
+        from shapely import union_all
+
+        rings = [ring for roi in rois for ring in _roi_rings(roi)]
+        area = float(union_all([roi.geometry for roi in rois]).area)
+        return rings, area, rois
+    return None, None, []
 
 
 def _get_or_create_image_id(

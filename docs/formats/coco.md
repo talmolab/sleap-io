@@ -81,8 +81,9 @@ On write, `save_coco` encodes each point from its state:
 | hidden, no location | `0, 0, 0` | `0, 0, 0` |
 | unlabeled | `0, 0, 0` | `0, 0, 0` |
 
-`num_keypoints` counts the keypoints written with `v > 0`, and the annotation
-`bbox` covers them. COCO has no code for "hidden with no location", so those points
+`num_keypoints` counts the keypoints written with `v > 0`. Without a linked
+bounding box (see [below](#annotation-metadata)), the annotation `bbox` covers
+them. COCO has no code for "hidden with no location", so those points
 read back as unlabeled.
 
 !!! warning "Changed in 0.10"
@@ -132,14 +133,28 @@ labels.save("coco_val.slp")      # metadata is stored in the SLP file
   integers across the export; records without one get new ids above the largest
   stored id. If they collide, for example after merging labels loaded from two
   COCO files, every image (or annotation) is renumbered from 1 with a warning.
-- **`area`.** The area of a mask or ROI linked to the instance is preferred, then
-  the stored `area`, then the area of the keypoints' bounding box. For bounding
+- **`bbox`.** The bounding box linked to the instance is written as is. Without
+  one, the `bbox` covers the keypoints written with `v > 0`.
+- **`segmentation`.** The first mask linked to the instance is written as RLE;
+  without a mask, every ROI linked to it is written as one polygon ring (in
+  `segmentation_format="roi"`, each ring of a COCO polygon is read as its own ROI).
+  Linked geometry is written once, inside the pose annotation. Masks, ROIs and
+  boxes not linked to an instance are written as annotations of their own.
+- **`area`.** The stored `area` is preferred, then the area of the instance's
+  segmentation (the union of its ROIs), then the area of its `bbox`. For bounding
   boxes, the stored `area` is preferred over the box's own area.
 - **`iscrowd`** is written from metadata (0 when missing).
 
+A COCO file read with `load_coco` and saved with `save_coco` keeps its keypoints,
+`bbox`, `area`, `iscrowd` and ids exactly, so COCO keypoint evaluation (which uses
+the ground-truth `area` as the OKS scale) gives the same results on both.
+
 `sio transform` (and [`transform_labels`][sleap_io.transform_labels])
 drops `area` from the metadata of transformed instances and boxes, since it no
-longer matches the transformed image.
+longer matches the transformed image; `save_coco` then computes it from the
+transformed geometry. Stored `area` and linked boxes aren't updated when you edit
+keypoints yourself, so drop `area` from `instance.metadata` (and update or remove
+the linked box) if the stored values no longer fit.
 
 ## Segmentation handling
 

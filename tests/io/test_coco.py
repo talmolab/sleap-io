@@ -3872,8 +3872,8 @@ def test_coco_export_renumbers_non_integer_ids(tmp_path):
     assert written["annotations"][0]["id"] == 1
 
 
-def test_coco_export_prefers_computed_area(tmp_path):
-    """A linked mask or ROI gives the area; then the stored one; then keypoints."""
+def test_coco_export_area_precedence():
+    """The stored area wins; then linked masks or ROIs; then the bounding box."""
     skeleton = sio.Skeleton(["a", "b"])
     video = sio.Video.from_filename(["img.png"])
 
@@ -3885,21 +3885,193 @@ def test_coco_export_prefers_computed_area(tmp_path):
             inst.metadata["area"] = area
         return inst
 
-    with_mask = make_instance(area=999)
-    with_roi = make_instance(area=999)
     stored = make_instance(area=7.5)
+    with_mask = make_instance()
+    with_rois = make_instance()
+    with_bbox = make_instance()
     computed = make_instance()
     lf = sio.LabeledFrame(
-        video=video, frame_idx=0, instances=[with_mask, with_roi, stored, computed]
+        video=video,
+        frame_idx=0,
+        instances=[stored, with_mask, with_rois, with_bbox, computed],
     )
     mask = np.zeros((10, 10), dtype=bool)
     mask[:3, :4] = True
+    lf.masks.append(UserSegmentationMask.from_numpy(mask, instance=stored))
     lf.masks.append(UserSegmentationMask.from_numpy(mask, instance=with_mask))
-    lf.rois.append(UserROI.from_bbox(0, 0, 2, 3, instance=with_roi))
+    # Two overlapping rings: the area is their union, not their sum.
+    for x in (0, 1):
+        ring = [(x, 0), (x + 2, 0), (x + 2, 3), (x, 3)]
+        lf.rois.append(UserROI.from_polygon(ring, instance=with_rois))
+    lf.bboxes.append(UserBoundingBox.from_xywh(1, 2, 3, 4, instance=with_bbox))
     labels = sio.Labels([lf])
 
-    areas = [ann["area"] for ann in coco.convert_labels(labels)["annotations"][:4]]
-    assert areas == [12.0, 6.0, 7.5, 20.0]
+    annotations = coco.convert_labels(labels)["annotations"]
+    assert len(annotations) == 5
+    assert [ann["area"] for ann in annotations] == [7.5, 12.0, 9.0, 12.0, 20.0]
+    assert [ann["bbox"] for ann in annotations] == [
+        [0.0, 0.0, 4.0, 5.0],
+        [0.0, 0.0, 4.0, 5.0],
+        [0.0, 0.0, 4.0, 5.0],
+        [1.0, 2.0, 3.0, 4.0],
+        [0.0, 0.0, 4.0, 5.0],
+    ]
+    assert annotations[2]["segmentation"] == [
+        [0.0, 0.0, 2.0, 0.0, 2.0, 3.0, 0.0, 3.0],
+        [1.0, 0.0, 3.0, 0.0, 3.0, 3.0, 1.0, 3.0],
+    ]
+
+
+def test_coco_export_extra_linked_geometry_is_standalone():
+    """Linked geometry that isn't the instance's segmentation gets its own entry."""
+    skeleton = sio.Skeleton(["a", "b"])
+    video = sio.Video.from_filename(["img.png"])
+    inst = sio.Instance.from_numpy(np.array([[0.0, 0.0], [4.0, 5.0]]), skeleton)
+    lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    mask = np.zeros((10, 10), dtype=bool)
+    mask[:3, :4] = True
+    lf.masks.append(UserSegmentationMask.from_numpy(mask, instance=inst))
+    lf.masks.append(UserSegmentationMask.from_numpy(~mask, instance=inst))
+    lf.rois.append(
+        UserROI.from_multi_polygon(
+            [[(0, 0), (2, 0), (2, 2)], [(5, 5), (8, 5), (8, 8)]], instance=inst
+        )
+    )
+
+    annotations = coco.convert_labels(sio.Labels([lf]))["annotations"]
+    assert len(annotations) == 3
+    assert annotations[0]["segmentation"] == coco._encode_coco_rle(mask)
+    # A multi-polygon ROI is written as one ring per polygon.
+    assert annotations[1]["segmentation"] == [
+        [0.0, 0.0, 2.0, 0.0, 2.0, 2.0],
+        [5.0, 5.0, 8.0, 5.0, 8.0, 8.0],
+    ]
+    assert annotations[2]["segmentation"] == coco._encode_coco_rle(~mask)
+    assert "keypoints" not in annotations[1]
+    assert "keypoints" not in annotations[2]
+
+
+def _rle(mask: np.ndarray) -> dict:
+    """Return the uncompressed COCO RLE of a mask."""
+    return coco._encode_coco_rle(mask)
+
+
+def _write_fidelity_coco(tmp_path: Path) -> dict:
+    """Write a COCO file with linked masks, polygons and crowd annotations."""
+    iio.imwrite(tmp_path / "img.png", np.zeros((50, 60, 3), dtype=np.uint8))
+    person = np.zeros((50, 60), dtype=bool)
+    person[10:30, 8:25] = True
+    crowd = np.zeros((50, 60), dtype=bool)
+    crowd[30:36, 40:50] = True
+    ball = np.zeros((50, 60), dtype=bool)
+    ball[2:5, 50:54] = True
+    keypoints = [10.5, 12.25, 2, 20, 21, 2, 0, 0, 0, 22, 15, 1]
+    common = {"image_id": 1, "category_id": 1, "iscrowd": 0}
+    coco_data = {
+        "images": [{"id": 1, "file_name": "img.png", "height": 50, "width": 60}],
+        "annotations": [
+            # A linked RLE mask, with a stored bbox and area that don't match the
+            # keypoints or the mask.
+            {
+                "id": 11,
+                **common,
+                "keypoints": keypoints,
+                "num_keypoints": 3,
+                "bbox": [412.8, 157.61, 53.05, 138.01],
+                "area": 412.7,
+                "segmentation": _rle(person),
+            },
+            # A linked polygon with two rings.
+            {
+                "id": 12,
+                **common,
+                "keypoints": keypoints,
+                "num_keypoints": 3,
+                "bbox": [1.0, 2.0, 29.0, 23.0],
+                "area": 149.5,
+                "segmentation": [
+                    [1.0, 2.0, 11.0, 2.0, 11.0, 12.0, 1.0, 12.0],
+                    [20.0, 20.0, 30.0, 20.0, 30.0, 25.0, 20.0, 25.0],
+                ],
+            },
+            # A crowd region with all-zero keypoints.
+            {
+                "id": 13,
+                "image_id": 1,
+                "category_id": 1,
+                "iscrowd": 1,
+                "keypoints": [0] * 12,
+                "num_keypoints": 0,
+                "bbox": [40.0, 30.0, 10.0, 6.0],
+                "area": 60,
+                "segmentation": _rle(crowd),
+            },
+            # No stored area.
+            {
+                "id": 14,
+                **common,
+                "keypoints": keypoints,
+                "num_keypoints": 3,
+                "bbox": [2.0, 3.0, 4.0, 5.0],
+                "segmentation": [[2.0, 3.0, 6.0, 3.0, 6.0, 8.0, 2.0, 8.0]],
+            },
+            # A mask that isn't linked to any pose instance.
+            {
+                "id": 15,
+                "image_id": 1,
+                "category_id": 2,
+                "iscrowd": 1,
+                "bbox": [50.0, 2.0, 4.0, 3.0],
+                "area": 12,
+                "segmentation": _rle(ball),
+            },
+        ],
+        "categories": [
+            {"id": 1, "name": "animal", "keypoints": ["a", "b", "c", "d"]},
+            {"id": 2, "name": "ball"},
+        ],
+    }
+    (tmp_path / "annotations.json").write_text(json.dumps(coco_data))
+    return coco_data
+
+
+@pytest.mark.parametrize("segmentation_format", ["mask", "roi"])
+def test_coco_round_trip_keeps_annotation_fields(tmp_path, segmentation_format):
+    """A COCO -> SLP -> COCO round trip keeps bbox, area, iscrowd and segmentation.
+
+    Linked masks and polygons are written once, inside their pose annotation.
+    """
+    source = _write_fidelity_coco(tmp_path)
+    labels = coco.read_labels(
+        tmp_path / "annotations.json", segmentation_format=segmentation_format
+    )
+    labels.save(tmp_path / "labels.slp")
+    written = coco.convert_labels(sio.load_slp(tmp_path / "labels.slp"))
+
+    assert len(written["annotations"]) == len(source["annotations"])
+    by_id = {ann["id"]: ann for ann in written["annotations"]}
+    for src in source["annotations"][:3]:
+        out = by_id[src["id"]]
+        for key in ("keypoints", "num_keypoints", "bbox", "area", "iscrowd"):
+            assert out[key] == src[key], (src["id"], key)
+
+    # RLE masks come back as they were. Polygons are kept in ROI mode and
+    # rasterized in mask mode.
+    assert by_id[11]["segmentation"] == source["annotations"][0]["segmentation"]
+    assert by_id[13]["segmentation"] == source["annotations"][2]["segmentation"]
+    if segmentation_format == "roi":
+        assert by_id[12]["segmentation"] == source["annotations"][1]["segmentation"]
+        assert by_id[14]["area"] == 20.0
+    else:
+        assert by_id[12]["segmentation"]["size"] == [50, 60]
+        assert by_id[14]["area"] == sum(by_id[14]["segmentation"]["counts"][1::2])
+    assert by_id[14]["bbox"] == [2.0, 3.0, 4.0, 5.0]
+
+    # The unlinked mask is written on its own, with a new id.
+    standalone = [ann for ann in written["annotations"] if "keypoints" not in ann]
+    assert len(standalone) == 1
+    assert standalone[0]["segmentation"] == source["annotations"][4]["segmentation"]
+    assert standalone[0]["id"] == 15
 
 
 def test_coco_metadata_survives_slp_round_trip(tmp_path, coco_binary_encoded):
