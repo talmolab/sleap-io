@@ -5327,8 +5327,9 @@ def _refuse_unlabeled_points(n_unlabeled: int, unlabeled_as: str) -> None:
         raise ValueError(
             f"{n_unlabeled} point(s) are unlabeled, but the legacy SLP layout can't "
             "store unlabeled points: they would be read back as labeled hidden "
-            'points. Pass unlabeled_as="absent" to save them as hidden points '
-            "instead, or save without legacy_format=True."
+            'points. Pass unlabeled_as="absent" (`--unlabeled-as absent` from '
+            "`sio convert`) to save them as hidden points instead, or save without "
+            "legacy_format=True."
         )
     warnings.warn(
         f"Saving {n_unlabeled} unlabeled point(s) as hidden points with no location "
