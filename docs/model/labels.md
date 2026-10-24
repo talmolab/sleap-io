@@ -324,8 +324,7 @@ can't open 3.0 files; to share labels with them, save the older layout with
 points raises a `ValueError` before anything is written; pass
 `unlabeled_as="absent"` to save them as hidden points with no location (labeled, not
 visible, NaN coordinates) with a warning. That layout also drops instance, frame
-and bounding box `metadata` with a warning. Format 3.0 stores instance and frame
-metadata, but bounding box metadata can't be saved yet and is dropped with a warning.
+and bounding box `metadata` with a warning. Format 3.0 stores all three.
 
 ```python
 labels.save("output.slp", legacy_format=True, unlabeled_as="absent")

@@ -400,12 +400,17 @@ A few rules keep these consistent:
 
 1. **Visible implies labeled.** Helpers read the flag as `labeled | visible`, so a
    visible point always counts as labeled.
-2. **NaN means no location.** Everything that creates points
-   ([`Instance.empty`][sleap_io.Instance.empty], dictionaries with missing nodes,
-   skeleton changes, merging) fills them as labeled, hidden and NaN. If you set
-   `points["visible"] = False` directly, clear `points["xy"]` too unless the
-   coordinates are a real estimate, or use
-   [`set_hidden`][sleap_io.Instance.set_hidden].
+2. **NaN means no location.** Factories that create points with no annotation
+   ([`Instance.empty`][sleap_io.Instance.empty], dictionaries with missing nodes)
+   fill them as labeled, hidden and NaN. Nodes that are new or unmapped after a
+   skeleton change ([`replace_skeleton`](#changing-the-skeleton),
+   `update_skeleton`) or a [merge](../merging.md#skeleton-matching) are filled as
+   unlabeled instead. If you set `points["visible"] = False` directly, clear
+   `points["xy"]` too unless the coordinates are a real estimate, or use
+   [`set_hidden`][sleap_io.Instance.set_hidden]. One helper keeps coordinates on
+   purpose: [`transform_labels`](../transforms.md#points-outside-the-frame)
+   (`sio transform`) hides points that land outside the output frame but keeps
+   them labeled with their transformed coordinates, as occluded estimates.
 3. **`labeled` defaults to `True`.** You only need to set it to mark nodes as
    unlabeled.
 4. **`verified` is provenance only.** It records that a human acted on the node in
@@ -529,7 +534,8 @@ source annotation id:
 
 - Values must be `bool`, `int`, `float` or `str`; `None` means missing. Nested
   values raise `TypeError`, so JSON-encode them into a `str`.
-- Keys are non-empty strings without `/`.
+- Keys are non-empty strings without `/` or NUL characters, and not `.` or `..`
+  (each key is stored as an HDF5 group name).
 - Values are validated when they are set (on assignment, `update`, or when
   replacing the whole dictionary).
 - Each key must hold one kind of value across a table (e.g. all instances): `int`

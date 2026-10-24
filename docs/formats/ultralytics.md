@@ -17,6 +17,22 @@ codes as COCO, and sleap-io maps them onto the
   `v=2`.
 - `v0_as="absent"` reads `v=0` as hidden with no location, as before 0.10.
 
+!!! warning "Changed in 0.10"
+    Before 0.10, `v=0` read as a hidden keypoint and `v=1` as *visible*, so
+    occluded estimates were indistinguishable from visible keypoints. Now `v=0` is
+    unlabeled and `v=1` is occluded (hidden) with its coordinates kept.
+
+    Because `v=1` points are no longer visible,
+    [`Instance.numpy()`][sleap_io.Instance.numpy] and
+    [`Labels.numpy()`][sleap_io.Labels.numpy] now return NaN for them where they
+    used to return their coordinates. Use `instance.numpy(invisible_as_nan=False)`
+    to get the estimated coordinates; `Labels.numpy(return_states=True)` tells
+    these points apart by their `OCCLUDED` state. Datasets that use `v=1` to mean
+    "visible" (binary visibility) read as before with
+    `visibility_encoding="binary"`, which `"auto"` picks when no keypoint has
+    `v=2`. See the [COCO notes](coco.md#keypoint-visibility) for how sleap-nn
+    trains on `v=0` and `v=1` joints.
+
 On write, `save_ultralytics` writes visible points as `2`, occluded estimates as
 `1` and every other point as `0` with `0 0` coordinates
 (`visibility_encoding="binary"` writes `1` and `0`). Instances are skipped only when

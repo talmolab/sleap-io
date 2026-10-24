@@ -2021,8 +2021,9 @@ class Labels:
             frames: If `True` (the default), remove empty frames. Note that negative
                 frames (frames explicitly marked as containing no instances via
                 `is_negative=True`) are preserved even when empty.
-            empty_instances: If `True` (NOT default), remove instances that have no
-                visible points.
+            empty_instances: If `True` (NOT default), remove empty instances: those
+                with no labeled point that has a location (see `Instance.is_empty`).
+                Instances whose points are all occluded estimates are kept.
             skeletons: If `True` (the default), remove unused skeletons.
             tracks: If `True` (the default), remove unused tracks.
             videos: If `True` (NOT default), remove videos that have no labeled frames.
@@ -2120,7 +2121,7 @@ class Labels:
         Args:
             clean: If `True` (the default), also remove any empty frames and unused
                 tracks and skeletons. It does NOT remove videos that have no labeled
-                frames or instances with no visible points.
+                frames or empty instances (see `Instance.is_empty`).
 
         Raises:
             RuntimeError: If Labels is lazy-loaded.
@@ -4755,7 +4756,10 @@ class Labels:
             new_node_inds, old_node_inds = mapped_skeleton.match_nodes(
                 source_points["name"]
             )
+            # Nodes the source skeleton lacks are unlabeled, as in
+            # `Instance.replace_skeleton`'s default.
             mapped_points = type(source_points).empty(len(mapped_skeleton))
+            mapped_points["labeled"] = False
             mapped_points[new_node_inds] = source_points[old_node_inds]
             mapped_points["name"] = mapped_skeleton.node_names
 

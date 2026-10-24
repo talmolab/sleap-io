@@ -4958,7 +4958,7 @@ def _analyze_video_colors(labels: Labels) -> list[dict]:
     "remove_empty_instances",
     default=False,
     show_default=True,
-    help="Remove instances with no visible points.",
+    help="Remove instances with no labeled point that has a location.",
 )
 @click.option(
     "--remove-empty-frames/--no-remove-empty-frames",

@@ -86,13 +86,22 @@ On write, `save_coco` encodes each point from its state:
 read back as unlabeled.
 
 !!! warning "Changed in 0.10"
-    Before 0.10, `v=0` read as a hidden keypoint and `v=1` as visible, so occluded
-    estimates were lost. Now `v=0` is unlabeled and `v=1` is occluded with its
-    coordinates. For **top-down** models trained with sleap-nn, COCO `v=0` joints
-    get zero loss and `v=1` joints train at their coordinates, as in HRNet. For
-    **bottom-up** models, frames that mix labeled and unlabeled instances still
-    treat `v=0` joints as hidden until spatial ignore masks exist. Pass
-    `v0_as="absent"` to keep the old reading of `v=0`.
+    Before 0.10, `v=0` read as a hidden keypoint and `v=1` as *visible*, so
+    occluded estimates were indistinguishable from visible keypoints. Now `v=0` is
+    unlabeled and `v=1` is occluded (hidden) with its coordinates kept.
+
+    Because `v=1` points are no longer visible,
+    [`Instance.numpy()`][sleap_io.Instance.numpy] and
+    [`Labels.numpy()`][sleap_io.Labels.numpy] now return NaN for them where they
+    used to return their coordinates. Use `instance.numpy(invisible_as_nan=False)`
+    to get the estimated coordinates; `Labels.numpy(return_states=True)` tells
+    these points apart by their `OCCLUDED` state.
+
+    For **top-down** models trained with sleap-nn, COCO `v=0` joints get zero loss
+    and `v=1` joints train at their coordinates, as in HRNet. For **bottom-up**
+    models, frames that mix labeled and unlabeled instances still treat `v=0`
+    joints as hidden until spatial ignore masks exist. Pass `v0_as="absent"` to
+    keep the old reading of `v=0`.
 
 ## Annotation metadata
 

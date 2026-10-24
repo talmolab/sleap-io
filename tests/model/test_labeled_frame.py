@@ -150,6 +150,31 @@ def test_remove_empty_instances():
     assert_equal(lf.numpy(), [[[0, 1], [2, 3]]])
 
 
+def test_remove_empty_instances_keeps_occluded():
+    """All-occluded instances are kept; unlabeled or located-nowhere ones are not."""
+    skeleton = Skeleton(["A", "B"])
+    occluded = Instance.from_numpy(
+        np.array([[0.0, 1.0], [2.0, 3.0]]), skeleton=skeleton, visible=False
+    )
+    unlabeled = Instance.from_numpy(
+        np.array([[0.0, 1.0], [2.0, 3.0]]),
+        skeleton=skeleton,
+        visible=False,
+        labeled=False,
+    )
+    absent = Instance.from_numpy(np.full((2, 2), np.nan), skeleton=skeleton)
+    lf = LabeledFrame(
+        video=Video(filename="test"),
+        frame_idx=0,
+        instances=[occluded, unlabeled, absent],
+    )
+
+    lf.remove_empty_instances()
+
+    assert len(lf.instances) == 1
+    assert lf.instances[0] is occluded
+
+
 def test_labeled_frame_image(centered_pair_low_quality_path):
     video = Video.from_filename(centered_pair_low_quality_path)
     lf = LabeledFrame(video=video, frame_idx=0)

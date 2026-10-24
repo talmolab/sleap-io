@@ -127,6 +127,18 @@ Before merging can proceed, skeletons from both datasets must be matched. Each s
 
 If no match is found, the skeleton is added as new to the base dataset.
 
+When a matched skeleton has nodes the incoming instance's skeleton lacks (for
+example, a 2-node instance merged into a 3-node skeleton with `"overlap"`), the
+merged instance marks those nodes as
+[unlabeled](model/poses.md#point-flags-and-states): not labeled, not visible,
+with no location. This matches the default of
+[`replace_skeleton`][sleap_io.Labels.replace_skeleton], so training ignores the
+nodes instead of treating them as annotated absent.
+
+!!! note "Changed in 0.10"
+    Before 0.10, these nodes were filled as hidden with no location, which reads
+    as labeled ("absent") under the [point flags](model/poses.md#point-flags-and-states).
+
 ### String configuration
 
 ```python

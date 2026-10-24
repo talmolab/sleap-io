@@ -1808,7 +1808,7 @@ With default options, `sio fix` automatically:
 |--------|---------|-------------|
 | `--remove-unused-tracks` | True | Remove tracks not used by any instance |
 | `--remove-empty-frames` | True | Remove frames with no instances |
-| `--remove-empty-instances` | False | Remove instances with no visible points |
+| `--remove-empty-instances` | False | Remove instances with no labeled point that has a location (all-occluded instances are kept) |
 | `--remove-unlabeled-videos` | False | Remove videos with no labeled frames |
 
 #### Path Fixing Options

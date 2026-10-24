@@ -211,6 +211,10 @@ with h5py.File("output.h5", "r") as f:
 
 [Label Studio](https://labelstud.io/) is a multi-modal annotation platform. Export annotations from Label Studio and load them into SLEAP.
 
+Label Studio keypoints have no visibility flag, so `save_labelstudio` writes only
+visible points. Hidden points, including occluded estimates with coordinates, are
+left out and read back as hidden with no location.
+
 ::: sleap_io.io.main.load_labelstudio
 
 ::: sleap_io.io.main.save_labelstudio

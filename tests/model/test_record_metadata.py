@@ -77,6 +77,43 @@ def test_record_metadata_validates_on_set():
     assert "bbox" not in md
 
 
+@pytest.mark.parametrize("key", [".", ".."])
+def test_record_metadata_rejects_dot_keys(key):
+    """`.` and `..` can't be stored as HDF5 group names, so they are rejected."""
+    md = RecordMetadata()
+    with pytest.raises(ValueError, match="'.' or '..'"):
+        md[key] = 1
+    with pytest.raises(ValueError, match="'.' or '..'"):
+        RecordMetadata({key: 1})
+    assert md == {}
+    # Keys that only contain dots are fine.
+    md["..."] = 1
+    md[".a"] = 2
+    assert md == {"...": 1, ".a": 2}
+
+
+def test_record_metadata_rejects_nul_keys():
+    """HDF5 truncates names at a NUL character, so such keys are rejected."""
+    md = RecordMetadata()
+    with pytest.raises(ValueError, match="NUL"):
+        md["a\x00b"] = 1
+    assert md == {}
+
+
+@pytest.mark.parametrize("key", [".", ".."])
+def test_metadata_on_records_rejects_dot_keys(key):
+    """Instance, frame and box metadata reject `.` and `..` keys when set."""
+    inst = Instance.empty(Skeleton(["A"]))
+    lf = LabeledFrame(video=Video("test.mp4"), frame_idx=0)
+    box = UserBoundingBox(x1=0, y1=0, x2=1, y2=1)
+    for record in (inst, lf, box):
+        with pytest.raises(ValueError, match="'.' or '..'"):
+            record.metadata[key] = 1
+        with pytest.raises(ValueError, match="'.' or '..'"):
+            record.metadata = {key: 1}
+        assert record.metadata == {}
+
+
 def test_record_metadata_dict_methods():
     """setdefault, |= and copy keep the validated type."""
     md = RecordMetadata()

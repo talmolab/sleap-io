@@ -151,8 +151,12 @@ def convert_labels(labels: Labels) -> List[dict]:
             )
 
             for point in instance.points:
-                # Skip points with NaN coordinates as they are not JSON compliant
-                # and Label Studio doesn't support them
+                # Label Studio has no notion of hidden keypoints, so write only
+                # visible points. Hidden points with an estimated location would
+                # otherwise come back as visible. Points with NaN coordinates are
+                # not JSON compliant and Label Studio doesn't support them.
+                if not point["visible"]:
+                    continue
                 if math.isnan(point["xy"][0]) or math.isnan(point["xy"][1]):
                     continue
 

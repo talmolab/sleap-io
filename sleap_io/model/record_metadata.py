@@ -7,7 +7,8 @@ restricted so that each key can be stored as one typed column per table on disk:
 - Values are `bool`, `int`, `float` or `str`. Numpy scalars are converted to the
   matching Python type. `None` means "missing".
 - Nested values (lists, dicts, arrays) are rejected. JSON-encode them into a `str`.
-- Keys are non-empty strings without `/`.
+- Keys are non-empty strings without `/` or NUL characters, and not `.` or `..`, so
+  that each one can be stored as an HDF5 group name.
 - All records of one table share a kind per key (`bool`, `int`, `float` or `str`).
   `int` and `float` mix as `float`, except that integers beyond 2^53 can't be widened
   to `float` without losing precision, so mixing them with floats raises.
@@ -36,7 +37,8 @@ def _check_key(key: Any) -> str:
 
     Raises:
         TypeError: If the key is not a string.
-        ValueError: If the key is empty or contains `/`.
+        ValueError: If the key is empty, contains `/` or a NUL character, or is `.`
+            or `..`.
     """
     if not isinstance(key, str):
         raise TypeError(f"Metadata keys must be strings, got {type(key).__name__}.")
@@ -44,6 +46,10 @@ def _check_key(key: Any) -> str:
         raise ValueError("Metadata keys must be non-empty.")
     if "/" in key:
         raise ValueError(f"Metadata keys can't contain '/': {key!r}.")
+    if "\x00" in key:
+        raise ValueError(f"Metadata keys can't contain NUL characters: {key!r}.")
+    if key in (".", ".."):
+        raise ValueError(f"Metadata keys can't be '.' or '..': {key!r}.")
     return key
 
 

@@ -9625,8 +9625,8 @@ def test_update_from_numpy_nan_keeps_hidden_points():
     assert other.point_states[1] == sleap_io.PointState.VISIBLE
 
 
-def test_map_instance_fills_nan_and_copies_metadata():
-    """Merge remapping fills unplaced nodes with NaN and copies metadata."""
+def test_map_instance_fills_unlabeled_and_copies_metadata():
+    """Merge remapping marks unplaced nodes unlabeled and copies metadata."""
     labels = Labels()
     src_skeleton = Skeleton(["A", "B"])
     dst_skeleton = Skeleton(["B", "C", "A"])
@@ -9637,10 +9637,37 @@ def test_map_instance_fills_nan_and_copies_metadata():
         assert type(mapped) is cls
         assert_equal(mapped.points["xy"][[0, 2]], [[3, 4], [1, 2]])
         assert np.isnan(mapped.points["xy"][1]).all()
-        assert mapped.points["labeled"].all()
+        assert mapped.points["labeled"].tolist() == [True, False, True]
         assert not mapped.points["visible"][1]
+        assert mapped.point_states.tolist() == [2, 0, 2]
         assert mapped.metadata == {"ann_id": 9}
         assert mapped.metadata is not inst.metadata
+
+
+def test_merge_overlap_skeleton_fills_unlabeled():
+    """Merging into a skeleton with an extra node leaves that node unlabeled."""
+    video = Video("test.mp4")
+    dst_skeleton = Skeleton(["A", "B", "C"])
+    src_skeleton = Skeleton(["A", "B"])
+    labels = Labels(videos=[video], skeletons=[dst_skeleton])
+    inst = Instance.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=src_skeleton)
+    other = Labels(
+        videos=[video],
+        skeletons=[src_skeleton],
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst])],
+    )
+
+    result = labels.merge(
+        other,
+        skeleton=SkeletonMatcher(method=SkeletonMatchMethod.OVERLAP, min_overlap=0.5),
+    )
+
+    assert result.successful
+    merged = labels[0].instances[0]
+    assert merged.skeleton is dst_skeleton
+    assert merged.point_states.tolist() == [2, 2, 0]
+    assert_equal(merged.points["xy"][:2], [[1, 2], [3, 4]])
+    assert np.isnan(merged.points["xy"][2]).all()
 
 
 def test_merge_copies_new_frame_metadata():
