@@ -929,6 +929,8 @@ def load_coco(
     grayscale: bool = False,
     segmentation_format: str = "mask",
     category_as_track: bool = False,
+    visibility_encoding: str = "auto",
+    v0_as: str = "unlabeled",
     **kwargs,
 ) -> Labels:
     """Load a COCO-style dataset and return a Labels object.
@@ -950,6 +952,16 @@ def load_coco(
             identity, creating one `Track` per category and assigning it to that
             category's annotations. Useful for instance-segmentation datasets
             where the category encodes identity. Default is False.
+        visibility_encoding: How to read keypoint visibility codes. ``"ternary"``
+            is COCO's 0/1/2 encoding (``v=0`` unlabeled, ``v=1`` occluded with its
+            coordinates kept, ``v=2`` visible). ``"binary"`` reads ``v>0`` as
+            visible; use it for files saved with
+            ``save_coco(..., visibility_encoding="binary")`` and for CrowdPose.
+            ``"auto"`` (the default) picks binary, with a warning, when some
+            keypoint has ``v=1`` and none in the file has ``v=2``.
+        v0_as: ``"unlabeled"`` (the default) reads ``v=0`` keypoints as unlabeled.
+            ``"absent"`` reads them as labeled and not visible with no location, as
+            sleap-io did before 0.10.
         **kwargs: Additional arguments (currently unused).
 
     Returns:
@@ -963,6 +975,8 @@ def load_coco(
         grayscale=grayscale,
         segmentation_format=segmentation_format,
         category_as_track=category_as_track,
+        visibility_encoding=visibility_encoding,
+        v0_as=v0_as,
     )
 
 
@@ -1178,7 +1192,9 @@ def load_file(
               "mask" (default) rasterizes polygons into `SegmentationMask` objects;
               "roi" keeps them as vector `ROI` objects. category_as_track (bool): If
               True, treat each COCO category as a persistent identity, creating one
-              `Track` per category. Default is False.
+              `Track` per category. Default is False. visibility_encoding (str):
+              "auto" (default), "ternary" or "binary". v0_as (str): "unlabeled"
+              (default) or "absent". See `load_coco`.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
             - For "analysis_h5" format: video (Optional[Video | str]): Video to
