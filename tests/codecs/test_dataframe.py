@@ -4384,3 +4384,48 @@ def test_to_dataframe_lazy_missing_tracking_score_is_none(fmt, tmp_path):
     lazy = to_dataframe(load_slp(path, lazy=True), format=fmt)
     assert lazy.equals(eager)
     assert lazy["track_score"].isna().all()
+
+
+def _labels_with_unlabeled_points() -> Labels:
+    """Labels with a visible, a hidden and an unlabeled point in each instance."""
+    skeleton = Skeleton(["a", "b", "c"])
+    video = Video(filename="test.mp4")
+    inst = Instance.from_numpy(
+        np.array([[1.0, 2.0], [np.nan, np.nan], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        labeled=[True, True, False],
+    )
+    pred = PredictedInstance.from_numpy(
+        np.array([[1.0, 2.0], [np.nan, np.nan], [np.nan, np.nan]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.9, 0.1, 0.0]),
+        score=0.5,
+        labeled=[True, True, False],
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst, pred])
+    return Labels(labeled_frames=[lf], skeletons=[skeleton], videos=[video])
+
+
+def test_to_dataframe_points_labeled_column():
+    """The points format marks unlabeled points in a `labeled` column."""
+    df = to_dataframe(_labels_with_unlabeled_points(), format="points")
+    assert df["labeled"].tolist() == [True, True, False] * 2
+    assert df["x"].isna().tolist() == [False, True, True] * 2
+
+    chunks = list(
+        to_dataframe_iter(
+            _labels_with_unlabeled_points(), format="points", chunk_size=100
+        )
+    )
+    assert chunks[0]["labeled"].tolist() == df["labeled"].tolist()
+
+
+def test_to_dataframe_points_labeled_column_lazy(tmp_path):
+    """The lazy points path writes the same `labeled` column."""
+    path = tmp_path / "unlabeled.slp"
+    _labels_with_unlabeled_points().save(str(path))
+
+    df_lazy = to_dataframe(load_slp(str(path), lazy=True), format="points")
+    df_eager = to_dataframe(load_slp(str(path), lazy=False), format="points")
+    assert df_lazy["labeled"].tolist() == [True, True, False] * 2
+    assert df_lazy["labeled"].tolist() == df_eager["labeled"].tolist()
