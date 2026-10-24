@@ -43,6 +43,7 @@ from sleap_io import (
     set_default_image_plugin,
 )
 from sleap_io.io.slp import (
+    LEGACY_INSTANCE_DTYPE,
     LI_DTYPE,
     METADATA_ATTR_SIZE_LIMIT,
     OBJ_DTYPE,
@@ -571,25 +572,29 @@ def test_negative_frames_roundtrip(tmp_path):
         skeletons=[skel],
     )
 
-    # Save
+    # Save: SLP 3.0 stores the flag in /frames, not in /negative_frames.
     path = tmp_path / "test.slp"
     write_labels(str(path), labels)
-
-    # Verify dataset was created
     with h5py.File(path, "r") as f:
-        assert "negative_frames" in f
+        assert "negative_frames" not in f
+        assert_equal(f["frames/is_negative"][()], [False, True, False])
+
+    # The legacy layout writes /negative_frames.
+    legacy_path = tmp_path / "legacy.slp"
+    write_labels(str(legacy_path), labels, legacy_format=True)
+    with h5py.File(legacy_path, "r") as f:
         data = f["negative_frames"][:]
         assert len(data) == 1
         assert data[0]["video_id"] == 0
         assert data[0]["frame_idx"] == 1
 
     # Load and verify
-    loaded = read_labels(str(path))
-
-    assert len(loaded.negative_frames) == 1
-    assert loaded.labeled_frames[0].is_negative is False  # frame 0
-    assert loaded.labeled_frames[1].is_negative is True  # frame 1
-    assert loaded.labeled_frames[2].is_negative is False  # frame 2
+    for p in (path, legacy_path):
+        loaded = read_labels(str(p))
+        assert len(loaded.negative_frames) == 1
+        assert loaded.labeled_frames[0].is_negative is False  # frame 0
+        assert loaded.labeled_frames[1].is_negative is True  # frame 1
+        assert loaded.labeled_frames[2].is_negative is False  # frame 2
 
 
 def test_negative_frames_no_dataset_when_empty(tmp_path):
@@ -666,12 +671,13 @@ def test_negative_frames_lazy_roundtrip(tmp_path):
 
     # Check that negative frame info is available in lazy store
     assert lazy_labels.is_lazy
-    assert len(lazy_labels._lazy_store._negative_frames) == 1
+    store = lazy_labels._lazy_store
+    assert_equal(store.frames_data["is_negative"], [False, True, False])
 
     # Check that copy() preserves negative frames
-    copied_store = lazy_labels._lazy_store.copy()
-    assert copied_store._negative_frames == lazy_labels._lazy_store._negative_frames
-    assert copied_store._negative_frames is not lazy_labels._lazy_store._negative_frames
+    copied_store = store.copy()
+    assert_equal(copied_store.frames_data["is_negative"], [False, True, False])
+    assert copied_store.frames_data is not store.frames_data
 
     # Materialize individual frames and check is_negative
     assert lazy_labels.labeled_frames[0].is_negative is False
@@ -756,17 +762,23 @@ def test_negative_frames_lazy_write(tmp_path):
     lazy_labels = load_slp(str(path1), lazy=True)
     path2 = tmp_path / "lazy_resave.slp"
     write_labels(str(path2), lazy_labels)
-
-    # Verify negative frames dataset exists in resaved file
     with h5py.File(path2, "r") as f:
-        assert "negative_frames" in f
+        assert "negative_frames" not in f
+        assert_equal(f["frames/is_negative"][()], [False, True])
+
+    # The legacy layout writes the negative frames dataset.
+    path3 = tmp_path / "lazy_legacy.slp"
+    write_labels(str(path3), lazy_labels, legacy_format=True)
+    with h5py.File(path3, "r") as f:
         data = f["negative_frames"][:]
         assert len(data) == 1
+        assert data[0]["frame_idx"] == 1
 
-    # Load the resaved file eagerly and verify
-    reloaded = read_labels(str(path2))
-    assert len(reloaded.negative_frames) == 1
-    assert reloaded.labeled_frames[1].is_negative is True
+    # Load the resaved files eagerly and verify
+    for path in (path2, path3):
+        reloaded = read_labels(str(path))
+        assert len(reloaded.negative_frames) == 1
+        assert reloaded.labeled_frames[1].is_negative is True
 
 
 def test_negative_frames_materialize(tmp_path):
@@ -3118,9 +3130,9 @@ def test_format_id_backward_compatibility(tmp_path):
         videos=[video], skeletons=[skeleton], tracks=[track], labeled_frames=[lf]
     )
 
-    # Save the file
+    # Save the file in the 2.x layout
     test_path = tmp_path / "test_format_old.slp"
-    write_labels(test_path, labels)
+    write_labels(test_path, labels, legacy_format=True)
 
     # Manually modify the format_id to simulate an older file
     with h5py.File(test_path, "r+") as f:
@@ -4579,7 +4591,7 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
 
     # Step 2: Save with embedded frames (creates video0, video1, ..., video4 groups)
     embedded_path = tmp_path / "embedded.slp"
-    save_slp(labels, str(embedded_path), embed="all")
+    save_slp(labels, str(embedded_path), embed="all", legacy_format=True)
 
     # Step 3: Create sparse version with renamed video groups
     sparse_path = tmp_path / "sparse.slp"
@@ -4718,7 +4730,7 @@ def test_load_slp_with_sequential_ids_sparse_datasets(tmp_path, small_robot_vide
 
     # Step 2: Save with embedded frames
     embedded_path = tmp_path / "embedded.slp"
-    save_slp(labels, str(embedded_path), embed="all")
+    save_slp(labels, str(embedded_path), embed="all", legacy_format=True)
 
     # Step 3: Create version with sparse dataset names but sequential frame IDs
     # This mimics files exported from larger .pkg.slp files
@@ -4941,7 +4953,7 @@ def test_load_slp_sparse_video_ids_with_fallback(tmp_path, small_robot_video):
 
     # Save with embedded frames
     embedded_path = tmp_path / "embedded.slp"
-    save_slp(labels, str(embedded_path), embed="all")
+    save_slp(labels, str(embedded_path), embed="all", legacy_format=True)
 
     # Create sparse version: frame IDs [0, 1, 15] with video 1 having non-standard name
     sparse_path = tmp_path / "sparse_fallback.slp"
@@ -10836,7 +10848,7 @@ def test_slp_lazy_old_format_annotation_only_frames(tmp_path):
         labeled_frames=[lf0, lf1],
     )
     path = str(tmp_path / "test.slp")
-    save_slp(labels, path)
+    save_slp(labels, path, legacy_format=True)
 
     # Remove frame 1 from /frames to simulate old format (annotation-only frame
     # not in /frames)
@@ -12237,15 +12249,24 @@ def test_save_slp_warns_dropped_metadata(tmp_path):
         warnings.simplefilter("error")
         save_slp(labels, str(tmp_path / "plain.slp"))
 
-    for set_metadata in (
-        lambda lf: lf.metadata.update(image_id=1),
-        lambda lf: lf.instances[0].metadata.update(ann_id=1),
-        lambda lf: lf.bboxes[0].metadata.update(area=1.0),
+    for set_metadata, dropped in (
+        (lambda lf: lf.metadata.update(image_id=1), False),
+        (lambda lf: lf.instances[0].metadata.update(ann_id=1), False),
+        (lambda lf: lf.bboxes[0].metadata.update(area=1.0), True),
     ):
         labels, lf = make_labels()
         set_metadata(lf)
-        with pytest.warns(UserWarning, match="metadata"):
-            save_slp(labels, str(tmp_path / "meta.slp"))
+        # SLP 3.0 stores instance and frame metadata, but not box metadata yet.
+        if dropped:
+            with pytest.warns(UserWarning, match="Bounding box metadata"):
+                save_slp(labels, str(tmp_path / "meta.slp"))
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                save_slp(labels, str(tmp_path / "meta.slp"))
+        # The legacy layout stores none of it.
+        with pytest.warns(UserWarning, match="legacy SLP layout"):
+            save_slp(labels, str(tmp_path / "legacy.slp"), legacy_format=True)
 
 
 def test_save_slp_rejects_mixed_metadata_kinds(tmp_path):
@@ -12367,9 +12388,8 @@ def test_points_written_as_columns(tmp_path):
         assert_equal(f["pred_points/score"][()], [0.9, 0.8, 0.7, 0.6])
         # The unlabeled point has no location on disk.
         assert np.isnan(f["points/x"][3])
-        # Instances and frames stay compound until they become columnar too.
-        assert isinstance(f["instances"], h5py.Dataset)
-        assert isinstance(f["frames"], h5py.Dataset)
+        assert isinstance(f["instances"], h5py.Group)
+        assert isinstance(f["frames"], h5py.Group)
 
 
 @pytest.mark.parametrize("lazy", [False, True])
@@ -12722,11 +12742,11 @@ def test_unknown_point_columns_with_unowned_rows_are_dropped(
             del f["points"][name]
             f["points"].create_dataset(name, data=data)
         if where == "first":
-            instances = f["instances"][()]
-            user = instances["instance_type"] == 0
-            instances["point_id_start"][user] += 1
-            instances["point_id_end"][user] += 1
-            f["instances"][...] = instances
+            user = f["instances/instance_type"][()] == 0
+            for name in ("point_id_start", "point_id_end"):
+                col = f["instances"][name][()]
+                col[user] += 1
+                f["instances"][name][...] = col
     labels = load_slp(path)
     with pytest.warns(UserWarning, match="future_weight of /points were not saved"):
         save_slp(labels, str(tmp_path / "out.slp"))
@@ -12737,9 +12757,7 @@ def test_unknown_instance_type_is_skipped(tmp_path, slp_typical):
     path = tmp_path / "labels.slp"
     save_slp(load_slp(slp_typical), str(path))
     with h5py.File(path, "r+") as f:
-        instances = f["instances"][()]
-        instances["instance_type"][2] = 7
-        f["instances"][...] = instances
+        f["instances/instance_type"][2] = 7
     assert [type(inst) for inst in load_slp(str(path))[0].instances] == [
         Instance,
         Instance,
@@ -12888,4 +12906,816 @@ def test_label_image_writer_writes_column_placeholders(tmp_path):
         assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
         assert isinstance(f["points"], h5py.Group)
         assert len(f["pred_points/score"]) == 0
+        assert isinstance(f["instances"], h5py.Group)
+        assert len(f["instances/point_id_end"]) == 0
+        assert "instance_id" not in f["instances"]
+        assert isinstance(f["frames"], h5py.Group)
+        assert len(f["frames/is_negative"]) == 0
     assert len(read_points(str(path))) == 0
+
+
+# -- SLP 3.0 instances and frames (PR 2b) ---------------------------------------------
+
+
+def _pose_summary(labels: Labels) -> list:
+    """Summarize the frames and instances of labels for comparing two reads."""
+    summary = []
+    for lf in labels:
+        instances = []
+        for inst in lf.instances:
+            source = inst.from_predicted
+            instances.append(
+                (
+                    type(inst).__name__,
+                    np.nan_to_num(inst.numpy(), nan=-1.0).round(4).tolist(),
+                    inst.point_states.tolist(),
+                    inst.track.name if inst.track is not None else None,
+                    inst.tracking_score,
+                    round(float(np.nan_to_num(inst.score, nan=-1.0)), 4)
+                    if hasattr(inst, "score")
+                    else None,
+                    lf.instances.index(source) if source in lf.instances else source,
+                    dict(inst.metadata),
+                )
+            )
+        summary.append(
+            (
+                labels.videos.index(lf.video),
+                lf.frame_idx,
+                lf.is_negative,
+                instances,
+                dict(lf.metadata),
+            )
+        )
+    return summary
+
+
+def _labels_with_links() -> Labels:
+    """Two frames with predictions, a linked user instance and a negative frame."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video("test.mp4")
+    track = Track("t")
+    pred = PredictedInstance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+        score=0.5,
+        track=track,
+        tracking_score=0.25,
+    )
+    user = Instance.from_numpy(np.array([[1.5, 2.5], [3.5, 4.5]]), skeleton=skeleton)
+    user.from_predicted = pred
+    other = PredictedInstance.from_numpy(
+        np.array([[5.0, 6.0], [7.0, 8.0]]), skeleton=skeleton, score=0.75
+    )
+    lfs = [
+        LabeledFrame(video=video, frame_idx=0, instances=[pred, user]),
+        LabeledFrame(video=video, frame_idx=1, is_negative=True),
+        LabeledFrame(video=video, frame_idx=2, instances=[other]),
+    ]
+    return Labels(lfs, videos=[video], skeletons=[skeleton], tracks=[track])
+
+
+def test_instances_and_frames_written_as_columns(tmp_path):
+    """The default writer stores /instances and /frames as groups of columns."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_links(), str(path))
+
+    with h5py.File(path, "r") as f:
+        assert "negative_frames" not in f
+        for name, columns in (
+            (
+                "instances",
+                {
+                    "instance_type": np.uint8,
+                    "frame_id": np.int64,
+                    "skeleton": np.int64,
+                    "track": np.int64,
+                    "from_predicted": np.int64,
+                    "score": np.float64,
+                    "point_id_start": np.int64,
+                    "point_id_end": np.int64,
+                    "tracking_score": np.float64,
+                },
+            ),
+            (
+                "frames",
+                {
+                    "video": np.int64,
+                    "frame_idx": np.int64,
+                    "instance_id_start": np.int64,
+                    "instance_id_end": np.int64,
+                    "is_negative": np.bool_,
+                },
+            ),
+        ):
+            grp = f[name]
+            assert isinstance(grp, h5py.Group)
+            assert sorted(grp.keys()) == sorted(columns)
+            for col, dtype in columns.items():
+                assert grp[col].dtype == dtype
+                assert grp[col].compression is None
+            # No metadata was set, so there is no metadata group.
+            assert "metadata" not in grp
+        assert_equal(f["instances/from_predicted"][()], [-1, 0, -1])
+        assert_equal(f["instances/frame_id"][()], [0, 0, 2])
+        assert_equal(f["instances/track"][()], [0, -1, -1])
+        # A user instance with no tracking score stores NaN.
+        assert_equal(f["instances/tracking_score"][()], [0.25, np.nan, np.nan])
+        assert_equal(f["frames/instance_id_start"][()], [0, 2, 2])
+        assert_equal(f["frames/instance_id_end"][()], [2, 2, 3])
+        assert_equal(f["frames/is_negative"][()], [False, True, False])
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_instances_and_frames_round_trip(tmp_path, lazy):
+    """Columnar instances and frames read back as written, eager and lazy."""
+    labels = _labels_with_links()
+    path = tmp_path / "labels.slp"
+    save_slp(labels, str(path))
+    loaded = load_slp(str(path), lazy=lazy)
+    if lazy:
+        loaded = loaded.materialize()
+    assert _pose_summary(loaded) == _pose_summary(labels)
+    user = loaded[0].instances[1]
+    assert user.from_predicted is loaded[0].instances[0]
+    # `tracking_score` NaN reads back as None.
+    assert user.tracking_score is None
+
+
+@pytest.mark.parametrize("compression", ["gzip", "lzf"])
+def test_instance_and_frame_compression(tmp_path, compression):
+    """`compression=` also compresses /instances and /frames."""
+    labels = _labels_with_links()
+    labels[0].instances[1].metadata["note"] = "linked"
+    path = tmp_path / "labels.slp"
+    save_slp(labels, str(path), compression=compression)
+    with h5py.File(path, "r") as f:
+        for name in ("instances/score", "frames/video"):
+            assert f[name].compression == compression
+            assert f[name].shuffle
+        assert f["instances/metadata/note/values"].compression == compression
+        assert f["instances/metadata/note/present"].compression == compression
+    assert _pose_summary(load_slp(str(path))) == _pose_summary(labels)
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "slp_typical",
+        "slp_real_data",
+        "slp_predictions_with_provenance",
+        "slp_legacy_h5wasm_flat",
+        "slp_legacy_hidden_complete",
+        "slp_legacy_negative_frames",
+        "slp_legacy_sparse_instance_ids",
+        "slp_mixed_layout",
+    ],
+)
+def test_legacy_fixtures_round_trip_through_columns(tmp_path, request, fixture):
+    """Legacy fixtures read the same eager and lazy, and after a 3.0 re-save."""
+    source = request.getfixturevalue(fixture)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        expected = _pose_summary(load_slp(source))
+        assert _pose_summary(load_slp(source, lazy=True).materialize()) == expected
+    for lazy in (False, True):
+        out = tmp_path / f"resaved_{lazy}.slp"
+        save_slp(load_slp(source, lazy=lazy), str(out))
+        with h5py.File(out, "r") as f:
+            assert isinstance(f["instances"], h5py.Group)
+            assert isinstance(f["frames"], h5py.Group)
+        assert _pose_summary(load_slp(str(out))) == expected
+        assert _pose_summary(load_slp(str(out), lazy=True).materialize()) == expected
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.parametrize("open_videos", [False, True])
+def test_legacy_negative_frames_fixture(slp_legacy_negative_frames, lazy, open_videos):
+    """/negative_frames of an old package is read into `is_negative`."""
+    labels = load_slp(slp_legacy_negative_frames, lazy=lazy, open_videos=open_videos)
+    assert [
+        (labels.videos.index(lf.video), lf.frame_idx, lf.is_negative) for lf in labels
+    ] == [(0, 0, False), (0, 1, True), (1, 0, False), (1, 1, True)]
+    if lazy:
+        store = labels._lazy_store
+        # The sparse embedded video ids are mapped to list indices once, on read.
+        assert_equal(store.frames_data["video"], [0, 0, 1, 1])
+        assert_equal(store.frames_data["is_negative"], [False, True, False, True])
+        assert len(labels.negative_frames) == 2
+        labels = labels.materialize()
+    pred, user = labels[2].instances
+    assert user.from_predicted is pred
+    if open_videos:
+        assert labels[2].image.shape == (8, 8, 1)
+
+
+def test_legacy_negative_frames_written_by_legacy_format(
+    tmp_path, slp_legacy_negative_frames
+):
+    """The legacy layout writes the 2.x video ids of the videos as written."""
+    for lazy in (False, True):
+        for kwargs, video_ids in (
+            # The source videos are restored, so the ids are list indices.
+            ({}, [0, 0, 1, 1]),
+            # The videos keep referring to the package's `video0` and `video4`.
+            (dict(embed=False, restore_original_videos=False), [0, 0, 4, 4]),
+        ):
+            out = tmp_path / f"legacy_{lazy}.slp"
+            save_slp(
+                load_slp(slp_legacy_negative_frames, lazy=lazy),
+                str(out),
+                legacy_format=True,
+                **kwargs,
+            )
+            with h5py.File(out, "r") as f:
+                assert isinstance(f["frames"], h5py.Dataset)
+                assert_equal(f["frames"]["video"], video_ids)
+                assert_equal(f["frames"]["frame_id"], [0, 1, 2, 3])
+                assert_equal(f["instances"]["instance_id"], [0, 1, 2])
+                assert sorted(map(tuple, f["negative_frames"][()].tolist())) == [
+                    (0, 1),
+                    (video_ids[-1], 1),
+                ]
+            loaded = load_slp(str(out))
+            assert [
+                (loaded.videos.index(lf.video), lf.is_negative) for lf in loaded
+            ] == [(0, False), (0, True), (1, False), (1, True)]
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_legacy_sparse_instance_ids_are_remapped(slp_legacy_sparse_instance_ids, lazy):
+    """Links stored as instance ids that aren't rows are remapped to rows."""
+    labels = load_slp(slp_legacy_sparse_instance_ids, lazy=lazy)
+    if lazy:
+        assert_equal(labels._lazy_store.instances_data["instance_id"], [0, 1, 2, 3])
+        assert_equal(labels._lazy_store.instances_data["frame_id"], [0, 1, 1, 1])
+        assert_equal(labels._lazy_store.frames_data["frame_id"], [0, 1])
+        labels = labels.materialize()
+    lf0, lf1 = labels
+    a = lf0.instances[0]
+    b, c, user = lf1.instances
+    assert [round(i.score, 4) for i in (a, b, c)] == [0.9, 0.8, 0.7]
+    assert user.from_predicted is b
+    if not lazy:
+        # `materialize` doesn't copy identities, categories or embeddings.
+        assert user.identity.name == "mouse_a"
+        assert user.identity_score == pytest.approx(0.75)
+        assert user.category.name == "female"
+        assert user.category_score == pytest.approx(0.5)
+        assert_equal(user.identity_embedding.vector, np.arange(4, dtype="f4"))
+        assert_equal(user.category_embedding.vector, np.arange(3, dtype="f4"))
+    assert lf1.bboxes[0].instance is user
+    assert lf1.rois[0].instance is user
+    assert lf1.centroids[0].instance is c
+    assert lf1.masks[0].instance is b
+    objects = lf1.label_images[0].objects
+    assert objects[1].instance is user
+    assert objects[2].instance is a
+
+
+def test_legacy_sparse_instance_ids_lazy_links(slp_legacy_sparse_instance_ids):
+    """Lazy reads key instance links by row once the stored ids are remapped."""
+    labels = load_slp(slp_legacy_sparse_instance_ids, lazy=True)
+    lf = labels[1]
+    user = lf.instances[2]
+    assert user.identity.name == "mouse_a"
+    assert user.category.name == "female"
+    assert_equal(user.identity_embedding.vector, np.arange(4, dtype="f4"))
+    assert_equal(user.category_embedding.vector, np.arange(3, dtype="f4"))
+    assert user.from_predicted is lf.instances[0]
+    bbox = labels._lazy_store._bbox_by_frame[(0, 3)][0]
+    assert bbox._instance_idx == 3
+
+
+def test_legacy_dangling_instance_ids_are_dropped(
+    tmp_path, slp_legacy_sparse_instance_ids
+):
+    """Links to stored ids that match no instance row are dropped."""
+    path = tmp_path / "dangling.slp"
+    shutil.copy(slp_legacy_sparse_instance_ids, path)
+    with h5py.File(path, "r+") as f:
+        instances = f["instances"][()]
+        instances["from_predicted"][3] = 999
+        f["instances"][...] = instances
+        f["bboxes/instance"][0] = 999
+        # An annotation that isn't linked to an instance stays unlinked.
+        f["centroids/instance"][0] = -1
+        links = f["identity/links"][()]
+        links["owner_id"][0] = 999
+        f["identity/links"][...] = links
+    labels = load_slp(str(path))
+    user = labels[1].instances[2]
+    assert user.from_predicted is None
+    assert user.identity is None
+    assert labels[1].bboxes[0].instance is None
+    assert labels[1].centroids[0].instance is None
+    # The other links are still remapped.
+    assert labels[1].rois[0].instance is user
+
+
+def test_links_to_unknown_instance_type_rows_are_skipped(
+    tmp_path, slp_legacy_sparse_instance_ids
+):
+    """Links to a row of an unknown instance type are skipped with the row."""
+    path = tmp_path / "unknown_type.slp"
+    shutil.copy(slp_legacy_sparse_instance_ids, path)
+    with h5py.File(path, "r+") as f:
+        instances = f["instances"][()]
+        instances["instance_type"][3] = 7
+        f["instances"][...] = instances
+    labels = load_slp(str(path))
+    assert [type(inst) for inst in labels[1].instances] == [
+        PredictedInstance,
+        PredictedInstance,
+    ]
+    assert labels[1].bboxes[0].instance is None
+    assert labels[1].masks[0].instance is labels[1].instances[0]
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_legacy_instance_ids_remap_from_predicted(tmp_path, lazy):
+    """Stored 2.x instance ids that aren't rows remap `from_predicted`."""
+    path = tmp_path / "legacy.slp"
+    labels = _labels_with_links()
+    save_slp(labels, str(path), legacy_format=True)
+    with h5py.File(path, "r+") as f:
+        instances = f["instances"][()]
+        instances["instance_id"] = [5, 4, 9]
+        instances["from_predicted"] = [-1, 5, -1]
+        f["instances"][...] = instances
+    loaded = load_slp(str(path), lazy=lazy)
+    if lazy:
+        loaded = loaded.materialize()
+    assert _pose_summary(loaded) == _pose_summary(labels)
+
+
+def test_legacy_tables_without_ids_read(tmp_path):
+    """2.x tables without id columns use their rows as ids."""
+    path = tmp_path / "legacy.slp"
+    labels = _labels_with_links()
+    save_slp(labels, str(path), legacy_format=True)
+    with h5py.File(path, "r+") as f:
+        for name, id_name in (("instances", "instance_id"), ("frames", "frame_id")):
+            rows = f[name][()]
+            names = [n for n in rows.dtype.names if n != id_name]
+            del f[name]
+            f.create_dataset(name, data=rows[names])
+    assert _pose_summary(load_slp(str(path))) == _pose_summary(labels)
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_mixed_layout_fixture(slp_mixed_layout, lazy):
+    """Columnar points with compound instances and frames read per table."""
+    labels = load_slp(slp_mixed_layout, lazy=lazy)
+    if lazy:
+        labels = labels.materialize()
+    assert [(lf.frame_idx, lf.is_negative, len(lf)) for lf in labels] == [
+        (0, False, 2),
+        (2, True, 0),
+    ]
+    pred, user = labels[0].instances
+    assert user.from_predicted is pred
+    assert pred.tracking_score == pytest.approx(0.25)
+    # The 2.x writer stored the user instance's missing tracking score as NaN.
+    assert user.tracking_score is None
+    # The columnar points keep the unlabeled point.
+    assert_equal(user.points["labeled"], [True, False])
+
+
+def test_tracking_score_none_round_trips(tmp_path):
+    """A missing tracking score is stored as NaN and read back as `None`."""
+    skeleton = Skeleton(["a"])
+    video = Video("test.mp4")
+    pred = PredictedInstance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skeleton, tracking_score=None
+    )
+    user = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skeleton)
+    labels = Labels([LabeledFrame(video, 0, instances=[pred, user])])
+    path = tmp_path / "labels.slp"
+    save_slp(labels, str(path))
+    for lazy in (False, True):
+        loaded = load_slp(str(path), lazy=lazy)
+        assert [inst.tracking_score for inst in loaded[0].instances] == [None, None]
+    # The legacy layout stores NaN too, which reads back as `None`.
+    save_slp(labels, str(path), legacy_format=True)
+    assert [inst.tracking_score for inst in load_slp(str(path))[0].instances] == [
+        None,
+        None,
+    ]
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_empty_pose_tables(tmp_path, lazy):
+    """Files without frames or instances read, eager and lazy."""
+    video = Video("test.mp4")
+    for labels in (
+        Labels(),
+        Labels(videos=[video], skeletons=[Skeleton(["a"])]),
+        Labels([LabeledFrame(video, 0, is_negative=True)]),
+    ):
+        path = tmp_path / "empty.slp"
+        save_slp(labels, str(path))
+        with h5py.File(path, "r") as f:
+            assert len(f["instances/score"]) == 0
+        loaded = load_slp(str(path), lazy=lazy)
+        assert len(loaded) == len(labels)
+        assert [lf.is_negative for lf in loaded] == [lf.is_negative for lf in labels]
+        # And through a save of the loaded labels.
+        save_slp(loaded, str(tmp_path / "resaved.slp"))
+        assert len(load_slp(str(tmp_path / "resaved.slp"))) == len(labels)
+
+
+def _corrupt_columns(path, table: str, name: str, values) -> None:
+    """Replace one column of a 3.0 table."""
+    with h5py.File(path, "r+") as f:
+        del f[table][name]
+        f[table].create_dataset(name, data=np.asarray(values))
+
+
+@pytest.mark.parametrize(
+    "table, name, values, match",
+    [
+        ("frames", "instance_id_end", [3, 2, 3], "ranges decrease or overlap"),
+        ("frames", "instance_id_start", [0, 2, 1], "ranges decrease or overlap"),
+        ("frames", "instance_id_end", [2, 2, 2], r"end at 2, not at the instance"),
+        ("instances", "frame_id", [0, 2, 2], "frame_id disagrees"),
+        ("instances", "point_id_end", [2, 3, 2], r"outside /points \(2 rows\)"),
+        ("instances", "point_id_start", [-1, 0, 2], "outside /pred_points"),
+        ("instances", "from_predicted", [-1, 3, -1], "from_predicted is not"),
+        ("instances", "from_predicted", [-2, 0, -1], "from_predicted is not"),
+        ("frames", "video", [0, 1, 0], "video is not one of the 1 videos"),
+        ("frames", "video", [0, -1, 0], "video is not one of the 1 videos"),
+        ("instances", "score", [0.5, 0.0], "columns have different lengths"),
+    ],
+)
+@pytest.mark.parametrize("lazy", [False, True])
+def test_corrupt_ranges_raise_for_columns(tmp_path, table, name, values, match, lazy):
+    """Inconsistent 3.0 pose tables raise, naming the table."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_links(), str(path))
+    _corrupt_columns(path, table, name, values)
+    with pytest.raises(ValueError, match=match):
+        load_slp(str(path), lazy=lazy)
+
+
+def test_missing_required_instance_column_raises(tmp_path):
+    """A 3.0 table missing a required column raises, naming it."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_links(), str(path))
+    with h5py.File(path, "r+") as f:
+        del f["instances/skeleton"]
+        del f["frames/frame_idx"]
+    with pytest.raises(ValueError, match=r"/instances is missing column\(s\) skel"):
+        load_slp(str(path))
+
+
+def test_missing_optional_instance_and_frame_columns_take_defaults(tmp_path):
+    """Optional 3.0 columns that are missing take their defaults."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_links(), str(path))
+    with h5py.File(path, "r+") as f:
+        for name in ("track", "from_predicted", "score", "tracking_score"):
+            del f["instances"][name]
+        del f["frames/is_negative"]
+    labels = load_slp(str(path))
+    pred, user = labels[0].instances
+    assert pred.track is None
+    assert user.from_predicted is None
+    assert np.isnan(pred.score)
+    assert pred.tracking_score is None
+    assert not labels[1].is_negative
+
+
+def test_columns_of_any_numeric_type(tmp_path):
+    """Integer and flag columns may be stored as any numeric type."""
+    path = tmp_path / "labels.slp"
+    labels = _labels_with_links()
+    save_slp(labels, str(path))
+    with h5py.File(path, "r+") as f:
+        for table in ("instances", "frames"):
+            for name, col in list(f[table].items()):
+                data = col[()].astype("f8")
+                del f[table][name]
+                f[table].create_dataset(name, data=data)
+    assert _pose_summary(load_slp(str(path))) == _pose_summary(labels)
+
+
+def test_corrupt_legacy_ranges_warn(tmp_path):
+    """Inconsistent 2.x tables warn and read leniently, as they always have."""
+    path = tmp_path / "legacy.slp"
+    save_slp(_labels_with_links(), str(path), legacy_format=True)
+    with h5py.File(path, "r+") as f:
+        # Orphan the last instance: no frame's range holds it any more.
+        frames = f["frames"][()]
+        frames["instance_id_end"][2] = 2
+        f["frames"][...] = frames
+    for lazy in (False, True):
+        with pytest.warns(UserWarning, match="end at 2, not at the instance count"):
+            labels = load_slp(str(path), lazy=lazy)
+        assert [len(lf) for lf in labels] == [2, 0, 0]
+
+
+def test_legacy_frame_ids_are_remapped(tmp_path):
+    """Stored 2.x frame ids that aren't rows are remapped in instances' frame_id."""
+    path = tmp_path / "legacy.slp"
+    save_slp(_labels_with_links(), str(path), legacy_format=True)
+    with h5py.File(path, "r+") as f:
+        frames = f["frames"][()]
+        frames["frame_id"] += 7
+        f["frames"][...] = frames
+        instances = f["instances"][()]
+        instances["frame_id"] += 7
+        f["instances"][...] = instances
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        labels = load_slp(str(path), lazy=True)
+    assert_equal(labels._lazy_store.instances_data["frame_id"], [0, 0, 2])
+    assert_equal(labels._lazy_store.frames_data["frame_id"], [0, 1, 2])
+
+
+def test_read_instances_by_row(tmp_path):
+    """`read_instances` reads instances in row order, links and metadata included."""
+    labels = _labels_with_links()
+    labels[0].instances[1].metadata["kind"] = "user"
+    path = tmp_path / "labels.slp"
+    save_slp(labels, str(path))
+    tracks = read_tracks(str(path))
+    instances = read_instances(
+        str(path),
+        read_skeletons(str(path)),
+        tracks,
+        read_points(str(path)),
+        read_pred_points(str(path)),
+        SLP_FORMAT_ID,
+    )
+    assert [type(inst) for inst in instances] == [
+        PredictedInstance,
+        Instance,
+        PredictedInstance,
+    ]
+    assert instances[1].from_predicted is instances[0]
+    assert instances[0].track is tracks[0]
+    assert dict(instances[1].metadata) == {"kind": "user"}
+
+
+def test_write_negative_frames_uses_embedded_video_ids(
+    tmp_path, slp_legacy_negative_frames
+):
+    """`write_negative_frames` stores the 2.x video ids of embedded videos."""
+    labels = load_slp(slp_legacy_negative_frames)
+    path = tmp_path / "negative.slp"
+    with h5py.File(path, "w"):
+        pass
+    write_negative_frames(str(path), labels)
+    assert read_negative_frames(str(path)) == {(0, 1), (4, 1)}
+
+
+def _labels_with_metadata() -> Labels:
+    """Labels whose instance and frame metadata has every kind, with gaps."""
+    labels = _labels_with_links()
+    pred, user = labels[0].instances
+    other = labels[2].instances[0]
+    pred.metadata.update(iscrowd=False, area=12.5, ann_id=7, source="coco")
+    user.metadata.update(iscrowd=True, area=3, ann_id=8, source="manual")
+    other.metadata.update(iscrowd=False, note="only here")
+    labels[0].metadata.update(image_id=101, split="train", weight=None)
+    labels[2].metadata.update(image_id=102, split="val")
+    return labels
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_metadata_round_trips(tmp_path, lazy):
+    """Instance and frame metadata of every kind survives, gaps included."""
+    labels = _labels_with_metadata()
+    path = tmp_path / "labels.slp"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(labels, str(path))
+
+    with h5py.File(path, "r") as f:
+        md = f["instances/metadata"]
+        assert sorted(md.keys()) == ["ann_id", "area", "iscrowd", "note", "source"]
+        assert md["iscrowd/values"].dtype == bool
+        assert "present" not in md["iscrowd"]
+        # Ints and floats mix as floats.
+        assert md["area/values"].dtype == np.float64
+        assert_equal(md["area/values"][()], [12.5, 3.0, np.nan])
+        assert_equal(md["area/present"][()], [True, True, False])
+        assert md["ann_id/values"].dtype == np.int64
+        assert_equal(md["ann_id/values"][()], [7, 8, 0])
+        assert h5py.check_string_dtype(md["source/values"].dtype) is not None
+        assert md["source/values"].asstr()[()].tolist() == ["coco", "manual", ""]
+        assert md["note/values"].asstr()[()].tolist() == ["", "", "only here"]
+        fmd = f["frames/metadata"]
+        # Keys whose values are all None aren't written.
+        assert sorted(fmd.keys()) == ["image_id", "split"]
+        assert_equal(fmd["image_id/present"][()], [True, False, True])
+
+    loaded = load_slp(str(path), lazy=lazy)
+    pred, user = loaded[0].instances
+    assert dict(pred.metadata) == {
+        "iscrowd": False,
+        "area": 12.5,
+        "ann_id": 7,
+        "source": "coco",
+    }
+    assert dict(user.metadata) == {
+        "iscrowd": True,
+        "area": 3.0,
+        "ann_id": 8,
+        "source": "manual",
+    }
+    assert type(user.metadata["ann_id"]) is int
+    assert type(user.metadata["iscrowd"]) is bool
+    assert dict(loaded[2].instances[0].metadata) == {
+        "iscrowd": False,
+        "note": "only here",
+    }
+    assert dict(loaded[0].metadata) == {"image_id": 101, "split": "train"}
+    assert dict(loaded[1].metadata) == {}
+    assert dict(loaded[2].metadata) == {"image_id": 102, "split": "val"}
+
+
+def test_metadata_survives_lazy_save(tmp_path):
+    """A lazy save carries metadata columns through unchanged."""
+    labels = _labels_with_metadata()
+    path = tmp_path / "labels.slp"
+    save_slp(labels, str(path))
+    lazy = load_slp(str(path), lazy=True)
+    assert lazy._lazy_store.copy().instance_metadata.keys() == (
+        lazy._lazy_store.instance_metadata.keys()
+    )
+    out = tmp_path / "lazy.slp"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(lazy, str(out))
+    assert lazy.is_lazy
+    assert _pose_summary(load_slp(str(out))) == _pose_summary(load_slp(str(path)))
+    # So does an eager save of the materialized labels.
+    save_slp(lazy.materialize(), str(out))
+    assert _pose_summary(load_slp(str(out))) == _pose_summary(load_slp(str(path)))
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_metadata_dropped_by_legacy_format(tmp_path, lazy):
+    """The legacy layout drops metadata with a warning."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_metadata(), str(path))
+    out = tmp_path / "legacy.slp"
+    with pytest.warns(UserWarning, match="legacy SLP layout"):
+        save_slp(load_slp(str(path), lazy=lazy), str(out), legacy_format=True)
+    loaded = load_slp(str(out))
+    assert all(not inst.metadata for inst in loaded.instances)
+    assert all(not lf.metadata for lf in loaded)
+
+
+def test_metadata_reader_ignores_unknown_members(tmp_path):
+    """Members of metadata/ that aren't a readable key column are ignored."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_metadata(), str(path))
+    with h5py.File(path, "r+") as f:
+        md = f["instances/metadata"]
+        md.create_dataset("not_a_group", data=[1, 2, 3])
+        md.create_group("no_values")
+        md.create_group("pairs").create_dataset("values", data=np.zeros((3, 2)))
+        compound = np.zeros(3, dtype=[("a", "i4"), ("b", "f4")])
+        md.create_group("compound").create_dataset("values", data=compound)
+    for lazy in (False, True):
+        loaded = load_slp(str(path), lazy=lazy)
+        assert sorted(loaded[0].instances[0].metadata) == [
+            "ann_id",
+            "area",
+            "iscrowd",
+            "source",
+        ]
+
+
+@pytest.mark.parametrize("member", ["values", "present"])
+def test_metadata_with_wrong_length_raises(tmp_path, member):
+    """A metadata column without one row per record raises."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_metadata(), str(path))
+    with h5py.File(path, "r+") as f:
+        col = f["frames/metadata/image_id"]
+        data = col[member][()]
+        del col[member]
+        col.create_dataset(member, data=data[:2])
+    with pytest.raises(ValueError, match=r"/frames/metadata/image_id doesn't have"):
+        load_slp(str(path))
+
+
+def test_metadata_written_as_fixed_strings_reads(tmp_path):
+    """String metadata stored as fixed-length strings (as JS writers may) reads."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_metadata(), str(path))
+    with h5py.File(path, "r+") as f:
+        col = f["frames/metadata/split"]
+        del col["values"]
+        col.create_dataset("values", data=np.array([b"train", b"", b"val"]))
+    assert load_slp(str(path))[2].metadata["split"] == "val"
+
+
+def _add_unknown_table_columns(path) -> tuple[np.ndarray, np.ndarray]:
+    """Add unknown columns to /instances and /frames of a 3.0 file."""
+    with h5py.File(path, "r+") as f:
+        n, n_frames = len(f["instances/score"]), len(f["frames/video"])
+        extra = np.arange(n, dtype="f4") + 0.5
+        extra_frames = np.arange(n_frames, dtype="i2")
+        f["instances"].create_dataset("future_quality", data=extra)
+        f["frames"].create_dataset("future_split", data=extra_frames)
+    return extra, extra_frames
+
+
+def _assert_unknown_table_columns(path, extra, extra_frames) -> None:
+    """Check the columns from `_add_unknown_table_columns` are in a file."""
+    with h5py.File(path, "r") as f:
+        assert f["instances/future_quality"].dtype == np.float32
+        assert_equal(f["instances/future_quality"][()], extra)
+        assert f["frames/future_split"].dtype == np.int16
+        assert_equal(f["frames/future_split"][()], extra_frames)
+
+
+@pytest.fixture
+def slp_with_unknown_table_columns(tmp_path):
+    """A 3.0 file whose /instances and /frames have unknown columns."""
+    path = tmp_path / "unknown_tables.slp"
+    save_slp(_labels_with_metadata(), str(path))
+    extra, extra_frames = _add_unknown_table_columns(path)
+    return str(path), extra, extra_frames
+
+
+def test_unknown_instance_and_frame_columns_survive_lazy_save(
+    tmp_path, slp_with_unknown_table_columns
+):
+    """A lazy save carries unknown instance and frame columns through."""
+    path, extra, extra_frames = slp_with_unknown_table_columns
+    lazy = load_slp(path, lazy=True)
+    out = tmp_path / "out.slp"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(lazy, str(out))
+    _assert_unknown_table_columns(out, extra, extra_frames)
+    assert _pose_summary(load_slp(str(out))) == _pose_summary(load_slp(path))
+
+
+def test_unknown_instance_and_frame_columns_survive_unedited_eager_save(
+    tmp_path, slp_with_unknown_table_columns
+):
+    """Eager saves carry the columns while the instances and frames are unchanged."""
+    path, extra, extra_frames = slp_with_unknown_table_columns
+    for source in (load_slp(path), load_slp(path, lazy=True).materialize()):
+        out = tmp_path / "out.slp"
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            save_slp(source, str(out))
+        _assert_unknown_table_columns(out, extra, extra_frames)
+
+
+def test_unknown_instance_and_frame_columns_dropped_when_changed(
+    tmp_path, slp_with_unknown_table_columns
+):
+    """The columns are dropped with a warning once their rows no longer line up."""
+    path, _, extra_frames = slp_with_unknown_table_columns
+    labels = load_slp(path)
+    labels[0].instances.pop()
+    out = tmp_path / "out.slp"
+    with pytest.warns(UserWarning, match="future_quality of /instances were not"):
+        save_slp(labels, str(out))
+    with h5py.File(out, "r") as f:
+        assert "future_quality" not in f["instances"]
+        # The frames are the ones loaded, so their column is kept.
+        assert_equal(f["frames/future_split"][()], extra_frames)
+
+    labels = load_slp(path)
+    labels.labeled_frames.pop()
+    with pytest.warns(UserWarning, match="future_split of /frames were not saved"):
+        save_slp(labels, str(out))
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_unknown_instance_and_frame_columns_dropped_by_legacy_format(
+    tmp_path, slp_with_unknown_table_columns, lazy
+):
+    """The legacy layout can't store unknown instance and frame columns."""
+    path, _, _ = slp_with_unknown_table_columns
+    out = tmp_path / "out.slp"
+    with pytest.warns(UserWarning) as record:
+        save_slp(load_slp(path, lazy=lazy), str(out), legacy_format=True)
+    messages = " ".join(str(w.message) for w in record)
+    assert "future_quality of /instances were not saved" in messages
+    assert "future_split of /frames were not saved" in messages
+    with h5py.File(out, "r") as f:
+        assert f["instances"].dtype.names == LEGACY_INSTANCE_DTYPE.names
+
+
+def test_unknown_instance_columns_with_unknown_instance_type_are_dropped(
+    tmp_path, slp_with_unknown_table_columns
+):
+    """Rows that aren't read as instances can't be followed, so the columns drop."""
+    path, _, _ = slp_with_unknown_table_columns
+    with h5py.File(path, "r+") as f:
+        f["instances/instance_type"][2] = 7
+    labels = load_slp(path)
+    assert [len(lf) for lf in labels] == [2, 0, 0]
+    with pytest.warns(UserWarning, match="future_quality of /instances were not"):
+        save_slp(labels, str(tmp_path / "out.slp"))

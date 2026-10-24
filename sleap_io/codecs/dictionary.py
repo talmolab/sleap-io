@@ -13,6 +13,7 @@ The dictionary codec is useful for:
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 from sleap_io.model.instance import Instance, PredictedInstance, Track
@@ -263,18 +264,8 @@ def _build_labeled_frames_lazy(
 
     labeled_frames_list = []
 
-    # Build instance lookup by frame_id for O(1) access
-    # Group instances by frame_id
-    frame_instances: dict[int, list[int]] = {}
-    for inst_idx, inst_row in enumerate(store.instances_data):
-        frame_id = int(inst_row["frame_id"])
-        if frame_id not in frame_instances:
-            frame_instances[frame_id] = []
-        frame_instances[frame_id].append(inst_idx)
-
     # Iterate over frames
     for frame_row in store.frames_data:
-        frame_id = int(frame_row["frame_id"])
         video_id = int(frame_row["video"])
         frame_idx = int(frame_row["frame_idx"])
 
@@ -282,11 +273,13 @@ def _build_labeled_frames_lazy(
         if video_filter is not None and video_id != video_filter:
             continue
 
-        # Get instances for this frame
-        inst_indices = frame_instances.get(frame_id, [])
+        # Get instances for this frame (a range of instance rows)
+        inst_indices = range(
+            int(frame_row["instance_id_start"]), int(frame_row["instance_id_end"])
+        )
 
         # Skip empty frames if requested (preserve negative frames)
-        is_negative = (video_id, frame_idx) in store._negative_frames
+        is_negative = bool(frame_row["is_negative"])
         if skip_empty_frames and len(inst_indices) == 0 and not is_negative:
             continue
 
@@ -330,9 +323,9 @@ def _build_labeled_frames_lazy(
             if track_id >= 0:
                 instance_dict["track_idx"] = track_id
 
-            # Add tracking score if present
+            # Add tracking score if present (NaN is a missing score)
             tracking_score = float(inst_row["tracking_score"])
-            if tracking_score != 0.0:
+            if not math.isnan(tracking_score) and tracking_score != 0.0:
                 instance_dict["tracking_score"] = tracking_score
 
             # Add score for predicted instances

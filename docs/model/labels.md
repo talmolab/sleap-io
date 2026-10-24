@@ -323,15 +323,16 @@ can't open 3.0 files; to share labels with them, save the older layout with
 `legacy_format=True`. That layout has no `labeled` column, so saving unlabeled
 points raises a `ValueError` before anything is written; pass
 `unlabeled_as="absent"` to save them as hidden points with no location (labeled, not
-visible, NaN coordinates) with a warning. Instance, frame and bounding box
-`metadata` can't be saved yet and is dropped with a warning.
+visible, NaN coordinates) with a warning. That layout also drops instance, frame
+and bounding box `metadata` with a warning. Format 3.0 stores instance and frame
+metadata, but bounding box metadata can't be saved yet and is dropped with a warning.
 
 ```python
 labels.save("output.slp", legacy_format=True, unlabeled_as="absent")
 ```
 
-Point tables are uncompressed by default for read speed; pass `compression="gzip"`
-or `"lzf"` for smaller files.
+Pose tables (points, instances and frames) are uncompressed by default for read
+speed; pass `compression="gzip"` or `"lzf"` for smaller files.
 
 ---
 

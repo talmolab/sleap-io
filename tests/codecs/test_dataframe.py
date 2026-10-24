@@ -4368,3 +4368,19 @@ def test_hidden_points_roundtrip_as_not_visible():
         for inst in lf:
             assert inst.points["visible"][0]
             assert not inst.points["visible"][1]
+
+
+@pytest.mark.parametrize("fmt", ["points", "instances"])
+def test_to_dataframe_lazy_missing_tracking_score_is_none(fmt, tmp_path):
+    """The lazy fast path reports a missing tracking score as None, like eager."""
+    skel = Skeleton(["A"])
+    video = Video(filename="test.mp4")
+    pred = PredictedInstance.from_numpy(
+        np.array([[1.0, 2.0]]), skeleton=skel, score=0.5, tracking_score=None
+    )
+    path = tmp_path / "labels.slp"
+    Labels([LabeledFrame(video, 0, instances=[pred])]).save(path)
+    eager = to_dataframe(load_slp(path), format=fmt)
+    lazy = to_dataframe(load_slp(path, lazy=True), format=fmt)
+    assert lazy.equals(eager)
+    assert lazy["track_score"].isna().all()
