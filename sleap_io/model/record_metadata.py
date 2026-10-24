@@ -128,8 +128,22 @@ class RecordMetadata(dict):
         return self
 
     def copy(self) -> "RecordMetadata":
-        """Return a shallow copy."""
-        return RecordMetadata(self)
+        """Return a copy.
+
+        The values are immutable scalars that were validated when set, so a shallow
+        copy is also a deep copy and needs no revalidation.
+        """
+        new = RecordMetadata.__new__(RecordMetadata)
+        dict.update(new, self)
+        return new
+
+    def __copy__(self) -> "RecordMetadata":
+        """Return a copy (see `copy`)."""
+        return self.copy()
+
+    def __deepcopy__(self, memo: dict) -> "RecordMetadata":
+        """Return a copy (see `copy`); the scalar values need no deep copy."""
+        return self.copy()
 
     def __reduce__(self) -> tuple:
         """Pickle as a plain mapping so unpickling revalidates nothing twice."""
@@ -218,6 +232,18 @@ def metadata_column_kinds(records: Iterable[Any], table: str) -> dict[str, str]:
     return kinds
 
 
+# Field names of slotted attrs classes, cached per class for the pickle hooks.
+_STATE_NAMES: dict[type, tuple[str, ...]] = {}
+
+
+def _state_names(cls: type) -> tuple[str, ...]:
+    """Return the attrs field names of a class, in field order (cached)."""
+    names = _STATE_NAMES.get(cls)
+    if names is None:
+        names = _STATE_NAMES[cls] = tuple(a.name for a in attrs.fields(cls))
+    return names
+
+
 def get_attrs_state(obj: Any) -> dict[str, Any]:
     """Return the pickle state of a slotted attrs object as a field dictionary.
 
@@ -227,7 +253,7 @@ def get_attrs_state(obj: Any) -> dict[str, Any]:
     Returns:
         A dictionary mapping field names to values, matching the format attrs uses.
     """
-    return {a.name: getattr(obj, a.name) for a in attrs.fields(type(obj))}
+    return {name: getattr(obj, name) for name in _state_names(type(obj))}
 
 
 def set_attrs_state(obj: Any, state: dict[str, Any] | tuple) -> None:
@@ -242,14 +268,14 @@ def set_attrs_state(obj: Any, state: dict[str, Any] | tuple) -> None:
         state: A dictionary of field values, or a tuple in field order (pickles made
             with attrs < 22.2).
     """
-    fields = attrs.fields(type(obj))
+    names = _state_names(type(obj))
     if isinstance(state, tuple):
-        state = dict(zip((a.name for a in fields), state))
-    for a in fields:
-        if a.name in state:
-            value = state[a.name]
-        elif isinstance(a.default, attrs.Factory):
-            value = a.default.factory()
-        else:
-            value = a.default
-        object.__setattr__(obj, a.name, value)
+        state = dict(zip(names, state))
+    for name in names:
+        if name in state:
+            object.__setattr__(obj, name, state[name])
+            continue
+        default = attrs.fields_dict(type(obj))[name].default
+        if isinstance(default, attrs.Factory):
+            default = default.factory()
+        object.__setattr__(obj, name, default)
