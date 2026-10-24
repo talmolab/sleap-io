@@ -643,6 +643,155 @@ class TestLazyNumpyEquivalence:
         np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
 
 
+class TestLazyNumpyFrameOrigin:
+    """Lazy numpy() rows line up with eager when the first labeled frame isn't 0."""
+
+    # Labeled frame indices per video; none start at frame 0.
+    FRAMES = {0: [3, 5], 1: [7, 9]}
+
+    def _save_offset_labels(self, tmp_path, tracked):
+        """Save labels with user and predicted instances starting after frame 0."""
+        skeleton = Skeleton(["A", "B", "C"])
+        videos = [Video(filename="video0.mp4"), Video(filename="video1.mp4")]
+        tracks = [Track("track0"), Track("track1")] if tracked else [None, None]
+
+        lfs = []
+        for video_id, frame_inds in self.FRAMES.items():
+            for frame_idx in frame_inds:
+                xy = np.full((3, 2), 10.0 * (video_id + 1) + frame_idx)
+                xy[2] = np.nan  # Not visible.
+                pred = PredictedInstance.from_numpy(
+                    xy + 1,
+                    point_scores=np.array([0.9, 0.8, 0.7]),
+                    score=0.95,
+                    skeleton=skeleton,
+                    track=tracks[0],
+                )
+                other_pred = PredictedInstance.from_numpy(
+                    xy + 2,
+                    point_scores=np.array([0.6, 0.5, 0.4]),
+                    score=0.85,
+                    skeleton=skeleton,
+                    track=tracks[1],
+                )
+                user = Instance.from_numpy(
+                    xy, skeleton=skeleton, track=tracks[0], from_predicted=pred
+                )
+                lfs.append(
+                    LabeledFrame(
+                        video=videos[video_id],
+                        frame_idx=frame_idx,
+                        instances=[user, pred, other_pred],
+                    )
+                )
+
+        path = tmp_path / "offset.slp"
+        sio.Labels(lfs).save(path)
+        return path
+
+    def test_single_instance_starts_at_frame_zero(self, tmp_path):
+        """One instance at frame 3 gives 4 rows, like eager."""
+        skeleton = Skeleton(["A", "B"])
+        inst = Instance.from_numpy(
+            np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton
+        )
+        labels = sio.Labels(
+            [LabeledFrame(video=Video(filename="v.mp4"), frame_idx=3, instances=[inst])]
+        )
+        path = tmp_path / "single.slp"
+        labels.save(path)
+
+        lazy_arr = sio.load_slp(path, lazy=True).numpy()
+        eager_arr = sio.load_slp(path, lazy=False).numpy()
+
+        assert lazy_arr.shape == (4, 1, 2, 2)
+        np.testing.assert_array_equal(lazy_arr, eager_arr)
+        np.testing.assert_array_equal(lazy_arr[3, 0], [[1.0, 2.0], [3.0, 4.0]])
+        assert np.isnan(lazy_arr[:3]).all()
+
+    @pytest.mark.parametrize("tracked", [True, False])
+    @pytest.mark.parametrize("video", [0, 1])
+    @pytest.mark.parametrize("untracked", [False, True])
+    @pytest.mark.parametrize("return_confidence", [False, True])
+    @pytest.mark.parametrize("user_instances", [True, False])
+    def test_matches_eager(
+        self, tmp_path, tracked, video, untracked, return_confidence, user_instances
+    ):
+        """Points and states equal eager for every video and mode."""
+        path = self._save_offset_labels(tmp_path, tracked=tracked)
+        lazy = sio.load_slp(path, lazy=True)
+        eager = sio.load_slp(path, lazy=False)
+
+        kwargs = dict(
+            video=video,
+            untracked=untracked,
+            return_confidence=return_confidence,
+            user_instances=user_instances,
+            return_states=True,
+        )
+        lazy_arr, lazy_states = lazy.numpy(**kwargs)
+        eager_arr, eager_states = eager.numpy(**kwargs)
+
+        assert lazy_arr.shape == eager_arr.shape
+        assert lazy_arr.shape[0] == self.FRAMES[video][-1] + 1
+        np.testing.assert_array_equal(lazy_arr, eager_arr)
+        np.testing.assert_array_equal(lazy_states, eager_states)
+
+        # Row i is frame i: unlabeled rows are empty, labeled rows hold data.
+        labeled = self.FRAMES[video]
+        empty = np.setdiff1d(np.arange(lazy_arr.shape[0]), labeled)
+        assert np.isnan(lazy_arr[empty]).all()
+        assert (lazy_states[empty] == sio.PointState.UNLABELED).all()
+        if tracked or untracked:
+            # Untracked instances have no slots unless untracked=True.
+            assert not np.isnan(lazy_arr[labeled]).all(axis=(1, 2, 3)).any()
+            assert (
+                (lazy_states[labeled] == sio.PointState.VISIBLE).any(axis=(1, 2)).all()
+            )
+        else:
+            assert lazy_arr.shape[1] == 0
+
+    def test_empty_video_matches_eager(self, tmp_path):
+        """A video with no labeled frames gives the same array as eager."""
+        labels = sio.load_slp(self._save_offset_labels(tmp_path, tracked=True))
+        labels.videos.append(Video(filename="empty.mp4"))
+        path = tmp_path / "with_empty_video.slp"
+        labels.save(path)
+
+        lazy = sio.load_slp(path, lazy=True)
+        eager = sio.load_slp(path, lazy=False)
+        lazy_arr, lazy_states = lazy.numpy(video=2, return_states=True)
+        eager_arr, eager_states = eager.numpy(video=2, return_states=True)
+
+        assert lazy_arr.shape == eager_arr.shape == (1, 2, 3, 2)
+        np.testing.assert_array_equal(lazy_arr, eager_arr)
+        np.testing.assert_array_equal(lazy_states, eager_states)
+
+    @pytest.mark.parametrize("return_confidence", [False, True])
+    def test_predictions_with_leading_frames_removed(
+        self, centered_pair, tmp_path, return_confidence
+    ):
+        """Dropping the first 100 frames keeps the remaining rows in place."""
+        labels = sio.load_slp(centered_pair)
+        kwargs = dict(return_confidence=return_confidence, return_states=True)
+        full_arr, full_states = labels.numpy(**kwargs)
+        labels.labeled_frames = [
+            lf for lf in labels.labeled_frames if lf.frame_idx >= 100
+        ]
+        path = tmp_path / "trimmed.slp"
+        labels.save(path)
+
+        lazy_arr, lazy_states = sio.load_slp(path, lazy=True).numpy(**kwargs)
+        eager_arr, eager_states = sio.load_slp(path, lazy=False).numpy(**kwargs)
+
+        np.testing.assert_array_equal(lazy_arr, eager_arr)
+        np.testing.assert_array_equal(lazy_states, eager_states)
+        np.testing.assert_array_equal(lazy_arr[100:], full_arr[100:])
+        np.testing.assert_array_equal(lazy_states[100:], full_states[100:])
+        assert np.isnan(lazy_arr[:100]).all()
+        assert (lazy_states[:100] == sio.PointState.UNLABELED).all()
+
+
 # === Labels.materialize() Tests ===
 
 
@@ -1520,8 +1669,8 @@ class TestLazyFindVideoNotInLabels:
 class TestLazyNumpyEmptyVideo:
     """Tests for numpy() edge case with empty video."""
 
-    def test_numpy_empty_video_returns_empty_array(self, tmp_path):
-        """numpy(video=X) returns empty array when video has no frames."""
+    def test_numpy_empty_video_matches_eager(self, tmp_path):
+        """numpy(video=X) matches eager when the video has no frames."""
         # Create labels with two videos, second one has no frames
         skeleton = Skeleton(["A", "B"])
         video1 = Video.from_filename("video1.mp4")
@@ -1540,17 +1689,20 @@ class TestLazyNumpyEmptyVideo:
         test_path = tmp_path / "multi_video.slp"
         write_labels(test_path, labels)
         labels = sio.load_slp(str(test_path), lazy=True)
+        eager = sio.load_slp(str(test_path), lazy=False)
 
-        # numpy() for video2 should return empty array
+        # numpy() for video2 has one empty frame and no slots, like eager.
         arr = labels.numpy(video=1)
-        assert arr.shape[0] == 0  # No frames
-        assert arr.shape[2] == 2  # n_nodes
-        assert arr.shape[3] == 2  # x, y
+        assert arr.shape == (1, 0, 2, 2)
+        np.testing.assert_array_equal(arr, eager.numpy(video=1))
 
         arr, states = labels.numpy(video=1, return_states=True)
-        assert arr.shape[0] == 0
-        assert states.shape == (0, 0, 2)
+        assert arr.shape == (1, 0, 2, 2)
+        assert states.shape == (1, 0, 2)
         assert states.dtype == np.int8
+        np.testing.assert_array_equal(
+            states, eager.numpy(video=1, return_states=True)[1]
+        )
 
 
 # === Track Overlap Tests ===

@@ -681,22 +681,14 @@ class LazyDataStore:
         frames_data = self.frames_data
         video_mask = frames_data["video"] == video_id
         video_frame_data = frames_data[video_mask]
-        n_frames_data = len(video_frame_data)
 
-        if n_frames_data == 0:
-            # No frames for this video, return empty array
-            skeleton = self.skeletons[0] if self.skeletons else None
-            n_nodes = len(skeleton.nodes) if skeleton else 0
-            n_coords = 3 if return_confidence else 2
-            output = np.full((0, 0, n_nodes, n_coords), np.nan, dtype="float32")
-            if return_states:
-                return output, np.zeros((0, 0, n_nodes), dtype="int8")
-            return output
-
-        # Get frame index range for this video
-        frame_indices = video_frame_data["frame_idx"]
-        first_frame = int(frame_indices.min())
-        last_frame = int(frame_indices.max())
+        # Get frame index range for this video. The frame axis always starts at
+        # frame 0 so that row `i` is frame `i` (matches eager).
+        first_frame, last_frame = 0, 0
+        if len(video_frame_data) > 0:
+            frame_indices = video_frame_data["frame_idx"]
+            first_frame = min(first_frame, int(frame_indices.min()))
+            last_frame = int(frame_indices.max())
 
         # Use video length when available so output spans the full video.
         video_obj = (
