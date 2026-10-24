@@ -80,7 +80,20 @@ Format version history:
             reader must understand. Older files are cleaned up on read: hidden
             points lose their (stale) coordinates and visible points without
             coordinates become hidden. `save_slp(..., legacy_format=True)` still
-            writes the 2.x layout.
+            writes the 2.x layout. `/instances` and `/frames` are groups of
+            columns too, without the id columns (the row number is the id):
+            `/frames/video` is the index into the videos, `/frames/is_negative`
+            replaces `/negative_frames`, and `metadata/` subgroups hold
+            per-record metadata. Every remaining table is a group of columns as
+            well: `/rois` (with its `wkb` buffer), `/masks` (with its `rle` buffer
+            and `score_maps/`), `/label_images` (with its pixel `data`, `objects/`
+            and `score_maps/`), `/identity/links`, `/categories/links` and the
+            `/session_data` tables, replacing the separate `roi_*`, `mask_*` and
+            `label_image_*` datasets. Byte data stays in flat `uint8` buffers
+            indexed by start/end columns. Converted tables use `f8` floats, `i8`
+            integers and `bool` flags, and range checks raise for 3.0 tables and
+            warn for older ones. `/bboxes` gains `metadata/`. A 3.0 file holds no
+            compound dataset.
 """
 
 from __future__ import annotations
@@ -91,6 +104,7 @@ import warnings
 import zlib
 from contextlib import nullcontext
 from enum import Enum, IntEnum
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Iterable, NamedTuple
 
@@ -2546,27 +2560,66 @@ def write_events(
 
 
 def read_identity_links(
-    labels_path: str, *, _hdf5_file: h5py.File | None = None
+    labels_path: str,
+    *,
+    _hdf5_file: h5py.File | None = None,
+    _carry: dict | None = None,
 ) -> dict[int, dict[int, tuple[int, float | None]]]:
     """Read per-detection identity links from a SLEAP labels file.
 
-    Links are stored in the optional ``/identity/links`` dataset (SLP format 2.5+),
-    a structured array of ``(owner_type, owner_id, identity_idx, identity_score)``
-    rows joining a detection -- identified by ``owner_type`` (one of the ``OWNER_*``
-    codes) and ``owner_id`` -- to an index into the file's identity catalog.
-    ``owner_id`` is the per-owner-type positional id (e.g. the global
-    ``instance_id`` assigned by `write_lfs` for instance owners), mirroring the
-    ``/embeddings`` join. The dataset is absent in older files, in which case an
-    empty mapping is returned.
+    Links are stored in the optional ``/identity/links`` table (SLP format 2.5+;
+    a group of columns since 3.0, a compound dataset before), with
+    ``(owner_type, owner_id, identity_idx, identity_score)`` rows joining a
+    detection -- identified by ``owner_type`` (one of the ``OWNER_*`` codes) and
+    ``owner_id`` -- to an index into the file's identity catalog. ``owner_id`` is
+    the per-owner-type positional id (e.g. the global ``instance_id`` assigned by
+    `write_lfs` for instance owners), mirroring the ``/embeddings`` join. The table
+    is absent in older files, in which case an empty mapping is returned.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
         _hdf5_file: An already-open `h5py.File` handle to read from.
+        _carry: If given, the table's raw records are added to it for carrying
+            unknown columns through a later save (see `_column_carry`).
 
     Returns:
         A dict mapping each ``owner_type`` to a ``{owner_id: (identity_idx,
         identity_score)}`` mapping. ``identity_score`` is ``None`` when it was not
         recorded (stored as NaN). Empty for older files.
+
+    Raises:
+        ValueError: If an SLP 3.0 link points outside the identity catalog. Older
+            tables warn instead.
+    """
+    return _read_links(
+        labels_path, "identity/links", _hdf5_file=_hdf5_file, _carry=_carry
+    )
+
+
+def _read_links(
+    labels_path: str,
+    table: str,
+    *,
+    _hdf5_file: h5py.File | None = None,
+    _carry: dict | None = None,
+) -> dict[int, dict[int, tuple[int, float | None]]]:
+    """Read `/identity/links` or `/categories/links` (see `read_identity_links`).
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        table: `"identity/links"` or `"categories/links"`.
+        _hdf5_file: An already-open `h5py.File` handle to read from.
+        _carry: If given, the table's raw records are added to it, keyed by their
+            `(owner_type, owner_id, catalog index)` values.
+
+    Returns:
+        A dict mapping each ``owner_type`` to a ``{owner_id: (catalog_idx,
+        score)}`` mapping, with unrecorded (NaN) scores as ``None``.
+
+    Raises:
+        ValueError: If an SLP 3.0 link points outside the catalog (the `name`
+            dataset of the same group, if there is one). Older tables warn
+            instead.
     """
     cm = (
         nullcontext(_hdf5_file)
@@ -2574,27 +2627,94 @@ def read_identity_links(
         else h5py.File(labels_path, "r")
     )
     with cm as f:
-        if "identity" not in f or "links" not in f["identity"]:
+        # The 2.x table may also be a flat 2-D array with a ``field_names``
+        # attribute, as written by sleap-io.js (h5wasm can't create compound
+        # datasets).
+        links = _read_table(f, table)
+        if links is None:
             return {}
-        # Route through the conversion-aware helper so a links table written by the
-        # coordinated sleap-io.js port (h5wasm cannot create compound datasets, so
-        # it writes a flat 2D f8 array + a ``field_names`` attribute) is rebuilt as
-        # a structured array, matching /session_data and points/instances/frames.
-        # A genuine compound dataset (Python-written) passes through unchanged.
-        data = _read_dataset_from_open_file(f, "identity/links")
+        catalog = f[table.partition("/")[0]]
+        n_catalog = len(catalog["name"]) if "name" in catalog else None
+    rows = links.rows
+    _, _, index, score_name = _TABLE_SPECS[table].raw.names
+    if n_catalog is not None and _index_out_of_range(
+        rows[index], n_catalog, optional=False
+    ):
+        _report_table_problems(
+            labels_path,
+            [f"/{table} {index} is not one of the {n_catalog} catalog entries"],
+            strict=not links.is_legacy,
+        )
     result: dict[int, dict[int, tuple[int, float | None]]] = {}
-    for row in data:
-        owner_type = int(row["owner_type"])
-        score = float(row["identity_score"])
-        result.setdefault(owner_type, {})[int(row["owner_id"])] = (
-            int(row["identity_idx"]),
+    for owner_type, owner_id, idx, score in zip(
+        rows["owner_type"].tolist(),
+        rows["owner_id"].tolist(),
+        rows[index].tolist(),
+        rows[score_name].tolist(),
+    ):
+        result.setdefault(owner_type, {})[owner_id] = (
+            idx,
             None if np.isnan(score) else score,
         )
+    if _carry is not None:
+        _carry[table] = (rows, _TABLE_SPECS[table].raw, lambda: _link_keys(rows))
     return result
 
 
+def _link_keys(rows: np.ndarray) -> list[tuple[int, int, int]]:
+    """Return `(owner_type, owner_id, catalog index)` of each link row.
+
+    Link rows aren't owned by one object each, so unknown link columns are carried
+    by these values instead (see `_ColumnCarry`).
+    """
+    return list(zip(*(rows[name].tolist() for name in rows.dtype.names[:3])))
+
+
+def _write_link_rows(
+    labels_path: str,
+    table: str,
+    rows: list[tuple[int, int, int, float]],
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
+) -> None:
+    """Write `/identity/links` or `/categories/links` rows.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        table: `"identity/links"` or `"categories/links"`.
+        rows: ``(owner_type, owner_id, catalog_idx, score)`` tuples, with NaN for
+            an unrecorded score. An empty list is a no-op (nothing is written).
+        legacy_format: If `True`, write the 2.x compound dataset. Otherwise (SLP
+            3.0) a group of columns.
+        compression: `None`, `"gzip"` or `"lzf"` for the columns.
+        carry: Unknown columns kept from loading, appended if the rows are the
+            ones loaded (see `_link_keys`).
+    """
+    if not rows:
+        return
+    arr = np.array(rows, dtype=_TABLE_SPECS[table].raw)
+    if not legacy_format:
+        arr = _with_carried_columns(arr, carry, table, _link_keys(arr))
+    with h5py.File(labels_path, "a") as f:
+        _write_table(
+            f.require_group(table.partition("/")[0]),
+            table,
+            arr,
+            legacy_format=legacy_format,
+            compression=compression,
+            resizable=True,
+        )
+
+
 def _write_identity_link_rows(
-    labels_path: str, rows: list[tuple[int, int, int, float]]
+    labels_path: str,
+    rows: list[tuple[int, int, int, float]],
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
 ) -> None:
     """Write ``(owner_type, owner_id, identity_idx, identity_score)`` rows.
 
@@ -2608,29 +2728,32 @@ def _write_identity_link_rows(
         rows: A list of ``(owner_type, owner_id, identity_idx, identity_score)``
             tuples. ``identity_score`` is a float (NaN encodes an unrecorded score).
             An empty list is a no-op (no dataset is created).
+        legacy_format: If `True`, write the 2.x compound dataset.
+        compression: `None`, `"gzip"` or `"lzf"` for the columns.
+        carry: Unknown columns kept from loading (see `_write_link_rows`).
     """
-    if not rows:
-        return
-
-    identity_link_dtype = np.dtype(
-        [
-            ("owner_type", "u1"),
-            ("owner_id", "i8"),
-            ("identity_idx", "i4"),
-            ("identity_score", "f4"),
-        ]
+    _write_link_rows(
+        labels_path,
+        "identity/links",
+        rows,
+        legacy_format=legacy_format,
+        compression=compression,
+        carry=carry,
     )
-    arr = np.array(rows, dtype=identity_link_dtype)
-    with h5py.File(labels_path, "a") as f:
-        group = f.require_group("identity")
-        group.create_dataset("links", data=arr, maxshape=(None,))
 
 
-def write_identity_links(labels_path: str, labels: Labels) -> None:
+def write_identity_links(
+    labels_path: str,
+    labels: Labels,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
+) -> None:
     """Write per-detection identity links to a SLEAP labels file.
 
-    Creates the ``/identity/links`` dataset (SLP format 2.5+) as a structured array
-    of ``(owner_type, owner_id, identity_idx, identity_score)`` rows for every
+    Creates the ``/identity/links`` table (SLP format 2.5+) of
+    ``(owner_type, owner_id, identity_idx, identity_score)`` rows for every
     detection carrying an `Identity` registered in ``labels.identities``. Instance,
     mask, centroid, bbox, and ROI owners are written (``OWNER_*``).
 
@@ -2645,6 +2768,10 @@ def write_identity_links(labels_path: str, labels: Labels) -> None:
     Args:
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object to store the identity links for.
+        legacy_format: If `True`, write the 2.x compound dataset. Otherwise (SLP
+            3.0) a group of columns.
+        compression: `None`, `"gzip"` or `"lzf"` for the columns.
+        carry: Unknown columns kept from loading (see `_write_link_rows`).
     """
     if not labels.identities:
         return
@@ -2683,7 +2810,13 @@ def write_identity_links(labels_path: str, labels: Labels) -> None:
     rows.extend(_identity_link_rows_for_owner(centroids, id_to_idx, OWNER_CENTROID))
     rows.extend(_identity_link_rows_for_owner(bboxes, id_to_idx, OWNER_BBOX))
     rows.extend(_identity_link_rows_for_owner(rois, id_to_idx, OWNER_ROI))
-    _write_identity_link_rows(labels_path, rows)
+    _write_identity_link_rows(
+        labels_path,
+        rows,
+        legacy_format=legacy_format,
+        compression=compression,
+        carry=carry,
+    )
 
 
 def _identity_link_rows_for_owner(
@@ -2757,53 +2890,50 @@ def _identity_link_rows_from_store(
 
 
 def read_category_links(
-    labels_path: str, *, _hdf5_file: h5py.File | None = None
+    labels_path: str,
+    *,
+    _hdf5_file: h5py.File | None = None,
+    _carry: dict | None = None,
 ) -> dict[int, dict[int, tuple[int, float | None]]]:
     """Read per-detection category links from a SLEAP labels file.
 
-    Links are stored in the optional ``/categories/links`` dataset (SLP format
-    2.7+), a structured array of ``(owner_type, owner_id, category_idx,
-    category_score)`` rows joining a detection -- identified by ``owner_type`` (one
-    of the ``OWNER_*`` codes) and ``owner_id`` -- to an index into the file's
-    category catalog. A fully self-contained mirror of `read_identity_links`.
-    ``owner_id`` is the per-owner-type positional id (e.g. the global
-    ``instance_id`` assigned by `write_lfs` for instance owners), mirroring the
-    ``/embeddings`` join. The dataset is absent in older files, in which case an
-    empty mapping is returned.
+    Links are stored in the optional ``/categories/links`` table (SLP format 2.7+;
+    a group of columns since 3.0, a compound dataset before), with ``(owner_type,
+    owner_id, category_idx, category_score)`` rows joining a detection --
+    identified by ``owner_type`` (one of the ``OWNER_*`` codes) and ``owner_id`` --
+    to an index into the file's category catalog. A fully self-contained mirror of
+    `read_identity_links`. ``owner_id`` is the per-owner-type positional id (e.g.
+    the global ``instance_id`` assigned by `write_lfs` for instance owners),
+    mirroring the ``/embeddings`` join. The table is absent in older files, in
+    which case an empty mapping is returned.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
         _hdf5_file: An already-open `h5py.File` handle to read from.
+        _carry: If given, the table's raw records are added to it for carrying
+            unknown columns through a later save (see `_column_carry`).
 
     Returns:
         A dict mapping each ``owner_type`` to a ``{owner_id: (category_idx,
         category_score)}`` mapping. ``category_score`` is ``None`` when it was not
         recorded (stored as NaN). Empty for older files.
+
+    Raises:
+        ValueError: If an SLP 3.0 link points outside the category catalog. Older
+            tables warn instead.
     """
-    cm = (
-        nullcontext(_hdf5_file)
-        if _hdf5_file is not None
-        else h5py.File(labels_path, "r")
+    return _read_links(
+        labels_path, "categories/links", _hdf5_file=_hdf5_file, _carry=_carry
     )
-    with cm as f:
-        if "categories" not in f or "links" not in f["categories"]:
-            return {}
-        # See read_identity_links: accept the sleap-io.js flat-2D + ``field_names``
-        # form and the Python-native compound form via the shared helper.
-        data = _read_dataset_from_open_file(f, "categories/links")
-    result: dict[int, dict[int, tuple[int, float | None]]] = {}
-    for row in data:
-        owner_type = int(row["owner_type"])
-        score = float(row["category_score"])
-        result.setdefault(owner_type, {})[int(row["owner_id"])] = (
-            int(row["category_idx"]),
-            None if np.isnan(score) else score,
-        )
-    return result
 
 
 def _write_category_link_rows(
-    labels_path: str, rows: list[tuple[int, int, int, float]]
+    labels_path: str,
+    rows: list[tuple[int, int, int, float]],
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
 ) -> None:
     """Write ``(owner_type, owner_id, category_idx, category_score)`` rows.
 
@@ -2818,29 +2948,32 @@ def _write_category_link_rows(
         rows: A list of ``(owner_type, owner_id, category_idx, category_score)``
             tuples. ``category_score`` is a float (NaN encodes an unrecorded score).
             An empty list is a no-op (no dataset is created).
+        legacy_format: If `True`, write the 2.x compound dataset.
+        compression: `None`, `"gzip"` or `"lzf"` for the columns.
+        carry: Unknown columns kept from loading (see `_write_link_rows`).
     """
-    if not rows:
-        return
-
-    category_link_dtype = np.dtype(
-        [
-            ("owner_type", "u1"),
-            ("owner_id", "i8"),
-            ("category_idx", "i4"),
-            ("category_score", "f4"),
-        ]
+    _write_link_rows(
+        labels_path,
+        "categories/links",
+        rows,
+        legacy_format=legacy_format,
+        compression=compression,
+        carry=carry,
     )
-    arr = np.array(rows, dtype=category_link_dtype)
-    with h5py.File(labels_path, "a") as f:
-        group = f.require_group("categories")
-        group.create_dataset("links", data=arr, maxshape=(None,))
 
 
-def write_category_links(labels_path: str, labels: Labels) -> None:
+def write_category_links(
+    labels_path: str,
+    labels: Labels,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
+) -> None:
     """Write per-detection category links to a SLEAP labels file.
 
-    Creates the ``/categories/links`` dataset (SLP format 2.7+) as a structured
-    array of ``(owner_type, owner_id, category_idx, category_score)`` rows for every
+    Creates the ``/categories/links`` table (SLP format 2.7+) of ``(owner_type,
+    owner_id, category_idx, category_score)`` rows for every
     detection carrying a `Category` registered in ``labels.categories``. Instance,
     mask, centroid, bbox, and ROI owners are written (``OWNER_*``). A fully
     self-contained mirror of `write_identity_links`.
@@ -2856,6 +2989,10 @@ def write_category_links(labels_path: str, labels: Labels) -> None:
     Args:
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object to store the category links for.
+        legacy_format: If `True`, write the 2.x compound dataset. Otherwise (SLP
+            3.0) a group of columns.
+        compression: `None`, `"gzip"` or `"lzf"` for the columns.
+        carry: Unknown columns kept from loading (see `_write_link_rows`).
     """
     if not labels.categories:
         return
@@ -2894,7 +3031,13 @@ def write_category_links(labels_path: str, labels: Labels) -> None:
     rows.extend(_category_link_rows_for_owner(centroids, id_to_idx, OWNER_CENTROID))
     rows.extend(_category_link_rows_for_owner(bboxes, id_to_idx, OWNER_BBOX))
     rows.extend(_category_link_rows_for_owner(rois, id_to_idx, OWNER_ROI))
-    _write_category_link_rows(labels_path, rows)
+    _write_category_link_rows(
+        labels_path,
+        rows,
+        legacy_format=legacy_format,
+        compression=compression,
+        carry=carry,
+    )
 
 
 def _category_link_rows_for_owner(
@@ -4047,27 +4190,41 @@ _POINT_COLUMN_DEFAULTS = {
 }
 
 
-def _read_columns(node: h5py.Group | h5py.Dataset) -> tuple[dict, bool]:
+def _read_column(ds: h5py.Dataset) -> np.ndarray:
+    """Read one column, with variable-length strings as a `str` object array."""
+    if h5py.check_string_dtype(ds.dtype) is not None:
+        return ds.asstr()[()]
+    return ds[()]
+
+
+def _read_columns(
+    node: h5py.Group | h5py.Dataset, *, exclude: Iterable[str] = ()
+) -> tuple[dict, bool]:
     """Read every column of a table, whatever its on-disk layout.
 
     Args:
         node: A columnar table (a group with one 1-D dataset per column, SLP 3.0+),
             a compound dataset, or an h5wasm-style flat 2-D dataset with a
             `field_names` attribute (SLP 2.x).
+        exclude: Names of datasets in a columnar table that aren't columns (for
+            example a byte buffer the table indexes into). Subgroups are never
+            columns.
 
     Returns:
         A tuple `(columns, is_legacy)` where `columns` maps column names to arrays
-        and `is_legacy` is `True` for the 2.x (non-columnar) layouts.
+        (string columns as `str` object arrays) and `is_legacy` is `True` for the
+        2.x (non-columnar) layouts.
 
     Notes:
         All of a columnar table's datasets are read in one pass, so a remote file
         is not revisited per column.
     """
     if isinstance(node, h5py.Group):
+        exclude = set(exclude)
         columns = {
-            name: member[()]
+            name: _read_column(member)
             for name, member in node.items()
-            if isinstance(member, h5py.Dataset)
+            if isinstance(member, h5py.Dataset) and name not in exclude
         }
         return columns, False
     data = _read_dataset_from_open_file(node.file, node.name)
@@ -4264,27 +4421,34 @@ def _write_columns(
     rows: np.ndarray,
     *,
     compression: str | None = None,
+    resizable: bool = False,
 ) -> h5py.Group:
     """Write a table as a group with one dataset per column.
 
     Args:
         f: The open file (or group) to write into.
-        name: Name of the group to create.
+        name: Name of the group to create (or to add columns to, if it exists).
         rows: A structured array of records; each field becomes a dataset of the
-            same name and dtype.
+            same name and dtype (object fields hold `str` and become
+            variable-length UTF-8 strings).
         compression: `None` (the default) writes contiguous, uncompressed columns,
             which read fastest. `"gzip"` or `"lzf"` writes chunked columns with the
             shuffle filter.
+        resizable: If `True`, the columns can grow (`maxshape=(None,)`, so they
+            are chunked).
 
     Returns:
         The created group.
     """
-    grp = f.create_group(name)
+    grp = f.require_group(name)
     for field in rows.dtype.names or ():
         data = rows[field]
-        grp.create_dataset(
-            field, data=data, **_compression_kwargs(compression, data.shape)
-        )
+        kwargs = _compression_kwargs(compression, data.shape)
+        if resizable:
+            kwargs["maxshape"] = (None, *data.shape[1:])
+        if data.dtype == object:
+            kwargs["dtype"] = h5py.string_dtype()
+        grp.create_dataset(field, data=data, **kwargs)
     return grp
 
 
@@ -4385,12 +4549,46 @@ def _table_rows(columns: dict[str, np.ndarray], table: str) -> np.ndarray:
             the same length.
     """
     base = RAW_INSTANCE_DTYPE if table == "instances" else RAW_FRAME_DTYPE
-    id_name = _ROW_ID_COLUMNS[table]
-    defaults = _TABLE_COLUMN_DEFAULTS[table]
+    return _rows_from_columns(
+        columns,
+        base,
+        _TABLE_COLUMN_DEFAULTS[table],
+        table,
+        row_id=_ROW_ID_COLUMNS[table],
+    )
+
+
+def _rows_from_columns(
+    columns: dict[str, np.ndarray],
+    base: np.dtype,
+    defaults: dict,
+    table: str,
+    *,
+    row_id: str | None = None,
+) -> np.ndarray:
+    """Build a table's raw records from its columns.
+
+    Args:
+        columns: The table's columns by name (see `_read_columns`).
+        base: The raw record layout. Its fields come first, cast to their types.
+        defaults: Defaults for optional fields missing from `columns`. Every other
+            field of `base` is required.
+        table: The table name, for messages.
+        row_id: A field of `base` that holds the row number, whatever the table
+            stores.
+
+    Returns:
+        A structured array with the fields of `base`, followed by any unknown
+        columns.
+
+    Raises:
+        ValueError: If a required column is missing or the columns don't all have
+            the same length.
+    """
     missing = [
         name
         for name in base.names
-        if name != id_name and name not in columns and name not in defaults
+        if name != row_id and name not in columns and name not in defaults
     ]
     if missing:
         raise ValueError(f"/{table} is missing column(s) {', '.join(missing)}.")
@@ -4406,7 +4604,7 @@ def _table_rows(columns: dict[str, np.ndarray], table: str) -> np.ndarray:
     ]
     rows = np.empty(n, dtype=base.descr + extra)
     for name in base.names:
-        if name == id_name:
+        if name == row_id:
             rows[name] = np.arange(n)
         elif name in columns:
             rows[name] = columns[name]
@@ -4712,8 +4910,8 @@ def _read_metadata_columns(
     """Read the per-record metadata columns of a 3.0 table.
 
     Args:
-        node: The table (`/instances` or `/frames`). Compound datasets (2.x) have
-            no metadata.
+        node: The table (`/instances`, `/frames` or `/bboxes`). Compound datasets
+            (2.x) have no metadata.
         table: The table name, for messages.
         n: The number of records in the table.
 
@@ -4826,7 +5024,7 @@ def _write_metadata_columns(
     """Write metadata columns into a table's `metadata/` group.
 
     Args:
-        grp: The table group (`/instances` or `/frames`).
+        grp: The table group (`/instances`, `/frames` or `/bboxes`).
         columns: Metadata columns (see `_read_metadata_columns`). Nothing is written
             if empty.
         compression: `None`, `"gzip"` or `"lzf"` (see `_write_columns`).
@@ -5146,8 +5344,8 @@ def _check_dropped_metadata(labels: Labels, *, legacy_format: bool) -> None:
     Args:
         labels: The labels about to be written.
         legacy_format: If `True`, the 2.x layout is written, which stores no
-            metadata. Otherwise (SLP 3.0) instance and frame metadata is stored and
-            only bounding box metadata is dropped.
+            metadata, so a warning is raised if there is any. Otherwise (SLP 3.0)
+            instance, frame and bounding box metadata is stored.
 
     Raises:
         TypeError: If a metadata key mixes kinds across a table's records (see
@@ -5158,11 +5356,6 @@ def _check_dropped_metadata(labels: Labels, *, legacy_format: bool) -> None:
         warnings.warn(
             "Instance, frame and bounding box metadata can't be stored in the legacy "
             "SLP layout and was not saved.",
-            stacklevel=3,
-        )
-    elif not legacy_format and kinds["bboxes"]:
-        warnings.warn(
-            "Bounding box metadata can't be stored yet and was not saved.",
             stacklevel=3,
         )
 
@@ -5278,27 +5471,33 @@ def _write_point_tables(
 
 
 class _ColumnCarry:
-    """Unknown pose table columns read from a file, kept to carry them through a save.
+    """Unknown table columns read from a file, kept to carry them through a save.
 
-    A newer sleap-io may add columns to `/points`, `/pred_points`, `/instances` or
-    `/frames` that this version doesn't know. They are kept alongside the loaded
+    A newer sleap-io may add columns to a table (for example `/points`, `/frames`
+    or `/masks`) that this version doesn't know. They are kept alongside the loaded
     `Labels` and written back if the rows of their table still line up with the
-    objects when saving: the same instances (with the same points arrays) or frames,
-    in the same order. Otherwise they are dropped with a warning.
+    objects when saving: the same objects (for example the same instances, with the
+    same points arrays), in the same order. Otherwise they are dropped with a
+    warning.
 
     Attributes:
         tables: Maps a table name to a tuple `(owners, columns)`. `owners` is a
             tuple with one key per object owning the table's rows, in order, or
             `None` if the rows couldn't be attributed to objects. A key is
-            `(instance, points)` for the point tables, `(instance,)` for
-            `/instances` and `(frame,)` for `/frames` (see `_carry_keys`).
-            `columns` is a structured array of the unknown columns, one record per
-            row.
+            `(instance, points)` for the point tables, the tuple itself for owners
+            given as tuples (such as `(instance group, camera)` for
+            `/session_data/instance_group_members` and the `(owner_type, owner_id,
+            catalog index)` values of a link row, see `_link_keys`), and
+            `(object,)` otherwise (see `_carry_keys`). `columns` is a structured
+            array of the unknown columns, one record per row.
+        consumed: Names of the tables a save has offered rows for so far (see
+            `_with_carried_columns` and `_warn_unconsumed_carry`).
     """
 
     def __init__(self, tables: dict[str, tuple[tuple | None, np.ndarray]]):
         """Initialize from the carried tables (see class attributes)."""
         self.tables = tables
+        self.consumed: set[str] = set()
 
 
 def _carry_keys(name: str, objects: Iterable) -> tuple:
@@ -5306,15 +5505,24 @@ def _carry_keys(name: str, objects: Iterable) -> tuple:
 
     Args:
         name: The table name.
-        objects: The instances (or, for `/frames`, the labeled frames) owning the
-            table's rows, in order.
+        objects: The objects owning the table's rows, in order: instances for the
+            pose tables other than `/frames`, labeled frames for `/frames`, and so
+            on (see `_ColumnCarry`).
 
     Returns:
         A tuple with one key per object (see `_ColumnCarry`).
     """
     if name in ("points", "pred_points"):
         return tuple((inst, inst.points) for inst in objects)
-    return tuple((obj,) for obj in objects)
+    return tuple(obj if isinstance(obj, tuple) else (obj,) for obj in objects)
+
+
+def _same_owner(a: object, b: object) -> bool:
+    """Whether two parts of carry keys refer to the same owner.
+
+    Objects must be identical; integers (the values keying link rows) equal.
+    """
+    return a is b or (type(a) is int and type(b) is int and a == b)
 
 
 def _unknown_columns(rows: np.ndarray, base: np.dtype) -> list[str]:
@@ -5353,7 +5561,7 @@ def _point_row_owners(
 def _column_carry(
     tables: dict[str, tuple[np.ndarray, np.dtype, Callable[[], list | None]]],
 ) -> _ColumnCarry | None:
-    """Collect unknown pose table columns to carry through a later save.
+    """Collect unknown table columns to carry through a later save.
 
     Args:
         tables: Maps a table name to `(rows, base, owners)`: the normalised records
@@ -5386,7 +5594,7 @@ def _column_carry(
 def _warn_dropped_columns(
     names: Iterable[str], columns: dict[str, Iterable[str]], reason: str
 ) -> None:
-    """Warn that unknown pose table columns are not being saved.
+    """Warn that unknown table columns are not being saved.
 
     Args:
         names: Names of the tables whose columns are dropped.
@@ -5399,8 +5607,8 @@ def _warn_dropped_columns(
         why = (
             "the legacy SLP layout can't store them"
             if reason == "legacy"
-            else "the instances or frames changed since the file was loaded, so its "
-            "rows no longer line up"
+            else "its records changed since the file was loaded, so its rows no "
+            "longer line up"
         )
         warnings.warn(
             f"Unknown column(s) {cols} of /{name} were not saved: {why}.",
@@ -5418,6 +5626,28 @@ def _warn_dropped_carry(carry: _ColumnCarry | None) -> None:
         )
 
 
+def _start_carry(carry: _ColumnCarry | None) -> None:
+    """Start a save that may carry unknown columns (see `_warn_unconsumed_carry`)."""
+    if carry is not None:
+        carry.consumed.clear()
+
+
+def _warn_unconsumed_carry(carry: _ColumnCarry | None) -> None:
+    """Warn about carried columns of tables a save wrote no rows for.
+
+    A table is left out of a save when its records are all gone (for example
+    every ROI was removed), so its unknown columns are dropped.
+    """
+    if carry is None:
+        return
+    unwritten = [name for name in carry.tables if name not in carry.consumed]
+    _warn_dropped_columns(
+        unwritten,
+        {name: carry.tables[name][1].dtype.names for name in unwritten},
+        "changed",
+    )
+
+
 def _with_carried_columns(
     rows: np.ndarray,
     carry: _ColumnCarry | None,
@@ -5430,8 +5660,7 @@ def _with_carried_columns(
         rows: Raw records built from `objects`.
         carry: Unknown columns kept from loading, or `None`.
         name: The table name.
-        objects: The instances (or labeled frames, for `/frames`) owning `rows`, in
-            order.
+        objects: The objects owning `rows`, in order (see `_carry_keys`).
 
     Returns:
         `rows` with the carried columns appended when the objects are the ones
@@ -5440,13 +5669,15 @@ def _with_carried_columns(
     """
     if carry is None or name not in carry.tables:
         return rows
+    carry.consumed.add(name)
     owners, columns = carry.tables[name]
     keys = _carry_keys(name, objects)
     if (
         owners is not None
         and len(owners) == len(keys)
         and all(
-            all(a is b for a, b in zip(owner, key)) for owner, key in zip(owners, keys)
+            len(owner) == len(key) and all(map(_same_owner, owner, key))
+            for owner, key in zip(owners, keys)
         )
     ):
         merged = np.empty(len(rows), dtype=rows.dtype.descr + columns.dtype.descr)
@@ -5546,6 +5777,571 @@ def _write_pose_tables(
             compression=compression,
         )
         _write_metadata_columns(grp, metadata, compression=compression)
+
+
+# -- Remaining tables (SLP 3.0) --------------------------------------------------------
+# ROIs, masks, label images, identity/category links and the session tables are
+# groups of 1-D columns in SLP 3.0, like the pose tables. Byte data (WKB geometry,
+# RLE counts, score maps, label image pixels) stays in a flat buffer that the rows
+# index with start/end ranges, since variable-length bytes can't hold NULs.
+
+
+class _TableSpec(NamedTuple):
+    """Where and how one of the remaining tables is stored.
+
+    Attributes:
+        path: Path of the table in SLP 3.0, where it is a group of columns.
+        legacy_path: Path of the 2.x compound dataset.
+        raw: The in-memory record layout every reader normalises to, which is also
+            the column layout written in 3.0 (object fields hold strings).
+        legacy: The 2.x compound layout, written by `legacy_format=True`.
+        defaults: Defaults for columns that older files may lack. Every other field
+            of `raw` is required.
+        buffer: Name of the byte buffer the rows index into, inside the 3.0 group.
+        legacy_buffer: Path of the buffer in 2.x files.
+        legacy_strings: Maps each string column to the 2.x dataset holding it and
+            the JSON attribute of the 2.x table that held it before (format 1.9).
+    """
+
+    path: str
+    legacy_path: str
+    raw: np.dtype
+    legacy: np.dtype
+    defaults: dict
+    buffer: str | None = None
+    legacy_buffer: str | None = None
+    legacy_strings: dict = {}
+
+
+_SPATIAL_FIELDS = [
+    ("scale_x", "f8"),
+    ("scale_y", "f8"),
+    ("offset_x", "f8"),
+    ("offset_y", "f8"),
+]
+_LEGACY_SPATIAL_FIELDS = [
+    ("scale_x", "f4"),
+    ("scale_y", "f4"),
+    ("offset_x", "f4"),
+    ("offset_y", "f4"),
+]
+_SPATIAL_DEFAULTS = {"scale_x": 1.0, "scale_y": 1.0, "offset_x": 0.0, "offset_y": 0.0}
+_SCORE_MAP_FIELDS = [
+    ("data_start", "i8"),
+    ("data_end", "i8"),
+    ("height", "i8"),
+    ("width", "i8"),
+    *_SPATIAL_FIELDS,
+]
+
+_TABLE_SPECS = {
+    "rois": _TableSpec(
+        path="rois",
+        legacy_path="rois",
+        raw=np.dtype(
+            [
+                ("annotation_type", "u1"),
+                ("video", "i8"),
+                ("frame_idx", "i8"),
+                ("track", "i8"),
+                ("instance", "i8"),
+                ("is_predicted", "?"),
+                ("score", "f8"),
+                ("tracking_score", "f8"),
+                ("wkb_start", "i8"),
+                ("wkb_end", "i8"),
+                ("name", "O"),
+                ("category", "O"),
+                ("source", "O"),
+            ]
+        ),
+        legacy=np.dtype(
+            [
+                ("annotation_type", "u1"),
+                ("video", "i4"),
+                ("frame_idx", "i8"),
+                ("track", "i4"),
+                ("is_predicted", "u1"),
+                ("score", "f4"),
+                ("tracking_score", "f4"),
+                ("wkb_start", "u8"),
+                ("wkb_end", "u8"),
+                ("instance", "i4"),
+            ]
+        ),
+        defaults={
+            "annotation_type": 0,
+            "instance": -1,
+            "is_predicted": False,
+            "score": np.nan,
+            "tracking_score": np.nan,
+            "name": "",
+            "category": "",
+            "source": "",
+        },
+        buffer="wkb",
+        legacy_buffer="roi_wkb",
+        legacy_strings={
+            "category": ("roi_categories", "categories"),
+            "name": ("roi_names", "names"),
+            "source": ("roi_sources", "sources"),
+        },
+    ),
+    "masks": _TableSpec(
+        path="masks",
+        legacy_path="masks",
+        raw=np.dtype(
+            [
+                ("height", "i8"),
+                ("width", "i8"),
+                ("annotation_type", "u1"),
+                ("video", "i8"),
+                ("frame_idx", "i8"),
+                ("track", "i8"),
+                ("instance", "i8"),
+                ("from_predicted", "i8"),
+                ("is_predicted", "?"),
+                ("score", "f8"),
+                ("tracking_score", "f8"),
+                ("rle_start", "i8"),
+                ("rle_end", "i8"),
+                *_SPATIAL_FIELDS,
+                ("name", "O"),
+                ("category", "O"),
+                ("source", "O"),
+            ]
+        ),
+        legacy=np.dtype(
+            [
+                ("height", "u4"),
+                ("width", "u4"),
+                ("annotation_type", "u1"),
+                ("video", "i4"),
+                ("frame_idx", "i8"),
+                ("track", "i4"),
+                ("instance", "i4"),
+                ("from_predicted", "i4"),  # Format 2.4+: index into this mask list
+                ("is_predicted", "u1"),
+                ("score", "f4"),
+                ("tracking_score", "f4"),
+                ("rle_start", "u8"),
+                ("rle_end", "u8"),
+                *_LEGACY_SPATIAL_FIELDS,
+            ]
+        ),
+        defaults={
+            "annotation_type": 2,
+            "instance": -1,
+            "from_predicted": -1,
+            "is_predicted": False,
+            "score": np.nan,
+            "tracking_score": np.nan,
+            **_SPATIAL_DEFAULTS,
+            "name": "",
+            "category": "",
+            "source": "",
+        },
+        buffer="rle",
+        legacy_buffer="mask_rle",
+        legacy_strings={
+            "category": ("mask_categories", "categories"),
+            "name": ("mask_names", "names"),
+            "source": ("mask_sources", "sources"),
+        },
+    ),
+    "masks/score_maps": _TableSpec(
+        path="masks/score_maps",
+        legacy_path="mask_score_map_index",
+        raw=np.dtype([("mask_idx", "i8"), *_SCORE_MAP_FIELDS]),
+        legacy=np.dtype(
+            [
+                ("mask_idx", "u4"),
+                ("data_start", "u8"),
+                ("data_end", "u8"),
+                ("height", "u4"),
+                ("width", "u4"),
+                *_LEGACY_SPATIAL_FIELDS,
+            ]
+        ),
+        defaults=dict(_SPATIAL_DEFAULTS),
+        buffer="data",
+        legacy_buffer="mask_score_maps",
+    ),
+    "label_images": _TableSpec(
+        path="label_images",
+        legacy_path="label_images",
+        raw=np.dtype(
+            [
+                ("video", "i8"),
+                ("frame_idx", "i8"),
+                ("height", "i8"),
+                ("width", "i8"),
+                ("n_objects", "i8"),
+                ("objects_start", "i8"),
+                ("data_start", "i8"),
+                ("data_end", "i8"),
+                ("is_predicted", "?"),
+                ("score", "f8"),
+                *_SPATIAL_FIELDS,
+                ("source", "O"),
+            ]
+        ),
+        legacy=LI_DTYPE,
+        defaults={
+            "is_predicted": False,
+            "score": np.nan,
+            **_SPATIAL_DEFAULTS,
+            "source": "",
+        },
+        buffer="data",
+        legacy_buffer="label_image_data",
+        legacy_strings={"source": ("label_image_sources", "sources")},
+    ),
+    "label_images/objects": _TableSpec(
+        path="label_images/objects",
+        legacy_path="label_image_objects",
+        raw=np.dtype(
+            [
+                ("label_id", "i8"),
+                ("track", "i8"),
+                ("instance", "i8"),
+                ("score", "f8"),
+                ("tracking_score", "f8"),
+                ("name", "O"),
+                ("category", "O"),
+            ]
+        ),
+        legacy=OBJ_DTYPE,
+        defaults={
+            "score": np.nan,
+            "tracking_score": np.nan,
+            "name": "",
+            "category": "",
+        },
+        legacy_strings={
+            "category": ("label_image_obj_categories", "categories"),
+            "name": ("label_image_obj_names", "names"),
+        },
+    ),
+    "label_images/score_maps": _TableSpec(
+        path="label_images/score_maps",
+        legacy_path="label_image_score_map_index",
+        raw=np.dtype([("li_idx", "i8"), *_SCORE_MAP_FIELDS]),
+        legacy=LI_SM_INDEX_DTYPE,
+        defaults=dict(_SPATIAL_DEFAULTS),
+        buffer="data",
+        legacy_buffer="label_image_score_maps",
+    ),
+    "identity/links": _TableSpec(
+        path="identity/links",
+        legacy_path="identity/links",
+        raw=np.dtype(
+            [
+                ("owner_type", "u1"),
+                ("owner_id", "i8"),
+                ("identity_idx", "i8"),
+                ("identity_score", "f8"),
+            ]
+        ),
+        legacy=np.dtype(
+            [
+                ("owner_type", "u1"),
+                ("owner_id", "i8"),
+                ("identity_idx", "i4"),
+                ("identity_score", "f4"),
+            ]
+        ),
+        defaults={},
+    ),
+    "categories/links": _TableSpec(
+        path="categories/links",
+        legacy_path="categories/links",
+        raw=np.dtype(
+            [
+                ("owner_type", "u1"),
+                ("owner_id", "i8"),
+                ("category_idx", "i8"),
+                ("category_score", "f8"),
+            ]
+        ),
+        legacy=np.dtype(
+            [
+                ("owner_type", "u1"),
+                ("owner_id", "i8"),
+                ("category_idx", "i4"),
+                ("category_score", "f4"),
+            ]
+        ),
+        defaults={},
+    ),
+    "session_data/frame_groups": _TableSpec(
+        path="session_data/frame_groups",
+        legacy_path="session_data/frame_groups",
+        raw=np.dtype([("frame_idx", "i8"), ("ig_start", "i8"), ("ig_end", "i8")]),
+        legacy=FRAME_GROUP_DTYPE,
+        defaults={},
+    ),
+    "session_data/instance_groups": _TableSpec(
+        path="session_data/instance_groups",
+        legacy_path="session_data/instance_groups",
+        raw=np.dtype(
+            [
+                ("identity_idx", "i8"),
+                ("score", "f8"),
+                ("instance_3d_score", "f8"),
+                ("pts3d_start", "i8"),
+                ("pts3d_end", "i8"),
+                ("pts3d_predicted", "?"),
+                ("member_start", "i8"),
+                ("member_end", "i8"),
+            ]
+        ),
+        legacy=INSTANCE_GROUP_DTYPE,
+        defaults={},
+    ),
+    "session_data/instance_group_members": _TableSpec(
+        path="session_data/instance_group_members",
+        legacy_path="session_data/instance_group_members",
+        raw=np.dtype([("camera", "i8"), ("lf", "i8"), ("inst", "i8")]),
+        legacy=INSTANCE_GROUP_MEMBER_DTYPE,
+        defaults={},
+    ),
+}
+
+
+class _Table(NamedTuple):
+    """One of the remaining tables, read and normalised (see `_read_table`).
+
+    Attributes:
+        rows: Raw records (see `_TableSpec.raw`), followed by any unknown columns.
+        is_legacy: Whether the table was stored in a 2.x layout.
+        buffer: The byte buffer the rows index into, or `None` if the file has
+            none (or the table has no buffer).
+    """
+
+    rows: np.ndarray
+    is_legacy: bool
+    buffer: h5py.Dataset | None
+
+
+def _find_node(f: h5py.File, path: str) -> h5py.Group | h5py.Dataset | None:
+    """Return the object at `path`, or `None` if it (or a parent group) is absent."""
+    node = f
+    for part in path.split("/"):
+        if not isinstance(node, h5py.Group) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def _legacy_strings(
+    f: h5py.File, dataset: str, attrs: h5py.AttributeManager, key: str, n: int
+) -> np.ndarray:
+    """Read a 2.x string column, stored as a dataset or (format < 1.9) an attribute.
+
+    Args:
+        f: The open file.
+        dataset: Path of the 2.x string dataset.
+        attrs: Attributes of the 2.x table, which may hold the strings as JSON.
+        key: Name of that attribute.
+        n: The number of rows in the table.
+
+    Returns:
+        A `str` object array of `n` strings, padded with `""` if fewer are stored.
+    """
+    if dataset in f:
+        stored = _read_column(f[dataset]).tolist()
+    else:
+        stored = json.loads(attrs.get(key, "[]"))
+    values = np.full(n, "", dtype=object)
+    stored = stored[:n]
+    values[: len(stored)] = stored
+    return values
+
+
+def _read_table(f: h5py.File, table: str) -> _Table | None:
+    """Read and normalise one of the remaining tables, whatever its layout.
+
+    Args:
+        f: The open file.
+        table: A key of `_TABLE_SPECS`.
+
+    Returns:
+        The normalised table, or `None` if the file doesn't have it. A 3.0 table
+        (a group of columns) is looked up first, then the 2.x compound (or h5wasm
+        flat) dataset, whose string columns come from their separate datasets.
+
+    Raises:
+        ValueError: If a required column is missing or the columns don't all have
+            the same length.
+    """
+    spec = _TABLE_SPECS[table]
+    node = _find_node(f, spec.path)
+    if node is None or (
+        not isinstance(node, h5py.Group) and spec.path != spec.legacy_path
+    ):
+        node = _find_node(f, spec.legacy_path)
+    if node is None:
+        return None
+    columns, is_legacy = _read_columns(node, exclude=(spec.buffer,))
+    if is_legacy:
+        n = len(next(iter(columns.values()))) if columns else 0
+        for name, (dataset, key) in spec.legacy_strings.items():
+            columns.setdefault(name, _legacy_strings(f, dataset, node.attrs, key, n))
+        buffer = _find_node(f, spec.legacy_buffer) if spec.legacy_buffer else None
+    else:
+        buffer = node[spec.buffer] if spec.buffer and spec.buffer in node else None
+    rows = _rows_from_columns(columns, spec.raw, spec.defaults, table)
+    return _Table(rows=rows, is_legacy=is_legacy, buffer=buffer)
+
+
+def _write_table(
+    parent: h5py.File | h5py.Group,
+    table: str,
+    rows: np.ndarray,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    resizable: bool = False,
+) -> h5py.Group | None:
+    """Write one of the remaining tables.
+
+    Args:
+        parent: The file or group to write the table into.
+        table: A key of `_TABLE_SPECS`.
+        rows: Raw records (see `_TableSpec.raw`), with any carried unknown columns.
+        legacy_format: If `True`, write the 2.x compound dataset at the table's
+            legacy path (under `parent`'s file root for sub-tables), plus its
+            separate string datasets. Unknown columns are dropped.
+        compression: `None`, `"gzip"` or `"lzf"` for the row columns.
+        resizable: If `True`, the table can grow (`maxshape=(None,)`).
+
+    Returns:
+        The group of columns, or `None` for the legacy layout.
+    """
+    spec = _TABLE_SPECS[table]
+    name = spec.path.rpartition("/")[2]
+    if not legacy_format:
+        return _write_columns(
+            parent, name, rows, compression=compression, resizable=resizable
+        )
+    f = parent.file
+    legacy = _legacy_table_rows(rows, spec.legacy)
+    kwargs = _compression_kwargs(compression, legacy.shape)
+    if resizable:
+        kwargs["maxshape"] = (None,)
+    if spec.path == spec.legacy_path:
+        parent.create_dataset(name, data=legacy, **kwargs)
+    else:
+        f.create_dataset(spec.legacy_path, data=legacy, **kwargs)
+    for column, (dataset, _) in spec.legacy_strings.items():
+        f.create_dataset(
+            dataset, data=rows[column].tolist(), dtype=h5py.special_dtype(vlen=str)
+        )
+    return None
+
+
+def _write_buffer(
+    f: h5py.File,
+    group: h5py.Group | None,
+    table: str,
+    data: np.ndarray,
+    *,
+    gzip: bool,
+) -> None:
+    """Write the flat `uint8` byte buffer of one of the remaining tables.
+
+    Args:
+        f: The open file.
+        group: The table's group of columns (SLP 3.0), which holds the buffer, or
+            `None` to write it at its 2.x path.
+        table: A key of `_TABLE_SPECS`.
+        data: The bytes, as a 1-D `uint8` array.
+        gzip: If `True`, compress with gzip (level 1). Otherwise the buffer is
+            chunked but unfiltered (its entries are already zlib-compressed).
+            An empty buffer is always contiguous.
+    """
+    spec = _TABLE_SPECS[table]
+    kwargs: dict = {}
+    if len(data) > 0:
+        kwargs["chunks"] = True
+        if gzip:
+            kwargs.update(compression="gzip", compression_opts=1)
+    parent, name = (f, spec.legacy_buffer) if group is None else (group, spec.buffer)
+    parent.create_dataset(name, data=data, dtype=np.uint8, **kwargs)
+
+
+def _rows_owners(owners: list, index: np.ndarray) -> list | None:
+    """Return `owners[i]` for each `i` of `index`, or `None` if one is out of range."""
+    index = index.tolist()
+    if any(not 0 <= i < len(owners) for i in index):
+        return None
+    return [owners[i] for i in index]
+
+
+def _span_out_of_range(rows: np.ndarray, start: str, end: str, n: int) -> bool:
+    """Whether any `[start, end)` range of `rows` isn't a range inside `[0, n)`."""
+    s, e = rows[start], rows[end]
+    return bool(np.any((s < 0) | (e < s) | (e > n)))
+
+
+def _index_out_of_range(values: np.ndarray, n: int, *, optional: bool = True) -> bool:
+    """Whether any index isn't a row of a table with `n` rows (or -1 if optional)."""
+    return bool(np.any((values < (-1 if optional else 0)) | (values >= n)))
+
+
+def _annotation_problems(
+    table: str,
+    rows: np.ndarray,
+    *,
+    n_videos: int,
+    n_tracks: int,
+    n_instances: int | None,
+) -> list[str]:
+    """Check the links from an annotation table to videos, tracks and instances.
+
+    Args:
+        table: The table name, for messages.
+        rows: Raw records with `track` and `instance` columns, and optionally a
+            `video` column.
+        n_videos: Number of videos in the file.
+        n_tracks: Number of tracks in the file.
+        n_instances: Number of rows in `/instances`, or `None` to skip checking
+            instance links (2.x tables store instance ids, mapped to rows later).
+
+    Returns:
+        A description of each problem found.
+    """
+    problems = []
+    targets = [("track", n_tracks, "tracks"), ("instance", n_instances, "instances")]
+    if "video" in rows.dtype.names:
+        targets.insert(0, ("video", n_videos, "videos"))
+    for column, n, what in targets:
+        if n is not None and _index_out_of_range(rows[column], n):
+            problems.append(f"/{table} {column} is not one of the {n} {what}")
+    return problems
+
+
+def _report_table_problems(
+    labels_path: str, problems: list[str], *, strict: bool
+) -> None:
+    """Raise or warn about inconsistent tables.
+
+    Args:
+        labels_path: Path or URL of the file (used in the message).
+        problems: A description of each problem found. Nothing happens if empty.
+        strict: If `True` (SLP 3.0 tables), raise. Otherwise (2.x tables, which
+            have always been read leniently) warn.
+
+    Raises:
+        ValueError: If `strict` and there are problems.
+    """
+    if not problems:
+        return
+    message = f"{labels_path} has inconsistent tables: {'; '.join(problems)}."
+    if strict:
+        raise ValueError(message)
+    warnings.warn(f"{message} Reading it leniently, as an SLP 2.x file.", stacklevel=3)
 
 
 def write_lfs(
@@ -6055,6 +6851,7 @@ def _reconstruct_frame_groups_columnar(
     camera_group: CameraGroup,
     labeled_frames: list[LabeledFrame],
     identities: list[Identity] | None,
+    owners: dict[str, dict[int, object]],
 ) -> dict[int, FrameGroup]:
     """Reconstruct a session's `FrameGroup`s from the columnar `/session_data` tables.
 
@@ -6065,6 +6862,10 @@ def _reconstruct_frame_groups_columnar(
         camera_group: `CameraGroup` for resolving camera indices.
         labeled_frames: `LabeledFrame` list for resolving member instances.
         identities: Optional identity catalog for resolving ``identity_idx``.
+        owners: Maps each session table name to a dictionary that the object built
+            for each row is added to, by row: the `FrameGroup`, the
+            `InstanceGroup`, or `(instance group, camera)` for a member (see
+            `_owners_by_row`).
 
     Returns:
         Mapping of ``frame_idx`` to reconstructed `FrameGroup`.
@@ -6089,6 +6890,7 @@ def _reconstruct_frame_groups_columnar(
                     ig_idx,
                 )
                 groups.append(group)
+                owners["instance_groups"][ig_idx] = group
                 # Recover the LabeledFrame-by-camera mapping from the same members.
                 m_start = int(instance_groups[ig_idx]["member_start"])
                 m_end = int(instance_groups[ig_idx]["member_end"])
@@ -6097,12 +6899,15 @@ def _reconstruct_frame_groups_columnar(
                     row = members[m]
                     camera = camera_group.cameras[int(row["camera"])]
                     labeled_frame_by_camera[camera] = labeled_frames[int(row["lf"])]
-            frame_group_by_frame_idx[frame_idx] = FrameGroup(
+                    owners["instance_group_members"][m] = (group, camera)
+            frame_group = FrameGroup(
                 frame_idx=frame_idx,
                 instance_groups=groups,
                 labeled_frame_by_camera=labeled_frame_by_camera,
                 metadata=_decode_meta_blob(session_data["frame_group_meta"], fg),
             )
+            frame_group_by_frame_idx[frame_idx] = frame_group
+            owners["frame_groups"][fg] = frame_group
         except (ValueError, IndexError) as e:
             print(
                 f"Error reconstructing FrameGroup at frame {frame_idx}. "
@@ -6117,6 +6922,8 @@ def make_session(
     labeled_frames: list[LabeledFrame],
     identities: list[Identity] | None = None,
     session_data: dict | None = None,
+    *,
+    _owners: dict[str, dict[int, object]] | None = None,
 ) -> RecordingSession:
     """Create a `RecordingSession` from a dictionary.
 
@@ -6137,6 +6944,8 @@ def make_session(
             indices.
         session_data: The loaded ``/session_data`` columnar arrays (see
             `_read_session_data`) used for the SLP 2.8+ path. `None` for legacy files.
+        _owners: If given, the objects built for the rows of the session tables
+            are added to it (see `_reconstruct_frame_groups_columnar`).
 
     Returns:
         `RecordingSession` object.
@@ -6170,6 +6979,9 @@ def make_session(
             camera_group,
             labeled_frames,
             identities,
+            owners=_owners
+            if _owners is not None
+            else {name: {} for name in _SESSION_TABLES},
         )
     elif fg_start is None and labeled_frames:
         # Legacy (<= 2.7) inline path.
@@ -6210,6 +7022,7 @@ def read_sessions(
     identities: list[Identity] | None = None,
     *,
     _hdf5_file: h5py.File | None = None,
+    _carry: dict | None = None,
 ) -> list[RecordingSession]:
     """Read `RecordingSession` dataset from a SLEAP labels file.
 
@@ -6226,6 +7039,9 @@ def read_sessions(
             the data is read from this handle (left open for the caller to close);
             otherwise `labels_path` is opened and closed internally. This is a
             private argument used to thread a single open handle through reads.
+        _carry: If given, the raw records of the ``/session_data`` tables are
+            added to it for carrying unknown columns through a later save (see
+            `_column_carry`).
 
     Returns:
         A list of `RecordingSession` objects.
@@ -6238,6 +7054,7 @@ def read_sessions(
         return []
     sessions = [json.loads(x) for x in sessions]
     session_data = _read_session_data(labels_path, _hdf5_file=_hdf5_file)
+    owners: dict[str, dict[int, object]] = {name: {} for name in _SESSION_TABLES}
     session_objects = []
     for session in sessions:
         session_objects.append(
@@ -6247,9 +7064,32 @@ def read_sessions(
                 labeled_frames,
                 identities=identities,
                 session_data=session_data,
+                _owners=owners,
             )
         )
+    if _carry is not None and session_data is not None:
+        for name in _SESSION_TABLES:
+            rows = session_data[name]
+            _carry[f"session_data/{name}"] = (
+                rows,
+                _TABLE_SPECS[f"session_data/{name}"].raw,
+                partial(_owners_by_row, owners[name], len(rows)),
+            )
     return session_objects
+
+
+def _owners_by_row(owners: dict[int, object], n: int) -> list | None:
+    """Return the owner of each of `n` rows, or `None` unless every row has one."""
+    if len(owners) != n:
+        return None
+    return [owners[row] for row in range(n)]
+
+
+_SESSION_TABLES = (
+    "frame_groups",
+    "instance_groups",
+    "instance_group_members",
+)
 
 
 def _read_session_data(
@@ -6262,8 +7102,16 @@ def _read_session_data(
         _hdf5_file: An already-open `h5py.File` handle to read from.
 
     Returns:
-        A dict of the (possibly-`None`, presence-guarded) member arrays keyed by
-        dataset name, or `None` when the group is absent (legacy <= 2.7 files).
+        A dict of the member arrays keyed by dataset name, or `None` when the group
+        is absent (legacy <= 2.7 files). ``frame_groups``, ``instance_groups`` and
+        ``instance_group_members`` are normalised raw records (see `_TABLE_SPECS`),
+        followed by any unknown columns, whatever their layout (empty if missing).
+        The presence-guarded ``points_3d``, ``pred_points_3d`` and metadata blobs
+        are `None` when absent.
+
+    Raises:
+        ValueError: If SLP 3.0 tables have ranges outside the tables they index or
+            links to rows that don't exist. Older tables warn instead.
     """
     cm = (
         nullcontext(_hdf5_file)
@@ -6274,29 +7122,97 @@ def _read_session_data(
         if "session_data" not in f:
             return None
         grp = f["session_data"]
-        names = [
-            "frame_groups",
-            "instance_groups",
-            "instance_group_members",
+        # The 2.x struct tables may also be flat 2-D arrays with a ``field_names``
+        # attribute, as written by the sleap-io.js 2.8 port (h5wasm can't create
+        # compound datasets). The plain float points_3d matrices and the metadata
+        # JSON blobs are read as they are.
+        tables = {
+            name: _read_table(f, f"session_data/{name}") for name in _SESSION_TABLES
+        }
+        data = {
+            name: np.empty(0, dtype=_TABLE_SPECS[f"session_data/{name}"].raw)
+            if table is None
+            else table.rows
+            for name, table in tables.items()
+        }
+        for name in (
             "points_3d",
             "pred_points_3d",
             "frame_group_meta",
             "instance_group_meta",
-        ]
-        # Read through the conversion-aware helper so the struct tables written by
-        # the coordinated sleap-io.js 2.8 port (h5wasm cannot create compound
-        # datasets, so it writes them as flat 2D arrays + a ``field_names``
-        # attribute) are rebuilt as structured arrays, matching how
-        # points/instances/frames are handled. h5py-written compound datasets and
-        # the plain float points_3d matrices pass through unchanged.
-        return {
-            name: (
-                _read_dataset_from_open_file(f, f"session_data/{name}")
-                if name in grp
-                else None
+        ):
+            data[name] = grp[name][()] if name in grp else None
+        n_identities = len(f["identity/name"]) if "identity/name" in f else 0
+        frames = f["frames"] if "frames" in f else None
+        if isinstance(frames, h5py.Group):
+            frames = frames["frame_idx"] if "frame_idx" in frames else None
+        n_frames = len(frames) if frames is not None else None
+    problems = _session_problems(data, n_identities=n_identities, n_frames=n_frames)
+    _report_table_problems(
+        labels_path,
+        problems,
+        strict=not any(t.is_legacy for t in tables.values() if t is not None),
+    )
+    return data
+
+
+def _session_problems(
+    data: dict, *, n_identities: int, n_frames: int | None
+) -> list[str]:
+    """Check the ranges and links of the ``/session_data`` tables.
+
+    Args:
+        data: The loaded ``/session_data`` arrays (see `_read_session_data`).
+        n_identities: Number of identities in the catalog.
+        n_frames: Number of rows in `/frames`, or `None` if the file has no frame
+            table (only sessions were written), to skip checking frame links.
+
+    Returns:
+        A description of each problem found.
+    """
+    frame_groups = data["frame_groups"]
+    groups = data["instance_groups"]
+    members = data["instance_group_members"]
+    problems = []
+    if _span_out_of_range(frame_groups, "ig_start", "ig_end", len(groups)):
+        problems.append(
+            "/session_data/frame_groups ranges fall outside instance_groups "
+            f"({len(groups)} rows)"
+        )
+    if _span_out_of_range(groups, "member_start", "member_end", len(members)):
+        problems.append(
+            "/session_data/instance_groups ranges fall outside "
+            f"instance_group_members ({len(members)} rows)"
+        )
+    with_3d = groups[groups["pts3d_start"] >= 0]
+    for predicted, name in ((False, "points_3d"), (True, "pred_points_3d")):
+        points = data[name]
+        n = 0 if points is None else len(points)
+        if _span_out_of_range(
+            with_3d[with_3d["pts3d_predicted"] == predicted],
+            "pts3d_start",
+            "pts3d_end",
+            n,
+        ):
+            problems.append(
+                f"/session_data/instance_groups 3D ranges fall outside {name} "
+                f"({n} rows)"
             )
-            for name in names
-        }
+    if _index_out_of_range(groups["identity_idx"], n_identities):
+        problems.append(
+            "/session_data/instance_groups identity_idx is not one of the "
+            f"{n_identities} identities"
+        )
+    if n_frames is not None and _index_out_of_range(
+        members["lf"], n_frames, optional=False
+    ):
+        problems.append(
+            f"/session_data/instance_group_members lf is not one of the {n_frames} "
+            "frames"
+        )
+    if np.any((members["camera"] < 0) | (members["inst"] < 0)):
+        problems.append("/session_data/instance_group_members has negative indices")
+    return problems
 
 
 def instance_group_to_dict(
@@ -6635,6 +7551,10 @@ def write_sessions(
     videos: list[Video],
     labeled_frames: list[LabeledFrame],
     identities: list[Identity] | None = None,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
 ):
     """Write `RecordingSession` metadata to a SLEAP labels file (SLP 2.8 columnar).
 
@@ -6645,9 +7565,10 @@ def write_sessions(
 
     When any session has frame groups (and ``labeled_frames`` are supplied), the
     per-frame numeric payload is written columnar into the ``/session_data`` group:
-    ``frame_groups`` / ``instance_groups`` / ``instance_group_members`` struct
-    datasets, ``points_3d`` (N,3) / ``pred_points_3d`` (N,4 = xyz+score) chunked
-    float matrices (appended one session at a time), and presence-guarded per-row
+    ``frame_groups`` / ``instance_groups`` / ``instance_group_members`` tables
+    (groups of columns in SLP 3.0, compound datasets in 2.x), ``points_3d`` (N,3) /
+    ``pred_points_3d`` (N,4 = xyz+score) chunked float matrices (appended one
+    session at a time), and presence-guarded per-row
     ``frame_group_meta`` / ``instance_group_meta`` JSON blobs. The group is omitted
     entirely (and the format stays <= 2.7) when there are no frame groups, so files
     without multi-view frame groups are byte-identical to before.
@@ -6664,6 +7585,13 @@ def write_sessions(
             not materialized).
         identities: Optional list of `Identity` objects for serializing identity
             indices.
+        legacy_format: If `True`, write the three tables as 2.x compound datasets.
+            Otherwise (SLP 3.0) as groups of columns.
+        compression: `None`, `"gzip"` or `"lzf"` for the table columns. The 3D
+            points are always gzipped.
+        carry: Unknown columns kept from loading, appended to a table if its rows
+            are owned by the same frame groups, instance groups and cameras, in
+            the same order (see `_with_carried_columns`).
     """
     sessions_json: list[np.bytes_] = []
     if len(sessions) > 0:
@@ -6676,6 +7604,8 @@ def write_sessions(
     member_rows: list[tuple] = []
     fg_meta: list[str] = []
     ig_meta: list[str] = []
+    # The objects owning each row, to match carried unknown columns.
+    owners: dict[str, list] = {name: [] for name in _SESSION_TABLES}
 
     save_frame_groups = len(sessions) > 0 and len(labeled_frame_to_idx) > 0
 
@@ -6713,6 +7643,7 @@ def write_sessions(
                         for cam, inst in ig.instance_by_camera.items():
                             lf_idx, inst_idx = instance_to_lf_and_inst_idx[inst]
                             member_rows.append((cameras.index(cam), lf_idx, inst_idx))
+                            owners["instance_group_members"].append((ig, cam))
                         member_end = len(member_rows)
 
                         # Identity -> catalog index (-1 when unset / not found).
@@ -6768,6 +7699,7 @@ def write_sessions(
                                 member_end,
                             )
                         )
+                        owners["instance_groups"].append(ig)
                         ig_meta.append(
                             json.dumps(ig.metadata, separators=(",", ":"))
                             if ig.metadata
@@ -6776,6 +7708,7 @@ def write_sessions(
                     ig_end = len(ig_rows)
 
                     fg_rows.append((int(frame_group.frame_idx), ig_start, ig_end))
+                    owners["frame_groups"].append(frame_group)
                     fg_meta.append(
                         json.dumps(frame_group.metadata, separators=(",", ":"))
                         if frame_group.metadata
@@ -6820,21 +7753,23 @@ def write_sessions(
         # Columnar frame-group tables (only when there are frame groups).
         if fg_rows:
             grp = f.require_group("session_data")
-            grp.create_dataset(
-                "frame_groups",
-                data=np.array(fg_rows, dtype=FRAME_GROUP_DTYPE),
-                maxshape=(None,),
-            )
-            grp.create_dataset(
-                "instance_groups",
-                data=np.array(ig_rows, dtype=INSTANCE_GROUP_DTYPE),
-                maxshape=(None,),
-            )
-            grp.create_dataset(
-                "instance_group_members",
-                data=np.array(member_rows, dtype=INSTANCE_GROUP_MEMBER_DTYPE),
-                maxshape=(None,),
-            )
+            for name, rows in (
+                ("frame_groups", fg_rows),
+                ("instance_groups", ig_rows),
+                ("instance_group_members", member_rows),
+            ):
+                table = f"session_data/{name}"
+                rows = np.array(rows, dtype=_TABLE_SPECS[table].raw)
+                if not legacy_format:
+                    rows = _with_carried_columns(rows, carry, table, owners[name])
+                _write_table(
+                    grp,
+                    table,
+                    rows,
+                    legacy_format=legacy_format,
+                    compression=compression,
+                    resizable=True,
+                )
             # Per-row metadata JSON blobs, presence-guarded (omitted when all empty).
             str_dt = h5py.special_dtype(vlen=str)
             if any(fg_meta):
@@ -6867,16 +7802,28 @@ def _videos_unchanged(current: list[Video], original_ids: tuple) -> bool:
     return tuple(id(v) for v in current) == tuple(original_ids)
 
 
-def write_sessions_passthrough(labels_path: str, store) -> bool:
+def write_sessions_passthrough(
+    labels_path: str,
+    store,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+) -> bool:
     """Copy a lazy store's raw RecordingSession payload verbatim (SLP 2.8+).
 
-    Writes the captured ``sessions_json`` bytes and the columnar ``/session_data``
-    arrays exactly as loaded, so lazy re-saves preserve frame groups + 3D points
-    losslessly without materializing frames (the eager lazy path drops them).
+    Writes the captured ``sessions_json`` bytes and the ``/session_data`` arrays as
+    loaded, so lazy re-saves preserve frame groups + 3D points losslessly without
+    materializing frames (the eager lazy path drops them). The three tables are
+    written in the layout being saved, whatever layout they were loaded from, so a
+    3.0 file never gets compound session tables.
 
     Args:
         labels_path: A string path to the SLEAP labels file being written.
         store: The `LazyDataStore` backing the lazy `Labels`.
+        legacy_format: If `True`, write the tables as 2.x compound datasets
+            (dropping unknown columns, with a warning). Otherwise (SLP 3.0) as
+            groups of columns, with every loaded column.
+        compression: `None`, `"gzip"` or `"lzf"` for the table columns.
 
     Returns:
         `True` if a passthrough was written; `False` if the store carried no
@@ -6909,7 +7856,18 @@ def write_sessions_passthrough(labels_path: str, store) -> bool:
                         maxshape=(None,),
                     )
                 else:
-                    grp.create_dataset(name, data=arr, maxshape=(None,))
+                    table = f"session_data/{name}"
+                    unknown = _unknown_columns(arr, _TABLE_SPECS[table].raw)
+                    if legacy_format and unknown:
+                        _warn_dropped_columns([table], {table: unknown}, "legacy")
+                    _write_table(
+                        grp,
+                        table,
+                        arr,
+                        legacy_format=legacy_format,
+                        compression=compression,
+                        resizable=True,
+                    )
     return True
 
 
@@ -6996,7 +7954,10 @@ def _read_labels_lazy_from_open_file(
     # Identity links: instance owners ride on the lazy store (keyed by global
     # instance_id) and attach at materialization time; mask owners attach eagerly
     # to the masks read below.
-    identity_links = read_identity_links(labels_path, _hdf5_file=f)
+    # Raw records of the tables this lazy read turns into objects, to carry their
+    # unknown columns through a later save.
+    carry_tables: dict = {}
+    identity_links = read_identity_links(labels_path, _hdf5_file=f, _carry=carry_tables)
     _remap_instance_owners(tables.instance_id_map, [identity_links], [])
     instance_identities = identity_links.get(OWNER_INSTANCE, {})
     mask_identity_map = identity_links.get(OWNER_MASK, {})
@@ -7004,7 +7965,7 @@ def _read_labels_lazy_from_open_file(
     bbox_identity_map = identity_links.get(OWNER_BBOX, {})
     roi_identity_map = identity_links.get(OWNER_ROI, {})
     # Category links (SLP 2.7+): same owner-keyed split as identity links.
-    category_links = read_category_links(labels_path, _hdf5_file=f)
+    category_links = read_category_links(labels_path, _hdf5_file=f, _carry=carry_tables)
     _remap_instance_owners(tables.instance_id_map, [category_links], [])
     instance_categories = category_links.get(OWNER_INSTANCE, {})
     mask_category_map = category_links.get(OWNER_MASK, {})
@@ -7076,7 +8037,15 @@ def _read_labels_lazy_from_open_file(
     # Read ROIs, masks, bboxes, and label images eagerly (typically small count).
     # Masks/centroids/bboxes/ROIs are eager even in lazy mode, so their identity +
     # embeddings attach now by global per-modality list index.
-    roi_tuples = read_rois(labels_path, videos, tracks, _hdf5_file=f)
+    n_instances = len(tables.instances)
+    roi_tuples = read_rois(
+        labels_path,
+        videos,
+        tracks,
+        _hdf5_file=f,
+        _n_instances=n_instances,
+        _carry=carry_tables,
+    )
     _attach_identity_and_embeddings(
         [r for r, _v, _f in roi_tuples],
         identities,
@@ -7089,7 +8058,14 @@ def _read_labels_lazy_from_open_file(
         roi_category_map,
         roi_category_embedding_map,
     )
-    mask_tuples = read_masks(labels_path, videos, tracks, _hdf5_file=f)
+    mask_tuples = read_masks(
+        labels_path,
+        videos,
+        tracks,
+        _hdf5_file=f,
+        _n_instances=n_instances,
+        _carry=carry_tables,
+    )
     _attach_identity_and_embeddings(
         [m for m, _v, _f in mask_tuples],
         identities,
@@ -7136,7 +8112,10 @@ def _read_labels_lazy_from_open_file(
         _url_headers=_url_headers,
         _url_stream_mode=_url_stream_mode,
         _url_bytes=_url_bytes,
+        _n_instances=n_instances,
+        _carry=carry_tables,
     )
+    lazy_store.annotation_carry = _column_carry(carry_tables)
     _remap_instance_owners(
         tables.instance_id_map,
         [],
@@ -7252,6 +8231,8 @@ def read_rois(
     instances: list[Instance | PredictedInstance] | None = None,
     *,
     _hdf5_file: h5py.File | None = None,
+    _n_instances: int | None = None,
+    _carry: dict | None = None,
 ) -> list[tuple[ROI, int, int]]:
     """Read ROI annotations from a SLEAP labels file.
 
@@ -7266,112 +8247,94 @@ def read_rois(
             the data is read from this handle (left open for the caller to close);
             otherwise `labels_path` is opened and closed internally. This is a
             private argument used to thread a single open handle through reads.
+        _n_instances: Number of rows in `/instances`, to check instance links when
+            `instances` isn't given (lazy reads).
+        _carry: If given, the table's raw records are added to it for carrying
+            unknown columns through a later save (see `_column_carry`).
 
     Returns:
         A list of ``(roi, video_idx, frame_idx)`` tuples. ``video_idx`` and
         ``frame_idx`` are the routing context read from the file (``-1``
         means undistributable). Returns an empty list if no ROIs are stored.
+
+    Raises:
+        ValueError: If an SLP 3.0 table has a byte range outside its `wkb` buffer
+            or a link to a video, track or instance that doesn't exist. Older
+            tables warn instead.
     """
     import shapely
 
-    try:
-        roi_data = read_hdf5_dataset(labels_path, "rois", _hdf5_file=_hdf5_file)
-    except KeyError:
-        return []
-
-    if len(roi_data) == 0:
-        return []
-
-    # Read packed WKB geometry bytes
-    try:
-        roi_wkb_flat = read_hdf5_dataset(labels_path, "roi_wkb", _hdf5_file=_hdf5_file)
-    except KeyError:
-        return []
-
-    # Read string metadata from string datasets first, fall back to JSON attributes
     cm = (
         nullcontext(_hdf5_file)
         if _hdf5_file is not None
         else h5py.File(labels_path, "r")
     )
     with cm as f:
-        roi_grp = f["rois"]
-        if "roi_categories" in f:
-            categories = [
-                s.decode() if isinstance(s, bytes) else s
-                for s in f["roi_categories"][:]
-            ]
-        else:
-            categories = json.loads(roi_grp.attrs.get("categories", "[]"))
-        if "roi_names" in f:
-            names = [
-                s.decode() if isinstance(s, bytes) else s for s in f["roi_names"][:]
-            ]
-        else:
-            names = json.loads(roi_grp.attrs.get("names", "[]"))
-        if "roi_sources" in f:
-            sources = [
-                s.decode() if isinstance(s, bytes) else s for s in f["roi_sources"][:]
-            ]
-        else:
-            sources = json.loads(roi_grp.attrs.get("sources", "[]"))
+        table = _read_table(f, "rois")
+        if table is None or len(table.rows) == 0:
+            return []
+        # Files before 3.0 without a geometry buffer have never been readable.
+        if table.is_legacy and table.buffer is None:
+            return []
+        wkb_flat = (
+            table.buffer[()] if table.buffer is not None else np.empty(0, np.uint8)
+        )
+    rows = table.rows
+    problems = _annotation_problems(
+        "rois",
+        rows,
+        n_videos=len(videos),
+        n_tracks=len(tracks),
+        n_instances=None
+        if table.is_legacy
+        else (len(instances) if instances is not None else _n_instances),
+    )
+    if _span_out_of_range(rows, "wkb_start", "wkb_end", len(wkb_flat)):
+        problems.append(f"/rois wkb ranges fall outside the buffer ({len(wkb_flat)})")
+    _report_table_problems(labels_path, problems, strict=not table.is_legacy)
 
     rois = []
-    for i, row in enumerate(roi_data):
-        wkb_start = int(row["wkb_start"])
-        wkb_end = int(row["wkb_end"])
-        wkb_bytes = bytes(roi_wkb_flat[wkb_start:wkb_end])
-        geometry = shapely.from_wkb(wkb_bytes)
+    for row in rows.tolist():
+        record = dict(zip(rows.dtype.names, row))
+        geometry = shapely.from_wkb(
+            bytes(wkb_flat[record["wkb_start"] : record["wkb_end"]])
+        )
 
-        video_idx = int(row["video"])
+        video_idx = record["video"]
         video = videos[video_idx] if 0 <= video_idx < len(videos) else None
-
-        frame_idx_val = int(row["frame_idx"])
-
-        track_idx = int(row["track"])
+        track_idx = record["track"]
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
-
-        instance_idx = int(row["instance"]) if "instance" in row.dtype.names else -1
+        instance_idx = record["instance"]
         instance = (
             instances[instance_idx]
             if instances is not None and 0 <= instance_idx < len(instances)
             else None
         )
-
-        # Read predicted flag (v1.9+)
-        is_predicted = (
-            bool(row["is_predicted"]) if "is_predicted" in row.dtype.names else False
-        )
-
-        tracking_score = None
-        if "tracking_score" in row.dtype.names:
-            ts = float(row["tracking_score"])
-            if not np.isnan(ts):
-                tracking_score = ts
+        tracking_score = record["tracking_score"]
 
         kwargs = dict(
             geometry=geometry,
-            name=names[i] if i < len(names) else "",
-            category=categories[i] if i < len(categories) else "",
-            source=sources[i] if i < len(sources) else "",
+            name=record["name"],
+            category=record["category"],
+            source=record["source"],
             video=video,
             track=track,
-            tracking_score=tracking_score,
+            tracking_score=None if np.isnan(tracking_score) else tracking_score,
             instance=instance,
         )
 
-        if is_predicted:
-            score_val = float(row["score"]) if "score" in row.dtype.names else 0.0
-            roi = PredictedROI(
-                score=score_val if not np.isnan(score_val) else 0.0, **kwargs
-            )
+        if record["is_predicted"]:
+            score = record["score"]
+            roi = PredictedROI(score=0.0 if np.isnan(score) else score, **kwargs)
         else:
             roi = UserROI(**kwargs)
 
         # Store raw index for deferred resolution (lazy loading)
         roi._instance_idx = instance_idx
-        rois.append((roi, video_idx, frame_idx_val))
+        rois.append((roi, video_idx, record["frame_idx"]))
 
+    if _carry is not None:
+        _carry["rois"] = (rows, _TABLE_SPECS["rois"].raw, lambda: [r for r, *_ in rois])
     return rois
 
 
@@ -7382,6 +8345,10 @@ def write_rois(
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
     contexts: list[tuple[int, int]] | None = None,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
 ) -> None:
     """Write ROI annotations to a SLEAP labels file.
 
@@ -7394,6 +8361,14 @@ def write_rois(
             mapping. If provided, ROI instance associations will be persisted.
         contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
             for each ROI. If ``None``, defaults to ``(-1, -1)`` for all.
+        legacy_format: If `True`, write the 2.x layout: a compound `/rois` dataset
+            with `/roi_wkb`, `/roi_names`, `/roi_categories` and `/roi_sources`.
+            Otherwise (SLP 3.0) a `/rois` group of columns holding the `wkb`
+            buffer.
+        compression: `None`, `"gzip"` or `"lzf"` for the row columns. The `wkb`
+            buffer is always gzipped.
+        carry: Unknown columns kept from loading, appended to the rows if the ROIs
+            are the ones loaded, in the same order (see `_with_carried_columns`).
     """
     if not rois:
         return
@@ -7403,27 +8378,9 @@ def write_rois(
 
     import shapely
 
-    roi_dtype = np.dtype(
-        [
-            ("annotation_type", "u1"),
-            ("video", "i4"),
-            ("frame_idx", "i8"),
-            ("track", "i4"),
-            ("is_predicted", "u1"),
-            ("score", "f4"),
-            ("tracking_score", "f4"),
-            ("wkb_start", "u8"),
-            ("wkb_end", "u8"),
-            ("instance", "i4"),
-        ]
-    )
-
     roi_rows = []
     wkb_chunks = []
     wkb_offset = 0
-    categories = []
-    names = []
-    sources = []
 
     track_ids = _identity_index(tracks)
     instance_ids = _identity_index(instances) if instances is not None else None
@@ -7454,44 +8411,32 @@ def write_rois(
                 video_idx,
                 frame_idx,
                 track_idx,
-                int(is_predicted),
+                instance_idx,
+                is_predicted,
                 score,
                 tracking_score,
                 wkb_start,
                 wkb_end,
-                instance_idx,
+                roi.name,
+                roi.category.name if roi.category else "",
+                roi.source,
             )
         )
 
-        categories.append(roi.category.name if roi.category else "")
-        names.append(roi.name)
-        sources.append(roi.source)
-
-    roi_array = np.array(roi_rows, dtype=roi_dtype)
-    wkb_flat = (
-        np.concatenate(wkb_chunks) if wkb_chunks else np.array([], dtype=np.uint8)
-    )
+    rows = np.array(roi_rows, dtype=_TABLE_SPECS["rois"].raw)
+    if not legacy_format:
+        rows = _with_carried_columns(rows, carry, "rois", rois)
+    # Every geometry serializes to >= 9 WKB bytes (even an empty polygon has a
+    # header), so the buffer is never empty here.
+    wkb_flat = np.concatenate(wkb_chunks)
 
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("rois", data=roi_array, dtype=roi_dtype)
-        str_dt = h5py.special_dtype(vlen=str)
-        f.create_dataset("roi_categories", data=categories, dtype=str_dt)
-        f.create_dataset("roi_names", data=names, dtype=str_dt)
-        f.create_dataset("roi_sources", data=sources, dtype=str_dt)
-        # Gzip-compress the packed WKB geometry bytes (lossless, transparent on
-        # read). Mirrors the gzip used for mask_rle / video / label-image data;
-        # ~2x smaller on polygon-heavy ROI sets. wkb_flat is always non-empty
-        # here: write_rois returns early on empty input and every geometry
-        # serializes to >=9 WKB bytes (even an empty polygon is a 9-byte
-        # header), so no empty-dataset guard is needed.
-        f.create_dataset(
-            "roi_wkb",
-            data=wkb_flat,
-            dtype=np.uint8,
-            chunks=True,
-            compression="gzip",
-            compression_opts=1,
+        grp = _write_table(
+            f, "rois", rows, legacy_format=legacy_format, compression=compression
         )
+        # Gzip-compress the packed WKB geometry bytes (lossless, transparent on
+        # read); ~2x smaller on polygon-heavy ROI sets.
+        _write_buffer(f, grp, "rois", wkb_flat, gzip=True)
 
 
 def read_bboxes(
@@ -7550,7 +8495,7 @@ def _read_bboxes_columnar(
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None,
 ) -> list[tuple[BoundingBox, int, int]]:
-    """Read bboxes from columnar /bboxes group (v2.0+ format)."""
+    """Read bboxes from columnar /bboxes group (v2.0+ format), with their metadata."""
     x1_arr = grp["x1"][:]
     y1_arr = grp["y1"][:]
     x2_arr = grp["x2"][:]
@@ -7566,9 +8511,12 @@ def _read_bboxes_columnar(
     name_arr = grp["name"][:]
     source_arr = grp["source"][:]
     tracking_score_arr = grp["tracking_score"][:] if "tracking_score" in grp else None
+    n = len(x1_arr)
+    metadata = _read_metadata_columns(grp, "bboxes", n)
+    records = _metadata_records(metadata, n) if metadata else None
 
     bboxes: list[BoundingBox] = []
-    for i in range(len(x1_arr)):
+    for i in range(n):
         video_idx = int(video_arr[i])
 
         frame_idx_val = int(frame_idx_arr[i])
@@ -7608,6 +8556,7 @@ def _read_bboxes_columnar(
             category=category,
             name=name,
             source=source,
+            metadata=records[i] if records is not None else None,
         )
 
         if bool(is_predicted_arr[i]):
@@ -7688,6 +8637,8 @@ def write_bboxes(
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
     contexts: list[tuple[int, int]] | None = None,
+    *,
+    legacy_format: bool = False,
 ) -> None:
     """Write bounding box annotations to a SLEAP labels file.
 
@@ -7701,6 +8652,13 @@ def write_bboxes(
             persisted.
         contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
             for each bounding box. If ``None``, defaults to ``(-1, -1)`` for all.
+        legacy_format: If `True`, write the 2.x layout, which has no metadata.
+            Otherwise (SLP 3.0) the boxes' `metadata` is written to
+            `/bboxes/metadata/` (see `_write_metadata_columns`).
+
+    Raises:
+        TypeError: If a metadata key mixes kinds across the boxes (see
+            `metadata_column_kinds`).
     """
     if not bboxes:
         return
@@ -7754,6 +8712,11 @@ def write_bboxes(
         names.append(bbox.name)
         sources.append(bbox.source)
 
+    metadata = (
+        {}
+        if legacy_format
+        else _metadata_columns(bboxes, metadata_column_kinds(bboxes, "bboxes"))
+    )
     str_dt = h5py.special_dtype(vlen=str)
     with h5py.File(labels_path, "a") as f:
         grp = f.create_group("bboxes")
@@ -7772,6 +8735,7 @@ def write_bboxes(
         grp.create_dataset("category", data=categories, dtype=str_dt)
         grp.create_dataset("name", data=names, dtype=str_dt)
         grp.create_dataset("source", data=sources, dtype=str_dt)
+        _write_metadata_columns(grp, metadata)
 
 
 def read_centroids(
@@ -7977,6 +8941,83 @@ def write_centroids(
         grp.create_dataset("source", data=sources, dtype=str_dt)
 
 
+def _read_score_map_index(
+    labels_path: str, f: h5py.File, table: str, n_owners: int
+) -> tuple[_Table | None, np.ndarray]:
+    """Read and check the score map index of masks or label images.
+
+    Args:
+        labels_path: Path or URL of the file (used in messages).
+        f: The open file.
+        table: `"masks/score_maps"` or `"label_images/score_maps"`.
+        n_owners: Number of rows in the owning table (`/masks` or
+            `/label_images`).
+
+    Returns:
+        A tuple `(table, data)`: the score map index table (or `None` if the file
+        has none) and its buffer of zlib-compressed maps.
+
+    Raises:
+        ValueError: If an SLP 3.0 index row points outside the owning table or the
+            `data` buffer. Older tables warn instead.
+    """
+    sm = _read_table(f, table)
+    if sm is None:
+        return None, np.empty(0, np.uint8)
+    index = _TABLE_SPECS[table].raw.names[0]
+    data = sm.buffer[()] if sm.buffer is not None else np.empty(0, np.uint8)
+    rows = sm.rows
+    problems = []
+    if _index_out_of_range(rows[index], n_owners, optional=False):
+        owner = table.partition("/")[0]
+        problems.append(f"/{table} {index} is not one of the {n_owners} /{owner}")
+    if _span_out_of_range(rows, "data_start", "data_end", len(data)):
+        problems.append(f"/{table} ranges fall outside the buffer ({len(data)})")
+    _report_table_problems(labels_path, problems, strict=not sm.is_legacy)
+    return sm, data
+
+
+def _read_score_maps(
+    labels_path: str, f: h5py.File, table: str, n_owners: int
+) -> tuple[_Table | None, dict[int, tuple[np.ndarray, tuple, tuple]]]:
+    """Read the dense score maps of predicted masks or label images.
+
+    Args:
+        labels_path: Path or URL of the file (used in messages).
+        f: The open file.
+        table: `"masks/score_maps"` or `"label_images/score_maps"`.
+        n_owners: Number of rows in the owning table (`/masks` or
+            `/label_images`).
+
+    Returns:
+        A tuple `(table, maps)`: the score map index table (or `None` if the file
+        has none), and a dictionary mapping each owning row to its score map, scale
+        and offset.
+
+    Raises:
+        ValueError: If an SLP 3.0 index row points outside the owning table or the
+            `data` buffer (see `_read_score_map_index`).
+    """
+    sm, data = _read_score_map_index(labels_path, f, table, n_owners)
+    if sm is None:
+        return None, {}
+    index = _TABLE_SPECS[table].raw.names[0]
+    rows = sm.rows
+    maps = {}
+    for row in rows.tolist():
+        record = dict(zip(rows.dtype.names, row))
+        score_map = np.frombuffer(
+            zlib.decompress(data[record["data_start"] : record["data_end"]].tobytes()),
+            dtype=np.float32,
+        ).reshape(record["height"], record["width"])
+        maps[record[index]] = (
+            score_map,
+            (record["scale_x"], record["scale_y"]),
+            (record["offset_x"], record["offset_y"]),
+        )
+    return sm, maps
+
+
 def read_masks(
     labels_path: str,
     videos: list[Video],
@@ -7984,6 +9025,8 @@ def read_masks(
     instances: list[Instance | PredictedInstance] | None = None,
     *,
     _hdf5_file: h5py.File | None = None,
+    _n_instances: int | None = None,
+    _carry: dict | None = None,
 ) -> list[tuple[SegmentationMask, int, int]]:
     """Read segmentation masks from a SLEAP labels file.
 
@@ -7998,169 +9041,100 @@ def read_masks(
             the data is read from this handle (left open for the caller to close);
             otherwise `labels_path` is opened and closed internally. This is a
             private argument used to thread a single open handle through reads.
+        _n_instances: Number of rows in `/instances`, to check instance links when
+            `instances` isn't given (lazy reads).
+        _carry: If given, the raw records of `/masks` and its score map index are
+            added to it for carrying unknown columns through a later save (see
+            `_column_carry`).
 
     Returns:
         A list of ``(mask, video_idx, frame_idx)`` tuples. ``video_idx`` and
         ``frame_idx`` are the routing context read from the file (``-1``
         means undistributable). Returns empty list if none stored.
+
+    Raises:
+        ValueError: If an SLP 3.0 table has a range outside its buffer or a link
+            to a row that doesn't exist. Older tables warn instead.
     """
-    try:
-        mask_data = read_hdf5_dataset(labels_path, "masks", _hdf5_file=_hdf5_file)
-    except KeyError:
-        return []
-
-    if len(mask_data) == 0:
-        return []
-
-    # Read packed RLE bytes
-    try:
-        mask_rle_flat = read_hdf5_dataset(
-            labels_path, "mask_rle", _hdf5_file=_hdf5_file
-        )
-    except KeyError:
-        return []
-
-    # Read string metadata and score maps in a single file open
-    score_map_by_idx: dict[int, np.ndarray] = {}
     cm = (
         nullcontext(_hdf5_file)
         if _hdf5_file is not None
         else h5py.File(labels_path, "r")
     )
     with cm as f:
-        mask_grp = f["masks"]
-        if "mask_categories" in f:
-            categories = [
-                s.decode() if isinstance(s, bytes) else s
-                for s in f["mask_categories"][:]
-            ]
-        else:
-            categories = json.loads(mask_grp.attrs.get("categories", "[]"))
-        if "mask_names" in f:
-            names = [
-                s.decode() if isinstance(s, bytes) else s for s in f["mask_names"][:]
-            ]
-        else:
-            names = json.loads(mask_grp.attrs.get("names", "[]"))
-        if "mask_sources" in f:
-            sources = [
-                s.decode() if isinstance(s, bytes) else s for s in f["mask_sources"][:]
-            ]
-        else:
-            sources = json.loads(mask_grp.attrs.get("sources", "[]"))
-
-        # Read and index score maps if available
-        score_map_spatial_by_idx: dict[
-            int, tuple[tuple[float, float], tuple[float, float]]
-        ] = {}
-        if "mask_score_map_index" in f:
-            sm_index = f["mask_score_map_index"][:]
-            sm_data = f["mask_score_maps"][:]
-            for sm_row in sm_index:
-                sm_start = int(sm_row["data_start"])
-                sm_end = int(sm_row["data_end"])
-                sm_h = int(sm_row["height"])
-                sm_w = int(sm_row["width"])
-                sm_compressed = sm_data[sm_start:sm_end]
-                midx = int(sm_row["mask_idx"])
-                score_map_by_idx[midx] = np.frombuffer(
-                    zlib.decompress(sm_compressed.tobytes()), dtype=np.float32
-                ).reshape(sm_h, sm_w)
-                # Read score map spatial metadata (v2.1+)
-                sm_scale = (
-                    float(sm_row["scale_x"])
-                    if "scale_x" in sm_row.dtype.names
-                    else 1.0,
-                    float(sm_row["scale_y"])
-                    if "scale_y" in sm_row.dtype.names
-                    else 1.0,
-                )
-                sm_offset = (
-                    float(sm_row["offset_x"])
-                    if "offset_x" in sm_row.dtype.names
-                    else 0.0,
-                    float(sm_row["offset_y"])
-                    if "offset_y" in sm_row.dtype.names
-                    else 0.0,
-                )
-                score_map_spatial_by_idx[midx] = (sm_scale, sm_offset)
+        table = _read_table(f, "masks")
+        if table is None or len(table.rows) == 0:
+            return []
+        # Files before 3.0 without an RLE buffer have never been readable.
+        if table.is_legacy and table.buffer is None:
+            return []
+        rle_flat = (
+            table.buffer[()] if table.buffer is not None else np.empty(0, np.uint8)
+        )
+        rows = table.rows
+        problems = _annotation_problems(
+            "masks",
+            rows,
+            n_videos=len(videos),
+            n_tracks=len(tracks),
+            n_instances=None
+            if table.is_legacy
+            else (len(instances) if instances is not None else _n_instances),
+        )
+        if _index_out_of_range(rows["from_predicted"], len(rows)):
+            problems.append("/masks from_predicted is not a mask row")
+        if _span_out_of_range(rows, "rle_start", "rle_end", len(rle_flat)):
+            problems.append(
+                f"/masks rle ranges fall outside the buffer ({len(rle_flat)})"
+            )
+        _report_table_problems(labels_path, problems, strict=not table.is_legacy)
+        sm_table, score_maps = _read_score_maps(
+            labels_path, f, "masks/score_maps", len(rows)
+        )
 
     masks = []
     from_predicted_pairs = []
-    for i, row in enumerate(mask_data):
-        rle_start = int(row["rle_start"])
-        rle_end = int(row["rle_end"])
-        rle_raw = mask_rle_flat[rle_start:rle_end]
-
+    for i, row in enumerate(rows.tolist()):
+        record = dict(zip(rows.dtype.names, row))
         # Convert packed uint8 bytes back to uint32 array
-        rle_counts = np.frombuffer(rle_raw.tobytes(), dtype=np.uint32)
+        rle_counts = np.frombuffer(
+            rle_flat[record["rle_start"] : record["rle_end"]].tobytes(),
+            dtype=np.uint32,
+        )
 
-        video_idx = int(row["video"])
-
-        frame_idx_val = int(row["frame_idx"])
-
-        track_idx = int(row["track"])
+        video_idx = record["video"]
+        track_idx = record["track"]
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
-
-        # Read instance index (v1.9+)
-        instance_idx = int(row["instance"]) if "instance" in row.dtype.names else -1
+        instance_idx = record["instance"]
         instance = (
             instances[instance_idx]
             if instances is not None and 0 <= instance_idx < len(instances)
             else None
         )
-
-        # Read from_predicted index (v2.4+). Resolved to an object in a deferred
-        # pass below, once all masks in this flat list have been constructed.
-        from_predicted_idx = (
-            int(row["from_predicted"]) if "from_predicted" in row.dtype.names else -1
-        )
-
-        # Read predicted flag (v1.9+)
-        is_predicted = (
-            bool(row["is_predicted"]) if "is_predicted" in row.dtype.names else False
-        )
-        score_val = float(row["score"]) if "score" in row.dtype.names else float("nan")
-
-        tracking_score = None
-        if "tracking_score" in row.dtype.names:
-            ts = float(row["tracking_score"])
-            if not np.isnan(ts):
-                tracking_score = ts
-
-        # Read spatial metadata (v2.1+)
-        scale = (
-            float(row["scale_x"]) if "scale_x" in row.dtype.names else 1.0,
-            float(row["scale_y"]) if "scale_y" in row.dtype.names else 1.0,
-        )
-        offset = (
-            float(row["offset_x"]) if "offset_x" in row.dtype.names else 0.0,
-            float(row["offset_y"]) if "offset_y" in row.dtype.names else 0.0,
-        )
+        tracking_score = record["tracking_score"]
 
         kwargs = dict(
             rle_counts=rle_counts,
-            height=int(row["height"]),
-            width=int(row["width"]),
-            name=names[i] if i < len(names) else "",
-            category=categories[i] if i < len(categories) else "",
-            source=sources[i] if i < len(sources) else "",
+            height=record["height"],
+            width=record["width"],
+            name=record["name"],
+            category=record["category"],
+            source=record["source"],
             track=track,
-            tracking_score=tracking_score,
+            tracking_score=None if np.isnan(tracking_score) else tracking_score,
             instance=instance,
-            scale=scale,
-            offset=offset,
+            scale=(record["scale_x"], record["scale_y"]),
+            offset=(record["offset_x"], record["offset_y"]),
         )
 
-        if is_predicted:
-            # Check for score map
-            sm = score_map_by_idx.get(i)
-            sm_spatial = score_map_spatial_by_idx.get(i)
-            sm_scale = sm_spatial[0] if sm_spatial else (1.0, 1.0)
-            sm_offset = sm_spatial[1] if sm_spatial else (0.0, 0.0)
+        if record["is_predicted"]:
+            score = record["score"]
+            score_map, sm_scale, sm_offset = score_maps.get(
+                i, (None, (1.0, 1.0), (0.0, 0.0))
+            )
             mask = PredictedSegmentationMask(
-                score=score_val if not np.isnan(score_val) else 0.0,
-                score_map=sm,
+                score=0.0 if np.isnan(score) else score,
+                score_map=score_map,
                 score_map_scale=sm_scale,
                 score_map_offset=sm_offset,
                 **kwargs,
@@ -8170,9 +9144,9 @@ def read_masks(
 
         mask._instance_idx = instance_idx
         # Only user masks carry a from_predicted link; queue it for re-linking.
-        if not is_predicted and from_predicted_idx >= 0:
-            from_predicted_pairs.append((i, from_predicted_idx))
-        masks.append((mask, video_idx, frame_idx_val))
+        if not record["is_predicted"] and record["from_predicted"] >= 0:
+            from_predicted_pairs.append((i, record["from_predicted"]))
+        masks.append((mask, video_idx, record["frame_idx"]))
 
     # Re-link from_predicted provenance now that every mask exists. The stored
     # value is a global index into this flat list (see write_masks); out-of-range
@@ -8181,7 +9155,90 @@ def read_masks(
         if 0 <= fp_idx < len(masks):
             masks[i][0].from_predicted = masks[fp_idx][0]
 
+    if _carry is not None:
+        raw = _TABLE_SPECS["masks"].raw
+        _carry["masks"] = (rows, raw, lambda: [m for m, *_ in masks])
+        if sm_table is not None:
+            _carry["masks/score_maps"] = (
+                sm_table.rows,
+                _TABLE_SPECS["masks/score_maps"].raw,
+                lambda: _rows_owners([m for m, *_ in masks], sm_table.rows["mask_idx"]),
+            )
     return masks
+
+
+def _score_map_rows(owners: list) -> tuple[list[tuple], list[np.ndarray]]:
+    """Build score map index rows for the predicted masks or label images.
+
+    Args:
+        owners: The masks or label images, in table order (`None` for those that
+            can't have a score map).
+
+    Returns:
+        A tuple `(rows, chunks)`: one index row per owner with a score map, and the
+        zlib-compressed `float32` bytes of each map.
+    """
+    rows = []
+    chunks = []
+    offset = 0
+    for i, owner in enumerate(owners):
+        score_map = getattr(owner, "score_map", None)
+        if score_map is None:
+            continue
+        compressed = zlib.compress(score_map.astype(np.float32).tobytes())
+        sm_bytes = np.frombuffer(compressed, dtype=np.uint8)
+        sm_h, sm_w = score_map.shape[:2]
+        rows.append(
+            (
+                i,
+                offset,
+                offset + len(sm_bytes),
+                sm_h,
+                sm_w,
+                owner.score_map_scale[0],
+                owner.score_map_scale[1],
+                owner.score_map_offset[0],
+                owner.score_map_offset[1],
+            )
+        )
+        chunks.append(sm_bytes)
+        offset += len(sm_bytes)
+    return rows, chunks
+
+
+def _write_score_maps(
+    f: h5py.File,
+    group: h5py.Group | None,
+    table: str,
+    rows: np.ndarray,
+    data: np.ndarray,
+    *,
+    legacy_format: bool,
+    compression: str | None,
+) -> None:
+    """Write a score map index table and its `data` buffer, if there are any.
+
+    Args:
+        f: The open file.
+        group: The owning table's group (`/masks` or `/label_images`) in SLP 3.0,
+            which holds the `score_maps/` group, or `None` for the 2.x layout.
+        table: `"masks/score_maps"` or `"label_images/score_maps"`.
+        rows: Raw index records (see `_TABLE_SPECS`). Nothing is written if empty.
+        data: The concatenated compressed score maps.
+        legacy_format: Whether to write the 2.x layout.
+        compression: `None`, `"gzip"` or `"lzf"` for the index columns. The buffer
+            is chunked but not filtered, since each map is zlib-compressed.
+    """
+    if len(rows) == 0:
+        return
+    sm_group = _write_table(
+        group if group is not None else f,
+        table,
+        rows,
+        legacy_format=legacy_format,
+        compression=compression,
+    )
+    _write_buffer(f, sm_group, table, data, gzip=False)
 
 
 def write_masks(
@@ -8191,6 +9248,10 @@ def write_masks(
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
     contexts: list[tuple[int, int]] | None = None,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
 ) -> None:
     """Write segmentation masks to a SLEAP labels file.
 
@@ -8203,6 +9264,15 @@ def write_masks(
             mapping. If provided, mask instance associations will be persisted.
         contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
             for each mask. If ``None``, defaults to ``(-1, -1)`` for all.
+        legacy_format: If `True`, write the 2.x layout: a compound `/masks`
+            dataset with `/mask_rle`, the `/mask_names`, `/mask_categories` and
+            `/mask_sources` string datasets and the `/mask_score_map_index` and
+            `/mask_score_maps` datasets. Otherwise (SLP 3.0) a `/masks` group of
+            columns holding the `rle` buffer and a `score_maps/` group.
+        compression: `None`, `"gzip"` or `"lzf"` for the row columns. The `rle`
+            buffer is always gzipped.
+        carry: Unknown columns kept from loading, appended to the rows if the masks
+            are the ones loaded, in the same order (see `_with_carried_columns`).
     """
     if not masks:
         return
@@ -8210,34 +9280,9 @@ def write_masks(
     if contexts is None:
         contexts = [(-1, -1)] * len(masks)
 
-    mask_dtype = np.dtype(
-        [
-            ("height", "u4"),
-            ("width", "u4"),
-            ("annotation_type", "u1"),
-            ("video", "i4"),
-            ("frame_idx", "i8"),
-            ("track", "i4"),
-            ("instance", "i4"),
-            ("from_predicted", "i4"),  # Format 2.4+: index into this mask list
-            ("is_predicted", "u1"),
-            ("score", "f4"),
-            ("tracking_score", "f4"),
-            ("rle_start", "u8"),
-            ("rle_end", "u8"),
-            ("scale_x", "f4"),
-            ("scale_y", "f4"),
-            ("offset_x", "f4"),
-            ("offset_y", "f4"),
-        ]
-    )
-
     mask_rows = []
     rle_chunks = []
     rle_offset = 0
-    categories = []
-    names = []
-    sources = []
 
     # Map each mask object to its global index so a UserSegmentationMask's
     # ``from_predicted`` link can be persisted as an index into this flat list,
@@ -8290,7 +9335,7 @@ def write_masks(
                 track_idx,
                 instance_idx,
                 from_predicted_idx,
-                int(is_predicted),
+                is_predicted,
                 score,
                 tracking_score,
                 rle_start,
@@ -8299,91 +9344,47 @@ def write_masks(
                 mask.scale[1],
                 mask.offset[0],
                 mask.offset[1],
+                mask.name,
+                mask.category.name if mask.category else "",
+                mask.source,
             )
         )
 
-        categories.append(mask.category.name if mask.category else "")
-        names.append(mask.name)
-        sources.append(mask.source)
-
-    mask_array = np.array(mask_rows, dtype=mask_dtype)
+    rows = np.array(mask_rows, dtype=_TABLE_SPECS["masks"].raw)
+    sm_rows, sm_chunks = _score_map_rows(
+        [m if isinstance(m, PredictedSegmentationMask) else None for m in masks]
+    )
+    sm_rows = np.array(sm_rows, dtype=_TABLE_SPECS["masks/score_maps"].raw)
+    if not legacy_format:
+        rows = _with_carried_columns(rows, carry, "masks", masks)
+        sm_rows = _with_carried_columns(
+            sm_rows,
+            carry,
+            "masks/score_maps",
+            [masks[i] for i in sm_rows["mask_idx"].tolist()],
+        )
     rle_flat = (
         np.concatenate(rle_chunks) if rle_chunks else np.array([], dtype=np.uint8)
     )
 
     with h5py.File(labels_path, "a") as f:
-        f.create_dataset("masks", data=mask_array, dtype=mask_dtype)
-        f.create_dataset(
-            "mask_rle",
-            data=rle_flat,
-            dtype=np.uint8,
-            # Gzip-compress the RLE bytes (lossless, transparent on read).
-            # RLE counts are uint32 run-lengths whose high bytes are mostly
-            # zero, so they compress ~8x+ at level 1. Mirrors the gzip used for
-            # video/label-image data. A degenerate empty-RLE mask (e.g. a
-            # zero-height mask) keeps the contiguous, no-filter path: there are
-            # no bytes to compress, so chunking + gzip would only add overhead.
-            **(
-                {"chunks": True, "compression": "gzip", "compression_opts": 1}
-                if len(rle_flat) > 0
-                else {}
-            ),
+        grp = _write_table(
+            f, "masks", rows, legacy_format=legacy_format, compression=compression
         )
-        str_dt = h5py.special_dtype(vlen=str)
-        f.create_dataset("mask_categories", data=categories, dtype=str_dt)
-        f.create_dataset("mask_names", data=names, dtype=str_dt)
-        f.create_dataset("mask_sources", data=sources, dtype=str_dt)
-
-    # Store dense score maps if any exist
-    score_map_indices = []
-    score_map_chunks = []
-    score_map_offset = 0
-    for i, mask in enumerate(masks):
-        if isinstance(mask, PredictedSegmentationMask) and mask.score_map is not None:
-            compressed = zlib.compress(mask.score_map.astype(np.float32).tobytes())
-            sm_bytes = np.frombuffer(compressed, dtype=np.uint8)
-            sm_end = score_map_offset + len(sm_bytes)
-            sm_h, sm_w = mask.score_map.shape[:2]
-            score_map_indices.append(
-                (
-                    i,
-                    score_map_offset,
-                    sm_end,
-                    sm_h,
-                    sm_w,
-                    mask.score_map_scale[0],
-                    mask.score_map_scale[1],
-                    mask.score_map_offset[0],
-                    mask.score_map_offset[1],
-                )
-            )
-            score_map_chunks.append(sm_bytes)
-            score_map_offset += len(sm_bytes)
-
-    if score_map_indices:
-        sm_index_dtype = np.dtype(
-            [
-                ("mask_idx", "u4"),
-                ("data_start", "u8"),
-                ("data_end", "u8"),
-                ("height", "u4"),
-                ("width", "u4"),
-                ("scale_x", "f4"),
-                ("scale_y", "f4"),
-                ("offset_x", "f4"),
-                ("offset_y", "f4"),
-            ]
+        # Gzip-compress the RLE bytes (lossless, transparent on read). RLE counts
+        # are uint32 run-lengths whose high bytes are mostly zero, so they compress
+        # ~8x+ at level 1. A degenerate empty-RLE mask (e.g. a zero-height mask)
+        # keeps the contiguous, no-filter path.
+        _write_buffer(f, grp, "masks", rle_flat, gzip=True)
+        _write_score_maps(
+            f,
+            grp,
+            "masks/score_maps",
+            sm_rows,
+            np.concatenate(sm_chunks) if sm_chunks else np.empty(0, np.uint8),
+            legacy_format=legacy_format,
+            compression=compression,
         )
-        sm_index_array = np.array(score_map_indices, dtype=sm_index_dtype)
-        sm_flat = np.concatenate(score_map_chunks)
-        with h5py.File(labels_path, "a") as f:
-            f.create_dataset("mask_score_map_index", data=sm_index_array)
-            f.create_dataset(
-                "mask_score_maps",
-                data=sm_flat,
-                dtype=np.uint8,
-                **({"chunks": True} if len(sm_flat) > 0 else {}),
-            )
 
 
 def read_label_images(
@@ -8396,13 +9397,16 @@ def read_label_images(
     _url_headers: dict[str, str] | None = None,
     _url_stream_mode: str = "blockcache",
     _url_bytes: bytes | None = None,
+    _n_instances: int | None = None,
+    _carry: dict | None = None,
 ) -> tuple[list[tuple[LabelImage, int, int]], "h5py.File | None"]:
     """Read label image annotations from a SLEAP labels file.
 
-    Supports both the legacy blob format (v1.8-v2.1) and the chunked format
-    (v2.2+). Pixel data is loaded lazily when possible: the HDF5 file handle
-    is kept open and each frame's data is decompressed on first ``.data``
-    access.
+    Supports the SLP 3.0 `/label_images` group of columns (with its `data`,
+    `objects/` and `score_maps/` members) and the 2.x compound tables, with pixel
+    data in the legacy blob format (v1.8-v2.1) or the chunked format (v2.2+).
+    Pixel data is loaded lazily when possible: the HDF5 file handle is kept open
+    and each frame's data is decompressed on first ``.data`` access.
 
     Args:
         labels_path: A string path or URL to the SLEAP labels file.
@@ -8427,6 +9431,11 @@ def read_label_images(
             handle for lazy pixel access, instead of re-opening ``labels_path``
             over the network. Used for Google Drive (where a re-resolve is a
             re-download against the per-file quota). Ignored for local paths.
+        _n_instances: Number of rows in `/instances`, to check instance links when
+            `instances` isn't given (lazy reads).
+        _carry: If given, the raw records of `/label_images`, its objects and its
+            score map index are added to it for carrying unknown columns through a
+            later save (see `_column_carry`).
 
     Returns:
         A tuple of ``(label_image_tuples, h5py_file)`` where
@@ -8436,14 +9445,46 @@ def read_label_images(
         for lazy data access (or ``None`` if no label images were found).
         The caller is responsible for storing and eventually closing the
         file handle.
-    """
-    try:
-        li_data = read_hdf5_dataset(labels_path, "label_images", _hdf5_file=_hdf5_file)
-    except KeyError:
-        return [], None
 
-    if len(li_data) == 0:
-        return [], None
+    Raises:
+        ValueError: If an SLP 3.0 table has a range outside the table or buffer it
+            indexes, or a link to a row that doesn't exist. Older tables warn
+            instead.
+    """
+    cm = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with cm as mf:
+        table = _read_table(mf, "label_images")
+        if table is None or len(table.rows) == 0:
+            return [], None
+        rows = table.rows
+        # Files before 3.0 without pixel data have never been readable.
+        if table.is_legacy and table.buffer is None:
+            return [], None
+        objects = _read_table(mf, "label_images/objects")
+        obj_rows = (
+            objects.rows
+            if objects is not None
+            else np.empty(0, dtype=_TABLE_SPECS["label_images/objects"].raw)
+        )
+        problems = _label_image_problems(
+            rows,
+            obj_rows,
+            table.buffer,
+            n_videos=len(videos),
+            n_tracks=len(tracks),
+            n_instances=None
+            if table.is_legacy
+            else (len(instances) if instances is not None else _n_instances),
+        )
+        _report_table_problems(labels_path, problems, strict=not table.is_legacy)
+        sm_table, score_maps = _read_score_maps(
+            labels_path, mf, "label_images/score_maps", len(rows)
+        )
+        pixel_path = table.buffer.name
 
     # Open a SECOND, long-lived file handle for lazy pixel data reading. This
     # handle intentionally outlives the orchestrator's `with` block (the closures
@@ -8470,88 +9511,8 @@ def read_label_images(
     else:
         f = h5py.File(labels_path, "r")
 
-    if "label_image_data" not in f:
-        f.close()
-        return [], None
-
-    pixel_ds = f["label_image_data"]
+    pixel_ds = f[pixel_path]
     is_chunked_format = pixel_ds.ndim == 3  # (T, H, W) = v2.2+ chunked
-
-    # Read objects table
-    try:
-        obj_data = read_hdf5_dataset(
-            labels_path, "label_image_objects", _hdf5_file=_hdf5_file
-        )
-    except KeyError:
-        obj_dtype = [
-            ("label_id", "i4"),
-            ("track", "i4"),
-            ("instance", "i4"),
-        ]
-        obj_data = np.array([], dtype=obj_dtype)
-
-    # Read string metadata and score maps
-    if "label_image_obj_categories" in f:
-        categories = [
-            s.decode() if isinstance(s, bytes) else s
-            for s in f["label_image_obj_categories"][:]
-        ]
-    elif "label_image_objects" in f:
-        obj_grp = f["label_image_objects"]
-        categories = json.loads(obj_grp.attrs.get("categories", "[]"))
-    else:
-        categories = []
-
-    if "label_image_obj_names" in f:
-        names = [
-            s.decode() if isinstance(s, bytes) else s
-            for s in f["label_image_obj_names"][:]
-        ]
-    elif "label_image_objects" in f:
-        obj_grp = f["label_image_objects"]
-        names = json.loads(obj_grp.attrs.get("names", "[]"))
-    else:
-        names = []
-
-    if "label_image_sources" in f:
-        sources = [
-            s.decode() if isinstance(s, bytes) else s
-            for s in f["label_image_sources"][:]
-        ]
-    elif "label_images" in f:
-        li_grp = f["label_images"]
-        sources = json.loads(li_grp.attrs.get("sources", "[]"))
-    else:
-        sources = []
-
-    # Read and index score maps if available
-    li_score_map_by_idx: dict[int, np.ndarray] = {}
-    li_score_map_spatial_by_idx: dict[
-        int, tuple[tuple[float, float], tuple[float, float]]
-    ] = {}
-    if "label_image_score_map_index" in f:
-        sm_index = f["label_image_score_map_index"][:]
-        sm_data_ds = f["label_image_score_maps"]
-        for sm_row in sm_index:
-            sm_start = int(sm_row["data_start"])
-            sm_end = int(sm_row["data_end"])
-            sm_h = int(sm_row["height"])
-            sm_w = int(sm_row["width"])
-            sm_compressed = sm_data_ds[sm_start:sm_end]
-            lidx = int(sm_row["li_idx"])
-            li_score_map_by_idx[lidx] = np.frombuffer(
-                zlib.decompress(sm_compressed.tobytes()), dtype=np.float32
-            ).reshape(sm_h, sm_w)
-            # Read score map spatial metadata (v2.1+)
-            sm_scale = (
-                float(sm_row["scale_x"]) if "scale_x" in sm_row.dtype.names else 1.0,
-                float(sm_row["scale_y"]) if "scale_y" in sm_row.dtype.names else 1.0,
-            )
-            sm_offset = (
-                float(sm_row["offset_x"]) if "offset_x" in sm_row.dtype.names else 0.0,
-                float(sm_row["offset_y"]) if "offset_y" in sm_row.dtype.names else 0.0,
-            )
-            li_score_map_spatial_by_idx[lidx] = (sm_scale, sm_offset)
 
     # Factory functions for lazy loaders (avoid closure-over-loop-variable)
     def _make_chunked_loader(ds, idx):
@@ -8567,98 +9528,57 @@ def read_label_images(
 
         return loader
 
+    obj_records = [dict(zip(obj_rows.dtype.names, r)) for r in obj_rows.tolist()]
+    obj_owners: list = [None] * len(obj_records)
     label_images: list[LabelImage] = []
-    for i, row in enumerate(li_data):
-        video_idx = int(row["video"])
-
-        frame_idx_val = int(row["frame_idx"])
-
-        height = int(row["height"])
-        width = int(row["width"])
-        n_objects = int(row["n_objects"])
-        objects_start = int(row["objects_start"])
+    for i, row in enumerate(rows.tolist()):
+        record = dict(zip(rows.dtype.names, row))
+        height = record["height"]
+        width = record["width"]
+        objects_start = record["objects_start"]
 
         # Build objects dict from objects table
         objects: dict[int, LabelImage.Info] = {}
-        for j in range(n_objects):
-            obj_idx = objects_start + j
-            if obj_idx < len(obj_data):
-                obj_row = obj_data[obj_idx]
-                label_id = int(obj_row["label_id"])
-
-                track_idx = int(obj_row["track"])
-                track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
-
-                instance_idx = int(obj_row["instance"])
-                instance = (
-                    instances[instance_idx]
-                    if instances is not None and 0 <= instance_idx < len(instances)
-                    else None
-                )
-
-                category = categories[obj_idx] if obj_idx < len(categories) else ""
-                name = names[obj_idx] if obj_idx < len(names) else ""
-
-                # Read per-object score if present (v1.9+)
-                obj_score = None
-                if "score" in obj_row.dtype.names:
-                    sv = float(obj_row["score"])
-                    if not np.isnan(sv):
-                        obj_score = sv
-
-                obj_tracking_score = None
-                if "tracking_score" in obj_row.dtype.names:
-                    ts = float(obj_row["tracking_score"])
-                    if not np.isnan(ts):
-                        obj_tracking_score = ts
-
-                objects[label_id] = LabelImage.Info(
-                    track=track,
-                    tracking_score=obj_tracking_score,
-                    category=category,
-                    name=name,
-                    instance=instance,
-                    score=obj_score,
-                )
-                # Store raw index for deferred resolution (lazy loading)
-                objects[label_id]._instance_idx = instance_idx
-
-        source = sources[i] if i < len(sources) else ""
-
-        # Read predicted flag (v1.9+)
-        is_predicted = (
-            bool(row["is_predicted"]) if "is_predicted" in row.dtype.names else False
-        )
-        score_val = float(row["score"]) if "score" in row.dtype.names else 0.0
-
-        # Read spatial metadata (v2.1+)
-        scale = (
-            float(row["scale_x"]) if "scale_x" in row.dtype.names else 1.0,
-            float(row["scale_y"]) if "scale_y" in row.dtype.names else 1.0,
-        )
-        offset = (
-            float(row["offset_x"]) if "offset_x" in row.dtype.names else 0.0,
-            float(row["offset_y"]) if "offset_y" in row.dtype.names else 0.0,
-        )
+        for obj_idx in range(objects_start, objects_start + record["n_objects"]):
+            if not 0 <= obj_idx < len(obj_records):
+                continue
+            obj = obj_records[obj_idx]
+            track_idx = obj["track"]
+            instance_idx = obj["instance"]
+            info = LabelImage.Info(
+                track=tracks[track_idx] if 0 <= track_idx < len(tracks) else None,
+                tracking_score=None
+                if np.isnan(obj["tracking_score"])
+                else obj["tracking_score"],
+                category=obj["category"],
+                name=obj["name"],
+                instance=instances[instance_idx]
+                if instances is not None and 0 <= instance_idx < len(instances)
+                else None,
+                score=None if np.isnan(obj["score"]) else obj["score"],
+            )
+            # Store raw index for deferred resolution (lazy loading)
+            info._instance_idx = instance_idx
+            objects[obj["label_id"]] = info
+            obj_owners[obj_idx] = info
 
         # Construct with data=None for lazy loading
         kwargs = dict(
             data=None,
             objects=objects,
-            source=source,
-            scale=scale,
-            offset=offset,
+            source=record["source"],
+            scale=(record["scale_x"], record["scale_y"]),
+            offset=(record["offset_x"], record["offset_y"]),
         )
 
-        if is_predicted:
-            # Check for score map
-            sm = li_score_map_by_idx.get(i)
-            sm_spatial = li_score_map_spatial_by_idx.get(i)
-            sm_scale = sm_spatial[0] if sm_spatial else (1.0, 1.0)
-            sm_offset = sm_spatial[1] if sm_spatial else (0.0, 0.0)
+        if record["is_predicted"]:
+            score = record["score"]
+            score_map, sm_scale, sm_offset = score_maps.get(
+                i, (None, (1.0, 1.0), (0.0, 0.0))
+            )
             li = PredictedLabelImage(
-                score=score_val if not np.isnan(score_val) else 0.0,
-                score_map=sm,
+                score=0.0 if np.isnan(score) else score,
+                score_map=score_map,
                 score_map_scale=sm_scale,
                 score_map_offset=sm_offset,
                 **kwargs,
@@ -8670,17 +9590,220 @@ def read_label_images(
         if is_chunked_format:
             li._lazy_loader = _make_chunked_loader(pixel_ds, i)
         else:
-            data_start = int(row["data_start"])
-            data_end = int(row["data_end"])
             li._lazy_loader = _make_blob_loader(
-                pixel_ds, data_start, data_end, height, width
+                pixel_ds, record["data_start"], record["data_end"], height, width
             )
         li._height = height
         li._width = width
 
-        label_images.append((li, video_idx, frame_idx_val))
+        label_images.append((li, record["video"], record["frame_idx"]))
 
+    if _carry is not None:
+        lis = [li for li, *_ in label_images]
+        _carry["label_images"] = (rows, _TABLE_SPECS["label_images"].raw, lambda: lis)
+        _carry["label_images/objects"] = (
+            obj_rows,
+            _TABLE_SPECS["label_images/objects"].raw,
+            lambda: None if any(o is None for o in obj_owners) else obj_owners,
+        )
+        if sm_table is not None:
+            _carry["label_images/score_maps"] = (
+                sm_table.rows,
+                _TABLE_SPECS["label_images/score_maps"].raw,
+                lambda: _rows_owners(lis, sm_table.rows["li_idx"]),
+            )
     return label_images, f
+
+
+def _label_image_problems(
+    rows: np.ndarray,
+    obj_rows: np.ndarray,
+    data: h5py.Dataset | None,
+    *,
+    n_videos: int,
+    n_tracks: int,
+    n_instances: int | None,
+) -> list[str]:
+    """Check the label image tables' ranges and links.
+
+    Args:
+        rows: Raw `/label_images` records.
+        obj_rows: Raw `/label_images/objects` records.
+        data: The pixel data: a `(T, H, W)` array with one frame per row, or a flat
+            buffer of zlib-compressed frames indexed by `data_start`/`data_end`.
+        n_videos: Number of videos in the file.
+        n_tracks: Number of tracks in the file.
+        n_instances: Number of rows in `/instances`, or `None` to skip checking
+            instance links.
+
+    Returns:
+        A description of each problem found.
+    """
+    problems = []
+    if _index_out_of_range(rows["video"], n_videos):
+        problems.append(f"/label_images video is not one of the {n_videos} videos")
+    start = rows["objects_start"]
+    end = start + rows["n_objects"]
+    if np.any((start < 0) | (end < start) | (end > len(obj_rows))):
+        problems.append(
+            f"/label_images object ranges fall outside /label_images/objects "
+            f"({len(obj_rows)} rows)"
+        )
+    if data is None:
+        problems.append("/label_images has no pixel data")
+    elif data.ndim == 3:
+        if data.shape[0] < len(rows):
+            problems.append(
+                f"/label_images has {len(rows)} rows but {data.shape[0]} frames of data"
+            )
+    elif _span_out_of_range(rows, "data_start", "data_end", data.shape[0]):
+        problems.append(
+            f"/label_images data ranges fall outside the buffer ({data.shape[0]})"
+        )
+    return problems + _annotation_problems(
+        "label_images/objects",
+        obj_rows,
+        n_videos=n_videos,
+        n_tracks=n_tracks,
+        n_instances=n_instances,
+    )
+
+
+def _label_image_data_path(legacy_format: bool) -> str:
+    """Return the path of the label image pixel data (see `_TABLE_SPECS`)."""
+    spec = _TABLE_SPECS["label_images"]
+    return spec.legacy_buffer if legacy_format else f"{spec.path}/{spec.buffer}"
+
+
+def _label_image_rows(
+    label_image: LabelImage,
+    context: tuple[int, int],
+    objects_start: int,
+    data_range: tuple[int, int],
+    object_ids: Callable[[LabelImage.Info], tuple[int, int]],
+) -> tuple[tuple, list[tuple]]:
+    """Build the raw `/label_images` row and object rows of one label image.
+
+    Args:
+        label_image: The label image.
+        context: Its `(video_idx, frame_idx)` routing context.
+        objects_start: Row of its first object in `/label_images/objects`.
+        data_range: `(data_start, data_end)` of its pixels in a flat buffer, or
+            `(0, 0)` for chunked `(T, H, W)` data.
+        object_ids: Returns the `(track, instance)` indices of an object.
+
+    Returns:
+        A tuple `(row, object_rows)` in the raw layouts (see `_TABLE_SPECS`), with
+        objects sorted by label ID.
+    """
+    object_rows = []
+    for label_id in sorted(label_image.objects):
+        info = label_image.objects[label_id]
+        track_idx, instance_idx = object_ids(info)
+        object_rows.append(
+            (
+                label_id,
+                track_idx,
+                instance_idx,
+                info.score if info.score is not None else float("nan"),
+                info.tracking_score
+                if info.tracking_score is not None
+                else float("nan"),
+                info.name,
+                info.category,
+            )
+        )
+    is_predicted = isinstance(label_image, PredictedLabelImage)
+    row = (
+        *context,
+        label_image.height,
+        label_image.width,
+        len(object_rows),
+        objects_start,
+        *data_range,
+        is_predicted,
+        label_image.score if is_predicted else float("nan"),
+        label_image.scale[0],
+        label_image.scale[1],
+        label_image.offset[0],
+        label_image.offset[1],
+        label_image.source,
+    )
+    return row, object_rows
+
+
+def _write_label_image_tables(
+    f: h5py.File,
+    rows: list[tuple] | np.ndarray,
+    object_rows: list[tuple] | np.ndarray,
+    score_map_rows: list[tuple] | np.ndarray,
+    score_map_data: np.ndarray,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
+    label_images: list[LabelImage] | None = None,
+) -> None:
+    """Write the label image tables, next to pixel data already written.
+
+    Args:
+        f: The open file, holding the pixel data at `_label_image_data_path`.
+        rows: Raw `/label_images` rows (see `_TABLE_SPECS`).
+        object_rows: Raw `/label_images/objects` rows.
+        score_map_rows: Raw `/label_images/score_maps` rows.
+        score_map_data: The concatenated compressed score maps.
+        legacy_format: If `True`, write the 2.x layout: compound `/label_images`,
+            `/label_image_objects` and `/label_image_score_map_index` datasets with
+            separate string datasets. Otherwise (SLP 3.0) the `/label_images` group
+            of columns with `objects/` and `score_maps/` groups.
+        compression: `None`, `"gzip"` or `"lzf"` for the row columns.
+        carry: Unknown columns kept from loading (see `_with_carried_columns`).
+        label_images: The label images written, in order, to match `carry`.
+    """
+    specs = {
+        name: _TABLE_SPECS[name]
+        for name in ("label_images", "label_images/objects", "label_images/score_maps")
+    }
+    rows = np.asarray(rows, dtype=specs["label_images"].raw)
+    object_rows = np.asarray(object_rows, dtype=specs["label_images/objects"].raw)
+    score_map_rows = np.asarray(
+        score_map_rows, dtype=specs["label_images/score_maps"].raw
+    )
+    if carry is not None and not legacy_format:
+        objects = [
+            li.objects[label_id]
+            for li in label_images
+            for label_id in sorted(li.objects)
+        ]
+        rows = _with_carried_columns(rows, carry, "label_images", label_images)
+        object_rows = _with_carried_columns(
+            object_rows, carry, "label_images/objects", objects
+        )
+        score_map_rows = _with_carried_columns(
+            score_map_rows,
+            carry,
+            "label_images/score_maps",
+            [label_images[i] for i in score_map_rows["li_idx"].tolist()],
+        )
+    grp = _write_table(
+        f, "label_images", rows, legacy_format=legacy_format, compression=compression
+    )
+    _write_table(
+        grp if grp is not None else f,
+        "label_images/objects",
+        object_rows,
+        legacy_format=legacy_format,
+        compression=compression,
+    )
+    _write_score_maps(
+        f,
+        grp,
+        "label_images/score_maps",
+        score_map_rows,
+        score_map_data,
+        legacy_format=legacy_format,
+        compression=compression,
+    )
 
 
 def write_label_images(
@@ -8690,6 +9813,10 @@ def write_label_images(
     tracks: list[Track],
     instances: list[Instance | PredictedInstance] | None = None,
     contexts: list[tuple[int, int]] | None = None,
+    *,
+    legacy_format: bool = False,
+    compression: str | None = None,
+    carry: "_ColumnCarry | None" = None,
 ) -> None:
     """Write label image annotations to a SLEAP labels file.
 
@@ -8711,6 +9838,14 @@ def write_label_images(
             persisted.
         contexts: Parallel list of ``(video_idx, frame_idx)`` routing context
             for each label image. If ``None``, defaults to ``(-1, -1)`` for all.
+        legacy_format: If `True`, write the 2.x layout (`/label_image_data` and
+            compound tables, see `_write_label_image_tables`). Otherwise (SLP 3.0)
+            the `/label_images` group, with the pixels in `/label_images/data`.
+        compression: `None`, `"gzip"` or `"lzf"` for the row columns. Pixel data
+            is always gzipped.
+        carry: Unknown columns kept from loading, appended to the rows if the
+            label images are the ones loaded, in the same order (see
+            `_with_carried_columns`).
     """
     if not label_images:
         return
@@ -8724,10 +9859,6 @@ def write_label_images(
 
     li_rows = []
     obj_rows = []
-    obj_offset = 0
-    sources = []
-    categories = []
-    obj_names = []
 
     # For blob format fallback
     data_chunks: list[bytes] = []
@@ -8736,13 +9867,20 @@ def write_label_images(
     track_ids = _identity_index(tracks)
     instance_ids = _identity_index(instances) if instances is not None else None
 
+    def object_ids(info: LabelImage.Info) -> tuple[int, int]:
+        instance_idx = info._instance_idx  # Use stored index as default
+        if instance_ids is not None and info.instance is not None:
+            instance_idx = instance_ids.get(id(info.instance), instance_idx)
+        return track_ids.get(id(info.track), -1), instance_idx
+
+    data_path = _label_image_data_path(legacy_format)
     with h5py.File(labels_path, "a") as f:
         # Create pixel data dataset
         if use_chunked:
             frame_h, frame_w = shapes.pop()
             n_frames = len(label_images)
             pixel_dset = f.create_dataset(
-                "label_image_data",
+                data_path,
                 shape=(n_frames, frame_h, frame_w),
                 chunks=(1, frame_h, frame_w),
                 dtype=np.int32,
@@ -8751,133 +9889,49 @@ def write_label_images(
             )
 
         for i, li in enumerate(label_images):
-            video_idx, frame_idx = contexts[i]
-
             if use_chunked:
                 # Write pixel data directly via write_direct_chunk (43x faster)
                 compressed = zlib.compress(li.data.astype(np.int32).tobytes(), level=1)
                 pixel_dset.id.write_direct_chunk((i, 0, 0), compressed)
-                data_start = 0
-                data_end = 0
+                data_range = (0, 0)
             else:
                 # Blob format: accumulate compressed chunks
                 compressed = zlib.compress(li.data.astype(np.int32).tobytes())
-                data_start = data_offset
-                data_end = data_offset + len(compressed)
+                data_range = (data_offset, data_offset + len(compressed))
                 data_chunks.append(compressed)
-                data_offset = data_end
+                data_offset += len(compressed)
 
-            # Build object rows for this frame
-            n_objects = len(li.objects)
-            objects_start = obj_offset
-
-            for label_id in sorted(li.objects):
-                info = li.objects[label_id]
-
-                track_idx = track_ids.get(id(info.track), -1)
-
-                instance_idx = info._instance_idx  # Use stored index as default
-                if instance_ids is not None and info.instance is not None:
-                    instance_idx = instance_ids.get(id(info.instance), instance_idx)
-
-                obj_score = info.score if info.score is not None else float("nan")
-                obj_tracking_score = (
-                    info.tracking_score
-                    if info.tracking_score is not None
-                    else float("nan")
-                )
-                obj_rows.append(
-                    (label_id, track_idx, instance_idx, obj_score, obj_tracking_score)
-                )
-                categories.append(info.category)
-                obj_names.append(info.name)
-
-            obj_offset += n_objects
-
-            is_predicted = isinstance(li, PredictedLabelImage)
-            score = li.score if is_predicted else float("nan")
-
-            li_rows.append(
-                (
-                    video_idx,
-                    frame_idx,
-                    li.height,
-                    li.width,
-                    n_objects,
-                    objects_start,
-                    data_start,
-                    data_end,
-                    int(is_predicted),
-                    score,
-                    li.scale[0],
-                    li.scale[1],
-                    li.offset[0],
-                    li.offset[1],
-                )
+            row, objects = _label_image_rows(
+                li, contexts[i], len(obj_rows), data_range, object_ids
             )
-
-            sources.append(li.source)
+            li_rows.append(row)
+            obj_rows.extend(objects)
 
         # Write blob data if using legacy format
         if not use_chunked:
             data_flat = np.frombuffer(b"".join(data_chunks), dtype=np.uint8)
             f.create_dataset(
-                "label_image_data",
+                data_path,
                 data=data_flat,
                 dtype=np.uint8,
                 **({"chunks": True} if len(data_flat) > 0 else {}),
             )
 
-        # Write metadata datasets
-        li_array = np.array(li_rows, dtype=LI_DTYPE)
-        obj_array = (
-            np.array(obj_rows, dtype=OBJ_DTYPE)
-            if obj_rows
-            else np.array([], dtype=OBJ_DTYPE)
+        # Store score maps for PredictedLabelImage if any exist
+        sm_rows, sm_chunks = _score_map_rows(
+            [li if isinstance(li, PredictedLabelImage) else None for li in label_images]
         )
-        f.create_dataset("label_images", data=li_array, dtype=LI_DTYPE)
-        f.create_dataset("label_image_objects", data=obj_array, dtype=OBJ_DTYPE)
-        str_dt = h5py.special_dtype(vlen=str)
-        f.create_dataset("label_image_sources", data=sources, dtype=str_dt)
-        f.create_dataset("label_image_obj_categories", data=categories, dtype=str_dt)
-        f.create_dataset("label_image_obj_names", data=obj_names, dtype=str_dt)
-
-    # Store score maps for PredictedLabelImage if any exist
-    li_sm_indices = []
-    li_sm_chunks = []
-    li_sm_offset = 0
-    for i, li in enumerate(label_images):
-        if isinstance(li, PredictedLabelImage) and li.score_map is not None:
-            compressed = zlib.compress(li.score_map.astype(np.float32).tobytes())
-            sm_bytes = np.frombuffer(compressed, dtype=np.uint8)
-            sm_h, sm_w = li.score_map.shape[:2]
-            li_sm_indices.append(
-                (
-                    i,
-                    li_sm_offset,
-                    li_sm_offset + len(sm_bytes),
-                    sm_h,
-                    sm_w,
-                    li.score_map_scale[0],
-                    li.score_map_scale[1],
-                    li.score_map_offset[0],
-                    li.score_map_offset[1],
-                )
-            )
-            li_sm_chunks.append(sm_bytes)
-            li_sm_offset += len(sm_bytes)
-
-    if li_sm_indices:
-        sm_index_array = np.array(li_sm_indices, dtype=LI_SM_INDEX_DTYPE)
-        sm_flat = np.concatenate(li_sm_chunks)
-        with h5py.File(labels_path, "a") as f:
-            f.create_dataset("label_image_score_map_index", data=sm_index_array)
-            f.create_dataset(
-                "label_image_score_maps",
-                data=sm_flat,
-                dtype=np.uint8,
-                **({"chunks": True} if len(sm_flat) > 0 else {}),
-            )
+        _write_label_image_tables(
+            f,
+            li_rows,
+            obj_rows,
+            sm_rows,
+            np.concatenate(sm_chunks) if sm_chunks else np.empty(0, np.uint8),
+            legacy_format=legacy_format,
+            compression=compression,
+            carry=carry,
+            label_images=label_images,
+        )
 
 
 def _write_metadata_standalone(
@@ -8960,7 +10014,9 @@ class LabelImageWriter:
     Writes label images one at a time (or in batches) to an HDF5/SLP file
     without holding all pixel data in memory simultaneously. Uses the chunked
     ``(T, H, W)`` int32 format with ``write_direct_chunk`` for maximum
-    throughput.
+    throughput. The file is SLP 3.0: the pixels go to ``/label_images/data`` and
+    the tables are written as columns by ``finalize()``. The file holds no
+    instances, so label image objects link to none.
 
     The HDF5 file and pixel dataset are created lazily on the first ``add()``
     call, since the frame dimensions ``(H, W)`` are needed to define the
@@ -9016,13 +10072,10 @@ class LabelImageWriter:
         self._capacity: int = initial_capacity
         self._count: int = 0
 
-        # Accumulated metadata (kept in memory, ~80 bytes/frame + 16 bytes/obj)
+        # Accumulated raw table rows (kept in memory, ~100 bytes/frame + ~50
+        # bytes/object), written as SLP 3.0 columns by `finalize`
         self._li_rows: list[tuple] = []
         self._obj_rows: list[tuple] = []
-        self._obj_offset: int = 0
-        self._sources: list[str] = []
-        self._categories: list[str] = []
-        self._obj_names: list[str] = []
 
         # Score map data (blob format, accumulated in memory)
         self._sm_indices: list[tuple] = []
@@ -9046,7 +10099,7 @@ class LabelImageWriter:
 
         self._file = h5py.File(self.path, "w")
         self._pixel_dset = self._file.create_dataset(
-            "label_image_data",
+            _label_image_data_path(legacy_format=False),
             shape=(self._capacity, height, width),
             maxshape=(None, height, width),
             chunks=(1, height, width),
@@ -9108,60 +10161,34 @@ class LabelImageWriter:
         compressed = zlib.compress(label_image.data.astype(np.int32).tobytes(), level=1)
         self._pixel_dset.id.write_direct_chunk((idx, 0, 0), compressed)
 
-        # Use provided routing context (video_idx, frame_idx are parameters)
-
-        # Build object rows (auto-collect new tracks)
-        n_objects = len(label_image.objects)
-        objects_start = self._obj_offset
+        # Build the rows (auto-collect new tracks)
         _track_set = set(self.tracks)
 
-        for label_id in sorted(label_image.objects):
-            info = label_image.objects[label_id]
+        def object_ids(info: LabelImage.Info) -> tuple[int, int]:
             if info.track is not None and info.track not in _track_set:
                 self.tracks.append(info.track)
                 _track_set.add(info.track)
             track_idx = (
                 self.tracks.index(info.track) if info.track in self.tracks else -1
             )
-            instance_idx = info._instance_idx
-            obj_score = info.score if info.score is not None else float("nan")
-            obj_tracking_score = (
-                info.tracking_score if info.tracking_score is not None else float("nan")
-            )
-            self._obj_rows.append(
-                (label_id, track_idx, instance_idx, obj_score, obj_tracking_score)
-            )
-            self._categories.append(info.category)
-            self._obj_names.append(info.name)
+            # The file holds no instances, so objects link to none.
+            return track_idx, -1
 
-        self._obj_offset += n_objects
-
-        is_predicted = isinstance(label_image, PredictedLabelImage)
-        score = label_image.score if is_predicted else float("nan")
-
-        self._li_rows.append(
-            (
-                video_idx,
-                frame_idx,
-                h,
-                w,
-                n_objects,
-                objects_start,
-                0,  # data_start (unused for chunked)
-                0,  # data_end (unused for chunked)
-                int(is_predicted),
-                score,
-                label_image.scale[0],
-                label_image.scale[1],
-                label_image.offset[0],
-                label_image.offset[1],
-            )
+        row, objects = _label_image_rows(
+            label_image,
+            (video_idx, frame_idx),
+            len(self._obj_rows),
+            (0, 0),  # data range (unused for chunked)
+            object_ids,
         )
-
-        self._sources.append(label_image.source)
+        self._li_rows.append(row)
+        self._obj_rows.extend(objects)
 
         # Score map handling for PredictedLabelImage
-        if is_predicted and label_image.score_map is not None:
+        if (
+            isinstance(label_image, PredictedLabelImage)
+            and label_image.score_map is not None
+        ):
             sm = label_image.score_map
             compressed_sm = zlib.compress(sm.astype(np.float32).tobytes())
             sm_bytes = np.frombuffer(compressed_sm, dtype=np.uint8)
@@ -9233,35 +10260,17 @@ class LabelImageWriter:
         # Trim pixel dataset to actual count
         self._pixel_dset.resize(self._count, axis=0)
 
-        # Write metadata datasets
-        li_array = np.array(self._li_rows, dtype=LI_DTYPE)
-        obj_array = (
-            np.array(self._obj_rows, dtype=OBJ_DTYPE)
-            if self._obj_rows
-            else np.array([], dtype=OBJ_DTYPE)
-        )
-
-        str_dt = h5py.special_dtype(vlen=str)
+        # Write the label image tables (SLP 3.0 columns) next to the pixel data
         f = self._file
-        f.create_dataset("label_images", data=li_array, dtype=LI_DTYPE)
-        f.create_dataset("label_image_objects", data=obj_array, dtype=OBJ_DTYPE)
-        f.create_dataset("label_image_sources", data=self._sources, dtype=str_dt)
-        f.create_dataset(
-            "label_image_obj_categories", data=self._categories, dtype=str_dt
+        _write_label_image_tables(
+            f,
+            self._li_rows,
+            self._obj_rows,
+            self._sm_indices,
+            np.concatenate(self._sm_chunks)
+            if self._sm_chunks
+            else np.empty(0, np.uint8),
         )
-        f.create_dataset("label_image_obj_names", data=self._obj_names, dtype=str_dt)
-
-        # Write score maps if any
-        if self._sm_indices:
-            sm_index_array = np.array(self._sm_indices, dtype=LI_SM_INDEX_DTYPE)
-            sm_flat = np.concatenate(self._sm_chunks)
-            f.create_dataset("label_image_score_map_index", data=sm_index_array)
-            f.create_dataset(
-                "label_image_score_maps",
-                data=sm_flat,
-                dtype=np.uint8,
-                **({"chunks": True} if len(sm_flat) > 0 else {}),
-            )
 
         # Close HDF5 file before writing video/track/metadata
         f.close()
@@ -9321,7 +10330,9 @@ def merge_label_images(
 
     Copies compressed chunks directly (no decompression) via
     ``read_direct_chunk`` -> ``write_direct_chunk`` when possible, falling
-    back to decompress + recompress for legacy blob-format sources.
+    back to decompress + recompress for legacy blob-format sources. Sources may
+    use any SLP layout and are checked as reading them would; the merged file is
+    SLP 3.0. It holds no instances, so label image objects link to none.
 
     Args:
         source_paths: List of paths to source SLP files containing label
@@ -9337,7 +10348,8 @@ def merge_label_images(
         ValueError: If source files have label images with different
             ``(height, width)`` dimensions, or if no source files are
             provided, or if a source contains no label images, or if a
-            source's format is newer than this sleap-io can read.
+            source's format is newer than this sleap-io can read, or if an SLP
+            3.0 source's label image tables are inconsistent.
     """
     if not source_paths:
         raise ValueError("At least one source path is required.")
@@ -9347,16 +10359,11 @@ def merge_label_images(
 
     # --- Phase 1: Open all sources, read index tables, validate dimensions ---
     source_files: list[h5py.File] = []
-    source_index_tables: list[np.ndarray] = []
-    source_pixel_datasets: list[h5py.Dataset] = []
-    source_obj_tables: list[np.ndarray] = []
-    source_categories: list[list[str]] = []
-    source_names: list[list[str]] = []
-    source_sources: list[list[str]] = []
+    source_tables: list[_Table] = []
+    source_obj_rows: list[np.ndarray] = []
+    source_sm_tables: list[tuple[_Table | None, np.ndarray]] = []
     source_videos: list[list[Video]] = []
     source_tracks: list[list[Track]] = []
-    source_sm_indices: list[np.ndarray | None] = []
-    source_sm_data: list[h5py.Dataset | None] = []
 
     all_shapes: set[tuple[int, int]] = set()
 
@@ -9366,68 +10373,47 @@ def merge_label_images(
             source_files.append(f)
             _check_format_id(src_path, f)
 
-            # Read index table
-            if "label_images" not in f or "label_image_data" not in f:
+            # Read the index table (any layout) and its pixel data
+            table = _read_table(f, "label_images")
+            if table is None or table.buffer is None or len(table.rows) == 0:
                 raise ValueError(f"Source file has no label images: {src_path}")
-
-            li_data = f["label_images"][:]
-            if len(li_data) == 0:
-                raise ValueError(f"Source file has no label images: {src_path}")
-            source_index_tables.append(li_data)
-            source_pixel_datasets.append(f["label_image_data"])
+            source_tables.append(table)
 
             # Collect frame dimensions
-            for row in li_data:
-                all_shapes.add((int(row["height"]), int(row["width"])))
+            all_shapes.update(
+                zip(table.rows["height"].tolist(), table.rows["width"].tolist())
+            )
 
             # Read objects table
-            if "label_image_objects" in f:
-                source_obj_tables.append(f["label_image_objects"][:])
-            else:
-                obj_dtype = np.dtype(
-                    [("label_id", "i4"), ("track", "i4"), ("instance", "i4")]
-                )
-                source_obj_tables.append(np.array([], dtype=obj_dtype))
-
-            # Read string metadata
-            if "label_image_obj_categories" in f:
-                cats = [
-                    s.decode() if isinstance(s, bytes) else s
-                    for s in f["label_image_obj_categories"][:]
-                ]
-            else:
-                cats = []
-            source_categories.append(cats)
-
-            if "label_image_obj_names" in f:
-                nms = [
-                    s.decode() if isinstance(s, bytes) else s
-                    for s in f["label_image_obj_names"][:]
-                ]
-            else:
-                nms = []
-            source_names.append(nms)
-
-            if "label_image_sources" in f:
-                srcs = [
-                    s.decode() if isinstance(s, bytes) else s
-                    for s in f["label_image_sources"][:]
-                ]
-            else:
-                srcs = []
-            source_sources.append(srcs)
+            objects = _read_table(f, "label_images/objects")
+            obj_rows = (
+                objects.rows
+                if objects is not None
+                else np.empty(0, dtype=_TABLE_SPECS["label_images/objects"].raw)
+            )
+            source_obj_rows.append(obj_rows)
 
             # Read videos and tracks from source
             source_videos.append(read_videos(src_path, open_backend=False))
             source_tracks.append(read_tracks(src_path))
 
+            # Check the source's tables as reading it would
+            problems = _label_image_problems(
+                table.rows,
+                obj_rows,
+                table.buffer,
+                n_videos=len(source_videos[-1]),
+                n_tracks=len(source_tracks[-1]),
+                n_instances=None,
+            )
+            _report_table_problems(src_path, problems, strict=not table.is_legacy)
+
             # Score map data
-            if "label_image_score_map_index" in f:
-                source_sm_indices.append(f["label_image_score_map_index"][:])
-                source_sm_data.append(f["label_image_score_maps"])
-            else:
-                source_sm_indices.append(None)
-                source_sm_data.append(None)
+            source_sm_tables.append(
+                _read_score_map_index(
+                    src_path, f, "label_images/score_maps", len(table.rows)
+                )
+            )
 
         # Validate uniform dimensions
         if len(all_shapes) > 1:
@@ -9464,21 +10450,17 @@ def merge_label_images(
                     merged_tracks.append(t)
 
         # --- Phase 3: Create destination and copy data ---
-        total_frames = sum(len(t) for t in source_index_tables)
+        total_frames = sum(len(t.rows) for t in source_tables)
 
         dest_li_rows: list[tuple] = []
         dest_obj_rows: list[tuple] = []
-        dest_obj_offset = 0
-        dest_sources: list[str] = []
-        dest_categories: list[str] = []
-        dest_obj_names: list[str] = []
-        dest_sm_indices: list[tuple] = []
+        dest_sm_rows: list[tuple] = []
         dest_sm_chunks: list[np.ndarray] = []
         dest_sm_offset = 0
 
         with h5py.File(dest_path, "w") as dest_f:
             dest_pixel_dset = dest_f.create_dataset(
-                "label_image_data",
+                _label_image_data_path(legacy_format=False),
                 shape=(total_frames, frame_h, frame_w),
                 chunks=(1, frame_h, frame_w),
                 dtype=np.int32,
@@ -9488,13 +10470,10 @@ def merge_label_images(
 
             dest_frame_idx = 0
 
-            for src_idx, (li_table, pixel_ds, obj_table) in enumerate(
-                zip(
-                    source_index_tables,
-                    source_pixel_datasets,
-                    source_obj_tables,
-                )
+            for src_idx, (table, obj_rows, (sm_table, sm_data)) in enumerate(
+                zip(source_tables, source_obj_rows, source_sm_tables)
             ):
+                pixel_ds = table.buffer
                 is_chunked = pixel_ds.ndim == 3
                 src_videos = source_videos[src_idx]
                 src_tracks = source_tracks[src_idx]
@@ -9514,7 +10493,25 @@ def merge_label_images(
                 for i, t in enumerate(src_tracks):
                     track_remap[i] = seen_track_names[t.name]
 
-                for local_i, row in enumerate(li_table):
+                # Score maps of this source, by label image row
+                sm_rows = (
+                    sm_table.rows
+                    if sm_table is not None
+                    else np.empty(0, _TABLE_SPECS["label_images/score_maps"].raw)
+                )
+                sm_by_row = {
+                    rec["li_idx"]: rec
+                    for rec in (
+                        dict(zip(sm_rows.dtype.names, r)) for r in sm_rows.tolist()
+                    )
+                }
+
+                obj_records = [
+                    dict(zip(obj_rows.dtype.names, r)) for r in obj_rows.tolist()
+                ]
+                li_rows = table.rows
+                for local_i, row in enumerate(li_rows.tolist()):
+                    record = dict(zip(li_rows.dtype.names, row))
                     # Copy pixel data
                     if is_chunked:
                         # Raw chunk copy: read_direct_chunk -> write_direct_chunk
@@ -9526,204 +10523,87 @@ def merge_label_images(
                         )
                     else:
                         # Blob format: decompress then recompress for chunked
-                        data_start = int(row["data_start"])
-                        data_end = int(row["data_end"])
-                        h = int(row["height"])
-                        w = int(row["width"])
-                        raw = zlib.decompress(pixel_ds[data_start:data_end].tobytes())
-                        arr = np.frombuffer(raw, dtype=np.int32).reshape(h, w)
+                        raw = zlib.decompress(
+                            pixel_ds[
+                                record["data_start"] : record["data_end"]
+                            ].tobytes()
+                        )
+                        arr = np.frombuffer(raw, dtype=np.int32).reshape(
+                            record["height"], record["width"]
+                        )
                         compressed = zlib.compress(arr.tobytes(), level=1)
                         dest_pixel_dset.id.write_direct_chunk(
                             (dest_frame_idx, 0, 0), compressed
                         )
 
-                    # Remap video index
-                    orig_video_idx = int(row["video"])
-                    new_video_idx = video_remap.get(orig_video_idx, -1)
-
                     # Remap object rows
-                    n_objects = int(row["n_objects"])
-                    objects_start = int(row["objects_start"])
-
-                    for j in range(n_objects):
-                        obj_idx = objects_start + j
-                        if obj_idx < len(obj_table):
-                            obj_row = obj_table[obj_idx]
-                            label_id = int(obj_row["label_id"])
-
-                            orig_track_idx = int(obj_row["track"])
-                            new_track_idx = track_remap.get(orig_track_idx, -1)
-
-                            instance_idx = int(obj_row["instance"])
-                            obj_score = (
-                                float(obj_row["score"])
-                                if "score" in obj_row.dtype.names
-                                else float("nan")
+                    objects_start = len(dest_obj_rows)
+                    start = record["objects_start"]
+                    for obj in obj_records[start : start + record["n_objects"]]:
+                        dest_obj_rows.append(
+                            (
+                                obj["label_id"],
+                                track_remap.get(obj["track"], -1),
+                                -1,  # The merged file holds no instances.
+                                obj["score"],
+                                obj["tracking_score"],
+                                obj["name"],
+                                obj["category"],
                             )
-                            obj_tracking_score = (
-                                float(obj_row["tracking_score"])
-                                if "tracking_score" in obj_row.dtype.names
-                                else float("nan")
-                            )
-
-                            dest_obj_rows.append(
-                                (
-                                    label_id,
-                                    new_track_idx,
-                                    instance_idx,
-                                    obj_score,
-                                    obj_tracking_score,
-                                )
-                            )
-
-                            # Copy string metadata
-                            src_cats = source_categories[src_idx]
-                            dest_categories.append(
-                                src_cats[obj_idx] if obj_idx < len(src_cats) else ""
-                            )
-                            src_nms = source_names[src_idx]
-                            dest_obj_names.append(
-                                src_nms[obj_idx] if obj_idx < len(src_nms) else ""
-                            )
-
-                    # Read spatial metadata with defaults
-                    scale_x = (
-                        float(row["scale_x"]) if "scale_x" in row.dtype.names else 1.0
-                    )
-                    scale_y = (
-                        float(row["scale_y"]) if "scale_y" in row.dtype.names else 1.0
-                    )
-                    offset_x = (
-                        float(row["offset_x"]) if "offset_x" in row.dtype.names else 0.0
-                    )
-                    offset_y = (
-                        float(row["offset_y"]) if "offset_y" in row.dtype.names else 0.0
-                    )
-
-                    is_predicted = (
-                        bool(row["is_predicted"])
-                        if "is_predicted" in row.dtype.names
-                        else False
-                    )
-                    score = (
-                        float(row["score"])
-                        if "score" in row.dtype.names
-                        else float("nan")
-                    )
+                        )
 
                     dest_li_rows.append(
                         (
-                            new_video_idx,
-                            int(row["frame_idx"]),
-                            int(row["height"]),
-                            int(row["width"]),
-                            n_objects,
-                            dest_obj_offset,
+                            video_remap.get(record["video"], -1),
+                            record["frame_idx"],
+                            record["height"],
+                            record["width"],
+                            len(dest_obj_rows) - objects_start,
+                            objects_start,
                             0,  # data_start (unused for chunked)
                             0,  # data_end (unused for chunked)
-                            int(is_predicted),
-                            score,
-                            scale_x,
-                            scale_y,
-                            offset_x,
-                            offset_y,
+                            record["is_predicted"],
+                            record["score"],
+                            record["scale_x"],
+                            record["scale_y"],
+                            record["offset_x"],
+                            record["offset_y"],
+                            record["source"],
                         )
                     )
 
-                    dest_obj_offset += n_objects
-
-                    # Copy source string
-                    src_srcs = source_sources[src_idx]
-                    dest_sources.append(
-                        src_srcs[local_i] if local_i < len(src_srcs) else ""
-                    )
-
-                    # Copy score maps if present
-                    sm_index = source_sm_indices[src_idx]
-                    sm_data = source_sm_data[src_idx]
-                    if sm_index is not None and sm_data is not None:
-                        for sm_row in sm_index:
-                            if int(sm_row["li_idx"]) == local_i:
-                                sm_start = int(sm_row["data_start"])
-                                sm_end = int(sm_row["data_end"])
-                                sm_bytes = sm_data[sm_start:sm_end]
-                                sm_h = int(sm_row["height"])
-                                sm_w = int(sm_row["width"])
-                                sm_scale_x = (
-                                    float(sm_row["scale_x"])
-                                    if "scale_x" in sm_row.dtype.names
-                                    else 1.0
-                                )
-                                sm_scale_y = (
-                                    float(sm_row["scale_y"])
-                                    if "scale_y" in sm_row.dtype.names
-                                    else 1.0
-                                )
-                                sm_offset_x = (
-                                    float(sm_row["offset_x"])
-                                    if "offset_x" in sm_row.dtype.names
-                                    else 0.0
-                                )
-                                sm_offset_y = (
-                                    float(sm_row["offset_y"])
-                                    if "offset_y" in sm_row.dtype.names
-                                    else 0.0
-                                )
-                                dest_sm_indices.append(
-                                    (
-                                        dest_frame_idx,
-                                        dest_sm_offset,
-                                        dest_sm_offset + len(sm_bytes),
-                                        sm_h,
-                                        sm_w,
-                                        sm_scale_x,
-                                        sm_scale_y,
-                                        sm_offset_x,
-                                        sm_offset_y,
-                                    )
-                                )
-                                sm_np = np.array(sm_bytes, dtype=np.uint8)
-                                dest_sm_chunks.append(sm_np)
-                                dest_sm_offset += len(sm_bytes)
-                                break
+                    # Copy score maps if present (still compressed)
+                    sm = sm_by_row.get(local_i)
+                    if sm is not None:
+                        sm_bytes = sm_data[sm["data_start"] : sm["data_end"]]
+                        dest_sm_rows.append(
+                            (
+                                dest_frame_idx,
+                                dest_sm_offset,
+                                dest_sm_offset + len(sm_bytes),
+                                sm["height"],
+                                sm["width"],
+                                sm["scale_x"],
+                                sm["scale_y"],
+                                sm["offset_x"],
+                                sm["offset_y"],
+                            )
+                        )
+                        dest_sm_chunks.append(sm_bytes)
+                        dest_sm_offset += len(sm_bytes)
 
                     dest_frame_idx += 1
 
-            # Write metadata datasets
-            li_array = np.array(dest_li_rows, dtype=LI_DTYPE)
-            obj_array = (
-                np.array(dest_obj_rows, dtype=OBJ_DTYPE)
-                if dest_obj_rows
-                else np.array([], dtype=OBJ_DTYPE)
+            # Write the label image tables (SLP 3.0 columns)
+            _write_label_image_tables(
+                dest_f,
+                dest_li_rows,
+                dest_obj_rows,
+                dest_sm_rows,
+                np.concatenate(dest_sm_chunks)
+                if dest_sm_chunks
+                else np.empty(0, np.uint8),
             )
-            str_dt = h5py.special_dtype(vlen=str)
-            dest_f.create_dataset("label_images", data=li_array, dtype=LI_DTYPE)
-            dest_f.create_dataset(
-                "label_image_objects", data=obj_array, dtype=OBJ_DTYPE
-            )
-            dest_f.create_dataset(
-                "label_image_sources", data=dest_sources, dtype=str_dt
-            )
-            dest_f.create_dataset(
-                "label_image_obj_categories", data=dest_categories, dtype=str_dt
-            )
-            dest_f.create_dataset(
-                "label_image_obj_names", data=dest_obj_names, dtype=str_dt
-            )
-
-            # Write score maps if any
-            if dest_sm_indices:
-                sm_index_array = np.array(dest_sm_indices, dtype=LI_SM_INDEX_DTYPE)
-                sm_flat = np.concatenate(dest_sm_chunks)
-                dest_f.create_dataset(
-                    "label_image_score_map_index", data=sm_index_array
-                )
-                dest_f.create_dataset(
-                    "label_image_score_maps",
-                    data=sm_flat,
-                    dtype=np.uint8,
-                    **({"chunks": True} if len(sm_flat) > 0 else {}),
-                )
 
         # Write video, track, and metadata info
         write_videos(dest_path, merged_videos)
@@ -9872,28 +10752,29 @@ def _read_labels_from_open_file(
                 metadata=frame_records[row] if frame_records is not None else None,
             )
         )
-    carried_columns = _column_carry(
-        {
-            "points": (
-                tables.points,
-                RAW_POINT_DTYPE,
-                lambda: _point_row_owners(point_owners, Instance, len(tables.points)),
+    # Every table's raw records, to carry unknown columns through a later save. The
+    # frames owning /frames rows are kept before annotation-only frames are added.
+    pose_frames = list(labeled_frames)
+    carry_tables = {
+        "points": (
+            tables.points,
+            RAW_POINT_DTYPE,
+            lambda: _point_row_owners(point_owners, Instance, len(tables.points)),
+        ),
+        "pred_points": (
+            tables.pred_points,
+            RAW_PRED_POINT_DTYPE,
+            lambda: _point_row_owners(
+                point_owners, PredictedInstance, len(tables.pred_points)
             ),
-            "pred_points": (
-                tables.pred_points,
-                RAW_PRED_POINT_DTYPE,
-                lambda: _point_row_owners(
-                    point_owners, PredictedInstance, len(tables.pred_points)
-                ),
-            ),
-            "instances": (
-                tables.instances,
-                RAW_INSTANCE_DTYPE,
-                lambda: None if any(i is None for i in instances) else instances,
-            ),
-            "frames": (tables.frames, RAW_FRAME_DTYPE, lambda: list(labeled_frames)),
-        }
-    )
+        ),
+        "instances": (
+            tables.instances,
+            RAW_INSTANCE_DTYPE,
+            lambda: None if any(i is None for i in instances) else instances,
+        ),
+        "frames": (tables.frames, RAW_FRAME_DTYPE, lambda: pose_frames),
+    }
 
     identities = read_identities(labels_path, _hdf5_file=f)
     # Class/category catalog (SLP 2.7+). Self-contained mirror of /identity; a
@@ -9909,7 +10790,7 @@ def _read_labels_from_open_file(
     # (older files) these are empty mappings and a no-op. The global instances list
     # is ordered by instance_id, so it indexes directly; mask owners are attached
     # after read_masks (mask-list index order).
-    identity_links = read_identity_links(labels_path, _hdf5_file=f)
+    identity_links = read_identity_links(labels_path, _hdf5_file=f, _carry=carry_tables)
     _remap_instance_owners(tables.instance_id_map, [identity_links], [])
     instance_identity_map = identity_links.get(OWNER_INSTANCE, {})
     mask_identity_map = identity_links.get(OWNER_MASK, {})
@@ -9927,7 +10808,7 @@ def _read_labels_from_open_file(
 
     # Attach category links (SLP format 2.7+). Self-contained mirror of the identity
     # links above; absent /categories group -> empty mappings and a no-op.
-    category_links = read_category_links(labels_path, _hdf5_file=f)
+    category_links = read_category_links(labels_path, _hdf5_file=f, _carry=carry_tables)
     _remap_instance_owners(tables.instance_id_map, [category_links], [])
     instance_category_map = category_links.get(OWNER_INSTANCE, {})
     mask_category_map = category_links.get(OWNER_MASK, {})
@@ -9971,9 +10852,16 @@ def _read_labels_from_open_file(
     roi_category_embedding_map = category_embeddings_by_owner.get(OWNER_ROI, {})
 
     sessions = read_sessions(
-        labels_path, videos, labeled_frames, identities=identities, _hdf5_file=f
+        labels_path,
+        videos,
+        labeled_frames,
+        identities=identities,
+        _hdf5_file=f,
+        _carry=carry_tables,
     )
-    roi_tuples = read_rois(labels_path, videos, tracks, instances, _hdf5_file=f)
+    roi_tuples = read_rois(
+        labels_path, videos, tracks, instances, _hdf5_file=f, _carry=carry_tables
+    )
     # Attach per-ROI identity links + embeddings (global ROI-list index: frame ROIs
     # then static ROIs, the same order write_rois emits).
     _attach_identity_and_embeddings(
@@ -9988,7 +10876,9 @@ def _read_labels_from_open_file(
         roi_category_map,
         roi_category_embedding_map,
     )
-    mask_tuples = read_masks(labels_path, videos, tracks, instances, _hdf5_file=f)
+    mask_tuples = read_masks(
+        labels_path, videos, tracks, instances, _hdf5_file=f, _carry=carry_tables
+    )
     # Attach per-mask identity links + embeddings (SLP format 2.5+/2.6+). Masks
     # are returned in global mask-list index order, the same id space written by
     # write_masks / write_identity_links / write_embeddings.
@@ -10043,6 +10933,7 @@ def _read_labels_from_open_file(
         _url_headers=_url_headers,
         _url_stream_mode=_url_stream_mode,
         _url_bytes=_url_bytes,
+        _carry=carry_tables,
     )
     _remap_instance_owners(
         tables.instance_id_map,
@@ -10142,7 +11033,7 @@ def _read_labels_from_open_file(
     # Store the HDF5 file handle for lazy label image data (keeps it alive)
     if _li_file is not None:
         labels._label_image_file = _li_file
-    labels._carried_columns = carried_columns
+    labels._carried_columns = _column_carry(carry_tables)
 
     return labels
 
@@ -10400,6 +11291,9 @@ def _write_labels_lazy(
 
     lazy_store = labels._lazy_store
 
+    lazy_bboxes = [
+        b for ann_list in lazy_store._bbox_by_frame.values() for b in ann_list
+    ] + list(lazy_store._undistributed_bboxes)
     if legacy_format:
         # Check before touching the output file so a refused save leaves it intact.
         n_unlabeled = sum(
@@ -10419,12 +11313,20 @@ def _write_labels_lazy(
         _warn_dropped_columns(
             [n for n, cols in unknown.items() if cols], unknown, "legacy"
         )
-        if lazy_store.instance_metadata or lazy_store.frame_metadata:
+        _warn_dropped_carry(lazy_store.annotation_carry)
+        if (
+            lazy_store.instance_metadata
+            or lazy_store.frame_metadata
+            or any(b.metadata for b in lazy_bboxes)
+        ):
             warnings.warn(
-                "Instance and frame metadata can't be stored in the legacy SLP "
-                "layout and was not saved.",
+                "Instance, frame and bounding box metadata can't be stored in the "
+                "legacy SLP layout and was not saved.",
                 stacklevel=3,
             )
+    else:
+        # Check bounding box metadata kinds before touching the output file.
+        metadata_column_kinds(lazy_bboxes, "bboxes")
 
     # Capture unknown top-level members from the source file before it is
     # truncated, to carry them across the load/save cycle (see write_labels).
@@ -10479,9 +11381,6 @@ def _write_labels_lazy(
     lazy_centroids = [
         c for ann_list in lazy_store._centroid_by_frame.values() for c in ann_list
     ] + list(lazy_store._undistributed_centroids)
-    lazy_bboxes = [
-        b for ann_list in lazy_store._bbox_by_frame.values() for b in ann_list
-    ] + list(lazy_store._undistributed_bboxes)
     lazy_rois = [
         r for ann_list in lazy_store._roi_by_frame.values() for r in ann_list
     ] + list(lazy_store._undistributed_rois)
@@ -10498,7 +11397,14 @@ def _write_labels_lazy(
         _identity_link_rows_for_owner(lazy_bboxes, id_to_idx, OWNER_BBOX)
     )
     identity_rows.extend(_identity_link_rows_for_owner(lazy_rois, id_to_idx, OWNER_ROI))
-    _write_identity_link_rows(labels_path, identity_rows)
+    # Unknown columns of the annotation and link tables, kept from loading.
+    _start_carry(lazy_store.annotation_carry)
+    table_kwargs = dict(
+        legacy_format=legacy_format,
+        compression=compression,
+        carry=lazy_store.annotation_carry,
+    )
+    _write_identity_link_rows(labels_path, identity_rows, **table_kwargs)
     # Class/category catalog + per-detection category links (SLP 2.7+). Self-
     # contained mirror of the identity block above, driven by the store dicts.
     write_categories(labels_path, lazy_store.categories)
@@ -10516,7 +11422,7 @@ def _write_labels_lazy(
     category_rows.extend(
         _category_link_rows_for_owner(lazy_rois, cat_id_to_idx, OWNER_ROI)
     )
-    _write_category_link_rows(labels_path, category_rows)
+    _write_category_link_rows(labels_path, category_rows, **table_kwargs)
     # Identity links always persist; the appearance vectors are gated by
     # save_embedding_vectors (mirrors the eager path).
     if save_embedding_vectors:
@@ -10575,7 +11481,12 @@ def _write_labels_lazy(
     # frame-group data would be dropped).
     did_passthrough = False
     if _videos_unchanged(labels.videos, lazy_store.session_video_ids):
-        did_passthrough = write_sessions_passthrough(labels_path, lazy_store)
+        did_passthrough = write_sessions_passthrough(
+            labels_path,
+            lazy_store,
+            legacy_format=legacy_format,
+            compression=compression,
+        )
     if not did_passthrough:
         if getattr(lazy_store, "session_data", None) is not None:
             warnings.warn(
@@ -10583,7 +11494,14 @@ def _write_labels_lazy(
                 "(including 3D points) are not preserved on this save. Call "
                 "`labels.materialize()` before saving to retain them."
             )
-        write_sessions(labels_path, labels.sessions, labels.videos, [])
+        write_sessions(
+            labels_path,
+            labels.sessions,
+            labels.videos,
+            [],
+            legacy_format=legacy_format,
+            compression=compression,
+        )
     write_metadata(labels_path, labels, legacy_format=legacy_format)
 
     # Write raw arrays directly from lazy store (fast path). The tables are in the
@@ -10637,12 +11555,29 @@ def _write_labels_lazy(
         lazy_store._undistributed_label_images,
         labels.videos,
     )
-    write_rois(labels_path, all_rois, labels.videos, labels.tracks, contexts=roi_ctxs)
+    write_rois(
+        labels_path,
+        all_rois,
+        labels.videos,
+        labels.tracks,
+        contexts=roi_ctxs,
+        **table_kwargs,
+    )
     write_masks(
-        labels_path, all_masks, labels.videos, labels.tracks, contexts=mask_ctxs
+        labels_path,
+        all_masks,
+        labels.videos,
+        labels.tracks,
+        contexts=mask_ctxs,
+        **table_kwargs,
     )
     write_bboxes(
-        labels_path, all_bboxes, labels.videos, labels.tracks, contexts=bbox_ctxs
+        labels_path,
+        all_bboxes,
+        labels.videos,
+        labels.tracks,
+        contexts=bbox_ctxs,
+        legacy_format=legacy_format,
     )
     write_centroids(
         labels_path,
@@ -10658,7 +11593,10 @@ def _write_labels_lazy(
         labels.videos,
         labels.tracks,
         contexts=li_ctxs,
+        **table_kwargs,
     )
+    if not legacy_format:
+        _warn_unconsumed_carry(lazy_store.annotation_carry)
 
     # Re-emit any unknown members captured from the source file.
     _restore_unknown_hdf5(labels_path, unknown_stash)
@@ -10747,30 +11685,34 @@ def write_labels(
             saves them as hidden points (labeled, not visible, no location) and
             warns. Ignored for the default (3.0) layout, which stores them.
         legacy_format: If `True`, write the SLP 2.x layout (compound `/points`,
-            `/pred_points`, `/instances` and `/frames` datasets, `/negative_frames`
-            and the 2.x `format_id`) that older sleap-io and SLEAP releases can
-            read. Default `False` writes SLP format 3.0.
-        compression: Compression for the pose tables (`/points`, `/pred_points`,
-            `/instances`, `/frames` and their metadata columns): `None` (the
-            default) for contiguous, uncompressed data
-            that reads fastest, or `"gzip"` or `"lzf"` (chunked, with the shuffle
+            `/pred_points`, `/instances` and `/frames` datasets, `/negative_frames`,
+            compound ROI, mask, label image, link and session tables with their
+            separate string datasets, and the 2.x `format_id`) that older sleap-io
+            and SLEAP releases can read. Default `False` writes SLP format 3.0,
+            where every table is a group of columns.
+        compression: Compression for the table columns (the pose tables and their
+            metadata columns, and the ROI, mask, label image, link and session
+            tables): `None` (the default) for contiguous, uncompressed data that
+            reads fastest, or `"gzip"` or `"lzf"` (chunked, with the shuffle
             filter) for smaller files. Datasets that are compressed by default
-            (segmentation, label image and 3D point data) stay compressed either
-            way.
+            (geometry, segmentation, label image and 3D point data) stay
+            compressed either way.
 
     Notes:
-        Instance and frame `metadata` is stored as columns of `/instances` and
-        `/frames` (lazy labels write the columns they were loaded with). Bounding
-        box metadata can't be stored yet, and `legacy_format=True` stores no
-        metadata; either is dropped with a warning. Metadata kinds are checked
-        first (`Labels.check_metadata`) for eager labels, so a key that mixes kinds
+        Instance, frame and bounding box `metadata` is stored as columns of
+        `/instances`, `/frames` and `/bboxes` (lazy labels write the instance and
+        frame columns they were loaded with). `legacy_format=True` stores no
+        metadata; it is dropped with a warning. Metadata kinds are checked first
+        (`Labels.check_metadata`) for eager labels, so a key that mixes kinds
         across records raises a `TypeError` before anything is written.
 
-        Unknown pose table columns read from a file written by a newer sleap-io are
+        Unknown table columns read from a file written by a newer sleap-io are
         carried through the save as long as their table's rows are in their loaded
-        order: always for lazy labels, and for eager labels whose instances (with
-        their points arrays) and frames are the ones loaded. Otherwise they are
-        dropped with a warning.
+        order: always for lazy labels' pose and session tables, and otherwise
+        when the objects owning the rows (instances with their points arrays,
+        frames, ROIs, masks, label images and their objects, frame and instance
+        groups) and the links are the ones loaded, in the same order. Otherwise
+        they are dropped with a warning.
     """
     if unlabeled_as not in _UNLABELED_AS_MODES:
         raise ValueError(
@@ -10900,14 +11842,20 @@ def write_labels(
     # (eager path only).
     labels._collect_identities()
     write_identities(labels_path, labels.identities)
-    write_identity_links(labels_path, labels)
+    # Unknown columns of every table, kept from loading (see `_ColumnCarry`).
+    carry = getattr(labels, "_carried_columns", None)
+    _start_carry(carry)
+    table_kwargs = dict(
+        legacy_format=legacy_format, compression=compression, carry=carry
+    )
+    write_identity_links(labels_path, labels, **table_kwargs)
     # Auto-collect any detection category not yet registered in the catalog
     # (object-identity deduped), mirroring _collect_identities, then persist the
     # /categories catalog + per-detection links (SLP 2.7+). Additive: omitted
     # entirely when there are no categories (files stay byte-identical).
     labels._collect_categories()
     write_categories(labels_path, labels.categories)
-    write_category_links(labels_path, labels)
+    write_category_links(labels_path, labels, **table_kwargs)
     # Frame-spanning events + their catalog (SLP 2.6+). Additive groups; omitted
     # entirely when there are no events / event types (files stay byte-identical).
     write_event_types(labels_path, labels.event_types)
@@ -10932,6 +11880,7 @@ def write_labels(
         labels.videos,
         labels.labeled_frames,
         identities=labels.identities,
+        **table_kwargs,
     )
     write_metadata(labels_path, labels, legacy_format=legacy_format)
     write_lfs(labels_path, labels, legacy_format=legacy_format, compression=compression)
@@ -10982,6 +11931,7 @@ def write_labels(
         labels.tracks,
         all_instances,
         contexts=roi_contexts,
+        **table_kwargs,
     )
     write_masks(
         labels_path,
@@ -10990,6 +11940,7 @@ def write_labels(
         labels.tracks,
         all_instances,
         contexts=mask_contexts,
+        **table_kwargs,
     )
     write_bboxes(
         labels_path,
@@ -10998,6 +11949,7 @@ def write_labels(
         labels.tracks,
         all_instances,
         contexts=bbox_contexts,
+        legacy_format=legacy_format,
     )
     write_centroids(
         labels_path,
@@ -11014,7 +11966,10 @@ def write_labels(
         labels.tracks,
         all_instances,
         contexts=li_contexts,
+        **table_kwargs,
     )
+    if not legacy_format:
+        _warn_unconsumed_carry(carry)
 
     # Re-emit any unknown members captured from the source file.
     _restore_unknown_hdf5(labels_path, unknown_stash)

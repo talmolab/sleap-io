@@ -72,6 +72,9 @@ class LazyDataStore:
         instance_metadata: Metadata columns of `/instances`, by key (see
             `sleap_io.io.slp._read_metadata_columns`).
         frame_metadata: Metadata columns of `/frames`, by key.
+        annotation_carry: Unknown columns of the ROI, mask and label image tables
+            and of the identity and category links, keyed by the annotation objects
+            held here (see `sleap_io.io.slp._ColumnCarry`), or `None`.
         _source_path: Path to source SLP file (for debugging).
     """
 
@@ -150,6 +153,10 @@ class LazyDataStore:
     session_data: "dict | None" = attrs.field(
         default=None, repr=False, alias="session_data"
     )
+    # Unknown columns of the tables read into annotation objects (ROIs, masks,
+    # label images) and of the identity and category links, carried through saves
+    # (see slp._ColumnCarry). The pose tables carry theirs in the raw arrays above.
+    annotation_carry: "_ColumnCarry | None" = attrs.field(default=None, repr=False)
     # Immutable snapshot of the video identity order at load time. The passthrough's
     # sessions_json encodes video indices, so it is only safe to copy verbatim when
     # the current video list matches this order (see slp._videos_unchanged).
@@ -242,6 +249,9 @@ class LazyDataStore:
             source_path=self._source_path,
             instance_metadata=_copy_metadata_columns(self.instance_metadata),
             frame_metadata=_copy_metadata_columns(self.frame_metadata),
+            # Keyed by the original annotation objects, so a save of the copy's
+            # deep-copied annotations warns and drops these columns.
+            annotation_carry=self.annotation_carry,
             centroid_by_frame={
                 k: [deepcopy(c) for c in v] for k, v in self._centroid_by_frame.items()
             },
@@ -495,24 +505,46 @@ class LazyDataStore:
             by_row[start : start + len(lf.instances)] = lf.instances
         return by_row
 
-    def column_carry(self, frames: list["LabeledFrame"]) -> "_ColumnCarry | None":
+    def column_carry(
+        self, frames: list["LabeledFrame"], replaced: dict | None = None
+    ) -> "_ColumnCarry | None":
         """Collect unknown columns to carry through a save of materialized frames.
 
         Args:
             frames: The frames returned by `materialize_all`, one per row of
                 `frames_data`.
+            replaced: Maps the `id` of an annotation held here to the copy that
+                replaces it in the materialized labels (for example a static ROI),
+                so the copy owns its rows.
 
         Returns:
-            A `_ColumnCarry` for the frames and their instances, or `None` if the
-            pose tables have no unknown columns.
+            A `_ColumnCarry` for the frames and their instances, and for the
+            annotations and links (see `annotation_carry`), or `None` if no table
+            has unknown columns.
         """
+        replaced = replaced or {}
+        annotation_tables = {
+            name: (
+                None
+                if owners is None
+                else tuple(
+                    tuple(replaced.get(id(obj), obj) for obj in key) for key in owners
+                ),
+                columns,
+            )
+            for name, (owners, columns) in (
+                self.annotation_carry.tables
+                if self.annotation_carry is not None
+                else {}
+            ).items()
+        }
         if (
             self.points_data.dtype.names == RAW_POINT_DTYPE.names
             and self.pred_points_data.dtype.names == RAW_PRED_POINT_DTYPE.names
             and self.instances_data.dtype.names == RAW_INSTANCE_DTYPE.names
             and self.frames_data.dtype.names == RAW_FRAME_DTYPE.names
         ):
-            return None
+            return _ColumnCarry(dict(annotation_tables)) if annotation_tables else None
         by_row = self._instances_by_row(frames)
 
         def point_owners() -> list:
@@ -527,7 +559,7 @@ class LazyDataStore:
 
         from sleap_io.model.instance import Instance, PredictedInstance
 
-        return _column_carry(
+        pose = _column_carry(
             {
                 "points": (
                     self.points_data,
@@ -551,6 +583,7 @@ class LazyDataStore:
                 "frames": (self.frames_data, RAW_FRAME_DTYPE, lambda: list(frames)),
             }
         )
+        return _ColumnCarry({**pose.tables, **annotation_tables})
 
     def materialize_all(self) -> list["LabeledFrame"]:
         """Materialize all frames.

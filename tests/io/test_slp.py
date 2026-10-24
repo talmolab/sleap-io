@@ -151,6 +151,11 @@ from sleap_io.model.roi import PredictedROI, UserROI
 from sleap_io.transform.frame import crop_frame
 
 
+def _table_columns(group: h5py.Group) -> dict[str, np.ndarray]:
+    """Read the columns of an SLP 3.0 table (a group of 1-D datasets)."""
+    return {name: ds[()] for name, ds in group.items() if isinstance(ds, h5py.Dataset)}
+
+
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
     """Test `read_labels` can read different types of .slp files."""
     labels = read_labels(slp_typical)
@@ -1154,9 +1159,8 @@ def test_per_instance_identity_round_trip(tmp_path):
         assert f["metadata"].attrs["format_id"] >= 2.5
         assert "links" in f["identity"]
         # Owner-type-aware: instance owners are written as OWNER_INSTANCE (0).
-        links = f["identity"]["links"][:]
-        assert "owner_type" in links.dtype.names
-        assert set(links["owner_type"].tolist()) == {OWNER_INSTANCE}
+        links = f["identity"]["links"]
+        assert set(links["owner_type"][:].tolist()) == {OWNER_INSTANCE}
 
     loaded = load_slp(path)
     li = list(loaded[0].instances)
@@ -1330,7 +1334,7 @@ def test_mask_identity_and_embedding_round_trip(tmp_path):
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.5
-        links = f["identity"]["links"][:]
+        links = _table_columns(f["identity/links"])
         # Both mask owners present (owner_type == OWNER_MASK).
         assert set(links["owner_type"].tolist()) == {OWNER_MASK}
         assert sorted(links["owner_id"].tolist()) == [0, 1]
@@ -1399,7 +1403,7 @@ def test_centroid_identity_and_embedding_round_trip(tmp_path):
 
     with h5py.File(path, "r") as f:
         assert f["metadata"].attrs["format_id"] >= 2.5
-        links = f["identity"]["links"][:]
+        links = _table_columns(f["identity/links"])
         assert set(links["owner_type"].tolist()) == {OWNER_CENTROID}
         assert links["owner_id"].tolist() == [0]
         assert set(f["embeddings/owner_type"][:].tolist()) == {OWNER_CENTROID}
@@ -1649,7 +1653,7 @@ def test_bbox_identity_and_embedding_round_trip(tmp_path):
     path = str(tmp_path / "bbox_ids.slp")
     save_slp(labels, path, save_embedding_vectors=True)
     with h5py.File(path, "r") as f:
-        links = f["identity"]["links"][:]
+        links = _table_columns(f["identity/links"])
         assert set(links["owner_type"].tolist()) == {OWNER_BBOX}
         assert links["owner_id"].tolist() == [0]
         assert set(f["embeddings/owner_type"][:].tolist()) == {OWNER_BBOX}
@@ -1680,7 +1684,7 @@ def test_roi_identity_and_embedding_round_trip(tmp_path):
     path = str(tmp_path / "roi_ids.slp")
     save_slp(labels, path, save_embedding_vectors=True)
     with h5py.File(path, "r") as f:
-        links = f["identity"]["links"][:]
+        links = _table_columns(f["identity/links"])
         assert set(links["owner_type"].tolist()) == {OWNER_ROI}
         assert set(f["embeddings/owner_type"][:].tolist()) == {OWNER_ROI}
 
@@ -5572,26 +5576,26 @@ def _polygon_heavy_rois(n_rois=100, n_verts=64):
 
 
 def test_slp_roi_wkb_gzip_compressed(tmp_path):
-    """`roi_wkb` is written with gzip compression (follow-up to #463)."""
+    """The `wkb` buffer is written with gzip compression (follow-up to #463)."""
     labels = _polygon_heavy_rois(n_rois=5, n_verts=8)
     path = str(tmp_path / "gzip_rois.slp")
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        wkb = f["roi_wkb"]
+        wkb = f["rois/wkb"]
         assert wkb.compression == "gzip"
         assert wkb.compression_opts == 1
         assert wkb.chunks is not None  # gzip requires a chunked layout
 
 
 def test_slp_roi_wkb_compression_reduces_size(tmp_path):
-    """Gzip meaningfully shrinks `roi_wkb` on disk vs. its raw byte size."""
+    """Gzip meaningfully shrinks the `wkb` buffer on disk vs. its raw byte size."""
     labels = _polygon_heavy_rois(n_rois=100, n_verts=64)
     path = str(tmp_path / "compressed_rois.slp")
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        wkb = f["roi_wkb"]
+        wkb = f["rois/wkb"]
         on_disk = wkb.id.get_storage_size()
         raw = wkb.nbytes
     # A polygon-heavy ROI set packs ~100 KB of WKB; gzip beats it ~2x.
@@ -5664,7 +5668,7 @@ def test_slp_roi_wkb_roundtrip_geometry_types(tmp_path):
 def test_slp_roi_wkb_empty_geometry(tmp_path):
     """An empty-geometry ROI still packs non-empty WKB and round-trips gzip.
 
-    Pins the invariant that lets ``write_rois`` always gzip ``roi_wkb`` with no
+    Pins the invariant that lets ``write_rois`` always gzip ``wkb`` with no
     empty-dataset guard: every geometry — even an empty polygon — serializes to
     a non-empty WKB header, so ``wkb_flat`` is never empty when ROIs exist.
     """
@@ -5677,8 +5681,8 @@ def test_slp_roi_wkb_empty_geometry(tmp_path):
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        assert f["roi_wkb"].compression == "gzip"
-        assert f["roi_wkb"].nbytes > 0
+        assert f["rois/wkb"].compression == "gzip"
+        assert f["rois/wkb"].nbytes > 0
 
     loaded = load_slp(path, open_videos=False)
     assert len(loaded.rois) == 1
@@ -5729,7 +5733,7 @@ def _fragmented_mask():
 
 
 def test_slp_mask_rle_gzip_compressed(tmp_path):
-    """`mask_rle` is written with gzip compression (issue #463)."""
+    """The `rle` buffer is written with gzip compression (issue #463)."""
     video = Video(filename="test.mp4")
     mask = UserSegmentationMask.from_numpy(_fragmented_mask())
     lf = LabeledFrame(video=video, frame_idx=0)
@@ -5742,14 +5746,14 @@ def test_slp_mask_rle_gzip_compressed(tmp_path):
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        rle = f["mask_rle"]
+        rle = f["masks/rle"]
         assert rle.compression == "gzip"
         assert rle.compression_opts == 1
         assert rle.chunks is not None  # gzip requires a chunked layout
 
 
 def test_slp_mask_rle_compression_reduces_size(tmp_path):
-    """Gzip meaningfully shrinks `mask_rle` on disk vs. its raw byte size."""
+    """Gzip meaningfully shrinks the `rle` buffer on disk vs. its raw byte size."""
     video = Video(filename="test.mp4")
     mask = UserSegmentationMask.from_numpy(_fragmented_mask())
     lf = LabeledFrame(video=video, frame_idx=0)
@@ -5762,7 +5766,7 @@ def test_slp_mask_rle_compression_reduces_size(tmp_path):
     save_slp(labels, path)
 
     with h5py.File(path, "r") as f:
-        rle = f["mask_rle"]
+        rle = f["masks/rle"]
         on_disk = rle.id.get_storage_size()
         raw = rle.nbytes
     # A fragmented RLE has thousands of bytes raw; gzip easily beats 2x on it.
@@ -5811,7 +5815,7 @@ def test_slp_mask_rle_empty_roundtrip(tmp_path):
 
     with h5py.File(path, "r") as f:
         # Empty RLE skips the gzip filter: there is nothing to compress.
-        assert f["mask_rle"].compression is None
+        assert f["masks/rle"].compression is None
 
     loaded = load_slp(path)
     assert len(loaded.masks) == 1
@@ -8391,8 +8395,12 @@ def test_slp_lazy_resave_preserves_group_metadata(tmp_path, camera_group_345):
     assert fg.metadata == {"reviewed": True}
 
 
-def test_slp_columnar_missing_points_dataset_warns(tmp_path, camera_group_345):
-    """A file whose points_3d dataset was truncated warns and drops 3D (no crash)."""
+@pytest.mark.parametrize("legacy_format", [True, False])
+def test_slp_columnar_missing_points_dataset(tmp_path, camera_group_345, legacy_format):
+    """A file whose points_3d dataset was removed raises (3.0) or warns (2.x).
+
+    A 2.x file drops the 3D points and keeps the 2D grouping (no crash).
+    """
     skeleton = Skeleton(["A", "B"])
     labels = _make_3d_session_labels(
         camera_group_345,
@@ -8406,12 +8414,19 @@ def test_slp_columnar_missing_points_dataset_warns(tmp_path, camera_group_345):
         skeleton=skeleton,
     )
     path = str(tmp_path / "t.slp")
-    write_labels(path, labels)
+    write_labels(path, labels, legacy_format=legacy_format)
     # Simulate a truncated/corrupt file: remove the referenced points dataset.
     with h5py.File(path, "a") as f:
         del f["session_data"]["points_3d"]
-    with pytest.warns(UserWarning, match="referenced points dataset is missing"):
+    if not legacy_format:
+        with pytest.raises(ValueError, match="3D ranges fall outside points_3d"):
+            read_labels(path)
+        return
+    with pytest.warns(UserWarning) as record:
         loaded = read_labels(path)
+    messages = [str(w.message) for w in record]
+    assert any("3D ranges fall outside points_3d" in m for m in messages)
+    assert any("referenced points dataset is missing" in m for m in messages)
     lig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
     assert lig.instance_3d is None  # gracefully dropped, 2D grouping intact
     assert len(lig.instance_by_camera) == 2
@@ -9710,11 +9725,10 @@ def test_label_image_writer_roundtrip(tmp_path):
         assert rli.objects[1].category == "neuron"
         assert rli.objects[2].category == "glia"
 
-    # Check format version is 2.2 (chunked)
+    # The streaming writer writes SLP 3.0, with chunked pixel data
     with h5py.File(path, "r") as f:
-        assert f["label_image_data"].ndim == 3
-        fmt = f["metadata"].attrs["format_id"]
-        assert fmt >= 2.2
+        assert f["label_images/data"].ndim == 3
+        assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
 
 
 def test_label_image_writer_context_manager(tmp_path):
@@ -10247,7 +10261,7 @@ def test_write_label_images_blob_fallback_mixed_sizes(tmp_path):
 
     # Verify blob format was used (1D flat array, not 3D chunked)
     with h5py.File(path, "r") as f:
-        assert f["label_image_data"].ndim == 1
+        assert f["label_images/data"].ndim == 1
 
     # Verify round-trip
     reloaded = load_slp(path, open_videos=False)
@@ -10267,12 +10281,12 @@ def test_write_metadata_bumps_format_for_chunked(tmp_path):
     _lf.label_images.append(li)
     labels = Labels(labeled_frames=[_lf], videos=[video])
 
-    # First save normally (write_metadata runs before label images)
-    save_slp(labels, path)
+    # First save in the 2.x layout (write_metadata runs before label images)
+    save_slp(labels, path, legacy_format=True)
 
     # Re-call write_metadata now that label_image_data exists in the file
-    # This exercises the format_id bump at lines 1518-1519
-    write_metadata(path, labels)
+    # This exercises the format_id bump for chunked label image data
+    write_metadata(path, labels, legacy_format=True)
 
     with h5py.File(path, "r") as f:
         assert f["label_image_data"].ndim == 3  # chunked
@@ -12234,7 +12248,7 @@ def test_save_slp_invalid_unlabeled_as(tmp_path, slp_minimal):
 
 
 def test_save_slp_warns_dropped_metadata(tmp_path):
-    """Metadata on instances, frames or boxes is dropped with a warning."""
+    """Metadata on instances, frames or boxes is dropped with a warning (legacy)."""
     skeleton = Skeleton(["A"])
     video = Video("test.mp4")
 
@@ -12249,21 +12263,17 @@ def test_save_slp_warns_dropped_metadata(tmp_path):
         warnings.simplefilter("error")
         save_slp(labels, str(tmp_path / "plain.slp"))
 
-    for set_metadata, dropped in (
-        (lambda lf: lf.metadata.update(image_id=1), False),
-        (lambda lf: lf.instances[0].metadata.update(ann_id=1), False),
-        (lambda lf: lf.bboxes[0].metadata.update(area=1.0), True),
+    for set_metadata in (
+        lambda lf: lf.metadata.update(image_id=1),
+        lambda lf: lf.instances[0].metadata.update(ann_id=1),
+        lambda lf: lf.bboxes[0].metadata.update(area=1.0),
     ):
         labels, lf = make_labels()
         set_metadata(lf)
-        # SLP 3.0 stores instance and frame metadata, but not box metadata yet.
-        if dropped:
-            with pytest.warns(UserWarning, match="Bounding box metadata"):
-                save_slp(labels, str(tmp_path / "meta.slp"))
-        else:
-            with warnings.catch_warnings():
-                warnings.simplefilter("error")
-                save_slp(labels, str(tmp_path / "meta.slp"))
+        # SLP 3.0 stores instance, frame and box metadata.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            save_slp(labels, str(tmp_path / "meta.slp"))
         # The legacy layout stores none of it.
         with pytest.warns(UserWarning, match="legacy SLP layout"):
             save_slp(labels, str(tmp_path / "legacy.slp"), legacy_format=True)
@@ -13719,3 +13729,874 @@ def test_unknown_instance_columns_with_unknown_instance_type_are_dropped(
     assert [len(lf) for lf in labels] == [2, 0, 0]
     with pytest.warns(UserWarning, match="future_quality of /instances were not"):
         save_slp(labels, str(tmp_path / "out.slp"))
+
+
+# -- SLP 3.0 remaining tables (PR 2c) -------------------------------------------------
+
+
+def _annotation_summary(labels: Labels) -> dict:
+    """Summarize the ROIs, masks, label images, boxes, links and sessions of labels.
+
+    Instances are referred to by their position in `labels.instances`.
+    """
+    instances = list(labels.instances)
+
+    def ref(obj):
+        if obj is None:
+            return None
+        if isinstance(obj, (Track, Identity, Category)):
+            return obj.name
+        return next(i for i, inst in enumerate(instances) if inst is obj)
+
+    def num(x):
+        return None if x is None or np.isnan(x) else round(float(x), 5)
+
+    def common(ann):
+        return [
+            ann.name,
+            ann.source,
+            ref(getattr(ann, "category", None)),
+            ref(ann.track),
+            num(ann.tracking_score),
+            ref(ann.instance),
+            type(ann).__name__,
+            num(getattr(ann, "score", None)),
+            ref(ann.identity),
+            num(ann.identity_score),
+            num(ann.category_score),
+        ]
+
+    frames = []
+    for lf in labels:
+        masks = [
+            common(m)
+            + [
+                m.data.astype(int).tolist(),
+                list(m.scale),
+                list(m.offset),
+                None if m.score_map is None else m.score_map.round(5).tolist(),
+                list(m.score_map_scale),
+                list(m.score_map_offset),
+            ]
+            if isinstance(m, PredictedSegmentationMask)
+            else common(m)
+            + [
+                m.data.astype(int).tolist(),
+                list(m.scale),
+                list(m.offset),
+                m.from_predicted.name if m.from_predicted is not None else None,
+            ]
+            for m in lf.masks
+        ]
+        label_images = [
+            [
+                type(li).__name__,
+                li.data.tolist(),
+                li.source,
+                num(getattr(li, "score", None)),
+                list(li.scale),
+                list(li.offset),
+                None
+                if getattr(li, "score_map", None) is None
+                else li.score_map.tolist(),
+                {
+                    label_id: [
+                        ref(info.track),
+                        info.category,
+                        info.name,
+                        num(info.score),
+                        num(info.tracking_score),
+                        ref(info.instance),
+                    ]
+                    for label_id, info in li.objects.items()
+                },
+            ]
+            for li in lf.label_images
+        ]
+        frames.append(
+            [
+                labels.videos.index(lf.video),
+                lf.frame_idx,
+                [(ref(i.identity), num(i.identity_score)) for i in lf.instances],
+                [shapely.to_wkt(r.geometry, rounding_precision=4) for r in lf.rois],
+                [common(r) for r in lf.rois],
+                masks,
+                label_images,
+                [
+                    [b.x1, b.y1, b.x2, b.y2, *common(b), dict(b.metadata)]
+                    for b in lf.bboxes
+                ],
+            ]
+        )
+    sessions = []
+    for session in labels.sessions:
+        frame_groups = {}
+        for frame_idx, fg in session.frame_groups.items():
+            groups = []
+            for ig in fg.instance_groups:
+                inst_3d = ig.instance_3d
+                groups.append(
+                    [
+                        num(ig.score),
+                        ref(ig.identity),
+                        dict(ig.metadata),
+                        sorted(
+                            (cam.name, ref(i))
+                            for cam, i in ig.instance_by_camera.items()
+                        ),
+                        type(inst_3d).__name__,
+                        None
+                        if inst_3d is None
+                        else np.asarray(inst_3d.points).tolist(),
+                        None if inst_3d is None else num(inst_3d.score),
+                    ]
+                )
+            frame_groups[frame_idx] = [groups, dict(fg.metadata)]
+        sessions.append([frame_groups, dict(session.metadata)])
+    return {
+        "frames": frames,
+        "static_rois": [
+            [
+                shapely.to_wkt(r.geometry),
+                r.name,
+                labels.videos.index(r.video) if r.video is not None else None,
+            ]
+            for r in labels.static_rois
+        ],
+        "sessions": sessions,
+    }
+
+
+def _compound_datasets(path) -> list[str]:
+    """Return the names of the compound datasets in an HDF5 file."""
+    found = []
+
+    def visit(name, obj):
+        if isinstance(obj, h5py.Dataset) and obj.dtype.names is not None:
+            found.append(name)
+
+    with h5py.File(path, "r") as f:
+        f.visititems(visit)
+    return found
+
+
+def _save(labels: Labels, path, **kwargs) -> str:
+    """Save labels without warnings about dropped metadata and return the path."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        save_slp(labels, str(path), **kwargs)
+    return str(path)
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_legacy_tables_fixture_reads(slp_legacy_tables, lazy):
+    """Every 2.x compound table of the fixture reads as it was written."""
+    labels = load_slp(slp_legacy_tables, lazy=lazy)
+    if lazy:
+        labels = labels.materialize()
+    lf = labels[0]
+    pred, user = lf.instances
+    assert user.identity.name == "mouse_a"
+    assert user.identity_score == pytest.approx(0.6)
+
+    arena, blob = lf.rois
+    assert isinstance(blob, PredictedROI) and blob.score == pytest.approx(0.6)
+    assert arena.geometry.equals(shapely.Polygon([(0, 0), (4, 0), (4, 3)]))
+    assert (arena.name, arena.category.name, arena.source) == (
+        "arena",
+        "female",
+        "manual",
+    )
+    assert arena.track.name == "t0"
+    assert arena.tracking_score == pytest.approx(0.25)
+    assert arena.identity.name == "mouse_a"
+    assert arena.identity_score == pytest.approx(0.75)
+    if not lazy:
+        assert arena.instance is user
+    assert [r.name for r in labels.static_rois] == ["static", "floating"]
+    assert labels.static_rois[0].video is labels.videos[0]
+    assert labels.static_rois[1].video is None
+
+    pm, um = lf.masks
+    assert isinstance(pm, PredictedSegmentationMask)
+    assert pm.score == pytest.approx(0.8)
+    assert pm.score_map.shape == (6, 8)
+    assert pm.score_map[5, 7] == pytest.approx(1.0)
+    assert pm.score_map_scale == (2.0, 2.0)
+    assert pm.score_map_offset == (0.5, 0.25)
+    assert pm.category.name == "female" and pm.category_score == pytest.approx(0.4)
+    assert um.from_predicted is pm
+    assert um.scale == (0.5, 0.5) and um.offset == (1.0, 2.0)
+    assert um.tracking_score == pytest.approx(0.4)
+    assert int(um.data.sum()) == 12
+
+    li_user, li_pred = lf.label_images
+    assert li_user.data.shape == (5, 7) and li_user.data.max() == 2
+    assert li_user.objects[1].name == "c1" and li_user.objects[1].track.name == "t0"
+    assert li_user.objects[2].tracking_score == pytest.approx(0.3)
+    if not lazy:
+        assert li_user.objects[1].instance is user
+    assert li_pred.score == pytest.approx(0.7)
+    assert li_pred.scale == (2.0, 2.0)
+    assert li_pred.objects[2].score == pytest.approx(0.55)
+    assert li_pred.objects[4].name == ""
+    assert_equal(li_pred.score_map, np.full((5, 7), 0.25, dtype=np.float32))
+    assert li_pred.score_map_offset == (0.0, 1.0)
+
+    if lazy:
+        # Lazy reads don't rebuild frame groups (saves copy them through).
+        (session,) = load_slp(slp_legacy_tables, lazy=True).sessions
+        assert session.metadata == {"site": "lab"}
+        assert session.frame_groups == {}
+        return
+    (session,) = labels.sessions
+    assert session.metadata == {"site": "lab"}
+    (fg,) = session.frame_groups.values()
+    assert fg.metadata == {"take": 1}
+    ig1, ig2 = fg.instance_groups
+    assert ig1.score == pytest.approx(0.95)
+    assert ig1.identity.name == "mouse_a"
+    assert ig1.metadata == {"note": "first"}
+    assert_equal(ig1.instance_3d.points, [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    assert isinstance(ig2.instance_3d, PredictedInstance3D)
+    assert ig2.instance_3d.score == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.parametrize("reload_lazy", [False, True])
+def test_legacy_tables_round_trip_through_columns(
+    tmp_path, slp_legacy_tables, lazy, reload_lazy
+):
+    """Saving the fixture writes 3.0 column groups that read back identically."""
+
+    def read(path, as_lazy):
+        labels = load_slp(path, lazy=as_lazy)
+        return _annotation_summary(labels.materialize() if as_lazy else labels)
+
+    expected = read(slp_legacy_tables, reload_lazy)
+    out = _save(load_slp(slp_legacy_tables, lazy=lazy), tmp_path / "out.slp")
+    with h5py.File(out, "r") as f:
+        assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
+        for name in (
+            "rois",
+            "masks",
+            "masks/score_maps",
+            "label_images",
+            "label_images/objects",
+            "label_images/score_maps",
+            "identity/links",
+            "categories/links",
+            "session_data/frame_groups",
+            "session_data/instance_groups",
+            "session_data/instance_group_members",
+        ):
+            assert isinstance(f[name], h5py.Group), name
+        for name in (
+            "roi_wkb",
+            "roi_names",
+            "mask_rle",
+            "mask_score_map_index",
+            "label_image_data",
+            "label_image_objects",
+            "label_image_score_map_index",
+        ):
+            assert name not in f
+        assert f["rois/wkb"].compression == "gzip"
+        assert f["masks/rle"].compression == "gzip"
+        assert f["label_images/data"].ndim == 3
+        assert f["label_images/data"].compression == "gzip"
+        assert f["masks/score_maps/data"].compression is None
+        assert f["session_data/points_3d"].compression == "gzip"
+        # Number types of converted tables: f8 floats, i8 integers, bool flags.
+        assert f["rois/score"].dtype == np.float64
+        assert f["rois/video"].dtype == np.int64
+        assert f["rois/is_predicted"].dtype == bool
+        assert f["rois/annotation_type"].dtype == np.uint8
+        assert f["masks/score_maps/mask_idx"].dtype == np.int64
+        assert f["label_images/objects/label_id"].dtype == np.int64
+        assert f["identity/links/identity_score"].dtype == np.float64
+        assert f["session_data/instance_groups/pts3d_predicted"].dtype == bool
+        assert f["session_data/frame_groups/ig_start"].maxshape == (None,)
+        assert h5py.check_string_dtype(f["rois/name"].dtype) is not None
+    assert read(out, reload_lazy) == expected
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_legacy_format_reproduces_2x_tables(tmp_path, slp_legacy_tables, lazy):
+    """`legacy_format=True` writes the same 2.x tables as the fixture."""
+    out = _save(
+        load_slp(slp_legacy_tables, lazy=lazy),
+        tmp_path / "legacy.slp",
+        legacy_format=True,
+    )
+    with h5py.File(slp_legacy_tables, "r") as src, h5py.File(out, "r") as dst:
+        assert dst["metadata"].attrs["format_id"] == pytest.approx(2.8)
+        for name in _compound_datasets(slp_legacy_tables) + [
+            "roi_wkb",
+            "roi_names",
+            "roi_categories",
+            "roi_sources",
+            "mask_rle",
+            "mask_names",
+            "mask_categories",
+            "mask_sources",
+            "mask_score_maps",
+            "label_image_data",
+            "label_image_sources",
+            "label_image_obj_names",
+            "label_image_obj_categories",
+            "label_image_score_maps",
+        ]:
+            assert dst[name].dtype == src[name].dtype, name
+            assert repr(dst[name][()].tolist()) == repr(src[name][()].tolist()), name
+
+
+def _to_h5wasm_layout(path) -> None:
+    """Rewrite every compound dataset of a file as h5wasm does (flat 2-D float64)."""
+    for name in _compound_datasets(path):
+        with h5py.File(path, "r+") as f:
+            data = f[name][()]
+            attrs = dict(f[name].attrs)
+            del f[name]
+            flat = np.stack([data[n].astype("f8") for n in data.dtype.names], axis=1)
+            ds = f.create_dataset(name, data=flat.reshape(len(data), -1))
+            for key, value in attrs.items():
+                ds.attrs[key] = value
+            ds.attrs["field_names"] = json.dumps(list(data.dtype.names))
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_h5wasm_legacy_tables_read(tmp_path, slp_legacy_tables, lazy):
+    """2.x tables written as h5wasm flat 2-D arrays read like compound ones."""
+    path = tmp_path / "h5wasm.slp"
+    shutil.copy(slp_legacy_tables, path)
+    _to_h5wasm_layout(path)
+    assert _compound_datasets(path) == []
+
+    def read(p):
+        labels = load_slp(str(p), lazy=lazy)
+        return _annotation_summary(labels.materialize() if lazy else labels)
+
+    assert read(path) == read(slp_legacy_tables)
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "slp_typical",
+        "slp_legacy_tables",
+        "slp_legacy_sparse_instance_ids",
+        "slp_multiview",
+        "slp_legacy_negative_frames",
+        "slp_mixed_layout",
+        "slp_legacy_h5wasm_flat",
+    ],
+)
+@pytest.mark.parametrize("lazy", [False, True])
+def test_new_files_have_no_compound_datasets(tmp_path, request, fixture, lazy):
+    """A file written by the default (3.0) writer holds no compound dataset."""
+    path = request.getfixturevalue(fixture)
+    out = _save(load_slp(path, lazy=lazy), tmp_path / "out.slp")
+    assert _compound_datasets(out) == []
+    with h5py.File(out, "r") as f:
+        assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
+
+
+def test_label_image_writer_and_merge_write_3_0(tmp_path, slp_legacy_tables):
+    """`LabelImageWriter` and `merge_label_images` write SLP 3.0 tables."""
+    video = Video(filename="cam1.mp4")
+    track = Track("t9")
+    path = str(tmp_path / "streamed.slp")
+    data = np.arange(35, dtype=np.int32).reshape(5, 7) % 3
+    with LabelImageWriter(path, video=video, tracks=[]) as writer:
+        writer.add(
+            PredictedLabelImage(
+                data=data,
+                objects={1: LabelImage.Info(track=track, name="o1", score=0.5)},
+                score=0.9,
+                score_map=np.full((5, 7), 0.5, dtype=np.float32),
+                source="stream",
+            )
+        )
+        writer.add(UserLabelImage(data=data * 2))
+    assert _compound_datasets(path) == []
+    with h5py.File(path, "r") as f:
+        assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
+        assert f["label_images/data"].ndim == 3
+        assert list(f["label_images/score_maps/li_idx"][()]) == [0]
+        assert f["label_images/objects/name"].asstr()[0] == "o1"
+    streamed = load_slp(path)
+    first, second = streamed.label_images
+    assert first.objects[1].track.name == "t9"
+    assert first.source == "stream" and first.score == pytest.approx(0.9)
+    assert_equal(first.score_map, np.full((5, 7), 0.5))
+    assert_equal(second.data, data * 2)
+
+    # Merge a 2.x source (the fixture) with the 3.0 output of the writer.
+    merged_path = str(tmp_path / "merged.slp")
+    merged = merge_label_images([slp_legacy_tables, path], merged_path)
+    assert _compound_datasets(merged_path) == []
+    with h5py.File(merged_path, "r") as f:
+        assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
+        assert list(f["label_images/score_maps/li_idx"][()]) == [1, 2]
+    lis = merged.label_images
+    assert len(lis) == 4
+    legacy = load_slp(slp_legacy_tables).label_images
+    for got, want in zip(lis[:2], legacy):
+        assert_equal(got.data, want.data)
+        assert {k: (v.name, v.category) for k, v in got.objects.items()} == {
+            k: (v.name, v.category) for k, v in want.objects.items()
+        }
+    assert_equal(lis[1].score_map, legacy[1].score_map)
+    assert lis[1].score_map_offset == (0.0, 1.0)
+    assert lis[2].objects[1].track.name == "t9"
+    assert_equal(lis[2].score_map, np.full((5, 7), 0.5))
+    assert [t.name for t in merged.tracks] == ["t0", "t1", "t9"]
+
+
+@pytest.fixture
+def slp_tables_3_0(tmp_path, slp_legacy_tables):
+    """The `slp_legacy_tables` fixture saved as SLP 3.0."""
+    return _save(load_slp(slp_legacy_tables), tmp_path / "tables.slp")
+
+
+def _replace_column(path, table: str, name: str, change) -> None:
+    """Replace a column of a 3.0 table with `change(column)`."""
+    with h5py.File(path, "r+") as f:
+        data = change(f[table][name][()])
+        del f[table][name]
+        f[table].create_dataset(name, data=data)
+
+
+def _bump_last(values: np.ndarray, by: int = 1000) -> np.ndarray:
+    """Add `by` to the last value."""
+    values = values.copy()
+    values[-1] += by
+    return values
+
+
+@pytest.mark.parametrize(
+    "table, name, change, match",
+    [
+        ("rois", "wkb_end", _bump_last, r"/rois wkb ranges fall outside"),
+        ("rois", "video", lambda v: v + 5, "/rois video is not one of the 2 videos"),
+        ("rois", "track", lambda v: v - 5, "/rois track is not one of the 2 tracks"),
+        ("rois", "instance", _bump_last, "/rois instance is not one of the 3 inst"),
+        ("masks", "rle_end", _bump_last, "/masks rle ranges fall outside"),
+        ("masks", "from_predicted", _bump_last, "from_predicted is not a mask row"),
+        ("masks/score_maps", "mask_idx", _bump_last, "mask_idx is not one of the 2"),
+        ("masks/score_maps", "data_end", _bump_last, "score_maps ranges fall out"),
+        ("label_images", "n_objects", _bump_last, "object ranges fall outside"),
+        ("label_images", "video", lambda v: v - 2, "/label_images video is not"),
+        ("label_images/objects", "track", _bump_last, "objects track is not one"),
+        ("label_images/score_maps", "li_idx", _bump_last, "li_idx is not one of"),
+        ("identity/links", "identity_idx", _bump_last, "identity_idx is not one of"),
+        ("categories/links", "category_idx", _bump_last, "category_idx is not one"),
+        ("session_data/frame_groups", "ig_end", _bump_last, "frame_groups ranges"),
+        ("session_data/instance_groups", "member_end", _bump_last, "groups ranges"),
+        ("session_data/instance_groups", "pts3d_end", _bump_last, "3D ranges fall"),
+        (
+            "session_data/instance_groups",
+            "identity_idx",
+            _bump_last,
+            "identity_idx is not one of the 1 identities",
+        ),
+        (
+            "session_data/instance_group_members",
+            "lf",
+            _bump_last,
+            "lf is not one of the 2 frames",
+        ),
+        (
+            "session_data/instance_group_members",
+            "inst",
+            lambda v: v - 5,
+            "has negative indices",
+        ),
+        ("rois", "name", lambda v: v[:-1], "/rois columns have different lengths"),
+    ],
+)
+@pytest.mark.parametrize("lazy", [False, True])
+def test_corrupt_remaining_tables_raise(
+    slp_tables_3_0, table, name, change, match, lazy
+):
+    """Inconsistent 3.0 tables raise, naming the table and the problem."""
+    _replace_column(slp_tables_3_0, table, name, change)
+    with pytest.raises(ValueError, match=match):
+        load_slp(slp_tables_3_0, lazy=lazy)
+
+
+def test_label_image_pixel_data_must_cover_rows(slp_tables_3_0):
+    """3.0 label image rows need a frame of pixel data each."""
+    with h5py.File(slp_tables_3_0, "r+") as f:
+        data = f["label_images/data"][:1]
+        del f["label_images/data"]
+        f["label_images"].create_dataset("data", data=data)
+    with pytest.raises(ValueError, match="2 rows but 1 frames of data"):
+        load_slp(slp_tables_3_0)
+    with h5py.File(slp_tables_3_0, "r+") as f:
+        del f["label_images/data"]
+    with pytest.raises(ValueError, match="/label_images has no pixel data"):
+        load_slp(slp_tables_3_0)
+
+
+def test_label_image_blob_ranges_are_checked(tmp_path):
+    """Flat pixel data ranges of 3.0 label images must fit the buffer."""
+    video = Video(filename="v.mp4")
+    lfs = [LabeledFrame(video=video, frame_idx=i) for i in range(2)]
+    lfs[0].label_images.append(UserLabelImage(data=np.ones((3, 4), dtype=np.int32)))
+    lfs[1].label_images.append(UserLabelImage(data=np.ones((2, 2), dtype=np.int32)))
+    path = str(tmp_path / "blob.slp")
+    save_slp(Labels(lfs, videos=[video]), path)
+    _replace_column(path, "label_images", "data_end", _bump_last)
+    with pytest.raises(ValueError, match="data ranges fall outside the buffer"):
+        load_slp(path)
+
+
+def test_missing_buffers_raise_for_columns(slp_tables_3_0):
+    """A 3.0 table whose rows index a missing byte buffer raises."""
+    with h5py.File(slp_tables_3_0, "r+") as f:
+        del f["rois/wkb"]
+    with pytest.raises(ValueError, match=r"wkb ranges fall outside the buffer \(0\)"):
+        load_slp(slp_tables_3_0)
+
+
+@pytest.mark.parametrize(
+    "dataset, field, change, match",
+    [
+        ("rois", "video", lambda v: v + 5, "/rois video is not one of"),
+        ("label_images", "n_objects", lambda v: v + 3, "object ranges fall outside"),
+        ("identity/links", "identity_idx", lambda v: v + 3, "identity_idx is not"),
+        ("mask_score_map_index", "mask_idx", lambda v: v + 3, "mask_idx is not one"),
+    ],
+)
+@pytest.mark.parametrize("lazy", [False, True])
+def test_corrupt_legacy_remaining_tables_warn(
+    tmp_path, slp_legacy_tables, dataset, field, change, match, lazy
+):
+    """Inconsistent 2.x tables warn and read leniently, as they always have."""
+    path = tmp_path / "legacy.slp"
+    shutil.copy(slp_legacy_tables, path)
+    with h5py.File(path, "r+") as f:
+        data = f[dataset][()]
+        data[field] = change(data[field])
+        f[dataset][...] = data
+    with pytest.warns(UserWarning, match=match):
+        labels = load_slp(str(path), lazy=lazy)
+    assert len(labels.labeled_frames) == 2
+
+
+def test_missing_optional_remaining_columns_take_defaults(slp_tables_3_0):
+    """Optional 3.0 columns that are missing take their defaults."""
+    with h5py.File(slp_tables_3_0, "r+") as f:
+        for name in ("instance", "score", "name", "tracking_score"):
+            del f["rois"][name]
+        for name in ("scale_x", "from_predicted", "name"):
+            del f["masks"][name]
+        del f["masks/score_maps/offset_y"]
+        del f["label_images/source"]
+        del f["label_images/objects/name"]
+        del f["label_images/score_maps/scale_x"]
+    labels = load_slp(slp_tables_3_0)
+    arena, blob = labels[0].rois
+    assert arena.instance is None and arena.name == "" and arena.tracking_score is None
+    assert blob.score == 0.0  # A missing score reads as NaN, then 0 for predictions.
+    pm, um = labels[0].masks
+    assert um.scale == (1.0, 0.5)
+    assert um.from_predicted is None and um.name == ""
+    assert pm.score_map_offset == (0.5, 0.0)
+    li_user, li_pred = labels[0].label_images
+    assert li_user.source == "" and li_user.objects[1].name == ""
+    assert li_pred.score_map_scale == (1.0, 1.5)
+
+
+def test_missing_required_remaining_column_raises(slp_tables_3_0):
+    """A 3.0 table missing a required column raises, naming it."""
+    with h5py.File(slp_tables_3_0, "r+") as f:
+        del f["masks/rle_start"]
+    with pytest.raises(ValueError, match=r"/masks is missing column\(s\) rle_start"):
+        load_slp(slp_tables_3_0)
+
+
+# Every table converted in 3.0, with the path of an unknown column added to it.
+_UNKNOWN_TABLE_COLUMNS = [
+    "rois",
+    "masks",
+    "masks/score_maps",
+    "label_images",
+    "label_images/objects",
+    "label_images/score_maps",
+    "identity/links",
+    "categories/links",
+    "session_data/frame_groups",
+    "session_data/instance_groups",
+    "session_data/instance_group_members",
+]
+
+
+def _add_unknown_remaining_columns(path) -> dict[str, np.ndarray]:
+    """Add a `future_x` column to every remaining table of a 3.0 file."""
+    added = {}
+    with h5py.File(path, "r+") as f:
+        for table in _UNKNOWN_TABLE_COLUMNS:
+            n = len(
+                next(
+                    ds
+                    for name, ds in f[table].items()
+                    if name not in ("wkb", "rle", "data")
+                    and isinstance(ds, h5py.Dataset)
+                )
+            )
+            data = np.arange(n, dtype="i2") + 7
+            f[table].create_dataset("future_x", data=data)
+            added[table] = data
+    return added
+
+
+def _unknown_remaining_columns(path) -> dict[str, np.ndarray]:
+    """Return the `future_x` columns of the remaining tables of a file."""
+    with h5py.File(path, "r") as f:
+        return {
+            table: f[table]["future_x"][()]
+            for table in _UNKNOWN_TABLE_COLUMNS
+            if table in f and "future_x" in f[table]
+        }
+
+
+@pytest.mark.parametrize("source", ["lazy", "eager", "materialized"])
+def test_unknown_remaining_columns_survive_saves(tmp_path, slp_tables_3_0, source):
+    """Unknown columns of the remaining tables are carried through saves."""
+    added = _add_unknown_remaining_columns(slp_tables_3_0)
+    if source == "lazy":
+        labels = load_slp(slp_tables_3_0, lazy=True)
+    elif source == "eager":
+        labels = load_slp(slp_tables_3_0)
+    else:
+        labels = load_slp(slp_tables_3_0, lazy=True).materialize()
+    out = str(tmp_path / "out.slp")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(labels, out)
+    carried = _unknown_remaining_columns(out)
+    if source == "materialized":
+        # Materializing doesn't rebuild frame groups, so the session tables (and
+        # their columns) aren't written.
+        added = {k: v for k, v in added.items() if not k.startswith("session")}
+    assert carried.keys() == added.keys()
+    for table, data in added.items():
+        assert carried[table].dtype == np.int16
+        assert_equal(carried[table], data)
+
+
+def test_unknown_remaining_columns_dropped_when_changed(tmp_path, slp_tables_3_0):
+    """Unknown columns drop with a warning once their rows no longer line up."""
+    _add_unknown_remaining_columns(slp_tables_3_0)
+    labels = load_slp(slp_tables_3_0)
+    lf = labels[0]
+    lf.rois.pop()
+    lf.masks.reverse()
+    lf.label_images[0].objects.pop(2)
+    lf.instances[1].identity = None
+    out = str(tmp_path / "out.slp")
+    with pytest.warns(UserWarning) as record:
+        save_slp(labels, out)
+    messages = " ".join(str(w.message) for w in record)
+    for table in (
+        "rois",
+        "masks",
+        "label_images/objects",
+        "identity/links",
+        "categories/links",  # Mask link rows follow the reordered masks.
+    ):
+        assert f"future_x of /{table} were not saved" in messages
+    assert "records changed since the file was loaded" in messages
+    carried = _unknown_remaining_columns(out)
+    # These rows are still owned by the same objects, in the same order.
+    for table in ("masks/score_maps", "label_images", "label_images/score_maps"):
+        assert table in carried
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_unknown_remaining_columns_of_removed_tables_warn(
+    tmp_path, slp_tables_3_0, lazy
+):
+    """Columns of a table left with no rows are dropped with a warning too."""
+    _add_unknown_remaining_columns(slp_tables_3_0)
+    labels = load_slp(slp_tables_3_0, lazy=lazy)
+    if lazy:
+        store = labels._lazy_store
+        store._roi_by_frame.clear()
+        store._undistributed_rois.clear()
+    else:
+        labels[0].rois.clear()
+        labels.static_rois.clear()
+    out = str(tmp_path / "out.slp")
+    with pytest.warns(UserWarning, match="future_x of /rois were not saved"):
+        save_slp(labels, out)
+    with h5py.File(out, "r") as f:
+        assert "rois" not in f
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_unknown_remaining_columns_dropped_by_legacy_format(
+    tmp_path, slp_tables_3_0, lazy
+):
+    """The legacy layout can't store unknown columns of the remaining tables."""
+    _add_unknown_remaining_columns(slp_tables_3_0)
+    out = str(tmp_path / "legacy.slp")
+    with pytest.warns(UserWarning) as record:
+        save_slp(load_slp(slp_tables_3_0, lazy=lazy), out, legacy_format=True)
+    messages = " ".join(str(w.message) for w in record)
+    for table in _UNKNOWN_TABLE_COLUMNS:
+        assert f"future_x of /{table} were not saved" in messages, table
+    assert "legacy SLP layout can't store them" in messages
+    assert _compound_datasets(out)
+
+
+def _labels_with_box_metadata() -> Labels:
+    """A frame with two boxes; only the first has a `source` metadata key."""
+    video = Video(filename="v.mp4")
+    lf = LabeledFrame(video=video, frame_idx=0)
+    lf.bboxes.append(
+        UserBoundingBox(x1=0, y1=0, x2=2, y2=2, metadata={"area": 4, "source": "coco"})
+    )
+    lf.bboxes.append(
+        PredictedBoundingBox(x1=1, y1=1, x2=2, y2=3, score=0.5, metadata={"area": 2.5})
+    )
+    return Labels([lf], videos=[video])
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_bbox_metadata_round_trips(tmp_path, lazy):
+    """Box metadata is stored in /bboxes/metadata and survives saves."""
+    path = str(tmp_path / "boxes.slp")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(_labels_with_box_metadata(), path)
+    with h5py.File(path, "r") as f:
+        assert_equal(f["bboxes/metadata/area/values"][()], [4.0, 2.5])
+        assert "present" not in f["bboxes/metadata/area"]
+        assert_equal(f["bboxes/metadata/source/present"][()], [True, False])
+    labels = load_slp(path, lazy=lazy)
+    out = str(tmp_path / "out.slp")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(labels, out)
+    for p in (path, out):
+        first, second = load_slp(p, lazy=lazy)[0].bboxes
+        assert first.metadata == {"area": 4.0, "source": "coco"}
+        assert second.metadata == {"area": 2.5}
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_bbox_metadata_dropped_by_legacy_format(tmp_path, lazy):
+    """The legacy layout drops box metadata with a warning."""
+    path = str(tmp_path / "boxes.slp")
+    save_slp(_labels_with_box_metadata(), path)
+    out = str(tmp_path / "legacy.slp")
+    with pytest.warns(UserWarning, match="bounding box metadata can't be stored"):
+        save_slp(load_slp(path, lazy=lazy), out, legacy_format=True)
+    with h5py.File(out, "r") as f:
+        assert "metadata" not in f["bboxes"]
+
+
+def test_lazy_save_rejects_mixed_bbox_metadata_kinds(tmp_path):
+    """A lazy save checks box metadata kinds before touching the output file."""
+    path = str(tmp_path / "boxes.slp")
+    save_slp(_labels_with_box_metadata(), path)
+    labels = load_slp(path, lazy=True)
+    labels[0].bboxes[1].metadata["source"] = 3
+    out = tmp_path / "out.slp"
+    with pytest.raises(TypeError, match="'source' mixes str and int"):
+        save_slp(labels, str(out))
+    assert not out.exists()
+
+
+def test_remaining_table_compression(tmp_path, slp_legacy_tables):
+    """`compression=` also compresses the remaining tables' row columns."""
+    out = _save(load_slp(slp_legacy_tables), tmp_path / "gz.slp", compression="gzip")
+    with h5py.File(out, "r") as f:
+        for name in (
+            "rois/video",
+            "masks/name",
+            "masks/score_maps/mask_idx",
+            "label_images/objects/label_id",
+            "identity/links/owner_id",
+            "session_data/frame_groups/frame_idx",
+        ):
+            assert f[name].compression == "gzip", name
+            assert f[name].shuffle, name
+        # Score map buffers hold zlib-compressed maps, so they aren't filtered.
+        assert f["masks/score_maps/data"].compression is None
+        assert f["session_data/frame_groups/frame_idx"].maxshape == (None,)
+    assert _annotation_summary(load_slp(out)) == _annotation_summary(
+        load_slp(slp_legacy_tables)
+    )
+
+
+def test_read_remaining_tables_directly(slp_tables_3_0, slp_legacy_tables):
+    """The table readers read 3.0 and 2.x tables alike when called directly."""
+    for path in (slp_tables_3_0, slp_legacy_tables):
+        videos = read_videos(path, open_backend=False)
+        tracks = read_tracks(path)
+        rois = read_rois(path, videos, tracks)
+        assert [r.name for r, _, _ in rois] == ["arena", "blob", "static", "floating"]
+        assert [(v, f) for _, v, f in rois] == [(0, 0), (0, 0), (0, -1), (-1, -1)]
+        masks = read_masks(path, videos, tracks)
+        assert masks[1][0].from_predicted is masks[0][0]
+        assert read_identity_links(path) == {
+            0: {1: (0, pytest.approx(0.6))},
+            5: {0: (0, pytest.approx(0.75))},
+        }
+
+
+def _add_compound_field(path, dataset: str, name: str, values) -> None:
+    """Rewrite a compound dataset with one more field."""
+    with h5py.File(path, "r+") as f:
+        data = f[dataset][()]
+        new = np.empty(len(data), dtype=data.dtype.descr + [(name, "i2")])
+        for field in data.dtype.names:
+            new[field] = data[field]
+        new[name] = values
+        del f[dataset]
+        f.create_dataset(dataset, data=new)
+
+
+def test_unattributable_legacy_rows_drop_unknown_columns(tmp_path, slp_legacy_tables):
+    """Unknown 2.x columns whose rows can't be attributed to objects are dropped."""
+    path = tmp_path / "legacy.slp"
+    shutil.copy(slp_legacy_tables, path)
+    # A score map of a mask that doesn't exist, and a frame group whose members
+    # are missing (so it can't be rebuilt).
+    _add_compound_field(path, "mask_score_map_index", "future_x", [1])
+    _add_compound_field(path, "label_image_score_map_index", "future_x", [2])
+    _add_compound_field(path, "session_data/frame_groups", "future_x", [3])
+    with h5py.File(path, "r+") as f:
+        index = f["mask_score_map_index"][()]
+        index["mask_idx"] = 7
+        f["mask_score_map_index"][...] = index
+        index = f["label_image_score_map_index"][()]
+        index["li_idx"] = 7
+        f["label_image_score_map_index"][...] = index
+        del f["session_data/instance_group_members"]
+    with pytest.warns(UserWarning, match="Reading it leniently"):
+        labels = load_slp(str(path))
+    assert labels[0].masks[0].score_map is None
+    assert labels.sessions[0].frame_groups == {}
+    out = str(tmp_path / "out.slp")
+    with pytest.warns(UserWarning) as record:
+        save_slp(labels, out)
+    messages = " ".join(str(w.message) for w in record)
+    assert "future_x of /masks/score_maps were not saved" in messages
+    assert "future_x of /label_images/score_maps were not saved" in messages
+    assert "future_x of /session_data/frame_groups were not saved" in messages
+
+
+def test_merge_label_images_checks_sources(tmp_path, slp_tables_3_0):
+    """Inconsistent 3.0 sources raise in `merge_label_images` as on reading."""
+    _replace_column(slp_tables_3_0, "label_images/score_maps", "data_end", _bump_last)
+    with pytest.raises(ValueError, match="score_maps ranges fall outside"):
+        merge_label_images([slp_tables_3_0], str(tmp_path / "m.slp"))
+    _replace_column(slp_tables_3_0, "label_images", "n_objects", _bump_last)
+    with pytest.raises(ValueError, match="object ranges fall outside"):
+        merge_label_images([slp_tables_3_0], str(tmp_path / "m.slp"))

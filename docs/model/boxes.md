@@ -137,8 +137,10 @@ Every bounding box can carry optional metadata:
 The `metadata` dictionary follows the same rules as
 [instance metadata](poses.md#metadata): values are `bool`, `int`, `float` or `str`
 (`None` means missing), validated when set, and each key holds one kind of value
-across all boxes (checked by `Labels.check_metadata()` and when saving). `pad()` keeps it on the new box. The current SLP layout
-doesn't store it yet (`save_slp` drops it with a warning).
+across all boxes (checked by `Labels.check_metadata()` and when saving). `pad()` keeps it on the new box. SLP format 3.0
+stores it as typed columns of `/bboxes` (see
+[Record Metadata](../formats/slp.md#record-metadata)), including through lazy
+saves; `legacy_format=True` drops it with a warning.
 
 ```pycon
 >>> import sleap_io as sio

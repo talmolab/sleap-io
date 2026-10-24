@@ -286,6 +286,38 @@ def slp_legacy_sparse_instance_ids():
 
 
 @pytest.fixture
+def slp_legacy_tables():
+    """SLP 2.8 file with every non-pose table in its compound (2.x) layout.
+
+    Two videos (`cam1.mp4`, `cam2.mp4`), tracks `t0` and `t1`, identity `mouse_a`
+    and two categories named `female` (the second made from the string given to
+    the user mask), with identity and category links. Frame 0 of `cam1` holds a
+    predicted instance P (track `t0`) and a user instance U copied from it
+    (identity `mouse_a`, score 0.6), plus:
+    - ROIs: a user polygon `arena` (category `female`, source `manual`, track
+      `t0`, tracking score 0.25, linked to U, identity `mouse_a` with score 0.75)
+      and a predicted buffered point `blob` (score 0.6);
+    - masks: a predicted mask `pm` (score 0.8, track `t1`, category `female` with
+      score 0.4) with a 6x8 score map (scale 2, offset (0.5, 0.25)), and a user
+      mask `um` copied from it (category `female`, scale 0.5, offset (1, 2),
+      linked to U, tracking score 0.4);
+    - label images (5x7, chunked): a user one with objects 1 (`c1`, track `t0`,
+      linked to U) and 2 (`c2`, track `t1`, tracking score 0.3), and a predicted
+      one (score 0.7, scale 2) with objects 2 (`p2`, score 0.55) and 4 and a
+      constant 0.25 score map (scale 1.5, offset (0, 1));
+    - a user box `box` linked to U.
+    Frame 0 of `cam2` holds a user instance. Static ROIs: `static` (a line, on
+    `cam1`) and `floating` (a point, no video). One session (metadata
+    `site: lab`) has a frame group (metadata `take: 1`) with two instance groups:
+    U and the `cam2` instance (score 0.95, identity `mouse_a`, metadata
+    `note: first`, a 3D instance with score 0.9), and P alone (a predicted 3D
+    instance with score 0.5). The session tables are compound `/session_data`
+    datasets.
+    """
+    return "tests/data/slp/legacy_tables.slp"
+
+
+@pytest.fixture
 def slp_mixed_layout():
     """SLP 3.0 file with columnar points but compound instances and frames.
 

@@ -236,11 +236,13 @@ def save_slp(
             warns. Ignored for the default (3.0) layout, which stores them.
         legacy_format: If `True`, write the SLP 2.x layout that older sleap-io
             (< 0.10) and SLEAP releases can read. Default `False` writes SLP format
-            3.0, which they refuse to open.
-        compression: Compression for the pose tables (points, instances and
-            frames): `None` (the default) for uncompressed data that reads
-            fastest, or `"gzip"` or `"lzf"` for smaller files. Segmentation, label
-            image and 3D point data are compressed regardless.
+            3.0, where every table is a group of columns, which they refuse to
+            open.
+        compression: Compression for the table columns (points, instances,
+            frames, ROIs, masks, label images, links and session tables): `None`
+            (the default) for uncompressed data that reads fastest, or `"gzip"` or
+            `"lzf"` for smaller files. Geometry, segmentation, label image and 3D
+            point data are compressed regardless.
     """
     from sleap_io.io import slp
 
@@ -1990,7 +1992,9 @@ def merge_label_images(
 
     Copies compressed chunks directly (no decompression) via
     ``read_direct_chunk`` -> ``write_direct_chunk`` when possible, falling
-    back to decompress + recompress for legacy blob-format sources.
+    back to decompress + recompress for legacy blob-format sources. Sources may
+    use any SLP layout; the merged file is SLP 3.0. The merged file holds no
+    instances, so label image objects link to none.
 
     Args:
         source_paths: List of paths to source SLP files containing label
@@ -2005,7 +2009,8 @@ def merge_label_images(
     Raises:
         ValueError: If source files have label images with different
             ``(height, width)`` dimensions, or if no source files are
-            provided, or if a source contains no label images.
+            provided, or if a source contains no label images, or if an SLP
+            3.0 source's label image tables are inconsistent.
 
     See also: :func:`sleap_io.io.slp.merge_label_images`
     """
