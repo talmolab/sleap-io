@@ -570,6 +570,10 @@ The `provenance` field tracks the origin and history of the labels file:
 | `merge_history` | `array` | `merge` | Records of merge operations (timestamp, source, strategy) |
 | *custom* | `any` | user | Additional user-defined provenance data |
 
+Subsets made with `Labels.extract`, `Labels.split`, `Labels.make_training_splits`
+or `sio split` carry a deep copy of the parent's provenance (including custom
+keys), except `filename`, which is replaced by `source_labels`.
+
 !!! note "Custom Provenance"
     The provenance dictionary can contain arbitrary key-value pairs for
     tracking custom metadata. Values must be JSON-serializable. Path objects
