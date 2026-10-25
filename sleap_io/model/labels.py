@@ -535,7 +535,7 @@ class Labels:
             skeletons=new_skeletons,
             tracks=new_tracks,
             suggestions=new_suggestions,
-            provenance=dict(self.provenance),
+            provenance=deepcopy(self.provenance),
             rois=static_rois,
         )
         materialized_labels._carried_columns = self._lazy_store.column_carry(
@@ -993,7 +993,7 @@ class Labels:
                 identities=new_identities,
                 suggestions=[deepcopy(s) for s in self.suggestions],
                 sessions=[deepcopy(s) for s in self.sessions],
-                provenance=dict(self.provenance),
+                provenance=deepcopy(self.provenance),
                 event_types=new_event_types,
                 events=new_events,
                 categories=new_categories,
@@ -3220,8 +3220,9 @@ class Labels:
             This copies the labeled frames and their associated data, including
             skeletons and tracks, and tries to maintain the relative ordering.
 
-            This also copies the provenance and inserts an extra key: `"source_labels"`
-            with the path to the current labels, if available.
+            This also deep copies the provenance (except for `"filename"`) and inserts
+            an extra key: `"source_labels"` with the path to the current labels, if
+            available.
 
             This also copies any suggested frames associated with the videos of the
             extracted labeled frames.
@@ -3258,7 +3259,12 @@ class Labels:
         labels.suggestions.extend(suggestions)
         labels.update()
 
-        labels.provenance = deepcopy(labels.provenance)
+        # Copy the source provenance, minus "filename": the extracted labels were
+        # not loaded from that file (it is recorded as "source_labels" instead), and
+        # saving would otherwise treat it as the file being re-saved.
+        labels.provenance = {
+            k: deepcopy(v) for k, v in self.provenance.items() if k != "filename"
+        }
         labels.provenance["source_labels"] = self.provenance.get("filename", None)
 
         # Unknown pose table columns can't follow a subset of the rows, so saving
@@ -3407,8 +3413,7 @@ class Labels:
         # Update provenance.
         source_labels = self.provenance.get("filename", None)
         labels_train.provenance["source_labels"] = source_labels
-        if n_val is not None:
-            labels_val.provenance["source_labels"] = source_labels
+        labels_val.provenance["source_labels"] = source_labels
         if n_test is not None:
             labels_test.provenance["source_labels"] = source_labels
 

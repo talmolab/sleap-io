@@ -1009,7 +1009,7 @@ splits/
 └── test.slp       # Test set (only if --test specified)
 ```
 
-Each output file includes provenance metadata:
+Each output file keeps the input file's provenance (except `filename`) and adds:
 
 - `source_labels`: Path to the original input file
 - `split`: Split name (`train`, `val`, or `test`)

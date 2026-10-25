@@ -1686,6 +1686,87 @@ def test_extract_with_suggestions():
     assert extracted.suggestions[1].video.matches_content(video2)
 
 
+def _labels_with_nested_provenance() -> Labels:
+    """Build labels whose provenance has a filename and a nested dict value."""
+    video = Video(filename="v1.mp4")
+    skel = Skeleton(["a", "b"])
+    labels = Labels(
+        labeled_frames=[
+            LabeledFrame(video, i, [Instance.from_numpy(np.zeros((2, 2)), skel)])
+            for i in range(4)
+        ]
+    )
+    labels.provenance["filename"] = "/path/to/source.slp"
+    labels.provenance["labeled_nodes"] = {"mpii": ["a"], "coco": ["a", "b"]}
+    labels.provenance["sleap_version"] = "1.4.1"
+    return labels
+
+
+@pytest.mark.parametrize("copy_frames", [True, False])
+def test_extract_preserves_provenance(copy_frames):
+    labels = _labels_with_nested_provenance()
+
+    extracted = labels.extract([0, 1], copy=copy_frames)
+
+    assert extracted.provenance["labeled_nodes"] == {
+        "mpii": ["a"],
+        "coco": ["a", "b"],
+    }
+    assert extracted.provenance["sleap_version"] == "1.4.1"
+    assert extracted.provenance["source_labels"] == "/path/to/source.slp"
+    # The extract was not loaded from the source file.
+    assert "filename" not in extracted.provenance
+    assert labels.provenance["filename"] == "/path/to/source.slp"
+    assert "source_labels" not in labels.provenance
+
+
+def test_extract_provenance_is_deep_copy():
+    labels = _labels_with_nested_provenance()
+
+    extracted = labels.extract([0, 1])
+    extracted.provenance["labeled_nodes"]["mpii"].append("b")
+    extracted.provenance["labeled_nodes"]["new"] = ["a"]
+    extracted.provenance["sleap_version"] = "changed"
+
+    assert labels.provenance["labeled_nodes"] == {"mpii": ["a"], "coco": ["a", "b"]}
+    assert labels.provenance["sleap_version"] == "1.4.1"
+
+
+def test_extract_provenance_without_filename():
+    labels = _labels_with_nested_provenance()
+    del labels.provenance["filename"]
+
+    extracted = labels.extract([0])
+
+    assert extracted.provenance["source_labels"] is None
+    assert extracted.provenance["labeled_nodes"]["coco"] == ["a", "b"]
+
+
+def test_extract_provenance_survives_save(tmp_path):
+    labels = _labels_with_nested_provenance()
+
+    labels.extract([0, 1]).save(tmp_path / "subset.slp")
+    loaded = load_slp(tmp_path / "subset.slp")
+
+    assert loaded.provenance["labeled_nodes"] == {"mpii": ["a"], "coco": ["a", "b"]}
+    assert loaded.provenance["source_labels"] == "/path/to/source.slp"
+
+
+def test_split_preserves_provenance():
+    labels = _labels_with_nested_provenance()
+
+    split1, split2 = labels.split(0.5, seed=0)
+
+    for split in (split1, split2):
+        assert split.provenance["labeled_nodes"] == labels.provenance["labeled_nodes"]
+        assert split.provenance["source_labels"] == "/path/to/source.slp"
+        assert "filename" not in split.provenance
+    # Splits don't share nested provenance values with each other or the source.
+    split1.provenance["labeled_nodes"]["mpii"].append("b")
+    assert split2.provenance["labeled_nodes"]["mpii"] == ["a"]
+    assert labels.provenance["labeled_nodes"]["mpii"] == ["a"]
+
+
 def test_make_training_splits(slp_real_data):
     labels = load_slp(slp_real_data)
     assert len(labels.user_labeled_frames) == 5
@@ -1721,6 +1802,26 @@ def test_make_training_splits(slp_real_data):
     assert len(train) == 2
     assert len(val) == 2
     assert len(test) == 1
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(n_train=0.5),
+        dict(n_train=0.5, n_val=0.25),
+        dict(n_train=0.5, n_test=0.25),
+        dict(n_train=0.5, n_val=0.25, n_test=0.25),
+    ],
+)
+def test_make_training_splits_preserves_provenance(kwargs):
+    labels = _labels_with_nested_provenance()
+
+    splits = labels.make_training_splits(**kwargs, seed=0)
+
+    for split in splits:
+        assert split.provenance["labeled_nodes"] == labels.provenance["labeled_nodes"]
+        assert split.provenance["source_labels"] == "/path/to/source.slp"
+        assert "filename" not in split.provenance
 
 
 def test_make_training_splits_save(slp_real_data, tmp_path):
@@ -7434,6 +7535,34 @@ def test_labels_lazy_copy_supplementary_frames(tmp_path):
     for i in range(len(lazy.labeled_frames)):
         lf = lazy.labeled_frames[i]
         assert lf.video is not None
+
+
+@pytest.mark.parametrize("method", ["copy", "materialize"])
+def test_labels_lazy_copy_provenance_is_deep_copy(tmp_path, method):
+    """Lazy copy() and materialize() don't share nested provenance values."""
+    labels = _labels_with_nested_provenance()
+    path = tmp_path / "test.slp"
+    save_slp(labels, path)
+    lazy = load_slp(path, lazy=True)
+
+    copied = getattr(lazy, method)()
+    copied.provenance["labeled_nodes"]["mpii"].append("b")
+
+    assert lazy.provenance["labeled_nodes"]["mpii"] == ["a"]
+    assert copied.provenance["filename"] == lazy.provenance["filename"]
+
+
+def test_labels_lazy_extract_preserves_provenance(tmp_path):
+    labels = _labels_with_nested_provenance()
+    path = tmp_path / "test.slp"
+    save_slp(labels, path)
+    lazy = load_slp(path, lazy=True)
+
+    extracted = lazy.extract([0, 1])
+
+    assert extracted.provenance["labeled_nodes"] == {"mpii": ["a"], "coco": ["a", "b"]}
+    assert extracted.provenance["source_labels"] == lazy.provenance["filename"]
+    assert "filename" not in extracted.provenance
 
 
 def test_labels_find_or_create_frame_reuse():
