@@ -4507,6 +4507,25 @@ def test_embed_channel_order_metadata(tmp_path, small_robot_video, plugin):
         assert format_id >= 1.4, f"Expected format_id >= 1.4, got {format_id}"
 
 
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_embed_keeps_image_video_plugin(tmp_path, centered_pair_frame_paths, plugin):
+    """Embedding decodes an ImageVideo with the plugin it was created with."""
+    video = Video.from_filename(centered_pair_frame_paths, plugin=plugin)
+    skeleton = Skeleton(nodes=["node1"])
+    instance = Instance(points=np.array([[10.0, 20.0]]), skeleton=skeleton)
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[instance])])
+
+    # The embed path decodes frames from a copy of the labels.
+    assert labels.copy(open_videos=True).video.backend.plugin == plugin
+
+    labels.save(tmp_path / "test.pkg.slp", embed=True)
+
+    # Copying for the embed closes and reopens the input video.
+    assert video.backend.plugin == plugin
+    loaded = load_slp(tmp_path / "test.pkg.slp")
+    assert_equal(loaded.video[0], video[0])
+
+
 def test_embed_backwards_compatibility_channel_order(tmp_path, small_robot_video):
     """Test that legacy files (format < 1.4) without channel_order default to BGR.
 

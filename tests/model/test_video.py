@@ -326,6 +326,39 @@ def test_video_open_with_plugin(centered_pair_low_quality_path):
     assert video.backend.plugin == "opencv"
 
 
+@pytest.mark.parametrize(
+    "fixture_name, plugin, expected",
+    [
+        ("centered_pair_frame_paths", "imageio", "imageio"),
+        ("centered_pair_frame_paths", "cv2", "opencv"),
+        ("centered_pair_low_quality_path", "ffmpeg", "FFMPEG"),
+        ("centered_pair_low_quality_path", "opencv", "opencv"),
+    ],
+)
+def test_video_from_filename_plugin_survives_copy_and_reopen(
+    request, fixture_name, plugin, expected
+):
+    """A plugin passed to from_filename is kept across deepcopy and reopen."""
+    video = Video.from_filename(request.getfixturevalue(fixture_name), plugin=plugin)
+    assert video.backend.plugin == expected
+    assert video.backend_metadata["plugin"] == expected
+
+    video_copy = copy.deepcopy(video)
+    assert video_copy.backend.plugin == expected
+    # The original is closed and reopened by deepcopy.
+    assert video.backend.plugin == expected
+
+    video.close()
+    video.open()
+    assert video.backend.plugin == expected
+
+
+def test_video_from_filename_without_plugin_records_none(centered_pair_frame_paths):
+    """Without an explicit plugin, from_filename leaves the default selection."""
+    video = Video.from_filename(centered_pair_frame_paths)
+    assert "plugin" not in video.backend_metadata
+
+
 def test_labels_set_video_plugin(centered_pair_low_quality_path):
     """Test Labels.set_video_plugin() method."""
     import sleap_io as sio

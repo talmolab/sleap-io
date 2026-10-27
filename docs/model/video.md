@@ -125,12 +125,17 @@ The full list of supported extensions is available via `Video.EXTS`:
 For media videos, you can choose which reading plugin to use:
 
 ```python
-# Set per-video
+# Set when loading
+video = sio.Video.from_filename("video.mp4", plugin="pyav")
+
+# Or change it on an existing video
 video.set_video_plugin("opencv")
 
 # Or set a global default
 sio.set_default_video_plugin("FFMPEG")
 ```
+
+A plugin chosen per video (including `plugin="opencv"` or `"imageio"` for image sequences) is kept when the video is copied, reopened, or decoded to embed frames in a `.pkg.slp`.
 
 Available plugins and their aliases:
 
