@@ -292,12 +292,19 @@ class Video:
             keep_open=keep_open,
             **kwargs,
         )
+        # Record an explicitly chosen plugin (normalized by the backend) so that a
+        # copied or reopened video keeps it instead of falling back to the default.
+        backend_metadata = {}
+        if kwargs.get("plugin") is not None and hasattr(backend, "plugin"):
+            backend_metadata["plugin"] = backend.plugin
+
         # If filename is a directory, VideoBackend.from_filename will expand it
         # to a list of paths to images contained within the directory. In this
         # case we want to use the expanded list as filename
         return cls(
             filename=backend.filename,
             backend=backend,
+            backend_metadata=backend_metadata,
             source_video=source_video,
         )
 
