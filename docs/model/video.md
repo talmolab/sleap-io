@@ -110,6 +110,9 @@ The full list of supported extensions is available via `Video.EXTS`:
 >>> print(sio.Video.EXTS)
 ```
 
+!!! note "Image orientation"
+    `ImageVideo` returns pixels as they are stored in the file. EXIF (JPEG/PNG) and TIFF `Orientation` tags are **not** applied, so a photo tagged as rotated is read unrotated, and `video.shape` reports the stored height and width. Frame reads, shape probes and embedding into `.pkg.slp` all follow this rule with either image plugin (`opencv` or `imageio`).
+
 !!! info "Norpix `.seq` extras"
     The `SeqVideo` backend exposes per-frame timestamps and an auto-computed FPS derived from the timestamp stream (handy when the header FPS is wrong, as is common for high-speed recordings):
 
