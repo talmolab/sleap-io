@@ -2689,6 +2689,51 @@ def test_embed_imagevideo_byte_copy(tmp_path, centered_pair_frame_paths):
     assert np.array_equal(video[0], reloaded.videos[0][0])
 
 
+@pytest.mark.parametrize("encode_plugin", ["opencv", "imageio"])
+@pytest.mark.parametrize("ext", ["jpg", "tif"])
+def test_embed_imagevideo_orientation_not_applied(tmp_path, encode_plugin, ext):
+    """Embedding an orientation-tagged image keeps the stored pixels and shape.
+
+    JPEGs are byte-copied (EXIF included) and TIFFs are decoded and re-encoded to
+    PNG. Either way the embedded frames and the recorded height/width must match
+    the stored (unrotated) pixels for both decode plugins.
+    """
+    img = np.full((30, 40, 3), 64, dtype=np.uint8)
+    img[:5, :10] = (255, 0, 0)
+    img[-5:, -10:] = (0, 0, 255)
+    exif = Image.Exif()
+    exif[0x0112] = 6  # Rotate 90 CW for display.
+    src = tmp_path / f"tagged.{ext}"
+    Image.fromarray(img).save(src, exif=exif.tobytes(), quality=95)
+
+    video = Video.from_filename([str(src)])
+    expected = video[0]
+    assert expected.shape == (30, 40, 3)
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=0,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[1.0, 2.0]]), skeleton=Skeleton(["a"])
+                    )
+                ],
+            )
+        ]
+    )
+    out = tmp_path / "tagged.pkg.slp"
+    labels.save(str(out), embed=True, plugin=encode_plugin)
+
+    with h5py.File(out, "r") as f:
+        attrs = f["video0/video"].attrs
+        assert (attrs["height"], attrs["width"]) == (30, 40)
+    for read_plugin in ["opencv", "imageio"]:
+        backend = HDF5Video(str(out), dataset="video0/video", plugin=read_plugin)
+        assert backend.shape == (1, 30, 40, 3)
+        assert np.array_equal(backend[0], expected)
+
+
 def test_embed_encoded_no_gzip(tmp_path, slp_real_data):
     """Encoded (PNG) embedded frames are stored uncompressed, not gzip-chunked.
 

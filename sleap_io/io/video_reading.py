@@ -12,6 +12,7 @@ import h5py
 import imageio.v3 as iio
 import numpy as np
 import simplejson as json
+import tifffile
 
 from sleap_io.io import _remote
 from sleap_io.transform.frame import crop_frame
@@ -313,6 +314,28 @@ def _extension_token(filename: str) -> str:
     if _remote._is_url(filename):
         return urllib.parse.urlparse(filename).path.lower()
     return filename.lower()
+
+
+def _has_tiff_orientation(filename: str) -> bool:
+    """Return whether a file is a TIFF with a non-default `Orientation` tag.
+
+    OpenCV's TIFF decoder applies the `Orientation` tag even with
+    `cv2.IMREAD_UNCHANGED` (and `cv2.IMREAD_IGNORE_ORIENTATION`): orientations 2-4
+    come back flipped or rotated, and 5-8 fail to decode. Such files must be read
+    with another decoder to get the stored pixels.
+
+    Args:
+        filename: Path to an image file.
+
+    Returns:
+        `True` if `filename` has a `.tif`/`.tiff` extension and its first page has an
+        `Orientation` tag other than 1 (top-left), otherwise `False`.
+    """
+    if Path(filename).suffix.lower() not in (".tif", ".tiff"):
+        return False
+    with tifffile.TiffFile(filename) as tif:
+        tag = tif.pages[0].tags.get("Orientation")
+    return tag is not None and tag.value != 1
 
 
 def _is_pyav_available() -> bool:
@@ -2066,17 +2089,23 @@ class ImageVideo(VideoBackend):
             Images are always returned in RGB order regardless of plugin:
             - imageio: Returns RGB natively
             - opencv: Returns BGR, automatically flipped to RGB
+
+            Pixels are returned as stored, without applying any EXIF/TIFF
+            orientation tag. TIFFs with an orientation tag are read with imageio
+            even with the opencv plugin, since OpenCV always applies the tag for
+            TIFFs.
         """
-        if self.plugin == "opencv":
+        filename = self.filename[frame_idx]
+        if self.plugin == "opencv" and not _has_tiff_orientation(filename):
             # OpenCV reads as BGR, flip to RGB
-            img = cv2.imread(self.filename[frame_idx], cv2.IMREAD_UNCHANGED)
+            img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
             if img is None:
-                raise ValueError(f"Failed to read image: {self.filename[frame_idx]}")
+                raise ValueError(f"Failed to read image: {filename}")
             if img.ndim == 3 and img.shape[-1] == 3:
                 img = img[..., ::-1]  # BGR -> RGB
         else:  # imageio
             # imageio reads as RGB natively
-            img = iio.imread(self.filename[frame_idx])
+            img = iio.imread(filename)
 
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)

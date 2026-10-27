@@ -9,6 +9,7 @@ import imageio.v3 as iio
 import numpy as np
 import pytest
 from numpy.testing import assert_equal
+from PIL import Image
 from pytest_httpserver import HTTPServer
 
 import sleap_io as sio
@@ -20,6 +21,7 @@ from sleap_io.io.video_reading import (
     MediaVideo,
     TiffVideo,
     VideoBackend,
+    _has_tiff_orientation,
     _probe_video_codec,
 )
 from sleap_io.transform.frame import crop_frame
@@ -528,6 +530,73 @@ def test_imagevideo_get_frame_raw_bytes(tmp_path, centered_pair_frame_paths):
     backend_missing = ImageVideo([str(missing)])
     missing.unlink()
     assert backend_missing.get_frame_raw_bytes(0) is None
+
+
+def _oriented_rgb_image() -> np.ndarray:
+    """Return a 30x40 RGB image with distinct, asymmetric corner markers."""
+    img = np.full((30, 40, 3), 64, dtype=np.uint8)
+    img[:5, :10] = (255, 0, 0)
+    img[-5:, -10:] = (0, 0, 255)
+    return img
+
+
+def _save_with_orientation(path: Path, img: np.ndarray, orientation: int) -> Path:
+    """Save an image with PIL, tagging it with an EXIF/TIFF `Orientation`."""
+    exif = Image.Exif()
+    exif[0x0112] = orientation
+    Image.fromarray(img).save(path, exif=exif.tobytes(), quality=95)
+    return path
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+@pytest.mark.parametrize("orientation", [3, 6, 8])
+def test_imagevideo_jpeg_orientation_not_applied(tmp_path, plugin, orientation):
+    """JPEG frames and shape are the stored pixels, ignoring EXIF orientation."""
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not installed")
+    img = _oriented_rgb_image()
+    tagged = _save_with_orientation(tmp_path / "tagged.jpg", img, orientation)
+    untagged = tmp_path / "untagged.jpg"
+    Image.fromarray(img).save(untagged, quality=95)
+    expected = iio.imread(untagged)
+
+    backend = ImageVideo([str(tagged)], plugin=plugin)
+    assert backend.shape == (1, 30, 40, 3)
+    assert_equal(backend[0], expected)
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+@pytest.mark.parametrize("orientation", [1, 3, 6, 8])
+def test_imagevideo_tiff_orientation_not_applied(tmp_path, plugin, orientation):
+    """TIFF frames and shape are the stored pixels with both plugins.
+
+    OpenCV applies the TIFF `Orientation` tag even with `IMREAD_UNCHANGED` (flipping
+    orientations 2-4 and failing on 5-8), so the opencv plugin must not decode
+    oriented TIFFs itself.
+    """
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not installed")
+    img = _oriented_rgb_image()
+    path = _save_with_orientation(tmp_path / "tagged.tif", img, orientation)
+
+    backend = ImageVideo([str(path)], plugin=plugin)
+    assert backend.shape == (1, 30, 40, 3)
+    assert_equal(backend[0], img)
+
+
+def test_has_tiff_orientation(tmp_path):
+    img = _oriented_rgb_image()
+    assert _has_tiff_orientation(str(tmp_path / "missing.png")) is False
+    plain = tmp_path / "plain.tif"
+    Image.fromarray(img).save(plain)
+    assert _has_tiff_orientation(str(plain)) is False
+    top_left = _save_with_orientation(tmp_path / "o1.tif", img, 1)
+    assert _has_tiff_orientation(str(top_left)) is False
+    rotated = _save_with_orientation(tmp_path / "o6.TIFF", img, 6)
+    assert _has_tiff_orientation(str(rotated)) is True
+    # JPEG orientation is ignored by every decoder, so it is not reported.
+    jpeg = _save_with_orientation(tmp_path / "o6.jpg", img, 6)
+    assert _has_tiff_orientation(str(jpeg)) is False
 
 
 def test_opencv_bgr_to_rgb_conversion(tmp_path):
