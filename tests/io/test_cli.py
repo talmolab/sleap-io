@@ -2563,9 +2563,61 @@ def test_convert_compression(tmp_path, slp_typical, compression):
     )
 
 
+def test_convert_image_format(tmp_path, slp_minimal_pkg):
+    """`--image-format`/`--image-quality` set how embedded frames are encoded."""
+    sizes = {}
+    for quality in ("30", "95"):
+        output_path = tmp_path / f"q{quality}.pkg.slp"
+        result = CliRunner().invoke(
+            cli,
+            [
+                "convert",
+                slp_minimal_pkg,
+                "-o",
+                str(output_path),
+                "--embed",
+                "user",
+                "--image-format",
+                "jpg",
+                "--image-quality",
+                quality,
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        with h5py.File(output_path, "r") as f:
+            ds = f["video0/video"]
+            assert ds.attrs["format"] == "jpg"
+            sizes[quality] = ds.shape[1]
+    assert sizes["30"] < sizes["95"]
+
+
+def test_convert_image_quality_needs_format(tmp_path, slp_minimal_pkg):
+    """`--image-quality` without `--image-format` fails with the library's error."""
+    result = CliRunner().invoke(
+        cli,
+        [
+            "convert",
+            slp_minimal_pkg,
+            "-o",
+            str(tmp_path / "out.pkg.slp"),
+            "--embed",
+            "user",
+            "--image-quality",
+            "90",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "image_quality needs" in _strip_ansi(result.output)
+
+
 @pytest.mark.parametrize(
     "option",
-    [["--compression", "gzip"], ["--unlabeled-as", "absent", "--legacy-format"]],
+    [
+        ["--compression", "gzip"],
+        ["--unlabeled-as", "absent", "--legacy-format"],
+        ["--image-format", "jpg"],
+        ["--image-quality", "90"],
+    ],
 )
 def test_convert_slp_options_require_slp_output(tmp_path, slp_typical, option):
     """SLP save options error for other output formats."""
@@ -8723,6 +8775,46 @@ def test_embed_basic(tmp_path, slp_real_data):
     assert "Embedded:" in output
     assert "user:" in output
     assert output_path.exists()
+
+
+def test_embed_image_format(tmp_path, slp_real_data):
+    """`sio embed --image-format jpg --image-quality` stores JPEG frames."""
+    output_path = tmp_path / "embedded.pkg.slp"
+    result = CliRunner().invoke(
+        cli,
+        [
+            "embed",
+            slp_real_data,
+            "-o",
+            str(output_path),
+            "--image-format",
+            "jpg",
+            "--image-quality",
+            "90",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    with h5py.File(output_path, "r") as f:
+        assert f["video0/video"].attrs["format"] == "jpg"
+
+
+def test_embed_image_quality_out_of_range(tmp_path, slp_real_data):
+    """An out-of-range `--image-quality` fails with the library's error."""
+    result = CliRunner().invoke(
+        cli,
+        [
+            "embed",
+            slp_real_data,
+            "-o",
+            str(tmp_path / "embedded.pkg.slp"),
+            "--image-format",
+            "png",
+            "--image-quality",
+            "12",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "[0, 9]" in _strip_ansi(result.output)
 
 
 def test_embed_with_predictions(tmp_path, slp_real_data):

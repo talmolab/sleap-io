@@ -2557,6 +2557,28 @@ def _infer_output_format(path: Path) -> str | None:
     return None
 
 
+_image_format_option = click.option(
+    "--image-format",
+    "image_format",
+    type=click.Choice(["png", "jpg", "hdf5"]),
+    default=None,
+    help=(
+        "Image format for embedded frames (default: keep PNG/JPEG sources as they "
+        "are, PNG otherwise)."
+    ),
+)
+_image_quality_option = click.option(
+    "--image-quality",
+    "image_quality",
+    type=int,
+    default=None,
+    help=(
+        "JPEG quality (0-100) with --image-format jpg, or PNG compression level "
+        "(0-9) with --image-format png."
+    ),
+)
+
+
 @cli.command()
 @click.argument(
     "input_arg",
@@ -2624,6 +2646,8 @@ def _infer_output_format(path: Path) -> str | None:
     default=None,
     help="Compress the SLP table columns (default: uncompressed). SLP output only.",
 )
+@_image_format_option
+@_image_quality_option
 @click.option(
     "--visibility-encoding",
     "visibility_encoding",
@@ -2702,6 +2726,8 @@ def convert(
     legacy_format: bool,
     unlabeled_as: str | None,
     compression: str | None,
+    image_format: str | None,
+    image_quality: int | None,
     visibility_encoding: str | None,
     v0_as: str | None,
     csv_format: str,
@@ -2730,8 +2756,9 @@ def convert(
     --coco-category-as-track and --coco-segmentation control identity tracks and
     polygon handling. For COCO and Ultralytics input, --visibility-encoding and
     --v0-as control how keypoint visibility codes are read. For SLP output,
-    --compression compresses the tables and --unlabeled-as sets how
-    --legacy-format handles unlabeled points.
+    --compression compresses the tables, --unlabeled-as sets how
+    --legacy-format handles unlabeled points, and --image-format and
+    --image-quality set how embedded frames are encoded.
 
     [dim]Examples:[/]
 
@@ -2741,6 +2768,7 @@ def convert(
         $ sio convert dlc_project/ -o labels.slp
         $ sio convert seg.json -o labels.slp --from coco --coco-category-as-track
         $ sio convert labels.slp -o labels.pkg.slp --embed user
+        $ sio convert labels.slp -o labels.pkg.slp --embed user --image-format jpg
         $ sio convert labels.slp -o labels.v2.slp --legacy-format
         $ sio convert coco.json -o labels.v2.slp --legacy-format --unlabeled-as absent
         $ sio convert crowdpose.json -o labels.slp --visibility-encoding binary
@@ -2799,6 +2827,8 @@ def convert(
     for flag, value in [
         ("--unlabeled-as", unlabeled_as),
         ("--compression", compression),
+        ("--image-format", image_format),
+        ("--image-quality", image_quality),
     ]:
         if value is not None and resolved_output_format != "slp":
             raise click.ClickException(f"{flag} is only valid for SLP output format.")
@@ -2885,6 +2915,10 @@ def convert(
                 save_kwargs["unlabeled_as"] = unlabeled_as
             if compression is not None:
                 save_kwargs["compression"] = compression
+            if image_format is not None:
+                save_kwargs["image_format"] = image_format
+            if image_quality is not None:
+                save_kwargs["image_quality"] = image_quality
         # Handle CSV-specific options
         if resolved_output_format == "csv":
             io_main.save_csv(
@@ -5628,6 +5662,8 @@ def fix(
     show_default=True,
     help="Include suggested frames.",
 )
+@_image_format_option
+@_image_quality_option
 def embed(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -5635,6 +5671,8 @@ def embed(
     include_user: bool,
     include_predictions: bool,
     include_suggestions: bool,
+    image_format: str | None,
+    image_quality: int | None,
 ):
     """Embed video frames into a labels file.
 
@@ -5646,9 +5684,13 @@ def embed(
     - --predictions: Frames with only predicted instances (default: off)
     - --suggestions: Suggested frames for labeling (default: off)
 
+    [bold]Encoding:[/] --image-format (png, jpg or hdf5) and --image-quality (JPEG
+    quality 0-100 or PNG compression level 0-9) set how frames are stored.
+
     [dim]Examples:[/]
 
         $ sio embed labels.slp -o labels.pkg.slp
+        $ sio embed labels.slp -o labels.pkg.slp --image-format jpg --image-quality 95
         $ sio embed labels.slp -o labels.pkg.slp --suggestions
         $ sio embed labels.slp -o labels.pkg.slp --predictions --suggestions
         $ sio embed labels.slp -o labels.pkg.slp --no-user --suggestions
@@ -5712,7 +5754,12 @@ def embed(
 
     # Save with embedding
     try:
-        labels.save(str(output_path), embed=frames_to_embed)
+        labels.save(
+            str(output_path),
+            embed=frames_to_embed,
+            image_format=image_format,
+            image_quality=image_quality,
+        )
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 

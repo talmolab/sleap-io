@@ -1105,31 +1105,93 @@ def can_use_fast_path(video: Video, frame_idx: int, target_format: str) -> bool:
     return True
 
 
-def _resolve_embed_format(video: Video, requested_format: str) -> str:
+def _encoded_image_channels(raw_bytes: np.ndarray) -> int:
+    """Number of channels of a PNG/JPEG image, read from its header (no decode)."""
+    from PIL import Image
+
+    with Image.open(io.BytesIO(raw_bytes.tobytes())) as img:
+        return len(img.getbands())
+
+
+EMBED_IMAGE_FORMATS = ("png", "jpg", "hdf5")
+"""Image formats embedded frames can be stored in (`image_format` of the writers)."""
+
+
+def _check_embed_image_format(
+    image_format: str | None, image_quality: int | None
+) -> str | None:
+    """Validate and normalize the `image_format`/`image_quality` embedding options.
+
+    Args:
+        image_format: `None` (choose per video, see `_resolve_embed_format`),
+            `"png"`, `"jpg"` (or `"jpeg"`) or `"hdf5"`, in any case.
+        image_quality: `None` for the encoder default, a JPEG quality (0-100) with
+            `image_format="jpg"` or a PNG compression level (0-9) with
+            `image_format="png"`.
+
+    Returns:
+        The normalized format: `None`, `"png"`, `"jpg"` or `"hdf5"`.
+
+    Raises:
+        ValueError: If the format is not one of `EMBED_IMAGE_FORMATS`, or the quality
+            is out of range for it or given without an explicit encoded format.
+    """
+    if image_format is not None:
+        image_format = str(image_format).lower()
+        if image_format == "jpeg":
+            image_format = "jpg"
+        if image_format not in EMBED_IMAGE_FORMATS:
+            raise ValueError(
+                f"image_format must be one of {EMBED_IMAGE_FORMATS} or None, got "
+                f"{image_format!r}."
+            )
+    if image_quality is not None:
+        bounds = {"jpg": (0, 100), "png": (0, 9)}.get(image_format)
+        if bounds is None:
+            raise ValueError(
+                "image_quality needs image_format='jpg' (quality 0-100) or "
+                f"image_format='png' (compression level 0-9), got {image_format!r}."
+            )
+        if not (bounds[0] <= int(image_quality) <= bounds[1]):
+            raise ValueError(
+                f"image_quality for image_format={image_format!r} must be in "
+                f"[{bounds[0]}, {bounds[1]}], got {image_quality}."
+            )
+    return image_format
+
+
+def _resolve_embed_format(video: Video, requested_format: str | None) -> str:
     """Determine the on-disk image format to store a video's embedded frames in.
 
-    For an `ImageVideo` whose source files are already-compressed PNG/JPEG, the
-    frames are byte-copied verbatim into the package (see
-    `process_and_embed_frames`), so the stored format follows the *source* rather
-    than `requested_format` -- re-encoding an already-compressed image would only
-    inflate size (PNG) or add artifacts (JPEG) for no benefit. All other sources
-    use `requested_format` (their frames are decoded and re-encoded).
+    With no requested format (`None`), a source whose frames are already PNG/JPEG
+    keeps its *source* format: an `ImageVideo` of PNG/JPEG files, or an embedded
+    `HDF5Video` with PNG/JPEG frames. Their frames are byte-copied verbatim into
+    the package (see `process_and_embed_frames`), since re-encoding an
+    already-compressed image would only inflate size (PNG) or add artifacts (JPEG).
+    All other sources are stored as PNG.
+
+    An explicit format applies to every video. Frames already stored in it are
+    still byte-copied; the rest are decoded and re-encoded.
 
     Args:
         video: The source `Video` whose frames will be embedded.
-        requested_format: The format requested by the caller ("png", "jpg", or
-            "hdf5").
+        requested_format: The format requested by the caller: `None` (per video, as
+            above), "png", "jpg", or "hdf5".
 
     Returns:
-        The image format string to store for this video's frames. This is the
-        normalized source extension ("png" or "jpg") for a byte-copyable
-        `ImageVideo`, otherwise `requested_format`.
+        The image format string to store for this video's frames: the explicit
+        `requested_format`, else the source's own "png" or "jpg", else "png".
     """
-    from sleap_io.io.video_reading import ImageVideo
+    from sleap_io.io.video_reading import CropVideoBackend, ImageVideo
 
-    if requested_format == "hdf5":
-        return "hdf5"
+    if requested_format is not None:
+        return requested_format
     backend = video.backend
+    if isinstance(backend, CropVideoBackend):
+        backend = backend.inner
+    if isinstance(backend, HDF5Video) and backend.has_embedded_images:
+        if backend.image_format in ("png", "jpg"):
+            return backend.image_format
     if isinstance(backend, ImageVideo):
         fnames = backend.filename
         first = fnames[0] if isinstance(fnames, list) and fnames else fnames
@@ -1137,17 +1199,18 @@ def _resolve_embed_format(video: Video, requested_format: str) -> str:
             ext = Path(first).suffix.lower().lstrip(".")
             if ext in ("png", "jpg", "jpeg"):
                 return "jpg" if ext == "jpeg" else ext
-    return requested_format
+    return "png"
 
 
 def process_and_embed_frames(
     labels_path: str,
     frames_metadata: list[dict],
-    image_format: str = "png",
+    image_format: str | None = None,
     fixed_length: bool = True,
     verbose: bool = True,
     plugin: str | None = None,
     progress_callback: Callable[[int, int, str], bool] | None = None,
+    image_quality: int | None = None,
 ) -> dict[Video, Video]:
     """Process and embed frames into a SLEAP labels file.
 
@@ -1158,8 +1221,12 @@ def process_and_embed_frames(
         labels_path: A string path to the SLEAP labels file.
         frames_metadata: A list of dictionaries with frame metadata from
             prepare_frames_to_embed.
-        image_format: The image format to use for embedding. Valid formats are "png"
-            (the default), "jpg" or "hdf5".
+        image_format: The image format to store embedded frames in: "png", "jpg"
+            or "hdf5" (raw pixels). If `None` (the default), sources already in
+            PNG/JPEG (image files or embedded frames) keep their own format and
+            everything else is stored as PNG.
+            Frames already stored in the target format are byte-copied without
+            re-encoding; the rest are decoded and re-encoded.
         fixed_length: If `True` (the default), the embedded images will be padded to the
             length of the largest image. If `False`, the images will be stored as
             variable length, which is smaller but may not be supported by all readers.
@@ -1179,13 +1246,22 @@ def process_and_embed_frames(
             .. note::
                 The ``phase`` argument (and the separate ``"write"`` phase) is a
                 breaking change from the previous ``(current, total)`` signature.
+        image_quality: Encoder setting for re-encoded frames: JPEG quality (0-100)
+            with `image_format="jpg"`, PNG compression level (0-9) with
+            `image_format="png"`. `None` (the default) uses the encoder's default
+            (JPEG quality 95 with OpenCV, 75 with imageio). Byte-copied frames keep
+            their stored bytes.
 
     Returns:
         A dictionary mapping original Video objects to their embedded versions.
 
     Raises:
         ExportCancelled: If the progress_callback returns `False`.
+        ValueError: If `image_format` or `image_quality` is invalid (see
+            `_check_embed_image_format`).
     """
+    image_format = _check_embed_image_format(image_format, image_quality)
+
     # Determine which plugin to use for encoding
     from sleap_io.io.video_reading import (
         CropVideoBackend,
@@ -1203,10 +1279,10 @@ def process_and_embed_frames(
     data_by_group: dict[str, dict] = {}
     total_frames = len(frames_metadata)
 
-    # Per-video (per-group) stored format: an ImageVideo of PNG/JPEG is byte-copied
-    # verbatim so its group stores the source format; everything else re-encodes to
-    # `image_format`. Decided once up front so a group's format is stable even when a
-    # stray frame falls back to the decode path.
+    # Per-video (per-group) stored format: the explicit `image_format`, else a
+    # source already in PNG/JPEG (image files, embedded frames) keeps its format and
+    # everything else is PNG. Decided once up front so a group's format is stable
+    # even when a stray frame falls back to the decode path.
     group_format: dict[str, str] = {}
     for frame_meta in frames_metadata:
         grp = frame_meta["group"]
@@ -1241,7 +1317,7 @@ def process_and_embed_frames(
 
         # Fast path: Copy raw bytes directly if formats match (avoids decode/encode)
         # This is faster and prevents quality degradation for lossy formats like JPEG
-        if can_use_fast_path(video, frame_idx, image_format):
+        if can_use_fast_path(video, frame_idx, grp_format):
             raw_bytes = video.backend.get_frame_raw_bytes(frame_idx)
             if raw_bytes is not None:
                 data_by_group[group]["imgs_data"].append(raw_bytes)
@@ -1262,6 +1338,8 @@ def process_and_embed_frames(
         # source bytes. Guard that this frame's on-disk format matches the group's
         # stored format (grp_format, decided from the first file); a stray frame with
         # a different extension falls through to the decode path and is re-encoded.
+        # Like `can_use_fast_path`, a grayscale video whose file has more than one
+        # channel is re-encoded too: its dataset attrs record one channel.
         if isinstance(video.backend, ImageVideo) and grp_format != "hdf5":
             fname = video.backend.filename[frame_idx]
             ext = (
@@ -1272,6 +1350,12 @@ def process_and_embed_frames(
             frame_format = "jpg" if ext == "jpeg" else ext
             if frame_format == grp_format:
                 raw_bytes = video.backend.get_frame_raw_bytes(frame_idx)
+                if (
+                    raw_bytes is not None
+                    and video.backend.grayscale
+                    and _encoded_image_channels(raw_bytes) != 1
+                ):
+                    raw_bytes = None
                 if raw_bytes is not None:
                     data_by_group[group]["imgs_data"].append(raw_bytes)
                     data_by_group[group]["frame_inds"].append(frame_idx)
@@ -1311,15 +1395,27 @@ def process_and_embed_frames(
             channel_order = "RGB"  # HDF5 format stores as-is (RGB)
         else:
             if plugin == "opencv":
-                img_data = np.squeeze(cv2.imencode("." + grp_format, frame)[1]).astype(
-                    "int8"
-                )
+                params = []
+                if image_quality is not None:
+                    flag = (
+                        cv2.IMWRITE_JPEG_QUALITY
+                        if grp_format == "jpg"
+                        else cv2.IMWRITE_PNG_COMPRESSION
+                    )
+                    params = [flag, int(image_quality)]
+                img_data = np.squeeze(
+                    cv2.imencode("." + grp_format, frame, params)[1]
+                ).astype("int8")
                 channel_order = "BGR"  # OpenCV encodes in BGR
             else:  # imageio
                 if frame.shape[-1] == 1:
                     frame = frame.squeeze(axis=-1)
+                kwargs = {}
+                if image_quality is not None:
+                    key = "quality" if grp_format == "jpg" else "compress_level"
+                    kwargs[key] = int(image_quality)
                 img_data = np.frombuffer(
-                    iio.imwrite("<bytes>", frame, extension="." + grp_format),
+                    iio.imwrite("<bytes>", frame, extension="." + grp_format, **kwargs),
                     dtype="int8",
                 )
                 channel_order = "RGB"  # imageio encodes in RGB
@@ -1553,11 +1649,12 @@ def embed_frames(
     labels_path: str,
     labels: Labels,
     embed: list[tuple[Video, int]],
-    image_format: str = "png",
+    image_format: str | None = None,
     verbose: bool = True,
     plugin: str | None = None,
     embed_all_videos: bool = True,
     progress_callback: Callable[[int, int, str], bool] | None = None,
+    image_quality: int | None = None,
 ):
     """Embed frames in a SLEAP labels file.
 
@@ -1565,8 +1662,11 @@ def embed_frames(
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object to embed in the labels file.
         embed: A list of tuples of `(video, frame_idx)` specifying the frames to embed.
-        image_format: The image format to use for embedding. Valid formats are "png"
-            (the default), "jpg" or "hdf5".
+        image_format: The image format to store embedded frames in: "png", "jpg"
+            or "hdf5". If `None` (the default), sources already in PNG/JPEG (image
+            files or embedded frames) keep their own format and everything else is
+            stored as PNG. See
+            `process_and_embed_frames`.
         verbose: If `True` (the default), display a progress bar for the embedding
             process.
         plugin: Image plugin to use for encoding. One of "opencv" or "imageio".
@@ -1581,6 +1681,9 @@ def embed_frames(
             HDF5 file). If it returns `False`, the operation is cancelled and
             `ExportCancelled` is raised. The ``phase`` argument is a breaking change
             from the previous ``(current, total)`` signature.
+        image_quality: JPEG quality (0-100) with `image_format="jpg"` or PNG
+            compression level (0-9) with `image_format="png"` for re-encoded frames.
+            `None` (the default) uses the encoder's default.
 
     Notes:
         This function will embed the frames in the labels file and update the `Videos`
@@ -1594,6 +1697,7 @@ def embed_frames(
         verbose=verbose,
         plugin=plugin,
         progress_callback=progress_callback,
+        image_quality=image_quality,
     )
 
     # Handle videos without any frames to embed.
@@ -1618,6 +1722,8 @@ def embed_videos(
     plugin: str | None = None,
     embed_all_videos: bool = True,
     progress_callback: Callable[[int, int, str], bool] | None = None,
+    image_format: str | None = None,
+    image_quality: int | None = None,
 ):
     """Embed videos in a SLEAP labels file.
 
@@ -1652,6 +1758,13 @@ def embed_videos(
             HDF5 file). If it returns `False`, the operation is cancelled and
             `ExportCancelled` is raised. The ``phase`` argument is a breaking change
             from the previous ``(current, total)`` signature.
+        image_format: The image format to store embedded frames in: "png", "jpg"
+            or "hdf5". If `None` (the default), sources already in PNG/JPEG (image
+            files or embedded frames) keep their own format and everything else is
+            stored as PNG.
+        image_quality: JPEG quality (0-100) with `image_format="jpg"` or PNG
+            compression level (0-9) with `image_format="png"` for re-encoded frames.
+            `None` (the default) uses the encoder's default.
     """
     if embed is True:
         embed = "all"
@@ -1676,10 +1789,12 @@ def embed_videos(
         labels_path,
         labels,
         embed,
+        image_format=image_format,
         verbose=verbose,
         plugin=plugin,
         embed_all_videos=embed_all_videos,
         progress_callback=progress_callback,
+        image_quality=image_quality,
     )
 
 
@@ -1691,6 +1806,8 @@ def write_videos(
     original_videos: list[Video] | None = None,
     verbose: bool = True,
     prefer_metadata: bool = True,
+    image_format: str | None = None,
+    image_quality: int | None = None,
 ):
     """Write video metadata to a SLEAP labels file.
 
@@ -1713,6 +1830,11 @@ def write_videos(
             of querying the live backend (avoids decoding frames just to recompute
             already-known metadata). Set to `False` to always read through the live
             backend. See `video_to_dict`.
+        image_format: Image format for videos re-embedded in EMBED mode: "png",
+            "jpg" or "hdf5". If `None` (the default), they keep the format of the
+            first such video's embedded frames.
+        image_quality: JPEG quality (0-100) or PNG compression level (0-9) for
+            re-encoded frames, with an explicit `image_format`.
     """
     # Handle backwards compatibility
     if reference_mode is None:
@@ -1824,14 +1946,16 @@ def write_videos(
         frames_metadata = prepare_frames_to_embed(
             labels_path, temp_labels, all_frames_to_embed
         )
+        if image_format is None:
+            # Keep the first video's stored format.
+            v = videos_to_embed[0][1]
+            image_format = getattr(v.backend, "image_format", "png")
         replaced_videos = process_and_embed_frames(
             labels_path,
             frames_metadata,
-            image_format=[
-                v.backend.image_format if hasattr(v.backend, "image_format") else "png"
-                for _, v, _ in videos_to_embed
-            ][0],  # Use the first video's format
+            image_format=image_format,
             verbose=verbose,
+            image_quality=image_quality,
         )
 
         # Add the embedded videos to the list
@@ -11248,6 +11372,8 @@ def _write_labels_lazy(
     legacy_format: bool = False,
     compression: str | None = None,
     unlabeled_as: str = "error",
+    image_format: str | None = None,
+    image_quality: int | None = None,
 ) -> None:
     """Write lazy Labels to SLP file using fast path.
 
@@ -11285,6 +11411,8 @@ def _write_labels_lazy(
         compression: Compression for the pose tables. See `write_labels`.
         unlabeled_as: How the legacy layout handles unlabeled points. See
             `write_labels`.
+        image_format: Image format for re-embedded frames. See `write_labels`.
+        image_quality: Encoder quality for re-embedded frames. See `write_labels`.
 
     Raises:
         ValueError: If labels is not lazy.
@@ -11365,6 +11493,8 @@ def _write_labels_lazy(
         original_videos=None,
         verbose=verbose,
         prefer_metadata=prefer_metadata,
+        image_format=image_format,
+        image_quality=image_quality,
     )
     # Emit virtual crop records (after videos_json so indices line up).
     write_video_crops(labels_path, labels)
@@ -11621,6 +11751,8 @@ def write_labels(
     unlabeled_as: str = "error",
     legacy_format: bool = False,
     compression: str | None = None,
+    image_format: str | None = None,
+    image_quality: int | None = None,
 ):
     """Write a SLEAP labels file.
 
@@ -11700,6 +11832,19 @@ def write_labels(
             filter) for smaller files. Datasets that are compressed by default
             (geometry, segmentation, label image and 3D point data) stay
             compressed either way.
+        image_format: The image format to store embedded frames in: `"png"`,
+            `"jpg"` (or `"jpeg"`) or `"hdf5"` (raw pixels). If `None` (the default),
+            PNG/JPEG image-file sources and already-embedded PNG/JPEG frames keep
+            their own format, and everything else is stored as PNG. An explicit
+            format applies to every embedded video: frames already stored in it are
+            byte-copied, the rest are decoded and re-encoded (a video with
+            `grayscale=True` is encoded with one channel). Only applies when frames
+            are embedded.
+        image_quality: Encoder setting for re-encoded frames: JPEG quality (0-100)
+            with `image_format="jpg"`, PNG compression level (0-9) with
+            `image_format="png"`. `None` (the default) uses the encoder's default
+            (JPEG quality 95 with OpenCV, 75 with imageio). Needs an explicit
+            `image_format`.
 
     Notes:
         Instance, frame and bounding box `metadata` is stored as columns of
@@ -11717,6 +11862,8 @@ def write_labels(
         groups) and the links are the ones loaded, in the same order. Otherwise
         they are dropped with a warning.
     """
+    # Check before touching the output file so a refused save leaves it intact.
+    image_format = _check_embed_image_format(image_format, image_quality)
     if unlabeled_as not in _UNLABELED_AS_MODES:
         raise ValueError(
             f"unlabeled_as must be one of {_UNLABELED_AS_MODES}, got {unlabeled_as!r}."
@@ -11759,6 +11906,8 @@ def write_labels(
                 legacy_format=legacy_format,
                 compression=compression,
                 unlabeled_as=unlabeled_as,
+                image_format=image_format,
+                image_quality=image_quality,
             )
             return
 
@@ -11817,6 +11966,8 @@ def write_labels(
             plugin=plugin,
             embed_all_videos=embed_all_videos,
             progress_callback=progress_callback,
+            image_format=image_format,
+            image_quality=image_quality,
         )
 
     # Determine reference mode based on parameters
@@ -11834,6 +11985,8 @@ def write_labels(
         original_videos=original_videos,
         verbose=verbose,
         prefer_metadata=prefer_metadata,
+        image_format=image_format,
+        image_quality=image_quality,
     )
     # Emit virtual crop records (after videos_json so indices line up). Omitted
     # entirely when no video is cropped (uncropped files stay byte-identical).
