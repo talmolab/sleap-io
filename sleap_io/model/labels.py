@@ -1933,9 +1933,10 @@ class Labels:
                 `/embeddings` vectors are skipped unless this is set `True` (they
                 stay in memory). Note this is distinct from `embed`, which embeds
                 *video frames*. SLP also takes `legacy_format=True` to write the 2.x
-                layout that older sleap-io and SLEAP releases read, and
-                `compression="gzip"` or `"lzf"` to compress the pose tables (see
-                `save_slp`).
+                layout that older sleap-io and SLEAP releases read,
+                `compression="gzip"` or `"lzf"` to compress the pose tables, and
+                `image_format` (`"png"`, `"jpg"` or `"hdf5"`) and `image_quality`
+                to choose how embedded frames are encoded (see `save_slp`).
         """
         from pathlib import Path
 

@@ -173,6 +173,8 @@ def save_slp(
     unlabeled_as: str = "error",
     legacy_format: bool = False,
     compression: str | None = None,
+    image_format: str | None = None,
+    image_quality: int | None = None,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -243,6 +245,16 @@ def save_slp(
             (the default) for uncompressed data that reads fastest, or `"gzip"` or
             `"lzf"` for smaller files. Geometry, segmentation, label image and 3D
             point data are compressed regardless.
+        image_format: The image format to store embedded frames in: `"png"`,
+            `"jpg"` (or `"jpeg"`) or `"hdf5"` (raw pixels). If `None` (the default),
+            sources already in PNG/JPEG (image files or embedded frames) keep their
+            own format and everything else is stored as PNG. An explicit format
+            applies to every embedded video; frames already in it are byte-copied
+            and the rest re-encoded. Only applies when frames are embedded.
+        image_quality: JPEG quality (0-100) with `image_format="jpg"` or PNG
+            compression level (0-9) with `image_format="png"` for re-encoded
+            frames. `None` (the default) uses the encoder's default (JPEG quality
+            95 with OpenCV, 75 with imageio).
     """
     from sleap_io.io import slp
 
@@ -261,6 +273,8 @@ def save_slp(
         unlabeled_as=unlabeled_as,
         legacy_format=legacy_format,
         compression=compression,
+        image_format=image_format,
+        image_quality=image_quality,
     )
 
 

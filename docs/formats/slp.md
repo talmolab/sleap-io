@@ -369,6 +369,34 @@ Frames can be embedded directly in SLP files for portability. Embedded frames ar
 | `jpg` | `int8[]` | Lossy JPEG | Smaller files, some quality loss |
 | `hdf5` | Raw array | Optional gzip | No encoding overhead, large files |
 
+Choose the format with `image_format` and the encoder setting with `image_quality`
+when saving:
+
+```python
+labels.save("labels.pkg.slp", embed="user", image_format="jpg", image_quality=95)
+```
+
+- **Default (`image_format=None`)**: frames that are already PNG or JPEG keep their
+  format and are byte-copied: image files (`ImageVideo`) and frames embedded in
+  another package. Everything else (video files, TIFF, other images) is encoded
+  as PNG.
+- **Explicit format**: applies to every embedded video. Frames already stored in
+  that format are byte-copied; the rest are decoded and re-encoded, so
+  `image_format="jpg"` converts a PNG package to JPEG.
+- **`image_quality`**: JPEG quality (0-100) for `"jpg"` or PNG compression level
+  (0-9) for `"png"`, applied to re-encoded frames. `None` uses the encoder default
+  (JPEG quality 95 with OpenCV, 75 with imageio). Byte-copied frames keep their
+  bytes.
+- **Grayscale**: a video with `grayscale=True` is encoded with one channel. Set it
+  on a video whose frames are gray but stored with three channels to shrink the
+  package and speed up decoding.
+
+JPEG decodes several times faster than PNG and is smaller, which matters when
+training reads embedded frames at random. PNG stays lossless.
+
+The CLI exposes the same options as `--image-format` and `--image-quality` on
+`sio embed` and `sio convert`.
+
 ### Frame Selection Modes
 
 When saving with embedded frames, the `embed` parameter controls which frames to include:

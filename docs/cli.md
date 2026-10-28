@@ -581,6 +581,8 @@ sio convert spots.csv -o labels.slp --from trackmate
 | `--legacy-format` | Write the SLP 2.x layout that sleap-io < 0.10 and SLEAP can open (SLP output only) |
 | `--unlabeled-as` | How `--legacy-format` handles unlabeled points: `error` (default) or `absent` (save them as hidden points) (SLP output with `--legacy-format` only) |
 | `--compression` | Compress the SLP table columns: `gzip` or `lzf` (default: uncompressed) (SLP output only) |
+| `--image-format` | Image format for embedded frames: `png`, `jpg` or `hdf5` (default: keep PNG/JPEG sources, PNG otherwise) (SLP output only) |
+| `--image-quality` | JPEG quality (0-100) with `--image-format jpg`, or PNG compression level (0-9) with `--image-format png` (SLP output only) |
 | `--visibility-encoding` | How to read keypoint visibility codes: `auto` (default), `ternary` or `binary` (coco and ultralytics input only) |
 | `--v0-as` | How to read `v=0` keypoints: `unlabeled` or `absent` (coco and ultralytics input only) |
 | `--csv-format` | CSV output format: `sleap`, `dlc`, `points`, `instances`, `frames` |
@@ -696,6 +698,9 @@ sio convert labels.slp -o labels.pkg.slp --embed all
 
 # Embed labeled frames plus suggestions
 sio convert labels.slp -o labels.pkg.slp --embed suggestions
+
+# Store the frames as JPEG (quality 95) instead of PNG
+sio convert labels.slp -o labels.pkg.slp --embed user --image-format jpg --image-quality 95
 ```
 
 !!! info "Embedding options"
@@ -1407,6 +1412,9 @@ sio embed labels.slp -o labels.pkg.slp --predictions --suggestions
 
 # Embed only suggestions (skip user frames)
 sio embed labels.slp -o labels.pkg.slp --no-user --suggestions
+
+# Store the frames as JPEG (quality 95) instead of PNG
+sio embed labels.slp -o labels.pkg.slp --image-format jpg --image-quality 95
 ```
 
 **Example output:**
@@ -1425,6 +1433,8 @@ Frames: user: 100, predictions: 50, suggestions: 25
 | `--user/--no-user` | on | Include frames with user-labeled instances |
 | `--predictions/--no-predictions` | off | Include frames with only predicted instances |
 | `--suggestions/--no-suggestions` | off | Include suggested frames for labeling |
+| `--image-format` | (auto) | Image format for embedded frames: `png`, `jpg` or `hdf5`. By default PNG/JPEG sources keep their format and everything else is PNG ([details](formats/slp.md#encoding-formats)) |
+| `--image-quality` | (encoder default) | JPEG quality (0-100) with `--image-format jpg`, or PNG compression level (0-9) with `--image-format png` |
 
 ### Frame Types
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import shutil
 import sys
 import warnings
@@ -2620,6 +2621,202 @@ def test_embed_grayscale_round_trip_keeps_shape_and_frames_in_sync(
     reloaded.grayscale = False
     assert reloaded[0].shape[-1] == 1
     assert reloaded.shape[-1] == 1
+
+
+def _stored_bytes(path: str, i: int = 0, group: str = "video0") -> bytes:
+    """Encoded bytes of embedded frame `i` with the fixed-length zero padding cut."""
+    with h5py.File(path, "r") as f:
+        row = f[f"{group}/video"][i].view(np.uint8)
+    nz = np.nonzero(row)[0]
+    return row[: nz[-1] + 1].tobytes()
+
+
+def test_save_image_format_jpg_from_png_pkg(tmp_path, slp_minimal_pkg):
+    """`image_format="jpg"` re-encodes PNG-embedded frames as JPEG."""
+    labels = read_labels(slp_minimal_pkg)
+    src = labels.video[0]
+    out = str(tmp_path / "jpg.pkg.slp")
+    labels.save(out, embed="user", image_format="jpg")
+
+    with h5py.File(out, "r") as f:
+        ds = f["video0/video"]
+        assert ds.attrs["format"] == "jpg"
+        assert ds.attrs["channels"] == 1
+    assert _stored_bytes(out)[:2] == b"\xff\xd8"  # JPEG magic
+
+    frame = read_labels(out).video[0]
+    assert frame.shape == src.shape == (384, 384, 1)
+    assert np.abs(frame.astype(int) - src.astype(int)).mean() < 2
+
+
+def test_save_image_format_default_keeps_png(tmp_path, slp_minimal_pkg):
+    """Without `image_format`, PNG-embedded frames are byte-copied as before."""
+    out = str(tmp_path / "png.pkg.slp")
+    read_labels(slp_minimal_pkg).save(out, embed="user")
+    with h5py.File(out, "r") as f:
+        assert f["video0/video"].attrs["format"] == "png"
+    assert _stored_bytes(out) == _stored_bytes(slp_minimal_pkg)
+
+
+def test_save_image_format_none_keeps_embedded_jpg(tmp_path, slp_minimal_pkg):
+    """Re-saving a JPEG package with the default format keeps its JPEG bytes."""
+    jpg = str(tmp_path / "jpg.pkg.slp")
+    read_labels(slp_minimal_pkg).save(jpg, embed="user", image_format="jpg")
+    out = str(tmp_path / "again.pkg.slp")
+    read_labels(jpg).save(out, embed="user")
+    with h5py.File(out, "r") as f:
+        assert f["video0/video"].attrs["format"] == "jpg"
+    assert _stored_bytes(out) == _stored_bytes(jpg)
+
+
+def test_save_image_format_none_encodes_raw_hdf5_as_png(tmp_path, slp_minimal_pkg):
+    """Raw-pixel (`"hdf5"`) embedded frames are encoded as PNG by default."""
+    raw = str(tmp_path / "raw.pkg.slp")
+    read_labels(slp_minimal_pkg).save(raw, embed="user", image_format="hdf5")
+    out = str(tmp_path / "png.pkg.slp")
+    labels = read_labels(raw)
+    labels.save(out, embed="user")
+    with h5py.File(out, "r") as f:
+        assert f["video0/video"].attrs["format"] == "png"
+    np.testing.assert_array_equal(read_labels(out).video[0], labels.video[0])
+
+
+def test_save_image_format_jpeg_alias(tmp_path, slp_minimal_pkg):
+    """`"jpeg"` (any case) is stored as `"jpg"`."""
+    out = str(tmp_path / "jpeg.pkg.slp")
+    read_labels(slp_minimal_pkg).save(out, embed="user", image_format="JPEG")
+    with h5py.File(out, "r") as f:
+        assert f["video0/video"].attrs["format"] == "jpg"
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_save_image_quality_jpg(tmp_path, slp_minimal_pkg, plugin):
+    """A lower JPEG quality gives smaller frames with either encoder."""
+    labels = read_labels(slp_minimal_pkg)
+    sizes = {}
+    for q in (20, 95):
+        out = str(tmp_path / f"q{q}.pkg.slp")
+        labels.save(
+            out, embed="user", image_format="jpg", image_quality=q, plugin=plugin
+        )
+        sizes[q] = len(_stored_bytes(out))
+        assert read_labels(out).video[0].shape == (384, 384, 1)
+    assert sizes[20] < sizes[95]
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_save_image_quality_png(tmp_path, slp_real_data, plugin):
+    """For PNG, `image_quality` is the compression level and stays lossless."""
+    labels = read_labels(slp_real_data)
+    lf = labels.user_labeled_frames[0]
+    sizes = {}
+    for level in (0, 9):
+        out = str(tmp_path / f"c{level}.pkg.slp")
+        labels.save(
+            out,
+            embed=[(lf.video, lf.frame_idx)],
+            image_format="png",
+            image_quality=level,
+            plugin=plugin,
+        )
+        sizes[level] = len(_stored_bytes(out))
+        np.testing.assert_array_equal(
+            read_labels(out).video[lf.frame_idx], lf.video[lf.frame_idx]
+        )
+    assert sizes[9] < sizes[0]
+
+
+def test_save_image_format_reencodes_imagevideo(tmp_path, centered_pair_frame_paths):
+    """An explicit format re-encodes image files stored in another format."""
+    video = Video.from_filename(centered_pair_frame_paths)
+    skel = Skeleton(["a"])
+    inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skel)
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+
+    out = str(tmp_path / "png.pkg.slp")
+    labels.save(out, embed="user", image_format="png")
+    with h5py.File(out, "r") as f:
+        assert f["video0/video"].attrs["format"] == "png"
+    np.testing.assert_array_equal(read_labels(out).video[0], video[0])
+
+
+def test_save_image_format_embed_none_reembeds(tmp_path, slp_minimal_pkg):
+    """With `embed=None`, embedded frames carried over use the requested format."""
+    out = str(tmp_path / "jpg.pkg.slp")
+    read_labels(slp_minimal_pkg).save(out, embed=None, image_format="jpg")
+    with h5py.File(out, "r") as f:
+        assert f["video0/video"].attrs["format"] == "jpg"
+
+
+def test_save_image_format_lazy(tmp_path, slp_minimal_pkg):
+    """Lazy labels saved without materializing honor `image_format` too."""
+    labels = load_slp(slp_minimal_pkg, lazy=True)
+    out = str(tmp_path / "jpg.pkg.slp")
+    labels.save(out, embed=None, image_format="jpg", image_quality=90)
+    with h5py.File(out, "r") as f:
+        assert f["video0/video"].attrs["format"] == "jpg"
+    assert read_labels(out).video[0].shape == (384, 384, 1)
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        (dict(image_format="bmp"), "image_format must be one of"),
+        (dict(image_quality=90), "image_quality needs"),
+        (dict(image_format="hdf5", image_quality=5), "image_quality needs"),
+        (dict(image_format="jpg", image_quality=101), r"\[0, 100\]"),
+        (dict(image_format="png", image_quality=10), r"\[0, 9\]"),
+    ],
+)
+def test_save_image_format_invalid(tmp_path, slp_minimal_pkg, kwargs, match):
+    """Bad format/quality options raise before the output file is created."""
+    out = tmp_path / "bad.pkg.slp"
+    with pytest.raises(ValueError, match=match):
+        read_labels(slp_minimal_pkg).save(str(out), embed="user", **kwargs)
+    assert not out.exists()
+
+
+@pytest.mark.parametrize("image_format", [None, "jpg"])
+def test_embed_imagevideo_grayscale_color_files_reencoded(tmp_path, image_format):
+    """Color image files of a grayscale video are re-encoded with one channel.
+
+    Byte-copying them would store 3-channel images under `channels=1`, the
+    mismatch `can_use_fast_path` already refuses for embedded sources.
+    """
+    paths = []
+    for i in range(2):
+        img = np.zeros((32, 48, 3), np.uint8)
+        img[..., 0], img[..., 2] = 200, 30
+        p = tmp_path / f"{i}.jpg"
+        Image.fromarray(img).save(p)
+        paths.append(str(p))
+    video = Video.from_filename(paths)
+    video.grayscale = True
+    skel = Skeleton(["a"])
+    inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skel)
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+
+    out = str(tmp_path / "gray.pkg.slp")
+    labels.save(out, embed="user", image_format=image_format)
+    with h5py.File(out, "r") as f:
+        assert f["video0/video"].attrs["channels"] == 1
+    assert Image.open(io.BytesIO(_stored_bytes(out))).mode == "L"
+    assert read_labels(out).video.backend.stored_channels == 1
+
+
+def test_embed_imagevideo_grayscale_gray_files_byte_copied(tmp_path):
+    """Single-channel image files of a grayscale video are still byte-copied."""
+    p = tmp_path / "0.jpg"
+    Image.fromarray(np.full((32, 48), 120, np.uint8)).save(p)
+    video = Video.from_filename([str(p)])
+    video.grayscale = True
+    skel = Skeleton(["a"])
+    inst = Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton=skel)
+    labels = Labels([LabeledFrame(video=video, frame_idx=0, instances=[inst])])
+
+    out = str(tmp_path / "gray.pkg.slp")
+    labels.save(out, embed="user")
+    assert _stored_bytes(out) == p.read_bytes()
 
 
 def test_fast_path_progress_callback_cancellation(tmpdir, slp_minimal_pkg):
