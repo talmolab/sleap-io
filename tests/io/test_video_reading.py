@@ -555,9 +555,10 @@ def test_imagevideo_frame_path(tmp_path, centered_pair_frame_paths):
     # Non-ASCII paths and `Path` objects round-trip.
     unicode_path = tmp_path / "größe 画像.jpg"
     unicode_path.write_bytes(Path(centered_pair_frame_paths[0]).read_bytes())
-    backend = ImageVideo([unicode_path, centered_pair_frame_paths[1]])
+    # Read with Pillow: `cv2.imread` cannot open non-ASCII paths on Windows.
+    backend = ImageVideo([unicode_path, centered_pair_frame_paths[1]], plugin="imageio")
     assert backend._frame_path(0) == str(unicode_path)
-    assert_equal(backend[0], ImageVideo(centered_pair_frame_paths)[0])
+    assert_equal(backend[0], ImageVideo(centered_pair_frame_paths, plugin="imageio")[0])
 
 
 def test_imagevideo_filename_reassignment(centered_pair_frame_paths):
