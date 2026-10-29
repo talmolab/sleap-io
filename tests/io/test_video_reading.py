@@ -508,6 +508,89 @@ def test_imagevideo(centered_pair_frame_paths):
     assert backend.shape == (1, 384, 384, 1)
 
 
+class _UnindexableList(list):
+    """A list whose items cannot be fetched by index, only iterated."""
+
+    def __getitem__(self, ind):
+        raise AssertionError("frame reads must not index the filename list")
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_imagevideo_reads_do_not_index_filename(centered_pair_frame_paths, plugin):
+    """Per-frame reads use the compact path lookup, not the `filename` list.
+
+    Indexing a list of `str` writes the item's reference count, which copies its
+    memory page into forked workers that share the parent heap copy-on-write.
+    """
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not installed")
+    reference = ImageVideo(centered_pair_frame_paths, plugin=plugin)
+    backend = ImageVideo(_UnindexableList(centered_pair_frame_paths), plugin=plugin)
+
+    assert backend.shape == reference.shape
+    for i in range(len(centered_pair_frame_paths)):
+        assert_equal(backend.get_frame(i), reference.get_frame(i))
+        assert_equal(
+            backend.get_frame(i, downscale=2), reference.get_frame(i, downscale=2)
+        )
+        assert backend.get_frame_size(i) == (384, 384)
+        assert_equal(backend.get_frame_raw_bytes(i), reference.get_frame_raw_bytes(i))
+    assert_equal(backend[0:3], reference[0:3])
+
+
+def test_imagevideo_frame_path(tmp_path, centered_pair_frame_paths):
+    backend = ImageVideo(centered_pair_frame_paths)
+    assert [backend._frame_path(i) for i in range(3)] == centered_pair_frame_paths
+    assert backend._frame_path(-1) == centered_pair_frame_paths[-1]
+    assert backend._frame_path(np.int64(1)) == centered_pair_frame_paths[1]
+    with pytest.raises(IndexError):
+        backend._frame_path(3)
+    with pytest.raises(IndexError):
+        backend._frame_path(-4)
+
+    # A single path is looked up as a one-item list.
+    assert (
+        ImageVideo(Path(centered_pair_frame_paths[0]))._frame_path(0)
+        == (centered_pair_frame_paths[0])
+    )
+
+    # Non-ASCII paths and `Path` objects round-trip.
+    unicode_path = tmp_path / "größe 画像.jpg"
+    unicode_path.write_bytes(Path(centered_pair_frame_paths[0]).read_bytes())
+    backend = ImageVideo([unicode_path, centered_pair_frame_paths[1]])
+    assert backend._frame_path(0) == str(unicode_path)
+    assert_equal(backend[0], ImageVideo(centered_pair_frame_paths)[0])
+
+
+def test_imagevideo_filename_reassignment(centered_pair_frame_paths):
+    """Reassigning `filename` rebuilds the path lookup on the next read."""
+    backend = ImageVideo(centered_pair_frame_paths[:1])
+    backend.filename = list(reversed(centered_pair_frame_paths))
+    assert backend._frame_path(0) == centered_pair_frame_paths[-1]
+    assert_equal(backend.get_frame(0), ImageVideo(centered_pair_frame_paths)[2])
+
+
+def test_imagevideo_pickle_and_copy(centered_pair_frame_paths):
+    """Pickling and copying keep the paths and rebuild the lookup."""
+    backend = ImageVideo(centered_pair_frame_paths)
+    expected = backend[0:3]
+    for clone in (
+        pickle.loads(pickle.dumps(backend)),
+        copy.deepcopy(backend),
+        copy.copy(backend),
+    ):
+        assert clone.filename == centered_pair_frame_paths
+        assert clone._path_source is clone.filename
+        assert_equal(clone[0:3], expected)
+    # The derived lookup is not stored in the pickled state.
+    state = backend.__getstate__()
+    assert state["_path_bytes"] is None and state["_path_offsets"] is None
+    # The lookup does not affect equality.
+    assert ImageVideo(centered_pair_frame_paths) == ImageVideo(
+        centered_pair_frame_paths
+    )
+
+
 def test_imagevideo_get_frame_raw_bytes(tmp_path, centered_pair_frame_paths):
     """ImageVideo.get_frame_raw_bytes returns source bytes for JPEG/PNG, else None."""
     import cv2

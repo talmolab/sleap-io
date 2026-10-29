@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import urllib.parse
 from io import BytesIO
@@ -2039,11 +2040,30 @@ class ImageVideo(VideoBackend):
         plugin: Image plugin to use for reading. One of "opencv" or "imageio".
             If None, uses global default from get_default_image_plugin(), or
             auto-detects.
+
+    Notes:
+        Frame reads look up paths in a compact copy of `filename` (one encoded
+        `bytes` buffer plus offsets) built at construction, never in the `filename`
+        list itself. Indexing a list of `str` writes each item's reference count,
+        which, in forked worker processes (e.g., a PyTorch `DataLoader`), copies the
+        memory page holding that string out of the copy-on-write parent heap. Over
+        a long image list this adds up to a private copy of every path per worker.
+        Reassigning `filename` rebuilds the copy on the next read; modifying the
+        list in place is not supported.
     """
 
     EXTS = ("png", "jpg", "jpeg", "tif", "tiff", "bmp")
 
     plugin: str = attrs.field()
+    _path_bytes: bytes | None = attrs.field(
+        init=False, default=None, eq=False, repr=False
+    )
+    _path_offsets: np.ndarray | None = attrs.field(
+        init=False, default=None, eq=False, repr=False
+    )
+    _path_source: list | None = attrs.field(
+        init=False, default=None, eq=False, repr=False
+    )
 
     @plugin.validator
     def _validate_plugin(self, attribute, value):
@@ -2078,6 +2098,56 @@ class ImageVideo(VideoBackend):
             return "opencv"
         else:
             return "imageio"
+
+    def __attrs_post_init__(self) -> None:
+        """Build the compact path lookup used by frame reads."""
+        self._build_path_lookup()
+
+    def __getstate__(self) -> dict:
+        """Return state for pickling/deepcopy, without the derived path lookup."""
+        state = super().__getstate__()
+        state["_path_bytes"] = None
+        state["_path_offsets"] = None
+        state["_path_source"] = None
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        """Restore state from pickling/deepcopy and rebuild the path lookup."""
+        super().__setstate__(state)
+        self._build_path_lookup()
+
+    def _build_path_lookup(self) -> None:
+        """Pack `filename` into one encoded buffer with per-path offsets.
+
+        A single path (`str` or `os.PathLike`) is treated as a one-item list.
+        """
+        paths = self.filename
+        if isinstance(paths, (str, os.PathLike)):
+            paths = [paths]
+        encoded = [os.fsencode(f) for f in paths]
+        offsets = np.zeros(len(encoded) + 1, dtype=np.int64)
+        np.cumsum([len(b) for b in encoded], out=offsets[1:])
+        self._path_bytes = b"".join(encoded)
+        self._path_offsets = offsets
+        self._path_source = self.filename
+
+    def _frame_path(self, frame_idx: int) -> str:
+        """Return the path of a frame without indexing the `filename` list.
+
+        Args:
+            frame_idx: Index of the frame. Negative indices count from the end.
+
+        Returns:
+            The frame's image path as a new `str`.
+
+        Raises:
+            IndexError: If the frame index is out of range.
+        """
+        if self._path_source is not self.filename:
+            self._build_path_lookup()
+        offsets = self._path_offsets
+        i = range(len(offsets) - 1)[frame_idx]
+        return os.fsdecode(self._path_bytes[offsets[i] : offsets[i + 1]])
 
     @staticmethod
     def find_images(folder: str) -> list[str]:
@@ -2117,7 +2187,7 @@ class ImageVideo(VideoBackend):
             Bytes copied this way decode back to RGB (matching `_read_frame`), so
             the embedded dataset should record `channel_order="RGB"`.
         """
-        filename = self.filename[frame_idx]
+        filename = self._frame_path(frame_idx)
         ext = Path(filename).suffix.lower().lstrip(".")
         if ext not in ("png", "jpg", "jpeg"):
             return None
@@ -2151,7 +2221,7 @@ class ImageVideo(VideoBackend):
             even with the opencv plugin, since OpenCV always applies the tag for
             TIFFs.
         """
-        filename = self.filename[frame_idx]
+        filename = self._frame_path(frame_idx)
         if self.plugin == "opencv" and not _has_tiff_orientation(filename):
             # OpenCV reads as BGR, flip to RGB
             img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
@@ -2190,7 +2260,7 @@ class ImageVideo(VideoBackend):
             This does not apply grayscale conversion. It is recommended to use the
             `get_frame` method of the `VideoBackend` class instead.
         """
-        filename = self.filename[frame_idx]
+        filename = self._frame_path(frame_idx)
         with Image.open(filename) as im:
             if im.format != "JPEG":
                 img = None
@@ -2244,7 +2314,7 @@ class ImageVideo(VideoBackend):
         """
         if frame_idx >= self.num_frames:
             raise IndexError(f"Frame index {frame_idx} out of range.")
-        with Image.open(self.filename[frame_idx]) as im:
+        with Image.open(self._frame_path(frame_idx)) as im:
             width, height = im.size
         return int(height), int(width)
 
