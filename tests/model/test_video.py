@@ -40,6 +40,31 @@ def test_video_getitem(centered_pair_low_quality_video):
     assert img.dtype == np.uint8
 
 
+def test_video_get_frame_downscale(centered_pair_frame_paths):
+    video = Video.from_filename(centered_pair_frame_paths)
+    np.testing.assert_array_equal(video.get_frame(1), video[1])
+    assert video.get_frame(1, downscale=4).shape == (96, 96, 1)
+    assert video.get_frame_size(1) == (384, 384)
+
+
+def test_video_get_frame_downscale_media_full_frame(centered_pair_low_quality_video):
+    video = centered_pair_low_quality_video
+    np.testing.assert_array_equal(video.get_frame(3, downscale=2), video[3])
+    assert video.get_frame_size(3) == (384, 384)
+
+
+def test_video_get_frame_opens_backend(centered_pair_frame_paths):
+    video = Video(centered_pair_frame_paths, open_backend=False)
+    with pytest.raises(ValueError, match="not open"):
+        video.get_frame(0, downscale=2)
+    with pytest.raises(ValueError, match="not open"):
+        video.get_frame_size(0)
+
+    video.open_backend = True
+    assert video.get_frame_size(0) == (384, 384)
+    assert video.is_open
+
+
 def test_video_repr(centered_pair_low_quality_video):
     assert str(centered_pair_low_quality_video) == (
         'Video(filename="tests/data/videos/centered_pair_low_quality.mp4", '

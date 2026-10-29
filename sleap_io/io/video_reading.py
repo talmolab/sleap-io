@@ -13,6 +13,7 @@ import imageio.v3 as iio
 import numpy as np
 import simplejson as json
 import tifffile
+from PIL import Image
 
 from sleap_io.io import _remote
 from sleap_io.transform.frame import crop_frame
@@ -812,15 +813,63 @@ class VideoBackend:
         """
         return frame_idx < len(self)
 
-    def get_frame(self, frame_idx: int) -> np.ndarray:
+    def _read_frame_reduced(self, frame_idx: int, downscale: int) -> np.ndarray:
+        """Read a single frame decoded at reduced size, if the backend supports it.
+
+        Backends that cannot decode at reduced size return the full frame. Override
+        in subclasses that can.
+
+        Args:
+            frame_idx: Index of frame to read.
+            downscale: Requested downscale factor (2, 4 or 8).
+
+        Returns:
+            The frame as a numpy array of shape `(height, width, channels)`, either
+            at reduced size or at full size.
+        """
+        return self._read_frame(frame_idx)
+
+    def get_frame_size(self, frame_idx: int) -> tuple[int, int]:
+        """Return the stored `(height, width)` of a single frame without decoding it.
+
+        The base implementation returns the (cached) video shape. Backends whose
+        frames can differ in size (e.g., `ImageVideo`) read it from the file header.
+
+        Args:
+            frame_idx: Index of frame to query.
+
+        Returns:
+            The full-resolution `(height, width)` of the frame.
+
+        Raises:
+            IndexError: If the frame index is out of range.
+        """
+        if not self.has_frame(frame_idx):
+            raise IndexError(f"Frame index {frame_idx} out of range.")
+        _, height, width, _ = self.shape
+        return int(height), int(width)
+
+    def get_frame(self, frame_idx: int, downscale: int = 1) -> np.ndarray:
         """Read a single frame from the video.
 
         Args:
             frame_idx: Index of frame to read.
+            downscale: Optional downscale factor (1, 2, 4 or 8). When greater than 1,
+                backends that support it decode the frame at reduced size inside the
+                decoder (currently JPEG files in `ImageVideo`, via libjpeg DCT
+                scaling), giving a frame of `ceil(height / downscale)` by
+                `ceil(width / downscale)`. Backends or formats that cannot do this
+                (PNG, TIFF, BMP, media videos, HDF5, crops, ...) return the full
+                frame, so infer the scale you got from the returned shape. The
+                default of 1 always reads the full frame.
 
         Returns:
             Frame as a numpy array of shape `(height, width, channels)` where the
             `channels` dimension is 1 for grayscale videos and 3 for color videos.
+
+        Raises:
+            IndexError: If the frame index is out of range.
+            ValueError: If `downscale` is not one of 1, 2, 4 or 8.
 
         Notes:
             If the `grayscale` attribute is set to `True`, the `channels` dimension will
@@ -829,12 +878,19 @@ class VideoBackend:
             If the `grayscale` attribute is set to `None`, the `grayscale` attribute
             will be automatically set based on the first frame read.
 
-        See also: `get_frames`
+        See also: `get_frames`, `get_frame_size`
         """
+        if downscale not in (1, 2, 4, 8):
+            raise ValueError(f"downscale must be 1, 2, 4 or 8, got {downscale!r}.")
+        downscale = int(downscale)
+
         if not self.has_frame(frame_idx):
             raise IndexError(f"Frame index {frame_idx} out of range.")
 
-        img = self._read_frame(frame_idx)
+        if downscale == 1:
+            img = self._read_frame(frame_idx)
+        else:
+            img = self._read_frame_reduced(frame_idx, downscale)
 
         if self.grayscale is None:
             self.detect_grayscale(img)
@@ -2111,6 +2167,86 @@ class ImageVideo(VideoBackend):
             img = np.expand_dims(img, axis=-1)
 
         return img
+
+    def _read_frame_reduced(self, frame_idx: int, downscale: int) -> np.ndarray:
+        """Read a single frame decoded at reduced size (JPEG only).
+
+        JPEG files are decoded at `1 / downscale` size inside libjpeg (DCT scaling),
+        which is much faster than a full decode for large photos. The result has
+        `ceil(height / downscale)` rows and `ceil(width / downscale)` columns, and
+        the same channels, channel order and dtype as `_read_frame`. Pixels are
+        returned as stored, without applying the EXIF orientation tag. Other
+        formats (PNG, TIFF, BMP) are read at full size via `_read_frame`.
+
+        Args:
+            frame_idx: Index of frame to read.
+            downscale: Requested downscale factor (2, 4 or 8).
+
+        Returns:
+            The frame as a numpy array of shape `(height, width, channels)` in RGB
+            order, at reduced size for JPEG files and full size otherwise.
+
+        Notes:
+            This does not apply grayscale conversion. It is recommended to use the
+            `get_frame` method of the `VideoBackend` class instead.
+        """
+        filename = self.filename[frame_idx]
+        with Image.open(filename) as im:
+            if im.format != "JPEG":
+                img = None
+            elif self.plugin == "opencv":
+                # Match the channels `cv2.IMREAD_UNCHANGED` gives in `_read_frame`:
+                # one for grayscale JPEGs, BGR for color (including CMYK) ones.
+                color = "GRAYSCALE" if im.mode == "L" else "COLOR"
+                flags = getattr(cv2, f"IMREAD_REDUCED_{color}_{downscale}")
+                # The REDUCED flags apply EXIF orientation unless told not to.
+                img = cv2.imread(filename, flags | cv2.IMREAD_IGNORE_ORIENTATION)
+                if img is None:
+                    raise ValueError(f"Failed to read image: {filename}")
+                if img.ndim == 3 and img.shape[-1] == 3:
+                    img = img[..., ::-1]  # BGR -> RGB
+            else:  # imageio
+                # Pillow picks the largest DCT scale s in (1, 2, 4, 8) with
+                # s <= min(width // w, height // h) for a requested size (w, h), so
+                # ask for the floored size to get exactly `downscale` (or less for
+                # images narrower than `downscale` pixels). imageio's Pillow plugin
+                # reads JPEGs as a writeable `np.asarray(image)`, so this matches
+                # `_read_frame`.
+                width, height = im.size
+                im.draft(
+                    im.mode, (max(1, width // downscale), max(1, height // downscale))
+                )
+                img = np.array(im)
+
+        if img is None:
+            return self._read_frame(frame_idx)
+
+        if img.ndim == 2:
+            img = np.expand_dims(img, axis=-1)
+
+        return img
+
+    def get_frame_size(self, frame_idx: int) -> tuple[int, int]:
+        """Return the stored `(height, width)` of a single image from its header.
+
+        Only the file header is read; the image is not decoded. The size is the
+        stored size, without applying any EXIF/TIFF orientation tag, matching the
+        frames returned by `get_frame`.
+
+        Args:
+            frame_idx: Index of frame to query.
+
+        Returns:
+            The full-resolution `(height, width)` of the image.
+
+        Raises:
+            IndexError: If the frame index is out of range.
+        """
+        if frame_idx >= self.num_frames:
+            raise IndexError(f"Frame index {frame_idx} out of range.")
+        with Image.open(self.filename[frame_idx]) as im:
+            width, height = im.size
+        return int(height), int(width)
 
 
 @attrs.define
