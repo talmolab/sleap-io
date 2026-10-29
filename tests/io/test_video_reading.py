@@ -723,14 +723,18 @@ def test_imagevideo_downscale_one_matches_get_frame(centered_pair_frame_paths, p
 
 
 def test_imagevideo_downscale_unreadable_jpeg(tmp_path):
-    """The opencv plugin raises for a JPEG whose header reads but data does not."""
+    """The opencv plugin raises for a JPEG that Pillow opens but libjpeg rejects."""
     if cv2 is None:
         pytest.skip("OpenCV not installed")
     good = tmp_path / "good.jpg"
     bad = tmp_path / "bad.jpg"
     Image.fromarray(_smooth_image(30, 40, 3)).save(good)
-    data = good.read_bytes()
-    bad.write_bytes(data[: data.find(b"\xff\xda")])  # Drop the scan data.
+    data = bytearray(good.read_bytes())
+    # Corrupt the first Huffman table: its code counts now sum far past 256, which
+    # libjpeg rejects, while Pillow skips the table when opening the header.
+    dht = data.find(b"\xff\xc4")
+    data[dht + 5 : dht + 21] = b"\xff" * 16
+    bad.write_bytes(bytes(data))
 
     backend = ImageVideo([str(good), str(bad)], plugin="opencv")
     with pytest.raises(ValueError, match="Failed to read image"):
