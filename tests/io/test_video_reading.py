@@ -549,10 +549,8 @@ def test_imagevideo_frame_path(tmp_path, centered_pair_frame_paths):
         backend._frame_path(-4)
 
     # A single path is looked up as a one-item list.
-    assert (
-        ImageVideo(Path(centered_pair_frame_paths[0]))._frame_path(0)
-        == (centered_pair_frame_paths[0])
-    )
+    single_path = Path(centered_pair_frame_paths[0])
+    assert ImageVideo(single_path)._frame_path(0) == str(single_path)
 
     # Non-ASCII paths and `Path` objects round-trip.
     unicode_path = tmp_path / "größe 画像.jpg"
