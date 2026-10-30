@@ -599,6 +599,198 @@ def test_has_tiff_orientation(tmp_path):
     assert _has_tiff_orientation(str(jpeg)) is False
 
 
+def _smooth_image(height: int, width: int, channels: int) -> np.ndarray:
+    """Return a smooth uint8 gradient image (squeezed to 2D for one channel)."""
+    yy, xx = np.mgrid[:height, :width]
+    planes = [
+        (64 + 64 * np.sin(xx / 17.0) + 48 * np.cos(yy / 13.0)) + 16 * c
+        for c in range(channels)
+    ]
+    img = np.clip(np.stack(planes, axis=-1), 0, 255).astype(np.uint8)
+    return img[..., 0] if channels == 1 else img
+
+
+def _block_mean(img: np.ndarray, k: int) -> np.ndarray:
+    """Downscale an `(H, W, C)` image whose sides are multiples of `k` by `k`."""
+    h, w, c = img.shape
+    return img.reshape(h // k, k, w // k, k, c).astype(float).mean(axis=(1, 3))
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+@pytest.mark.parametrize("downscale", [2, 4, 8])
+@pytest.mark.parametrize("channels", [3, 1])
+def test_imagevideo_downscale_jpeg(tmp_path, plugin, downscale, channels):
+    """JPEG frames decode at reduced size and match a full decode downscaled."""
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not installed")
+    path = tmp_path / "img.jpg"
+    Image.fromarray(_smooth_image(96, 160, channels)).save(path, quality=95)
+
+    backend = ImageVideo([str(path)], plugin=plugin)
+    full = backend.get_frame(0)
+    reduced = backend.get_frame(0, downscale=downscale)
+
+    assert full.shape == (96, 160, channels)
+    assert reduced.shape == (96 // downscale, 160 // downscale, channels)
+    assert reduced.dtype == full.dtype
+    assert backend.grayscale is (channels == 1)
+    # Equal to the full decode at reduced size, up to libjpeg's DCT scaling.
+    diff = np.abs(reduced.astype(float) - _block_mean(full, downscale))
+    assert diff.mean() < 1.5
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+@pytest.mark.parametrize("downscale", [2, 4, 8])
+def test_imagevideo_downscale_odd_size(tmp_path, plugin, downscale):
+    """Sides that are not multiples of the factor round up, like libjpeg."""
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not installed")
+    path = tmp_path / "img.jpg"
+    Image.fromarray(_smooth_image(101, 203, 3)).save(path, quality=95)
+
+    reduced = ImageVideo([str(path)], plugin=plugin).get_frame(0, downscale)
+    assert reduced.shape == (-(-101 // downscale), -(-203 // downscale), 3)
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_imagevideo_downscale_matches_plugins(tmp_path, plugin):
+    """Reduced RGB frames are in RGB order with either plugin."""
+    if cv2 is None:
+        pytest.skip("OpenCV not installed")
+    path = tmp_path / "img.jpg"
+    Image.fromarray(_smooth_image(96, 160, 3)).save(path, quality=95)
+
+    reduced = ImageVideo([str(path)], plugin=plugin).get_frame(0, downscale=2)
+    other = "imageio" if plugin == "opencv" else "opencv"
+    expected = ImageVideo([str(path)], plugin=other).get_frame(0, downscale=2)
+    assert np.abs(reduced.astype(int) - expected.astype(int)).max() <= 2
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_imagevideo_downscale_forced_grayscale(tmp_path, plugin):
+    """`grayscale=True` keeps the first channel of reduced RGB frames."""
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not installed")
+    path = tmp_path / "img.jpg"
+    Image.fromarray(_smooth_image(96, 160, 3)).save(path, quality=95)
+
+    color = ImageVideo([str(path)], plugin=plugin, grayscale=False)
+    gray = ImageVideo([str(path)], plugin=plugin, grayscale=True)
+    reduced = gray.get_frame(0, downscale=4)
+    assert reduced.shape == (24, 40, 1)
+    assert_equal(reduced, color.get_frame(0, downscale=4)[..., [0]])
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+@pytest.mark.parametrize("orientation", [3, 6, 8])
+def test_imagevideo_downscale_orientation_not_applied(tmp_path, plugin, orientation):
+    """Reduced JPEG frames and sizes ignore EXIF orientation, like full reads."""
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not installed")
+    img = _smooth_image(96, 160, 3)
+    tagged = _save_with_orientation(tmp_path / "tagged.jpg", img, orientation)
+    untagged = tmp_path / "untagged.jpg"
+    Image.fromarray(img).save(untagged, quality=95)
+
+    backend = ImageVideo([str(tagged)], plugin=plugin)
+    expected = ImageVideo([str(untagged)], plugin=plugin).get_frame(0, downscale=2)
+    assert backend.get_frame_size(0) == (96, 160)
+    assert_equal(backend.get_frame(0, downscale=2), expected)
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_imagevideo_downscale_png_full_frame(tmp_path, plugin):
+    """Formats that cannot decode at reduced size return the full frame."""
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not installed")
+    path = tmp_path / "img.png"
+    Image.fromarray(_smooth_image(30, 40, 3)).save(path)
+
+    backend = ImageVideo([str(path)], plugin=plugin)
+    assert_equal(backend.get_frame(0, downscale=4), backend.get_frame(0))
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_imagevideo_downscale_one_matches_get_frame(centered_pair_frame_paths, plugin):
+    """`downscale=1` is a full read, identical to indexing."""
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not installed")
+    backend = ImageVideo(centered_pair_frame_paths, plugin=plugin)
+    reference = ImageVideo(centered_pair_frame_paths, plugin=plugin)
+    for i in range(len(centered_pair_frame_paths)):
+        assert_equal(backend.get_frame(i, downscale=1), reference[i])
+    assert backend.get_frame(0, downscale=2).shape == (192, 192, 1)
+
+
+def test_imagevideo_downscale_unreadable_jpeg(tmp_path):
+    """The opencv plugin raises for a JPEG that Pillow opens but libjpeg rejects."""
+    if cv2 is None:
+        pytest.skip("OpenCV not installed")
+    good = tmp_path / "good.jpg"
+    bad = tmp_path / "bad.jpg"
+    Image.fromarray(_smooth_image(30, 40, 3)).save(good)
+    data = bytearray(good.read_bytes())
+    # Corrupt the first Huffman table: its code counts now sum far past 256, which
+    # libjpeg rejects, while Pillow skips the table when opening the header.
+    dht = data.find(b"\xff\xc4")
+    data[dht + 5 : dht + 21] = b"\xff" * 16
+    bad.write_bytes(bytes(data))
+
+    backend = ImageVideo([str(good), str(bad)], plugin="opencv")
+    with pytest.raises(ValueError, match="Failed to read image"):
+        backend.get_frame(1, downscale=2)
+
+
+@pytest.mark.parametrize("downscale", [0, 3, 16, 2.5])
+def test_get_frame_invalid_downscale(centered_pair_frame_paths, downscale):
+    backend = ImageVideo(centered_pair_frame_paths)
+    with pytest.raises(ValueError, match="downscale"):
+        backend.get_frame(0, downscale=downscale)
+
+
+def test_get_frame_downscale_out_of_range(centered_pair_frame_paths):
+    backend = ImageVideo(centered_pair_frame_paths)
+    with pytest.raises(IndexError):
+        backend.get_frame(3, downscale=2)
+
+
+def test_get_frame_integral_float_downscale(centered_pair_frame_paths):
+    backend = ImageVideo(centered_pair_frame_paths)
+    assert backend.get_frame(0, downscale=2.0).shape == (192, 192, 1)
+
+
+def test_imagevideo_get_frame_size(tmp_path):
+    """Per-image sizes come from the file headers, even when images differ."""
+    jpg = tmp_path / "a.jpg"
+    png = tmp_path / "b.png"
+    Image.fromarray(_smooth_image(101, 203, 3)).save(jpg)
+    Image.fromarray(_smooth_image(30, 40, 1)).save(png)
+
+    backend = ImageVideo([str(jpg), str(png)])
+    assert backend.get_frame_size(0) == (101, 203)
+    assert backend.get_frame_size(1) == (30, 40)
+    with pytest.raises(IndexError):
+        backend.get_frame_size(2)
+
+
+def test_media_video_downscale_and_frame_size(centered_pair_low_quality_path):
+    """Backends that cannot reduce return full frames and the video size."""
+    backend = MediaVideo(centered_pair_low_quality_path)
+    assert_equal(backend.get_frame(5, downscale=4), backend.get_frame(5))
+    assert backend.get_frame_size(5) == (384, 384)
+    with pytest.raises(IndexError):
+        backend.get_frame_size(len(backend))
+
+
+def test_crop_backend_downscale_and_frame_size(centered_pair_frame_paths):
+    """Cropped views read full crops and report the crop size."""
+    crop = CropVideoBackend.wrap(
+        ImageVideo(centered_pair_frame_paths), (10, 20, 110, 70)
+    )
+    assert crop.get_frame_size(0) == (50, 100)
+    assert_equal(crop.get_frame(0, downscale=2), crop.get_frame(0))
+
+
 def test_opencv_bgr_to_rgb_conversion(tmp_path):
     """Test that OpenCV backend correctly converts BGR to RGB."""
     try:

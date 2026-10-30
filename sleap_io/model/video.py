@@ -667,6 +667,66 @@ class Video:
 
         See also: VideoBackend.get_frame, VideoBackend.get_frames
         """
+        self._ensure_open()
+        return self.backend[inds]
+
+    def get_frame(self, frame_idx: int, downscale: int = 1) -> np.ndarray:
+        """Read a single frame, optionally decoded at reduced size.
+
+        Args:
+            frame_idx: Index of the frame to read.
+            downscale: Optional downscale factor (1, 2, 4 or 8). When greater than 1,
+                JPEG images in image sequences are decoded at reduced size inside the
+                decoder (libjpeg DCT scaling), giving a frame of
+                `ceil(height / downscale)` by `ceil(width / downscale)`. Other
+                formats and backends (PNG, TIFF, BMP, media videos, HDF5, cropped
+                videos, ...) return the full frame, so infer the scale you got from
+                the returned shape, e.g. against `get_frame_size`. The default of 1
+                reads the full frame, the same as `video[frame_idx]`.
+
+        Returns:
+            Frame as a numpy array of shape `(height, width, channels)`, with the
+            same channels as `video[frame_idx]`.
+
+        Raises:
+            IndexError: If the frame index is out of range.
+            ValueError: If `downscale` is not one of 1, 2, 4 or 8, or if the backend
+                is not open and `open_backend` is `False`.
+
+        See also: VideoBackend.get_frame, get_frame_size
+        """
+        self._ensure_open()
+        return self.backend.get_frame(frame_idx, downscale=downscale)
+
+    def get_frame_size(self, frame_idx: int) -> tuple[int, int]:
+        """Return the full-resolution `(height, width)` of a single frame.
+
+        For image sequences, this reads only the image file header, so it is cheap
+        even for very large photos and correct when images differ in size. Other
+        backends return the height and width from `shape`.
+
+        Args:
+            frame_idx: Index of the frame to query.
+
+        Returns:
+            The `(height, width)` of the frame as stored, without applying any
+            EXIF/TIFF orientation tag (matching the frames that are read).
+
+        Raises:
+            IndexError: If the frame index is out of range.
+            ValueError: If the backend is not open and `open_backend` is `False`.
+
+        See also: VideoBackend.get_frame_size, get_frame
+        """
+        self._ensure_open()
+        return self.backend.get_frame_size(frame_idx)
+
+    def _ensure_open(self) -> None:
+        """Open the backend if needed before reading frames.
+
+        Raises:
+            ValueError: If the backend is not open and `open_backend` is `False`.
+        """
         if not self.is_open:
             if self.open_backend:
                 self.open()
@@ -675,7 +735,6 @@ class Video:
                     "Video backend is not open. Call video.open() or set "
                     "video.open_backend to True to do automatically on frame read."
                 )
-        return self.backend[inds]
 
     def exists(self, check_all: bool = False, dataset: str | None = None) -> bool:
         """Check if the video file exists and is accessible.

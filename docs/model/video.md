@@ -66,6 +66,20 @@ video = sio.Video("test.mp4", open_backend=False)
 frame = video[0]  # Backend opens automatically on first access
 ```
 
+### Reduced-size reads
+
+For very large photos, `get_frame` can decode a frame at 1/2, 1/4 or 1/8 size inside the JPEG decoder, which is much faster than decoding the full image and resizing it. `get_frame_size` returns a frame's full `(height, width)` from the file header without decoding it, so you can pick the largest factor that still covers the size you need:
+
+```python
+video = sio.Video.from_filename(["photo_0.jpg", "photo_1.jpg"])
+
+height, width = video.get_frame_size(0)        # Header only, no decode
+frame = video.get_frame(0, downscale=4)        # ~(height / 4, width / 4, channels)
+scale = width / frame.shape[1]                 # Scale actually used
+```
+
+The reduced decode applies to JPEG files in image sequences, with either image plugin (`opencv` or `imageio`). Each side is `ceil(side / downscale)` pixels, and channels and grayscale handling are the same as `video[idx]`. Other formats and backends (PNG, TIFF, BMP, media videos, HDF5, cropped videos) return the full frame, so check the returned shape for the scale you got. `downscale=1` (the default) is the same as `video[idx]`. Like full reads, reduced reads and `get_frame_size` ignore EXIF orientation tags.
+
 ## Video properties
 
 | Property | Type | Description |
