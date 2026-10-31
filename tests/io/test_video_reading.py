@@ -12,6 +12,7 @@ from numpy.testing import assert_equal
 from pytest_httpserver import HTTPServer
 
 import sleap_io as sio
+from sleap_io.io import video_reading
 from sleap_io.io.video_reading import (
     PYAV_PREFERRED_CODECS,
     CropVideoBackend,
@@ -116,7 +117,7 @@ def test_mediavideo(centered_pair_low_quality_path, keep_open):
         if keep_open:
             assert backend._open_reader is not None
             assert backend[0].shape == (384, 384, 1)
-            assert type(backend._open_reader).__name__ == "PyAVPlugin"
+            assert type(backend._open_reader).__name__ == "_PyAVPlugin"
         else:
             assert backend._open_reader is None
     except ImportError:
@@ -1287,6 +1288,107 @@ def test_media_video_pyav_frame_threading_reads_same_frames(
         MediaVideo(centered_pair_low_quality_path, plugin="FFMPEG")._imageio_read_kwargs
         == {}
     )
+
+
+def _write_all_keyframes_h264(path: Path, n_frames: int) -> np.ndarray:
+    """Write an H.264 video in which every frame is a keyframe, without B-frames.
+
+    Frame `i` is a flat gray of value 20 + 8 * i, so frames stay distinguishable
+    after compression.
+
+    Returns:
+        The frames that were written, as `(n_frames, 32, 48, 3)` uint8.
+    """
+    frames = np.stack(
+        [np.full((32, 48, 3), 20 + 8 * i, dtype=np.uint8) for i in range(n_frames)]
+    )
+    with sio.VideoWriter(path, fps=30, output_params=["-g", "1", "-bf", "0"]) as w:
+        for frame in frames:
+            w.write_frame(frame)
+    return frames
+
+
+@pytest.mark.parametrize("keep_open", [True, False])
+@pytest.mark.parametrize("plugin", ["opencv", "FFMPEG", "pyav"])
+def test_media_video_one_frame_video(tmp_path, plugin, keep_open):
+    """Test reading a video that holds a single frame, more than once."""
+    if plugin == "opencv" and cv2 is None:
+        pytest.skip("OpenCV not available")
+    if plugin == "pyav":
+        pytest.importorskip("av")
+    path = tmp_path / "one_frame.mp4"
+    expected = _write_all_keyframes_h264(path, 1)[0]
+
+    video = sio.load_video(path.as_posix(), plugin=plugin, grayscale=False)
+    assert video.shape == (1, 32, 48, 3)
+
+    # The shape is read from frame 0 first, so every read below goes back to it.
+    backend = MediaVideo(
+        path.as_posix(), plugin=plugin, keep_open=keep_open, grayscale=False
+    )
+    assert backend.shape == (1, 32, 48, 3)
+    for _ in range(3):
+        assert np.abs(backend[0].astype(int) - expected).max() <= 2
+    frames = backend.get_frames([0, 0])
+    assert frames.shape == (2, 32, 48, 3)
+    assert np.abs(frames.astype(int) - expected).max() <= 2
+
+
+@pytest.mark.skipif(cv2 is None, reason="OpenCV not available")
+def test_media_video_opencv_read_past_end_raises(tmp_path):
+    """Test OpenCV reads past the last frame still fail after a fresh capture."""
+    path = tmp_path / "one_frame.mp4"
+    _write_all_keyframes_h264(path, 1)
+    backend = MediaVideo(path.as_posix(), plugin="opencv", keep_open=True)
+    with pytest.raises(IndexError, match="Failed to read frame index 1"):
+        backend._read_frame(1)
+    with pytest.raises(IndexError, match="Failed to read frame index 1"):
+        backend._read_frames([0, 1])
+
+
+@pytest.mark.parametrize("keep_open", [True, False])
+def test_media_video_pyav_reads_last_frames(tmp_path, keep_open):
+    """Test pyav reads the right frame near the end of a video, in any order.
+
+    With every frame a keyframe, the keyframe of each of the last frames is within
+    the frame-threading decoder's delay of the end of the file, where imageio's own
+    seek returns the next frame instead (or raises for the last frame).
+    """
+    pytest.importorskip("av")
+    n_frames = 24
+    path = (tmp_path / "keyframes.mp4").as_posix()
+    _write_all_keyframes_h264(Path(path), n_frames)
+    expected = iio.imread(path, plugin="pyav")  # One sequential pass, no seeking.
+
+    backend = MediaVideo(path, plugin="pyav", keep_open=keep_open, grayscale=False)
+    inds = [n_frames - 1, n_frames - 1, 0, n_frames - 2, 5] + list(
+        range(n_frames - 1, -1, -1)
+    )
+    for i in inds:
+        assert_equal(backend._read_frame(i), expected[i])
+    assert_equal(backend._read_frames(inds), expected[inds])
+
+
+def test_pyav_plugin_seek_without_constant_framerate(tmp_path):
+    """Test the fixed pyav plugin keeps imageio's variable frame rate seek."""
+    pytest.importorskip("av")
+    path = (tmp_path / "keyframes.mp4").as_posix()
+    _write_all_keyframes_h264(Path(path), 6)
+    expected = iio.imread(path, plugin="pyav")
+
+    with iio.imopen(path, "r", plugin=video_reading._PyAVPlugin) as reader:
+        for i in [2, 4, 1, 5, 0]:
+            assert_equal(reader.read(index=i, constant_framerate=False), expected[i])
+
+
+def test_load_video_av1_one_frame(av1_one_frame_video_path):
+    """Test reading a one-frame AV1 video, which is read with pyav by default."""
+    sio.set_default_video_plugin(None)
+    video = sio.load_video(av1_one_frame_video_path)
+    assert video.backend.plugin == "pyav"
+    assert video.shape == (1, 128, 128, 1)
+    for _ in range(3):
+        assert abs(_square_left_edge(video[0]) - 4) <= 2
 
 
 @pytest.mark.parametrize("plugin", ["opencv", "imageio"])
