@@ -32,7 +32,7 @@ try:
 except ImportError:
     pass
 
-if "av" in sys.modules:
+if "av" in sys.modules:  # pragma: no branch - pyav is an optional extra
     from imageio.plugins.pyav import PyAVPlugin
 
     class _PyAVPlugin(PyAVPlugin):
