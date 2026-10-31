@@ -384,6 +384,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v095" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.5
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v094" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -696,17 +707,6 @@
     <span class="md-ellipsis">
       
         v0.1.9
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v018" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.8
       
     </span>
   </a>
@@ -3877,6 +3877,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v095" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.5
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v094" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4195,17 +4206,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v018" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.8
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -4225,6 +4225,74 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v095"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.9.5">v0.9.5</a><a class="headerlink" href="#v095" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.9.5 Release Notes</h1>
+<h2>Summary</h2>
+<p>sleap-io v0.9.5 is a small patch release. It prepares current installs for the upcoming <strong>SLP format 3.0</strong>, which ships in sleap-io 0.10.0. From this release on, sleap-io refuses <code>.slp</code> files written in a newer format than it understands, and says so clearly. Before this, opening such a file failed with a cryptic h5py error.</p>
+<p>This release also corrects the documentation of the per-point <code>complete</code> field.</p>
+<p>There are no SLP format changes: the writer still produces format <strong>2.8</strong> at most. There are no breaking API changes.</p>
+<p><strong>Highlights:</strong></p>
+<ul>
+<li><strong>Clear error for newer SLP files (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6006763861" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/567" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/567/hovercard" href="https://github.com/talmolab/sleap-io/pull/567">#567</a>).</strong> Loading a file whose <code>/metadata</code> <code>format_id</code> is 3.0 or higher now raises:
+<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="ValueError: labels.slp uses SLP format 3, which is newer than this version of sleap-io supports (max 2.x); upgrade sleap-io to read it."><pre class="notranslate"><code>ValueError: labels.slp uses SLP format 3, which is newer than this version of sleap-io supports (max 2.x); upgrade sleap-io to read it.
+</code></pre></div>
+The check runs before any table is read.</li>
+<li><strong><code>complete</code> documented correctly (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6006763861" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/567" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/567/hovercard" href="https://github.com/talmolab/sleap-io/pull/567">#567</a>).</strong> It was described as "fully visible". It actually records that a human acted on the node in the SLEAP GUI.</li>
+</ul>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.9.5 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.9.5 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span></pre></div>
+<hr>
+<h2>Fixes</h2>
+<ul>
+<li><strong>Forward-compatibility guard for SLP format 3.0 (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6006763861" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/567" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/567/hovercard" href="https://github.com/talmolab/sleap-io/pull/567">#567</a>).</strong>
+<ul>
+<li>The new module constant <code>sleap_io.io.slp.SLP_FORMAT_ID_LIMIT</code> is <code>3.0</code>. Files with <code>format_id &gt;= SLP_FORMAT_ID_LIMIT</code> are refused.</li>
+<li>The check covers <code>load_slp</code> (eager and <code>lazy=True</code>, local paths and URLs), <code>load_file</code>, <code>read_labels</code>, <code>read_labels_set</code>/<code>load_labels_set</code> and <code>merge_label_images</code>.</li>
+<li>Files without a <code>format_id</code> are not affected, and every existing 1.x and 2.x file loads as before.</li>
+<li><strong>Why this matters:</strong> SLP 3.0 stores <code>/points</code>, <code>/instances</code>, <code>/frames</code> and the other tables as one dataset per column, following the <code>/bboxes</code> layout from format 2.0. sleap-io 0.9.4 and earlier would try to slice those groups as compound datasets and fail partway through with an h5py error. If you get the new error, upgrade sleap-io once 0.10.0 is released.</li>
+<li>sleap-nn, which pins <code>sleap-io&lt;0.10</code>, picks up this guard on its next install or upgrade.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2>Documentation</h2>
+<ul>
+<li><strong><code>complete</code> field (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6006763861" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/567" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/567/hovercard" href="https://github.com/talmolab/sleap-io/pull/567">#567</a>).</strong> <code>docs/model/poses.md</code>, the <code>PointsArray</code>/<code>PredictedPointsArray</code> docstrings and the point dtype comments in <code>docs/formats/slp.md</code> now say what <code>complete</code> means: the SLEAP GUI sets it when a human placed or moved a node, or toggled its visibility. sleap-io stores it without interpreting it. Visibility is the separate <code>visible</code> field. The field is not renamed in 0.9.x.</li>
+<li><strong>Format docs (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6006763861" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/567" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/567/hovercard" href="https://github.com/talmolab/sleap-io/pull/567">#567</a>).</strong> The Version History in <code>docs/formats/slp.md</code> now mentions the upper-bound check.</li>
+</ul>
+<hr>
+<h2>Development</h2>
+<ul>
+<li><strong>pytest-xdist (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6006939184" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/568" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/568/hovercard" href="https://github.com/talmolab/sleap-io/pull/568">#568</a>).</strong> It's now a dev dependency, so <code>uv run pytest -n auto tests/</code> runs the suite in parallel. With all extras installed, the full suite takes about 20 s on 16 workers. CI is unchanged.</li>
+</ul>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6006763861" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/567" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/567/hovercard" href="https://github.com/talmolab/sleap-io/pull/567">#567</a>: fix(slp): refuse SLP format &gt;= 3.0 with a clear error; fix <code>complete</code> docs</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6006939184" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/568" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/568/hovercard" href="https://github.com/talmolab/sleap-io/pull/568">#568</a>: chore(dev): add pytest-xdist to dev dependencies</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6013339594" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/574" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/574/hovercard" href="https://github.com/talmolab/sleap-io/pull/574">#574</a>: chore(release): Bump version to 0.9.5</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/talmolab/sleap-io/compare/v0.9.4...v0.9.5">v0.9.4...v0.9.5</a></p>
 <h2 id="v094"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.9.4">v0.9.4</a><a class="headerlink" href="#v094" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.9.4 Release Notes</h1>
 <h2>Summary</h2>
@@ -11349,17 +11417,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 </li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.8...v0.1.9"><tt>v0.1.8...v0.1.9</tt></a></p>
-<h2 id="v018"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.8">v0.1.8</a><a class="headerlink" href="#v018" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Fix docs by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2443831067" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/108" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/108/hovercard" href="https://github.com/talmolab/sleap-io/pull/108">#108</a></li>
-<li>Support NumPy &gt; 2.0 and Python 3.12 by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/lochhh/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/lochhh">@lochhh</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2517585968" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/115" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/115/hovercard" href="https://github.com/talmolab/sleap-io/pull/115">#115</a></li>
-</ul>
-<h2>New Contributors</h2>
-<ul>
-<li><a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/lochhh/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/lochhh">@lochhh</a> made their first contribution in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2517585968" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/115" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/115/hovercard" href="https://github.com/talmolab/sleap-io/pull/115">#115</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.7...v0.1.8"><tt>v0.1.7...v0.1.8</tt></a></p>
 
 
 
