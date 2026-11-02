@@ -29,6 +29,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
+from sleap_io.io._remote import _mask_url_credentials, _mask_url_credentials_deep
 from sleap_io.model.labels import Labels, SuggestionFrame
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
@@ -490,7 +491,9 @@ def _write_dlc(
 
     for lf in sorted(lfs, key=lambda x: x.frame_idx):
         # Create image path index (DLC convention)
-        video_name = Path(lf.video.filename).stem if lf.video else "video"
+        video_name = (
+            Path(_mask_url_credentials(lf.video.filename)).stem if lf.video else "video"
+        )
         img_path = f"labeled-data/{video_name}/img{lf.frame_idx:04d}.png"
         index.append(img_path)
 
@@ -587,7 +590,7 @@ def _write_codec_format(
             end_frame=end_frame,
             video_id=video_id,
         )
-        df.to_csv(filename, index=False)
+        _mask_video_columns(df).to_csv(filename, index=False)
     else:
         # Chunked: iterate and write incrementally
         first_chunk = True
@@ -600,13 +603,30 @@ def _write_codec_format(
             include_metadata=True,
             video_id=video_id,
         ):
-            chunk.to_csv(
+            _mask_video_columns(chunk).to_csv(
                 filename,
                 mode="w" if first_chunk else "a",
                 header=first_chunk,
                 index=False,
             )
             first_chunk = False
+
+
+def _mask_video_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Mask URL credentials in a DataFrame's video names, which are about to be saved.
+
+    The codecs return a video's filename as it is in memory, for whoever goes back to
+    it. A file gets passed around.
+
+    Args:
+        df: A DataFrame from the codecs, with a video column if it has several videos.
+
+    Returns:
+        The DataFrame, with any ``video_path`` column masked. The input isn't changed.
+    """
+    if "video_path" not in df.columns:
+        return df
+    return df.assign(video_path=df["video_path"].map(_mask_url_credentials_deep))
 
 
 # =============================================================================
@@ -636,14 +656,14 @@ def _write_metadata(labels: Labels, filename: Path) -> None:
         "skeletons": [],
         "tracks": [],
         "suggestions": [],
-        "provenance": dict(labels.provenance),
+        "provenance": _mask_url_credentials_deep(dict(labels.provenance)),
     }
 
     # Videos: filename + backend_metadata (shape, fps, etc.)
     for video in labels.videos:
         video_data = {
-            "filename": video.filename,
-            "backend_metadata": video.backend_metadata,
+            "filename": _mask_url_credentials_deep(video.filename),
+            "backend_metadata": _mask_url_credentials_deep(video.backend_metadata),
         }
         metadata["videos"].append(video_data)
 

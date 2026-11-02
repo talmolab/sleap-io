@@ -2,6 +2,7 @@
 
 import numpy as np
 
+import sleap_io as sio
 from sleap_io import Instance, LabeledFrame, Labels, Skeleton, Video
 from sleap_io.io.labelstudio import (
     convert_labels,
@@ -87,3 +88,23 @@ def test_write_labels_with_nan_points(tmp_path):
         if annot["type"] == "keypointlabels"
     ]
     assert len(keypoint_annots) == 2  # Only node1 and node3, node2 was skipped
+
+
+def test_save_holds_no_url_credentials(tmp_path, saved_bytes_without):
+    """A task names the video it came from."""
+    url = "https://x.test/v.mp4?token=SECRET"
+    video = Video(filename=url, open_backend=False)
+    skeleton = Skeleton(["a", "b"])
+    instance = Instance.from_numpy(np.ones((2, 2)), skeleton=skeleton)
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[instance])],
+        videos=[video],
+        skeletons=[skeleton],
+    )
+    path = tmp_path / "a.json"
+
+    sio.save_labelstudio(labels, str(path))
+
+    assert b"https://x.test/v.mp4?token=***" in saved_bytes_without(path)
+    assert video.filename == url
+    assert sio.load_labelstudio(str(path)).videos[0].filename.endswith("?token=***")

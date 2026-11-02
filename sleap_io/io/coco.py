@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
+from sleap_io.io._remote import _mask_url_credentials
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.category import Category
 from sleap_io.model.instance import Instance, Track
@@ -941,12 +942,14 @@ def convert_labels(
             if isinstance(video.filename, list):
                 # Image sequence - use the specific frame
                 if labeled_frame.frame_idx < len(video.filename):
-                    image_filename = Path(video.filename[labeled_frame.frame_idx]).name
+                    image_filename = Path(
+                        _mask_url_credentials(video.filename[labeled_frame.frame_idx])
+                    ).name
                 else:
                     image_filename = f"frame_{labeled_frame.frame_idx:06d}.png"
             else:
                 # Video file - generate image name
-                video_name = Path(video.filename).stem
+                video_name = Path(_mask_url_credentials(video.filename)).stem
                 image_filename = f"{video_name}_frame_{labeled_frame.frame_idx:06d}.png"
 
         # Get image dimensions

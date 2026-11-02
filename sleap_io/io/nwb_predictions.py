@@ -22,6 +22,7 @@ from ndx_pose import (  # type: ignore[import]
 )
 from pynwb import NWBHDF5IO, NWBFile, ProcessingModule  # type: ignore[import]
 
+from sleap_io.io._remote import _mask_url_credentials
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -386,7 +387,7 @@ def append_nwb_data(
 
     # Extract default metadata
     provenance = labels.provenance
-    default_metadata = dict(scorer=str(provenance))
+    default_metadata = dict(scorer=_mask_url_credentials(str(provenance)))
     sleap_version = provenance.get("sleap_version", None)
     default_metadata["source_software_version"] = sleap_version
 
@@ -394,7 +395,7 @@ def append_nwb_data(
 
     # For every video create a processing module
     for video_index, video in enumerate(labels.videos):
-        video_path = Path(video.filename)
+        video_path = Path(_mask_url_credentials(video.filename))
         processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
         nwb_processing_module = get_processing_module_for_video(
             processing_module_name, nwbfile
@@ -411,8 +412,9 @@ def append_nwb_data(
             )
 
         # Propagate video metadata
-        default_metadata["original_videos"] = [f"{video.filename}"]  # type: ignore
-        default_metadata["labeled_videos"] = [f"{video.filename}"]  # type: ignore
+        saved_name = _mask_url_credentials(f"{video.filename}")
+        default_metadata["original_videos"] = [saved_name]  # type: ignore
+        default_metadata["labeled_videos"] = [saved_name]  # type: ignore
 
         # Overwrite default with the user provided metadata
         default_metadata.update(pose_estimation_metadata)
@@ -514,7 +516,7 @@ def build_pose_estimation_container_for_track(
     """
     # Copy metadata for local use and modification
     pose_estimation_metadata_copy = deepcopy(pose_estimation_metadata)
-    video_path = Path(video.filename)
+    video_path = Path(_mask_url_credentials(video.filename))
 
     all_track_skeletons = (
         labels_data_df[video.filename]

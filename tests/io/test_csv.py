@@ -830,3 +830,86 @@ class TestChunkedWriting:
 
         df = pd.read_csv(csv_path)
         assert len(df) == 2
+
+
+def _labels_on_urls(*urls):
+    """Labels with one frame on each of `urls`."""
+    skeleton = Skeleton(["a", "b"], name="s")
+    videos = [
+        Video(
+            filename=url, open_backend=False, backend_metadata={"shape": (9, 4, 4, 1)}
+        )
+        for url in urls
+    ]
+    frames = [
+        LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[Instance.from_numpy(np.ones((2, 2)), skeleton=skeleton)],
+        )
+        for video in videos
+    ]
+    return Labels(labeled_frames=frames, videos=videos, skeletons=[skeleton])
+
+
+@pytest.mark.parametrize("csv_format", ["points", "instances", "frames"])
+@pytest.mark.parametrize("video_id", ["path", "name"])
+@pytest.mark.parametrize("chunk_size", [None, 1])
+def test_table_of_several_videos_holds_no_url_credentials(
+    tmp_path, saved_bytes_without, csv_format, video_id, chunk_size
+):
+    """With several videos a table says which video each row is from."""
+    urls = [f"https://x.test/{i}.mp4?token=SECRET" for i in range(2)]
+    labels = _labels_on_urls(*urls)
+    path = tmp_path / "a.csv"
+
+    sio.save_csv(
+        labels, str(path), format=csv_format, video_id=video_id, chunk_size=chunk_size
+    )
+
+    saved_bytes_without(path)
+    names = set(pd.read_csv(path)["video_path"])
+    if video_id == "path":
+        assert names == {f"https://x.test/{i}.mp4?token=***" for i in range(2)}
+    else:
+        assert names == {f"{i}.mp4?token=***" for i in range(2)}
+    # What the codecs return is in memory, for whoever goes back to it.
+    assert [video.filename for video in labels.videos] == urls
+    assert set(
+        labels.to_dataframe(format=csv_format, video_id="path")["video_path"]
+    ) == (set(urls))
+
+
+def test_table_keeps_a_filename_with_nothing_to_mask(tmp_path):
+    """With nothing to mask, nothing moves."""
+    names = ["https://x.test/a b.mp4?x=1", "/data/run=1/b.mp4"]
+    path = tmp_path / "a.csv"
+    sio.save_csv(_labels_on_urls(*names), str(path), format="points")
+    assert set(pd.read_csv(path)["video_path"]) == set(names)
+
+
+def test_sidecar_metadata_holds_no_url_credentials(tmp_path, saved_bytes_without):
+    """The metadata saved next to a table names the videos and their provenance."""
+    url = "https://x.test/v.mp4?token=SECRET"
+    labels = _labels_on_urls(url)
+    labels.provenance["filename"] = "https://x.test/labels.slp?token=SECRET"
+    labels.videos[0].backend_metadata["filename"] = url
+    path = tmp_path / "a.csv"
+
+    sio.save_csv(labels, str(path), save_metadata=True)
+
+    saved_bytes_without(tmp_path)
+    metadata = json.loads(path.with_suffix(".json").read_text())
+    assert metadata["videos"][0]["filename"] == "https://x.test/v.mp4?token=***"
+    assert metadata["videos"][0]["backend_metadata"]["filename"].endswith("?token=***")
+    assert metadata["provenance"]["filename"].endswith("?token=***")
+    assert labels.videos[0].filename == url
+
+
+def test_dlc_table_holds_no_part_of_a_url_credential(tmp_path, saved_bytes_without):
+    """A file's stem stops at a dot, and a token can have dots in it."""
+    labels = _labels_on_urls("https://x.test/v.mp4?token=SECRET.AND.MORE")
+    path = tmp_path / "a.csv"
+    sio.save_csv(labels, str(path), format="dlc")
+    saved = saved_bytes_without(path)
+    assert b"labeled-data/v/img0000.png" in saved

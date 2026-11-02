@@ -32,7 +32,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from sleap_io.io import main as io_main
-from sleap_io.io._remote import _is_url, _redact_url
+from sleap_io.io._remote import _is_url, _mask_url_credentials_deep, _redact_url
 from sleap_io.io.video_reading import HDF5Video
 from sleap_io.model.event import PredictedEvent
 from sleap_io.model.instance import Instance, PredictedInstance, Track
@@ -8078,7 +8078,8 @@ def _generate_transform_metadata(
 
         metadata["videos"][video_idx] = video_meta
 
-    return metadata
+    # This goes in the output file and in a YAML file next to it.
+    return _mask_url_credentials_deep(metadata)
 
 
 def _export_transform_metadata(metadata: dict, output_path: Path) -> None:
