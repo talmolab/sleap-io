@@ -5405,6 +5405,23 @@ def test_labels_match_string_method():
     assert result.all_skeletons_matched
 
 
+def test_labels_match_non_auto_searches_all_candidates():
+    """Non-AUTO matching checks every candidate and leaves unmatched videos None."""
+    skeleton = Skeleton(["head", "tail"])
+    video_a = Video(filename="/data/a.mp4", open_backend=False)
+    video_b = Video(filename="/data/b.mp4", open_backend=False)
+    pred_b = Video(filename="/output/b.mp4", open_backend=False)
+    pred_c = Video(filename="/output/c.mp4", open_backend=False)
+
+    gt_labels = Labels(videos=[video_a, video_b], skeletons=[skeleton])
+    pred_labels = Labels(videos=[pred_b, pred_c], skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels, video="basename")
+
+    assert result.video_map[pred_b] is video_b
+    assert result.video_map[pred_c] is None
+
+
 def test_labels_match_custom_matchers():
     """Test Labels.match with custom matcher objects."""
     # For SUBSET matching, skeleton1 must be a subset of skeleton2
