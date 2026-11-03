@@ -3812,6 +3812,7 @@ class Labels:
             TrackMatchMethod,
             VideoMatcher,
             VideoMatchMethod,
+            _cache_file_exists,
         )
 
         # Coerce string arguments to Matcher objects
@@ -3849,22 +3850,24 @@ class Labels:
             result.skeleton_map[other_skel] = matched_skel
 
         # Match videos
-        # Use find_match for AUTO method to get full matching cascade
-        for other_video in other.videos:
-            if video_matcher.method == VideoMatchMethod.AUTO:
-                matched_video = video_matcher.find_match(
-                    other_video,
-                    self.videos,
-                    labels_incoming=other,
-                    labels_base=self,
-                )
-            else:
-                matched_video = None
-                for self_video in self.videos:
-                    if video_matcher.match(self_video, other_video):
-                        matched_video = self_video
-                        break
-            result.video_map[other_video] = matched_video
+        # Use find_match for AUTO method to get full matching cascade. File
+        # existence checks on provenance are cached across all video pairs.
+        with _cache_file_exists():
+            for other_video in other.videos:
+                if video_matcher.method == VideoMatchMethod.AUTO:
+                    matched_video = video_matcher.find_match(
+                        other_video,
+                        self.videos,
+                        labels_incoming=other,
+                        labels_base=self,
+                    )
+                else:
+                    matched_video = None
+                    for self_video in self.videos:
+                        if video_matcher.match(self_video, other_video):
+                            matched_video = self_video
+                            break
+                result.video_map[other_video] = matched_video
 
         # Match tracks
         for other_track in other.tracks:

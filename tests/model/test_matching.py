@@ -1,6 +1,11 @@
 """Tests for the matching module."""
 
+import os
+import shutil
+import sys
+
 import numpy as np
+import pytest
 
 import sleap_io as sio
 from sleap_io.model.category import Category
@@ -30,11 +35,15 @@ from sleap_io.model.matching import (
     TrackMatchMethod,
     VideoMatcher,
     VideoMatchMethod,
+    _cache_file_exists,
     _crop_key,
+    _file_exists,
     _get_effective_shape,
     _is_same_file_direct,
     _same_file_different_crop,
+    _same_file_different_dataset,
     is_same_file,
+    original_videos_conflict,
     shapes_compatible,
 )
 from sleap_io.model.skeleton import Skeleton
@@ -1703,6 +1712,138 @@ class TestProvenanceConflictFallthrough:
 
         # One file exists and paths differ - should conflict
         assert original_videos_conflict(video1, video2)
+
+    def test_file_exists_permission_denied(self, locked_dir):
+        """Paths under an untraversable directory count as missing, not errors."""
+        path = str(locked_dir / "frame.jpg")
+        assert not _file_exists(path)
+        assert not _file_exists([path, path])
+
+    def test_no_conflict_when_originals_permission_denied(self, locked_dir):
+        """Unreachable originals fall through instead of raising."""
+        video1 = Video(
+            filename="/pkg.slp",
+            source_video=Video(
+                filename=[str(locked_dir / "a.jpg")], open_backend=False
+            ),
+            open_backend=False,
+        )
+        video2 = Video(
+            filename="/pkg.slp",
+            source_video=Video(
+                filename=[str(locked_dir / "b.jpg")], open_backend=False
+            ),
+            open_backend=False,
+        )
+        assert not original_videos_conflict(video1, video2)
+
+    def test_file_exists_cached_within_context(self, tmp_path):
+        """Existence is memoized for the outermost cache context only."""
+        path = tmp_path / "late.mp4"
+        with _cache_file_exists():
+            assert not _file_exists(str(path))
+            path.write_text("")
+            assert not _file_exists(str(path))
+            with _cache_file_exists():
+                # Nested contexts share the outer cache.
+                assert not _file_exists(str(path))
+        assert _file_exists(str(path))
+
+
+@pytest.fixture
+def locked_dir(tmp_path):
+    """A directory whose contents can't be stat'd (permission denied)."""
+    if sys.platform == "win32" or os.geteuid() == 0:
+        pytest.skip("Requires POSIX permissions enforced for a non-root user.")
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    (locked / "frame.jpg").write_text("")
+    locked.chmod(0)
+    yield locked
+    locked.chmod(0o755)
+
+
+def _make_package_labels(src_dir):
+    """Labels with 3 image-list videos; videos 0 and 2 share the same images."""
+    frames = sorted(str(p) for p in src_dir.iterdir())
+    skeleton = Skeleton(["a", "b"])
+    videos = [Video(frames[:4]), Video(frames[4:]), Video(frames[:4])]
+    lfs = []
+    for i, video in enumerate(videos):
+        pts = np.array([[10.0 + 20 * i, 10.0], [30.0 + 20 * i, 30.0]])
+        lfs.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=1,
+                instances=[Instance.from_numpy(pts, skeleton=skeleton)],
+            )
+        )
+    return Labels(lfs, videos=videos, skeletons=[skeleton])
+
+
+@pytest.fixture
+def embedded_package(tmp_path, tiff_image_sequence_path):
+    """A 3-video .pkg.slp whose original image lists become unreachable."""
+    if sys.platform == "win32" or os.geteuid() == 0:
+        pytest.skip("Requires POSIX permissions enforced for a non-root user.")
+    src_dir = tmp_path / "src"
+    shutil.copytree(tiff_image_sequence_path, src_dir)
+    pkg_path = tmp_path / "val.pkg.slp"
+    sio.save_slp(
+        _make_package_labels(src_dir),
+        pkg_path,
+        embed="user",
+    )
+    src_dir.chmod(0)
+    yield pkg_path
+    src_dir.chmod(0o755)
+
+
+def test_same_file_different_dataset(embedded_package):
+    """Package videos sharing a filename are told apart by dataset."""
+    gt = sio.load_slp(embedded_package, open_videos=False)
+    other = sio.load_slp(embedded_package, open_videos=False)
+    assert [v.backend_metadata["dataset"] for v in gt.videos] == [
+        "video0/video",
+        "video1/video",
+        "video2/video",
+    ]
+    assert _same_file_different_dataset(gt.videos[0], other.videos[2])
+    assert not _same_file_different_dataset(gt.videos[0], other.videos[0])
+    assert not _is_same_file_direct(gt.videos[0], other.videos[2])
+    assert _is_same_file_direct(gt.videos[1], other.videos[1])
+
+
+def test_match_embedded_package_predictions(embedded_package, tmp_path):
+    """Predictions on a package match their own dataset despite unreachable originals.
+
+    The originals are permission-denied, and videos 0 and 2 have identical
+    original image lists, so only the HDF5 dataset can tell them apart.
+    """
+    gt = sio.load_slp(embedded_package)
+    assert gt.videos[0].original_video.filename[0].startswith(str(tmp_path / "src"))
+
+    pred = sio.load_slp(embedded_package)
+    for lf in pred.labeled_frames:
+        lf.instances = [
+            PredictedInstance.from_numpy(
+                inst.numpy(), skeleton=inst.skeleton, score=1.0
+            )
+            for inst in lf.instances
+        ]
+    pred_path = tmp_path / "val.pred.slp"
+    # Reference the package's embedded videos, as `sleap-nn predict` does.
+    sio.save_slp(pred, pred_path, embed=False, restore_original_videos=False)
+    pred = sio.load_slp(pred_path)
+    assert [v.filename for v in pred.videos] == [str(embedded_package)] * 3
+
+    result = gt.match(pred)
+    assert [result.video_map[v] for v in pred.videos] == gt.videos
+
+    matcher = VideoMatcher()
+    for gt_video, pred_video in zip(gt.videos, pred.videos):
+        assert matcher.match(gt_video, pred_video)
+    assert not matcher.match(gt.videos[0], pred.videos[2])
 
 
 class TestPoseMatching:
