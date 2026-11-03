@@ -18,8 +18,11 @@ automatic strategies.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Iterator
 
 import attrs
 import numpy as np
@@ -193,6 +196,45 @@ def _get_root_video(video: Video) -> Video:
     return video
 
 
+# Memo of `_file_exists` results, active only inside `_cache_file_exists()`.
+_FILE_EXISTS_CACHE: ContextVar[dict | None] = ContextVar(
+    "_FILE_EXISTS_CACHE", default=None
+)
+
+
+@contextmanager
+def _cache_file_exists() -> Iterator[None]:
+    """Memoize `_file_exists` for the duration of one matching call.
+
+    Provenance checks stat each candidate's root original video once per
+    (candidate, incoming) pair, which is O(N^2) stats when matching N videos
+    against N. On slow or unreachable network mounts each stat can block, so
+    results are cached until the outermost context exits. Nested uses share
+    the outer cache.
+    """
+    if _FILE_EXISTS_CACHE.get() is not None:
+        yield
+        return
+    token = _FILE_EXISTS_CACHE.set({})
+    try:
+        yield
+    finally:
+        _FILE_EXISTS_CACHE.reset(token)
+
+
+def _path_exists(filename: str) -> bool:
+    """Check if a path exists, treating inaccessible paths as missing.
+
+    `Path.exists()` raises `PermissionError` (and other `OSError`s) when a
+    parent directory can't be traversed, e.g. provenance paths from another
+    machine under `/root`. Those can't be verified, so they count as missing.
+    """
+    try:
+        return Path(filename).exists()
+    except OSError:
+        return False
+
+
 def _file_exists(filename: str | list[str]) -> bool:
     """Check if file(s) exist on disk.
 
@@ -200,13 +242,25 @@ def _file_exists(filename: str | list[str]) -> bool:
         filename: Single file path or list of file paths.
 
     Returns:
-        True if the file (or all files in the list) exist.
+        True if the file (or all files in the list) exist. Paths that can't be
+        accessed (e.g., permission denied) are treated as nonexistent.
+
+    Notes:
+        Results are memoized while inside `_cache_file_exists()`.
     """
-    from pathlib import Path
+    cache = _FILE_EXISTS_CACHE.get()
+    key = tuple(filename) if isinstance(filename, list) else filename
+    if cache is not None and key in cache:
+        return cache[key]
 
     if isinstance(filename, list):
-        return all(Path(f).exists() for f in filename)
-    return Path(filename).exists()
+        exists = all(_path_exists(f) for f in filename)
+    else:
+        exists = _path_exists(filename)
+
+    if cache is not None:
+        cache[key] = exists
+    return exists
 
 
 def _get_frame_instances(
@@ -464,21 +518,31 @@ def _to_grayscale_float(frame: "np.ndarray") -> "np.ndarray":
     return gray / 255.0
 
 
-def _is_same_file_direct(video1: Video, video2: Video) -> bool:
-    """Check if two videos (without chain traversal) refer to the same file.
+def _hdf5_dataset(video: Video) -> str | None:
+    """Return the HDF5 dataset a video reads from, or `None`.
 
-    This is the low-level comparison used by is_same_file() after resolving
-    any provenance chains.
+    Reads the open backend's `dataset`, falling back to
+    `backend_metadata["dataset"]` for videos loaded with `open_videos=False`.
+    """
+    dataset = getattr(video.backend, "dataset", None)
+    if dataset is None:
+        dataset = video.backend_metadata.get("dataset")
+    return dataset
+
+
+def _is_same_path(video1: Video, video2: Video) -> bool:
+    """Check if two videos (without chain traversal) point at the same file path.
+
+    Ignores HDF5 datasets; see `_is_same_file_direct()` for full identity.
 
     Args:
         video1: First video to compare.
         video2: Second video to compare.
 
     Returns:
-        True if both videos refer to the same underlying file (and dataset for HDF5).
+        True if both videos' filenames refer to the same file (or the same
+        image list for ImageVideo).
     """
-    from pathlib import Path
-
     # Handle ImageVideo (list of filenames)
     if isinstance(video1.filename, list) and isinstance(video2.filename, list):
         # For ImageVideo, require exact same list (order matters for frame indices)
@@ -517,21 +581,60 @@ def _is_same_file_direct(video1: Video, video2: Video) -> bool:
         # Final check: exact path string match (normalized)
         files_match = str(path1) == str(path2)
 
-    if not files_match:
+    return files_match
+
+
+def _is_same_file_direct(video1: Video, video2: Video) -> bool:
+    """Check if two videos (without chain traversal) refer to the same file.
+
+    This is the low-level comparison used by is_same_file() after resolving
+    any provenance chains.
+
+    Args:
+        video1: First video to compare.
+        video2: Second video to compare.
+
+    Returns:
+        True if both videos refer to the same underlying file (and dataset for HDF5).
+    """
+    if not _is_same_path(video1, video2):
         return False
 
     # Files match - now check HDF5 datasets if applicable
     # For HDF5 videos within the same file, different datasets are different videos
-    backend1 = video1.backend
-    backend2 = video2.backend
-    if backend1 is not None and backend2 is not None:
-        dataset1 = getattr(backend1, "dataset", None)
-        dataset2 = getattr(backend2, "dataset", None)
-        if dataset1 is not None and dataset2 is not None:
-            # Both have datasets - they must match
-            return dataset1 == dataset2
+    dataset1 = _hdf5_dataset(video1)
+    dataset2 = _hdf5_dataset(video2)
+    if dataset1 is not None and dataset2 is not None:
+        # Both have datasets - they must match
+        return dataset1 == dataset2
 
     return True
+
+
+def _same_file_different_dataset(video1: Video, video2: Video) -> bool:
+    """Check if two videos are in the same HDF5 file but DIFFERENT datasets.
+
+    This is the definitive disambiguation for videos embedded in one package
+    file (e.g. `video0` ... `video29` in a `.pkg.slp`): they share a filename,
+    so the path and leaf-uniqueness rungs would otherwise collapse them, and
+    their provenance may be unreachable for `original_videos_conflict()`.
+
+    Unlike `is_same_file()`, this compares the videos themselves rather than
+    their provenance roots, so it needs no filesystem access to the originals.
+
+    Args:
+        video1: First video to compare.
+        video2: Second video to compare.
+
+    Returns:
+        True only when both videos have an HDF5 dataset, the datasets differ,
+        and the videos point at the same file.
+    """
+    dataset1 = _hdf5_dataset(video1)
+    dataset2 = _hdf5_dataset(video2)
+    if dataset1 is None or dataset2 is None or dataset1 == dataset2:
+        return False
+    return _is_same_path(video1, video2)
 
 
 def _crop_key(video: Video) -> tuple[int, int, int, int] | None:
@@ -744,8 +847,6 @@ def _same_file_different_crop(video1: Video, video2: Video) -> bool:
 
     # Even without verifiable file identity, a shared root basename means the
     # path/leaf rungs could re-match the pair; differing crops still disambiguate.
-    from pathlib import Path
-
     fn1 = root1.filename
     fn2 = root2.filename
     if isinstance(fn1, list) or isinstance(fn2, list):
@@ -1002,6 +1103,7 @@ class VideoMatcher:
             )
         return self._frame_cache[cache_key]
 
+    @_cache_file_exists()
     def match(self, video1: Video, video2: Video) -> bool:
         """Check if two videos match according to the configured method.
 
@@ -1014,6 +1116,11 @@ class VideoMatcher:
 
             # Rejection: incompatible shapes
             if shapes_compatible(video1, video2) is False:
+                return False
+
+            # Definitive: same package file but different embedded dataset.
+            # Runs before the provenance check, which stats original videos.
+            if _same_file_different_dataset(video1, video2):
                 return False
 
             # Rejection: conflicting provenance
@@ -1055,6 +1162,7 @@ class VideoMatcher:
         else:
             raise ValueError(f"Unknown video match method: {self.method}")
 
+    @_cache_file_exists()
     def find_match(
         self,
         incoming: Video,
@@ -1081,17 +1189,16 @@ class VideoMatcher:
         Notes:
             For AUTO method, implements the safe matching cascade:
             1. Shape rejection (filter candidates)
-            2. original_video conflict rejection (filter candidates)
-            3. Definitive file identity (is_same_file)
-            4. Strict path match
-            5. Leaf uniqueness matching at increasing depths
-            6. Pose-based matching (if labels provided)
-            7. Image-based matching (if compare_images=True)
+            2. Same file, different HDF5 dataset rejection (filter candidates)
+            3. original_video conflict rejection (filter candidates)
+            4. Definitive file identity (is_same_file)
+            5. Strict path match
+            6. Leaf uniqueness matching at increasing depths
+            7. Pose-based matching (if labels provided)
+            8. Image-based matching (if compare_images=True)
 
             Shape is for REJECTION only - compatible shapes don't imply a match.
         """
-        from pathlib import Path
-
         from sleap_io.io.utils import sanitize_filename
 
         if self.method == VideoMatchMethod.AUTO:
@@ -1104,12 +1211,19 @@ class VideoMatcher:
                     # Definitely incompatible shapes - skip
                     continue
 
-                # REJECTION CHECK 2: original_video conflict
+                # REJECTION CHECK 2: same package file, different dataset.
+                # Videos embedded in one .pkg.slp share a filename and differ
+                # only by dataset. Checked before provenance, which stats the
+                # (possibly unreachable) original videos.
+                if _same_file_different_dataset(candidate, incoming):
+                    continue
+
+                # REJECTION CHECK 3: original_video conflict
                 if original_videos_conflict(candidate, incoming):
                     # Both have provenance pointing to different files - skip
                     continue
 
-                # REJECTION CHECK 3: same source file, different crop.
+                # REJECTION CHECK 4: same source file, different crop.
                 # Distinct crops (mosaic tiles) of one physical file share a
                 # root file, so dropping them here prevents the file-identity,
                 # strict-path, and leaf-uniqueness rungs from collapsing them.

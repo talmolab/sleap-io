@@ -188,19 +188,22 @@ For each incoming video, AUTO runs these checks in order:
 | Step | Check | Result |
 |------|-------|--------|
 | 1 | Shape incompatible (frames, H, W differ) | Reject |
-| 2 | Provenance conflict (different `original_video`, verifiable) | Reject |
-| 3 | Same physical file (`os.path.samefile`) | **Match** |
-| 4 | Exact path string match | **Match** |
-| 5 | Unique basename/parent suffix match | **Match** |
-| 6 | Pose matching (identical annotations on common frames) | **Match** |
-| 7 | Image matching (pixel similarity, if enabled) | **Match** |
-| 8 | No match found | Add as new |
+| 2 | Same `.pkg.slp` file, different embedded dataset (`video0` vs `video1`) | Reject |
+| 3 | Provenance conflict (different `original_video`, verifiable) | Reject |
+| 4 | Same physical file (`os.path.samefile`) | **Match** |
+| 5 | Exact path string match | **Match** |
+| 6 | Unique basename/parent suffix match | **Match** |
+| 7 | Pose matching (identical annotations on common frames) | **Match** |
+| 8 | Image matching (pixel similarity, if enabled) | **Match** |
+| 9 | No match found | Add as new |
 
 **Shape is for rejection only.** Same resolution does NOT imply a match—it just means the videos aren't rejected. This prevents matching unrelated videos that happen to have the same dimensions.
 
 **Shape resolves through the source chain.** A derived video's effective shape is taken from the nearest video in its `source_video` chain that has a known shape (read from in-memory metadata — no file is opened). An **embedded subset** of frames therefore reports its **source's full shape**, so it is shape-compatible with that source and is not rejected on frame count before the definitive same-file check runs. This holds even when the deeper root shape is unknown (e.g. an embedded `.pkg.slp` whose deeper provenance file is not loaded). Genuine siblings that merely share a file but have no source relationship keep their own shapes and are still rejected when their frame counts differ.
 
-**Provenance conflict checking** only rejects when files can be verified on disk. If neither file exists (e.g., embedded videos in `.pkg.slp` files), the check is skipped to allow fall-through to content-based matching.
+**Embedded videos are told apart by dataset.** All videos in one `.pkg.slp` share its filename and differ only by HDF5 dataset. Two of them can even share the same `original_video` (the same images embedded twice), so the dataset, not the provenance, decides. This check reads no files, so it runs before provenance checking.
+
+**Provenance conflict checking** only rejects when files can be verified on disk. If neither file exists or can be accessed (e.g., `original_video` paths on another machine, or under a directory you can't read), the check is skipped to allow fall-through to content-based matching. Existence is checked once per file for each `Labels.match()` call, so unreachable network paths aren't stat'd for every video pair.
 
 ### Examples
 
