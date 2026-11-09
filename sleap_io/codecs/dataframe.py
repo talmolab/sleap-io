@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Generator, Iterator, Literal
 import numpy as np
 import pandas as pd
 
+from sleap_io.codecs.numpy import _max_instances_per_frame, _untracked_frame_instances
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labels import Labels
 from sleap_io.model.video import Video
@@ -124,6 +125,7 @@ def to_dataframe(
     all_frames: bool = False,
     start_frame: int | None = None,
     end_frame: int | None = None,
+    prefer_user_instances: bool = False,
 ) -> pd.DataFrame | "pl.DataFrame":
     """Convert Labels to a DataFrame.
 
@@ -161,6 +163,12 @@ def to_dataframe(
             from 0 when all_frames=True, or from first labeled frame otherwise.
         end_frame: End frame index (exclusive) for frame padding. If None, ends at
             the full video length when known, otherwise at last labeled frame + 1.
+        prefer_user_instances: For the "instances" format, write one row per
+            animal the way Analysis HDF5 export does: drop a predicted instance
+            that a user instance in the same frame replaced (linked by
+            `from_predicted`, or on the same track). In a single-instance project
+            any user instance replaces the frame's predictions. Default False:
+            every user and predicted instance gets a row.
 
     Returns:
         DataFrame in the specified format. Type depends on backend parameter.
@@ -239,8 +247,16 @@ def to_dataframe(
         # Auto-detect: include if multiple videos, unless explicitly omitted
         include_video = len(labels.videos) > 1
 
-    # Use lazy fast path when available (for POINTS and INSTANCES formats)
-    if labels.is_lazy and format in (DataFrameFormat.POINTS, DataFrameFormat.INSTANCES):
+    # Use lazy fast path when available (for POINTS and INSTANCES formats). The
+    # user-over-predicted selection follows `from_predicted` links between
+    # instance objects, so it takes the eager path.
+    use_lazy = labels.is_lazy and format in (
+        DataFrameFormat.POINTS,
+        DataFrameFormat.INSTANCES,
+    )
+    if prefer_user_instances and format == DataFrameFormat.INSTANCES:
+        use_lazy = False
+    if use_lazy:
         store = labels.labeled_frames._store
 
         if format == DataFrameFormat.POINTS:
@@ -304,6 +320,7 @@ def to_dataframe(
             all_frames=all_frames,
             start_frame=start_frame,
             end_frame=end_frame,
+            prefer_user_instances=prefer_user_instances,
         )
     elif format == DataFrameFormat.FRAMES:
         df = _to_frames_df(
@@ -357,6 +374,7 @@ def to_dataframe_iter(
     instance_id: Literal["index", "track"] = "index",
     untracked: Literal["error", "ignore"] = "error",
     backend: Literal["pandas", "polars"] = "pandas",
+    prefer_user_instances: bool = False,
 ) -> Iterator[pd.DataFrame | "pl.DataFrame"]:
     """Iterate over Labels data, yielding DataFrames in chunks.
 
@@ -395,6 +413,9 @@ def to_dataframe_iter(
         backend: "pandas" or "polars". Polars requires the polars package.
             When using polars, DataFrames are constructed natively without
             going through pandas, providing better performance for large datasets.
+        prefer_user_instances: For the "instances" format, one row per animal:
+            drop predicted instances replaced by a user instance. See
+            `to_dataframe()`.
 
     Yields:
         DataFrames, each containing up to `chunk_size` rows.
@@ -460,6 +481,7 @@ def to_dataframe_iter(
             instance_id=instance_id,
             untracked=untracked,
             backend=backend,
+            prefer_user_instances=prefer_user_instances,
         )
         yield df
         return
@@ -486,6 +508,7 @@ def to_dataframe_iter(
             include_predicted_instances=include_predicted_instances,
             include_video=include_video,
             video_id=video_id,
+            prefer_user_instances=prefer_user_instances,
         )
     elif format == DataFrameFormat.FRAMES:
         # For frames format, we need to pre-scan for max_instances and tracks
@@ -703,6 +726,52 @@ def _iter_points_rows(
                 yield row
 
 
+def _frame_instances_to_write(
+    lf,
+    *,
+    include_user_instances: bool,
+    include_predicted_instances: bool,
+    prefer_user_instances: bool,
+    is_single_instance: bool,
+) -> list:
+    """Instances of one frame that get a row in the instances format.
+
+    With `prefer_user_instances`, uses the Analysis HDF5 export's selection
+    (`_untracked_frame_instances`), so the two exports agree on which instance
+    stands for each animal.
+    """
+    if prefer_user_instances:
+        return _untracked_frame_instances(
+            lf,
+            is_single_instance=is_single_instance,
+            user_instances=include_user_instances,
+            predicted_instances=include_predicted_instances,
+        )
+    out = []
+    if include_user_instances:
+        out.extend(lf.user_instances)
+    if include_predicted_instances:
+        out.extend(lf.predicted_instances)
+    return out
+
+
+def _is_single_instance(
+    labeled_frames: list,
+    *,
+    include_user_instances: bool,
+    include_predicted_instances: bool,
+) -> bool:
+    """Whether at most one instance per frame is exported (as numpy export)."""
+    return (
+        _max_instances_per_frame(
+            labeled_frames,
+            user_instances=include_user_instances,
+            predicted_instances=include_predicted_instances,
+        )
+        == 1
+    )
+
+
 def _iter_instances_rows(
     labels: Labels,
     labeled_frames: list,
@@ -713,19 +782,23 @@ def _iter_instances_rows(
     include_predicted_instances: bool = True,
     include_video: bool = True,
     video_id: str = "path",
+    prefer_user_instances: bool = False,
 ) -> Generator[dict, None, None]:
     """Yield row dicts for instances format (one row per instance)."""
-
-    def _included(lf):
-        out = []
-        if include_user_instances:
-            out.extend(lf.user_instances)
-        if include_predicted_instances:
-            out.extend(lf.predicted_instances)
-        return out
+    is_single_instance = prefer_user_instances and _is_single_instance(
+        labeled_frames,
+        include_user_instances=include_user_instances,
+        include_predicted_instances=include_predicted_instances,
+    )
 
     for lf in labeled_frames:
-        for instance in _included(lf):
+        for instance in _frame_instances_to_write(
+            lf,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            prefer_user_instances=prefer_user_instances,
+            is_single_instance=is_single_instance,
+        ):
             is_predicted = isinstance(instance, PredictedInstance)
 
             row = {"frame_idx": int(lf.frame_idx)}
@@ -1092,6 +1165,7 @@ def _to_instances_df(  # noqa: D417
     all_frames: bool = False,
     start_frame: int | None = None,
     end_frame: int | None = None,
+    prefer_user_instances: bool = False,
 ) -> "pd.DataFrame | pl.DataFrame":
     """Convert to instances format (one row per instance).
 
@@ -1111,6 +1185,12 @@ def _to_instances_df(  # noqa: D417
     # Track which (video, frame_idx) pairs we've seen
     seen_frames = set()
 
+    is_single_instance = prefer_user_instances and _is_single_instance(
+        labeled_frames,
+        include_user_instances=include_user_instances,
+        include_predicted_instances=include_predicted_instances,
+    )
+
     for lf in labeled_frames:
         # Skip frames outside the specified range
         if start_frame is not None and lf.frame_idx < start_frame:
@@ -1122,12 +1202,13 @@ def _to_instances_df(  # noqa: D417
         seen_frames.add((lf.video, lf.frame_idx))
 
         # Collect instances to include
-        instances_to_process = []
-
-        if include_user_instances:
-            instances_to_process.extend(lf.user_instances)
-        if include_predicted_instances:
-            instances_to_process.extend(lf.predicted_instances)
+        instances_to_process = _frame_instances_to_write(
+            lf,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            prefer_user_instances=prefer_user_instances,
+            is_single_instance=is_single_instance,
+        )
 
         for instance in instances_to_process:
             is_predicted = isinstance(instance, PredictedInstance)

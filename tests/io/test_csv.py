@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 import sleap_io as sio
+from sleap_io.codecs import to_dataframe
 from sleap_io.io import csv
 from sleap_io.model.instance import Instance
 from sleap_io.model.labeled_frame import LabeledFrame
@@ -186,6 +187,105 @@ class TestSleapFormat:
         orig_pts = simple_labels[0].instances[0].numpy()
         loaded_pts = loaded[0].instances[0].numpy()
         np.testing.assert_array_almost_equal(orig_pts[:, :2], loaded_pts[:, :2])
+
+
+class TestSleapFormatPrefersUserInstances:
+    """SLEAP Analysis CSV writes one row per animal, like Analysis HDF5.
+
+    A user instance made from a prediction (Accept All Predictions, or
+    double-clicking a prediction in the SLEAP GUI) keeps that prediction in the
+    file, linked by ``from_predicted``. The CSV must not write it as a second
+    row (talmolab/sleap#2881).
+    """
+
+    @staticmethod
+    def _accepted(skeleton, video, frame_idx, track=None, link=True):
+        """A prediction plus the user instance accepted from it, head hidden."""
+        pred = sio.PredictedInstance.from_numpy(
+            np.array([[10.0, 20.0], [30.0, 40.0]]),
+            skeleton=skeleton,
+            point_scores=np.array([0.9, 0.8]),
+            score=0.95,
+            track=track,
+        )
+        user = Instance.from_numpy(
+            np.array([[10.0, 20.0], [30.0, 40.0]]), skeleton=skeleton, track=track
+        )
+        user.points["visible"][0] = False
+        if link:
+            user.from_predicted = pred
+        return LabeledFrame(video=video, frame_idx=frame_idx, instances=[user, pred])
+
+    def test_accepted_prediction_is_one_row(self, tmp_path, simple_skeleton):
+        """The user row is written, its source prediction is not."""
+        video = Video(str(tmp_path / "video.mp4"))
+        labels = Labels(
+            labeled_frames=[self._accepted(simple_skeleton, video, i) for i in (0, 1)]
+        )
+        csv_path = tmp_path / "out.csv"
+
+        csv.write_labels(labels, csv_path, format="sleap")
+        df = pd.read_csv(csv_path)
+
+        assert list(df["frame_idx"]) == [0, 1]
+        # The user row: no instance score, the hidden head left empty.
+        assert df["instance.score"].isna().all()
+        assert df["head.x"].isna().all()
+        assert (df["tail.x"] == 30.0).all()
+
+    def test_same_track_prefers_user_and_keeps_other_predictions(
+        self, tmp_path, simple_skeleton
+    ):
+        """Multi-animal: a user label replaces the prediction on its track only."""
+        video = Video(str(tmp_path / "video.mp4"))
+        track_a, track_b = sio.Track("a"), sio.Track("b")
+        lf = self._accepted(simple_skeleton, video, 0, track=track_a, link=False)
+        other = sio.PredictedInstance.from_numpy(
+            np.array([[50.0, 60.0], [70.0, 80.0]]),
+            skeleton=simple_skeleton,
+            point_scores=np.array([0.7, 0.6]),
+            score=0.75,
+            track=track_b,
+        )
+        lf.instances.append(other)
+        labels = Labels(labeled_frames=[lf])
+        csv_path = tmp_path / "out.csv"
+
+        csv.write_labels(labels, csv_path, format="sleap")
+        df = pd.read_csv(csv_path)
+
+        assert sorted(df["track"]) == ["a", "b"]
+        row_a = df[df["track"] == "a"].iloc[0]
+        assert np.isnan(row_a["instance.score"])  # the user instance
+        row_b = df[df["track"] == "b"].iloc[0]
+        assert row_b["instance.score"] == pytest.approx(0.75)  # unreplaced
+
+    def test_chunked_writing_also_prefers_user(self, tmp_path, simple_skeleton):
+        """The chunked writer applies the same selection."""
+        video = Video(str(tmp_path / "video.mp4"))
+        labels = Labels(
+            labeled_frames=[self._accepted(simple_skeleton, video, i) for i in range(3)]
+        )
+        csv_path = tmp_path / "out.csv"
+
+        csv.write_labels(labels, csv_path, format="sleap", chunk_size=1)
+        df = pd.read_csv(csv_path)
+
+        assert list(df["frame_idx"]) == [0, 1, 2]
+        assert df["instance.score"].isna().all()
+
+    def test_to_dataframe_default_still_lists_every_instance(
+        self, tmp_path, simple_skeleton
+    ):
+        """The general instances DataFrame keeps both unless asked."""
+        video = Video(str(tmp_path / "video.mp4"))
+        labels = Labels(labeled_frames=[self._accepted(simple_skeleton, video, 0)])
+
+        assert len(to_dataframe(labels, format="instances")) == 2
+        assert (
+            len(to_dataframe(labels, format="instances", prefer_user_instances=True))
+            == 1
+        )
 
 
 # =============================================================================
