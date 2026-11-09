@@ -100,6 +100,7 @@ import h5py
 import numpy as np
 
 from sleap_io.codecs.numpy import to_analysis_arrays
+from sleap_io.io._remote import _mask_url_credentials_deep
 from sleap_io.model.instance import PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -657,10 +658,16 @@ def write_labels(
         write_dataset("edge_inds", np.array(edge_inds))
 
         # Metadata
-        write_dataset("labels_path", str(labels_path) if labels_path else "")
-        write_dataset("video_path", video.filename or "")
+        write_dataset(
+            "labels_path",
+            _mask_url_credentials_deep(str(labels_path)) if labels_path else "",
+        )
+        write_dataset("video_path", _mask_url_credentials_deep(video.filename) or "")
         write_dataset("video_ind", labels.videos.index(video))
-        write_dataset("provenance", json.dumps(dict(labels.provenance)))
+        write_dataset(
+            "provenance",
+            json.dumps(_mask_url_credentials_deep(dict(labels.provenance))),
+        )
 
         # File-level attributes (always written for format identification)
         f.attrs["preset"] = preset_name
@@ -675,4 +682,6 @@ def write_labels(
             ]
             f.attrs["skeleton_name"] = skeleton.name or ""
             f.attrs["skeleton_symmetries"] = json.dumps(symmetries)
-            f.attrs["video_backend_metadata"] = json.dumps(video.backend_metadata)
+            f.attrs["video_backend_metadata"] = json.dumps(
+                _mask_url_credentials_deep(video.backend_metadata)
+            )

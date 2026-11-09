@@ -1099,3 +1099,47 @@ class TestRealData:
 
         # Verify structure
         assert len(loaded) == len(labels)
+
+
+def test_write_labels_holds_no_url_credentials(tmp_path, saved_bytes_without):
+    """Paths, provenance and backend metadata can all quote a URL."""
+    url = "https://x.test/v.mp4?token=SECRET"
+    video = Video(
+        filename=url,
+        open_backend=False,
+        backend_metadata={"shape": (10, 4, 4, 1), "filename": url},
+    )
+    skeleton = Skeleton(["a", "b"])
+    instance = Instance.from_numpy(np.ones((2, 2)), skeleton=skeleton)
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[instance])],
+        videos=[video],
+        skeletons=[skeleton],
+        provenance={"filename": "https://x.test/labels.slp?token=SECRET"},
+    )
+    path = tmp_path / "a.h5"
+
+    sio.save_analysis_h5(
+        labels, str(path), labels_path="https://x.test/labels.slp?token=SECRET"
+    )
+
+    saved_bytes_without(path)
+    with h5py.File(path, "r") as f:
+        assert f["video_path"][()].decode() == "https://x.test/v.mp4?token=***"
+        assert f["labels_path"][()].decode() == "https://x.test/labels.slp?token=***"
+        assert json.loads(f["provenance"][()])["filename"].endswith("?token=***")
+        metadata = json.loads(f.attrs["video_backend_metadata"])
+        assert metadata["filename"] == "https://x.test/v.mp4?token=***"
+    assert video.filename == url
+    assert labels.provenance["filename"].endswith("?token=SECRET")
+
+
+def test_write_labels_keeps_a_local_path_as_it_is(tmp_path, slp_minimal):
+    """With nothing to mask, nothing moves."""
+    labels = sio.load_slp(slp_minimal, open_videos=False)
+    path = tmp_path / "a.h5"
+    sio.save_analysis_h5(labels, str(path), labels_path="/data/run=1/labels.slp")
+    with h5py.File(path, "r") as f:
+        assert f["video_path"][()].decode() == labels.video.filename
+        assert f["labels_path"][()].decode() == "/data/run=1/labels.slp"
+        assert json.loads(f["provenance"][()]) == dict(labels.provenance)

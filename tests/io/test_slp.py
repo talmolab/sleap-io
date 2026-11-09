@@ -52,6 +52,7 @@ from sleap_io.io.slp import (
     ExportCancelled,
     LabelImageWriter,
     _check_format_id,
+    _copy_video_group,
     _create_json_rows_dataset,
     _encode_metadata_attr,
     _identity_index,
@@ -12143,3 +12144,605 @@ def test_check_format_id_without_format_id(tmp_path, slp_minimal):
         _check_format_id(str(path), f)
         del f["metadata"]
         _check_format_id(str(path), f)
+
+
+# ---------------------------------------------------------------------------
+# A URL's credentials stay out of saved files
+#
+# A video's `filename` can be a URL with its token: its own, or the URL its labels were
+# opened from. It stays whole in memory, because `Video.exists` and `Video.open` go back
+# to it, and a save used to write it into a file that people pass around. Each test here
+# searches the saved bytes (see `saved_bytes_without`), against a server that refuses a
+# request with no token (see `gated_files`), so a read that works has really used it.
+# ---------------------------------------------------------------------------
+
+_SAVES_OF_ANY_VIDEO = {
+    "embed None": {"embed": None},
+    "embed False": {"embed": False},
+    "embed False, keep source": {"embed": False, "restore_original_videos": False},
+    "embed None, from the backend": {"embed": None, "prefer_metadata": False},
+}
+
+_SAVES_OF_OPEN_VIDEOS = {
+    "embed True": {"embed": True},
+    "embed all": {"embed": "all"},
+    "embed user": {"embed": "user"},
+    "embed suggestions": {"embed": "suggestions"},
+    "embed user+suggestions": {"embed": "user+suggestions"},
+    "embed source": {"embed": "source"},
+    "embed True, in place": {"embed": True, "embed_inplace": True},
+}
+
+_RECORDED = {"shape": (10, 4, 4, 1), "grayscale": True, "fps": 30.0}
+
+
+def _labels_on(video, provenance=None):
+    """Labels with one labeled frame on `video`."""
+    skeleton = Skeleton(["a", "b"])
+    instance = Instance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton
+    )
+    frame = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    return Labels(
+        labeled_frames=[frame],
+        videos=[video],
+        skeletons=[skeleton],
+        provenance=provenance or {},
+    )
+
+
+def _closed(filename, **kwargs):
+    """A video that's only a name, with what a loaded video records about itself."""
+    return Video(
+        filename=filename,
+        open_backend=False,
+        backend_metadata=dict(_RECORDED),
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize(
+    "save_kwargs", _SAVES_OF_ANY_VIDEO.values(), ids=_SAVES_OF_ANY_VIDEO.keys()
+)
+@pytest.mark.parametrize("lazy", [False, True], ids=["eager", "lazy"])
+@pytest.mark.parametrize("open_videos", [True, False], ids=["open", "closed"])
+def test_save_of_labels_from_a_url_holds_no_token(
+    gated_files, saved_bytes_without, tmp_path, slp_minimal_pkg, open_videos, lazy,
+    save_kwargs,
+):  # fmt: skip
+    """Whichever way labels were read, the URL they came from isn't saved whole."""
+    url = gated_files.serve("/pkg.slp", slp_minimal_pkg)
+    labels = load_slp(url, open_videos=open_videos, lazy=lazy)
+    # What makes this a test: the token was there to write.
+    assert labels.videos[0].filename == url
+    assert labels.provenance["filename"] == url
+
+    save_slp(labels, tmp_path / "a.slp", verbose=False, **save_kwargs)
+
+    saved = saved_bytes_without(tmp_path / "a.slp")
+    # The search can see what's written: the masked URL is in the same bytes.
+    assert b"/pkg.slp?token=***" in saved
+    assert labels.videos[0].filename == url
+    assert labels.provenance["filename"] == url
+
+
+@pytest.mark.parametrize(
+    "save_kwargs", _SAVES_OF_OPEN_VIDEOS.values(), ids=_SAVES_OF_OPEN_VIDEOS.keys()
+)
+@pytest.mark.parametrize("lazy", [False, True], ids=["eager", "lazy"])
+def test_embedding_labels_from_a_url_holds_no_token(
+    gated_files, saved_bytes_without, tmp_path, slp_minimal_pkg, lazy, save_kwargs
+):
+    """Every embed setting: `{group}/source_video` is where the video's URL goes."""
+    url = gated_files.serve("/pkg.slp", slp_minimal_pkg)
+    labels = load_slp(url, lazy=lazy)
+    assert labels.videos[0].filename == url
+
+    save_slp(labels, tmp_path / "a.slp", verbose=False, **save_kwargs)
+
+    assert b"/pkg.slp?token=***" in saved_bytes_without(tmp_path / "a.slp")
+    assert gated_files.refused == 0
+
+
+def test_embedding_a_list_of_frames_holds_no_token(
+    gated_files, saved_bytes_without, tmp_path, slp_minimal_pkg
+):
+    """An embed list goes the same way as the others."""
+    labels = load_slp(gated_files.serve("/pkg.slp", slp_minimal_pkg))
+    frame = labels.labeled_frames[0]
+    save_slp(
+        labels,
+        tmp_path / "a.slp",
+        embed=[(frame.video, frame.frame_idx)],
+        verbose=False,
+    )
+    assert b"/pkg.slp?token=***" in saved_bytes_without(tmp_path / "a.slp")
+
+
+@pytest.mark.parametrize(
+    "save",
+    [
+        lambda labels, path: labels.save(path.as_posix(), verbose=False),
+        lambda labels, path: save_file(labels, path),
+    ],
+    ids=["Labels.save", "save_file"],
+)
+def test_other_ways_of_saving_hold_no_token(
+    gated_files, saved_bytes_without, tmp_path, slp_minimal_pkg, save
+):
+    """What a save is called makes no difference."""
+    labels = load_slp(gated_files.serve("/pkg.slp", slp_minimal_pkg))
+    save(labels, tmp_path / "a.slp")
+    assert b"/pkg.slp?token=***" in saved_bytes_without(tmp_path / "a.slp")
+
+
+def test_saving_labels_from_a_url_with_a_password(
+    gated_files, saved_bytes_without, tmp_path, slp_minimal_pkg
+):
+    """A password in a URL is a credential like a token."""
+    url = gated_files.serve("/pkg.slp", slp_minimal_pkg).split("?")[0]
+    url = url.replace("http://", "http://me:PASSWORD-SECRET@")
+    labels = load_slp(url)
+    assert labels.videos[0].filename == url
+    assert labels.videos[0].exists()
+
+    for embed in (None, False, True):
+        save_slp(labels, tmp_path / "a.slp", embed=embed, verbose=False)
+        saved = saved_bytes_without(tmp_path / "a.slp", "PASSWORD-SECRET")
+        assert b"http://***:***@" in saved
+    assert gated_files.refused == 0
+
+
+def test_request_headers_stay_with_the_video_in_memory(
+    gated_files, saved_bytes_without, tmp_path, slp_minimal_pkg
+):
+    """Headers keep working in memory, and never reach a file."""
+    url = gated_files.serve("/pkg.slp", slp_minimal_pkg).split("?")[0]
+    headers = {"Authorization": "Bearer HEADER-SECRET"}
+    for lazy in (False, True):
+        labels = load_slp(url, headers=headers, lazy=lazy)
+        assert labels.videos[0]._url_headers == headers
+        for embed in (None, False):
+            save_slp(labels, tmp_path / "a.slp", embed=embed, verbose=False)
+            saved_bytes_without(tmp_path / "a.slp", "HEADER-SECRET")
+        assert labels.videos[0]._url_headers == headers
+    assert gated_files.refused == 0
+
+
+@pytest.mark.parametrize(
+    "filename, masked",
+    [
+        ("https://x.test/v.mp4?token=SECRET", "https://x.test/v.mp4?token=***"),
+        ("https://x.test/v.mp4?token=SECRET.X.Y", "https://x.test/v.mp4?token=***"),
+        ("https://me:SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("gs://bucket/v.mp4?sig=SECRET", "gs://bucket/v.mp4?sig=***"),
+        ("/some/dir/v.mp4?a=1&token=SECRET", "/some/dir/v.mp4?a=1&token=***"),
+    ],
+)
+@pytest.mark.parametrize("embed", [None, False, "source"], ids=str)
+def test_saved_filename_of_a_closed_video(
+    saved_bytes_without, tmp_path, filename, masked, embed
+):
+    """`embed="source"` goes back to the video itself when it has no source."""
+    video = _closed(filename)
+    save_slp(_labels_on(video), tmp_path / "a.slp", embed=embed, verbose=False)
+
+    saved_bytes_without(tmp_path / "a.slp")
+    assert video.filename == filename
+    again = load_slp((tmp_path / "a.slp").as_posix(), open_videos=False)
+    names = [again.videos[0].filename]
+    if again.videos[0].source_video is not None:
+        names.append(again.videos[0].source_video.filename)
+    assert masked in names
+
+
+def test_saved_image_sequence_filenames(saved_bytes_without, tmp_path):
+    """Every name in an image sequence, open or closed."""
+    urls = [f"http://x.test/{i}.png?token=SECRET" for i in range(3)]
+    masked = [f"http://x.test/{i}.png?token=***" for i in range(3)]
+
+    closed = _closed(urls)
+    save_slp(_labels_on(closed), tmp_path / "closed.slp", verbose=False)
+    saved_bytes_without(tmp_path / "closed.slp")
+    with h5py.File(tmp_path / "closed.slp", "r") as f:
+        assert json.loads(f["videos_json"][0])["filename"] == masked
+    assert closed.filename == urls
+
+    backend = ImageVideo(urls)
+    opened = Video(
+        filename=urls,
+        backend=backend,
+        open_backend=False,
+        backend_metadata=dict(_RECORDED),
+    )
+    written = video_to_dict(opened)
+    assert written["filename"] == masked
+    assert written["backend"]["filenames"] == masked
+    assert written["backend"]["filename"] == masked[0]
+    assert backend.filename == urls
+
+
+def test_saved_backend_metadata_at_any_depth(saved_bytes_without, tmp_path):
+    """Anything in the backend's metadata, read from a file or not."""
+    video = Video(
+        filename="v.mp4",
+        open_backend=False,
+        backend_metadata={
+            "filename": "http://x.test/1.mp4?token=SECRET",
+            "filenames": ["http://x.test/2.mp4?token=SECRET"],
+            "source_filename": "http://x.test/3.mp4?token=SECRET",
+            "nested": {"deeper": ["http://x.test/4.mp4?token=SECRET"]},
+        },
+    )
+    save_slp(_labels_on(video), tmp_path / "a.slp", verbose=False)
+    saved = saved_bytes_without(tmp_path / "a.slp")
+    for n in (1, 2, 3, 4):
+        assert f"http://x.test/{n}.mp4?token=***".encode() in saved
+    assert video.backend_metadata["filename"] == "http://x.test/1.mp4?token=SECRET"
+
+
+def test_saved_source_videos_at_any_depth_in_videos_json(saved_bytes_without, tmp_path):
+    """A source video's own source goes in the same entry of `videos_json`."""
+    original = _closed("http://x.test/original.mp4?token=SECRET")
+    middle = _closed("http://x.test/middle.mp4?token=SECRET", source_video=original)
+    video = _closed("v.mp4", source_video=middle)
+
+    save_slp(_labels_on(video), tmp_path / "a.slp", embed=None, verbose=False)
+
+    saved_bytes_without(tmp_path / "a.slp")
+    again = load_slp((tmp_path / "a.slp").as_posix(), open_videos=False).videos[0]
+    assert again.source_video.filename == "http://x.test/middle.mp4?token=***"
+    assert (
+        again.source_video.source_video.filename
+        == "http://x.test/original.mp4?token=***"
+    )
+    assert middle.filename == "http://x.test/middle.mp4?token=SECRET"
+
+
+@pytest.mark.parametrize(
+    "save_kwargs",
+    [{"embed": None}, {"embed": True}],
+    ids=["images kept", "images embedded"],
+)
+def test_saved_source_video_in_an_embedded_group(
+    saved_bytes_without, tmp_path, slp_minimal_pkg, save_kwargs
+):
+    """`{group}/source_video` holds the source, at any depth, not `videos_json`."""
+    labels = load_slp(slp_minimal_pkg)
+    labels.videos[0].source_video = _closed(
+        "http://x.test/middle.mp4?token=SECRET",
+        source_video=_closed("http://x.test/original.mp4?token=SECRET"),
+    )
+    save_slp(labels, tmp_path / "a.slp", verbose=False, **save_kwargs)
+
+    saved_bytes_without(tmp_path / "a.slp")
+    with h5py.File(tmp_path / "a.slp", "r") as f:
+        assert (
+            b"?token=***"
+            in json.dumps(_read_source_video_json(f["video0/source_video"])).encode()
+        )
+    again = load_slp((tmp_path / "a.slp").as_posix(), open_videos=False).videos[0]
+    assert "?token=***" in again.source_video.source_video.filename or (
+        "?token=***" in again.source_video.filename
+    )
+
+
+def test_saved_provenance_at_any_depth(saved_bytes_without, tmp_path):
+    """Provenance can quote a URL anywhere, in both places a save keeps it."""
+    provenance = {
+        "filename": "http://x.test/1.slp?token=SECRET",
+        "path": Path("v.mp4?token=SECRET"),
+        "merge_history": [
+            {"source_filename": "http://x.test/2.slp?sig=SECRET", "n": 1}
+        ],
+        "command": "sleap-track http://x.test/3.mp4?token=SECRET --batch-size 4",
+        "dlc_crops": {"http://x.test/4.mp4?token=SECRET": [0, 0, 10, 10]},
+    }
+    before = dict(provenance)
+    labels = _labels_on(_closed("v.mp4"), provenance)
+
+    save_slp(labels, tmp_path / "a.slp", verbose=False)
+
+    saved_bytes_without(tmp_path / "a.slp")
+    expected = {
+        "filename": "http://x.test/1.slp?token=***",
+        "path": "v.mp4?token=***",
+        "merge_history": [{"source_filename": "http://x.test/2.slp?sig=***", "n": 1}],
+        "command": "sleap-track http://x.test/3.mp4?token=*** --batch-size 4",
+        "dlc_crops": {"http://x.test/4.mp4?token=***": [0, 0, 10, 10]},
+    }
+    with h5py.File(tmp_path / "a.slp", "r") as f:
+        assert json.loads(f["provenance_json"][()]) == expected
+        assert json.loads(f["metadata"].attrs["json"])["provenance"] == expected
+    # Still there for whoever holds the labels.
+    assert labels.provenance is provenance
+    assert provenance == before
+
+
+def test_standalone_metadata_masks_provenance(saved_bytes_without, tmp_path):
+    """The label image writers keep their provenance the same way."""
+    _write_metadata_standalone(
+        (tmp_path / "a.slp").as_posix(),
+        provenance={
+            "filename": "http://x.test/1.slp?token=SECRET",
+            "path": Path("v.mp4?token=SECRET"),
+        },
+    )
+    assert b"token=***" in saved_bytes_without(tmp_path / "a.slp")
+
+
+def test_label_image_writer_masks_its_video(saved_bytes_without, tmp_path):
+    """A label image file names its video like any other."""
+    path = tmp_path / "a.slp"
+    with LabelImageWriter(path, video=_closed("http://x.test/v.mp4?token=SECRET")) as w:
+        w.add(
+            UserLabelImage(
+                data=np.ones((4, 4), dtype=np.int32),
+                objects={1: LabelImage.Info(track=None, category="a", name="a")},
+            )
+        )
+    assert b"http://x.test/v.mp4?token=***" in saved_bytes_without(path)
+
+
+def _file_holding_a_token(path, slp_minimal_pkg, in_dataset=False):
+    """A package as saved before this: the token wherever a save could write one."""
+    url = "http://x.test/old.mp4?token=SECRET"
+    shutil.copy(slp_minimal_pkg, path)
+    with h5py.File(path, "a") as f:
+        rows = [json.loads(row) for row in f["videos_json"][:]]
+        for row in rows:
+            row["filename"] = url
+        del f["videos_json"]
+        _create_json_rows_dataset(f, "videos_json", [json.dumps(r) for r in rows])
+
+        lineage = f["video0/source_video"]
+        metadata = _read_source_video_json(lineage)
+        metadata["filename"] = url
+        metadata["backend"]["filename"] = url
+        metadata["source_video"] = {"filename": url, "backend": {"filename": url}}
+        if in_dataset:
+            del lineage.attrs["json"]
+            lineage.create_dataset("json", data=np.bytes_(json.dumps(metadata)))
+        else:
+            lineage.attrs["json"] = json.dumps(metadata)
+        f["video0"].require_group("original_video").attrs["json"] = json.dumps(metadata)
+
+        f.create_dataset("provenance_json", data=np.bytes_(json.dumps({"from": url})))
+        md = json.loads(f["metadata"].attrs["json"])
+        md["provenance"] = {"from": url}
+        f["metadata"].attrs["json"] = np.bytes_(json.dumps(md))
+    assert b"SECRET" in Path(path).read_bytes()
+
+
+@pytest.mark.parametrize("in_dataset", [False, True], ids=["attribute", "dataset"])
+@pytest.mark.parametrize("lazy", [False, True], ids=["eager", "lazy"])
+@pytest.mark.parametrize("open_videos", [True, False], ids=["open", "closed"])
+def test_a_file_holding_a_token_loses_it_when_saved(
+    saved_bytes_without, tmp_path, slp_minimal_pkg, open_videos, lazy, in_dataset
+):
+    """Closed, the images are copied raw, and the source comes along with them."""
+    old = tmp_path / "old.pkg.slp"
+    _file_holding_a_token(old, slp_minimal_pkg, in_dataset=in_dataset)
+
+    labels = load_slp(old.as_posix(), open_videos=open_videos, lazy=lazy)
+    assert (
+        labels.videos[0].source_video.filename == "http://x.test/old.mp4?token=SECRET"
+    )
+
+    out = tmp_path / "out.slp"
+    save_slp(labels, out, embed=None, verbose=False)
+
+    saved = saved_bytes_without(out)
+    assert b"http://x.test/old.mp4?token=***" in saved
+    again = load_slp(out.as_posix())
+    assert again.videos[0].source_video.filename == "http://x.test/old.mp4?token=***"
+    # The images came through it.
+    frame = again.videos[0].backend.source_inds[0]
+    assert again.videos[0][int(frame)].shape == (384, 384, 1)
+
+
+def _image_bytes(dataset):
+    """The encoded images of an embedded video, one `bytes` per frame."""
+    return [image.tobytes() for image in dataset[()]]
+
+
+def test_copying_a_video_group_with_nothing_to_mask_copies_it_whole(
+    tmp_path, slp_minimal_pkg
+):
+    """Nothing is rewritten when there's nothing to mask."""
+    with h5py.File(slp_minimal_pkg, "r") as src, h5py.File(tmp_path / "a", "w") as dest:
+        _copy_video_group(src["video0"], dest, "video3")
+        assert sorted(dest["video3"]) == sorted(src["video0"])
+        assert (
+            dest["video3/source_video"].attrs["json"]
+            == src["video0/source_video"].attrs["json"]
+        )
+        assert _image_bytes(dest["video3/video"]) == _image_bytes(src["video0/video"])
+        assert list(dest["video3/video"].attrs) == list(src["video0/video"].attrs)
+
+
+def test_copying_a_video_group_with_nothing_to_mask_keeps_its_links(
+    tmp_path, slp_minimal_pkg
+):
+    """A whole copy doesn't look inside the group, so it can't trip over anything."""
+    source = tmp_path / "source.pkg.slp"
+    shutil.copy(slp_minimal_pkg, source)
+    with h5py.File(source, "a") as f:
+        f["video0/elsewhere"] = h5py.SoftLink("/not/here")
+    with h5py.File(source, "r") as src, h5py.File(tmp_path / "a.h5", "w") as dest:
+        _copy_video_group(src["video0"], dest, "video3")
+        assert dest["video3"].get("elsewhere", getlink=True).path == "/not/here"
+
+
+def test_copying_a_video_group_keeps_everything_but_the_credential(
+    tmp_path, slp_minimal_pkg, saved_bytes_without
+):
+    """What's left in a group when its lineage has to be rewritten."""
+    old = tmp_path / "old.pkg.slp"
+    _file_holding_a_token(old, slp_minimal_pkg)
+    with h5py.File(old, "a") as f:
+        f["video0"].attrs["kept"] = "yes"
+    with h5py.File(old, "r") as src, h5py.File(tmp_path / "a.h5", "w") as dest:
+        _copy_video_group(src["video0"], dest, "video3")
+        assert sorted(dest["video3"]) == sorted(src["video0"])
+        assert dest["video3"].attrs["kept"] == "yes"
+        assert _image_bytes(dest["video3/video"]) == _image_bytes(src["video0/video"])
+        assert list(dest["video3/video"].attrs) == list(src["video0/video"].attrs)
+        expected = {"filename": "http://x.test/old.mp4?token=***"}
+        assert expected.items() <= (
+            _read_source_video_json(dest["video3/source_video"]).items()
+        )
+    saved_bytes_without(tmp_path / "a.h5")
+
+
+def test_copying_a_video_group_takes_a_lineage_with_no_metadata(
+    tmp_path, slp_minimal_pkg
+):
+    """A group the reader would skip is no reason for a save to fail."""
+    old = tmp_path / "old.pkg.slp"
+    shutil.copy(slp_minimal_pkg, old)
+    with h5py.File(old, "a") as f:
+        f["video0"].require_group("original_video")
+    with h5py.File(old, "r") as src, h5py.File(tmp_path / "a.h5", "w") as dest:
+        _copy_video_group(src["video0"], dest, "video3")
+        assert sorted(dest["video3"]) == sorted(src["video0"])
+
+
+def test_labels_from_a_url_go_on_working_after_a_save(
+    gated_files, saved_bytes_without, tmp_path, slp_minimal_pkg
+):
+    """Nothing changes in memory, against a server that would turn away a mask."""
+    url = gated_files.serve("/pkg.slp", slp_minimal_pkg)
+    labels = load_slp(url)
+    video = labels.videos[0]
+    frame = int(video.backend.source_inds[0])
+    image = video[frame]
+
+    for embed in (None, False, True, "source"):
+        save_slp(labels, tmp_path / "a.slp", embed=embed, verbose=False)
+        saved_bytes_without(tmp_path / "a.slp")
+
+    assert video.filename == url
+    assert video.backend_metadata.get("filename", url) != "http://x.test"
+    assert video.exists()
+    assert np.array_equal(video[frame], image)
+    video.close()
+    video.open()
+    assert np.array_equal(video[frame], image)
+    assert gated_files.refused == 0
+
+
+def test_masking_in_memory_would_break_what_goes_back_to_the_filename(
+    gated_files, slp_minimal_pkg
+):
+    """Why a save masks and a read doesn't: the server does turn away what has no token.
+
+    If this ever passes without its token, nothing here is testing anything.
+    """
+    url = gated_files.serve("/pkg.slp", slp_minimal_pkg)
+    video = load_slp(url).videos[0]
+    frame = int(video.backend.source_inds[0])
+    assert video.exists()
+    assert gated_files.refused == 0
+
+    video.filename = url.replace("SECRET", "***")
+    assert not video.exists()
+    with pytest.raises(FileNotFoundError):
+        video[frame]
+    with pytest.raises(FileNotFoundError):
+        video.open()
+    assert gated_files.refused > 0
+    assert "SECRET" not in str(video.filename)
+
+
+def test_a_saved_url_opens_once_it_is_given_its_link_again(
+    gated_files, saved_bytes_without, tmp_path, slp_minimal_pkg
+):
+    """The cost of all this, and the way back."""
+    url = gated_files.serve("/pkg.slp", slp_minimal_pkg)
+    labels = load_slp(url)
+    frame = int(labels.videos[0].backend.source_inds[0])
+    n_frames = len(labels)
+
+    path = tmp_path / "a.slp"
+    save_slp(labels, path, embed=False, restore_original_videos=False, verbose=False)
+    assert gated_files.refused == 0
+
+    # It loads, like one whose link has expired, and it doesn't raise.
+    again = load_slp(path.as_posix())
+    assert len(again) == n_frames
+    video = again.videos[0]
+    assert video.filename == url.replace("SECRET", "***")
+    assert not video.exists()
+    with pytest.raises(FileNotFoundError):
+        video[frame]
+    assert gated_files.refused > 0
+
+    # Saving it again leaves it as it is.
+    keep = {"embed": False, "restore_original_videos": False, "verbose": False}
+    save_slp(again, tmp_path / "b.slp", **keep)
+    assert b"/pkg.slp?token=***" in saved_bytes_without(tmp_path / "b.slp")
+
+    video.replace_filename(url)
+    assert video.exists()
+    assert video[frame].shape == (384, 384, 1)
+
+    # And giving it the link doesn't put the token back in a file.
+    save_slp(again, tmp_path / "c.slp", **keep)
+    assert b"/pkg.slp?token=***" in saved_bytes_without(tmp_path / "c.slp")
+
+
+def test_a_saved_package_still_has_its_images(
+    gated_files, saved_bytes_without, tmp_path, slp_minimal_pkg
+):
+    """The images don't need the link: embedding makes a file that just opens."""
+    url = gated_files.serve("/pkg.slp", slp_minimal_pkg)
+    labels = load_slp(url)
+    frame = int(labels.videos[0].backend.source_inds[0])
+    image = labels.videos[0][frame]
+
+    save_slp(labels, tmp_path / "a.slp", embed=True, verbose=False)
+    saved_bytes_without(tmp_path / "a.slp")
+
+    again = load_slp((tmp_path / "a.slp").as_posix()).videos[0]
+    assert again.exists()
+    assert np.array_equal(again[frame], image)
+    assert again.source_video.filename == url.replace("SECRET", "***")
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "https://x.test",
+        "HTTP://X.TEST/a b.mp4?x=1 2",
+        "https://x.test/a%20b.mp4?x=\u00e9#frag",
+        "https://x.test/v.mp4?token=***",
+        "https://cdn.test/npm/pkg@1.2.3/v.mp4",
+        "gs://bucket/a b.mp4",
+        "/Users/me/a b#1?%.mp4",
+        "/Users/me@corp/run=1/v.mp4",
+        "tests/data/videos/centered_pair_low_quality.mp4",
+        "\u65e5\u672c\u8a9e.mp4",
+    ],
+)
+def test_a_filename_with_nothing_to_mask_is_saved_as_it_was(tmp_path, filename):
+    """A public URL or a local path comes back byte for byte."""
+    provenance = {"source": filename, "nested": [{"source": filename}]}
+    labels = _labels_on(_closed(filename), provenance)
+    save_slp(labels, tmp_path / "a.slp", verbose=False)
+
+    with h5py.File(tmp_path / "a.slp", "r") as f:
+        row = json.loads(f["videos_json"][0])
+        assert row["filename"] == filename
+        assert row["backend"]["filename"] == filename
+        assert json.loads(f["provenance_json"][()]) == provenance
+    again = load_slp((tmp_path / "a.slp").as_posix(), open_videos=False)
+    assert again.videos[0].filename == filename
+
+
+def test_masking_leaves_the_rest_of_a_video_entry_alone(tmp_path):
+    """The JSON a video is saved as has the same shape and the same key order."""
+    video = _closed("http://x.test/v.mp4?token=SECRET")
+    plain = _closed("http://x.test/v.mp4?token=***")
+    assert json.dumps(video_to_dict(video)) == json.dumps(video_to_dict(plain))
+    assert video_to_dict(video)["backend"]["shape"] == _RECORDED["shape"]
