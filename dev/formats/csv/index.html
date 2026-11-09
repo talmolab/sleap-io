@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.1">
     
     
       
@@ -3952,7 +3952,7 @@
 <tr>
 <td><code>sleap</code></td>
 <td>SLEAP Analysis CSV</td>
-<td>Native SLEAP exports, one row per instance</td>
+<td>Native SLEAP exports, one row per animal</td>
 </tr>
 <tr>
 <td><code>dlc</code></td>
@@ -3978,7 +3978,7 @@
 </table>
 <h2 id="format-details">Format Details<a class="headerlink" href="#format-details" title="Permanent link">&para;</a></h2>
 <h3 id="sleap-format-sleap">SLEAP Format (<code>sleap</code>)<a class="headerlink" href="#sleap-format-sleap" title="Permanent link">&para;</a></h3>
-<p>The default SLEAP Analysis CSV format produces one row per instance.</p>
+<p>The default SLEAP Analysis CSV format produces one row per animal per frame, like the Analysis HDF5 export. A user instance made from a prediction (for example with <em>Accept All Predictions</em> in SLEAP) keeps that prediction in the file; the CSV writes only the user instance. Predicted instances are dropped when a user instance in the same frame links to them (<code>from_predicted</code>) or is on the same track, and in single-instance projects any user instance replaces the frame's predictions. Use the <code>instances</code> format, or <code>to_dataframe(..., format="instances")</code>, to get every user and predicted instance.</p>
 <p><strong>Columns:</strong></p>
 <table>
 <thead>
@@ -4914,7 +4914,7 @@ Not supported for DLC format.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/_markdown_exec_pyodide.js"></script>
       
