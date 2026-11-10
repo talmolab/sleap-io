@@ -3988,6 +3988,13 @@ class Labels:
             # Step 2: Match and merge videos
             video_map = {}
             frame_idx_map = {}  # Maps (old_video, old_idx) -> (new_video, new_idx)
+            # Videos appended from `other` during this loop. Two videos of one
+            # Labels are distinct by construction, so an incoming video must never
+            # be matched to a sibling added a moment earlier. Without this, a
+            # package whose cameras share a file name (Camera1/x.mp4, Camera3/x.mp4)
+            # collapsed into one video whenever the originals could not be opened
+            # to tell them apart (#592).
+            added_from_other: set[int] = set()
 
             for other_video in other.videos:
                 matched = False
@@ -4107,7 +4114,7 @@ class Labels:
                     # All other methods: use find_match() for the full matching cascade
                     matched_video = video_matcher.find_match(
                         other_video,
-                        self.videos,
+                        [v for v in self.videos if id(v) not in added_from_other],
                         labels_incoming=other,
                         labels_base=self,
                     )
@@ -4119,6 +4126,7 @@ class Labels:
                     # Add new video if no match
                     self.videos.append(other_video)
                     video_map[other_video] = other_video
+                    added_from_other.add(id(other_video))
 
             # Step 3: Match and merge tracks
             track_map = {}

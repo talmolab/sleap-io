@@ -9502,3 +9502,110 @@ def test_labels_event_types_dedup_pre_supplied_duplicates():
     assert [et.name for et in labels.event_types] == ["groom"]
     assert labels.event_types[0] is d1
     assert labels.events[0].type is d1
+
+
+# --- #592: merging must not join different cameras that share a file name ------
+
+
+def _camera_package(tmp_path: Path) -> str:
+    """Package two cameras whose frames share names (cam1/0.png, cam2/0.png)."""
+    from PIL import Image
+
+    skeleton = Skeleton(["a", "b"])
+    videos, frames = [], []
+    for k, name in enumerate(["cam1", "cam2"]):
+        folder = tmp_path / name
+        folder.mkdir()
+        paths = []
+        for i in range(5):
+            path = folder / f"{i}.png"
+            Image.fromarray(np.full((16, 16), 100 * (k + 1) + i, np.uint8)).save(path)
+            paths.append(str(path))
+        video = Video.from_filename(paths)
+        videos.append(video)
+        frames.append(
+            LabeledFrame(
+                video=video,
+                frame_idx=k + 1,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[k + 1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton
+                    )
+                ],
+            )
+        )
+    out = str(tmp_path / "cameras.pkg.slp")
+    sleap_io.save_slp(
+        Labels(frames, videos=videos, skeletons=[skeleton]), out, embed="user"
+    )
+    return out
+
+
+def _camera_of(video: Video) -> str:
+    root = video
+    while root.source_video is not None:
+        root = root.source_video
+    fn = root.filename[0] if isinstance(root.filename, list) else root.filename
+    return Path(fn).parent.name
+
+
+def test_merge_keeps_same_named_cameras_apart_without_originals(tmp_path):
+    """Two cameras of one package stay two videos when originals are gone.
+
+    Both resolve to "0.png" at the leaf, and with the original files missing
+    nothing could tell them apart, so the second camera was matched to the
+    first one added a moment earlier and their labels were combined (#592).
+    """
+    package_path = _camera_package(tmp_path)
+    shutil.rmtree(tmp_path / "cam1")
+    shutil.rmtree(tmp_path / "cam2")
+
+    merged = Labels(skeletons=[Skeleton(["a", "b"])])
+    merged.merge(sleap_io.load_slp(package_path))
+
+    assert len(merged.videos) == 2
+    assert sorted((_camera_of(lf.video), lf.frame_idx) for lf in merged) == [
+        ("cam1", 1),
+        ("cam2", 2),
+    ]
+
+
+def test_merge_does_not_match_a_sibling_camera_already_in_base(tmp_path):
+    """An incoming camera is not matched to a different base camera by file name.
+
+    The base already holds cam1 from an earlier merge; the package brings cam1
+    and cam2 with their originals gone. cam1 joins cam1, cam2 is added (#592).
+    """
+    package_path = _camera_package(tmp_path)
+    shutil.rmtree(tmp_path / "cam1")
+    shutil.rmtree(tmp_path / "cam2")
+
+    package = sleap_io.load_slp(package_path)
+    base = Labels(skeletons=package.skeletons)
+    base.videos.append(package.videos[0])  # cam1 only, as from an earlier merge
+
+    base.merge(sleap_io.load_slp(package_path))
+
+    assert sorted(_camera_of(v) for v in base.videos) == ["cam1", "cam2"]
+
+
+def test_merge_still_matches_same_video_under_different_roots():
+    """The same video stored under two absolute roots still merges as one.
+
+    This is the reason unverifiable provenance is not rejected outright; the
+    #592 fix must keep it, alone and next to a sibling camera.
+    """
+    base = Labels(videos=[Video("/home/a/data/cam1/x.mp4", open_backend=False)])
+    base.merge(Labels(videos=[Video("C:/data/cam1/x.mp4", open_backend=False)]))
+    assert len(base.videos) == 1
+
+    base = Labels(videos=[Video("/home/a/data/cam1/x.mp4", open_backend=False)])
+    base.merge(
+        Labels(
+            videos=[
+                Video("C:/data/cam1/x.mp4", open_backend=False),
+                Video("C:/data/cam2/x.mp4", open_backend=False),
+            ]
+        )
+    )
+    assert [Path(v.filename).parent.name for v in base.videos] == ["cam1", "cam2"]
