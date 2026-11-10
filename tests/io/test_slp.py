@@ -53,7 +53,9 @@ from sleap_io.io.slp import (
     LabelImageWriter,
     _check_format_id,
     _create_json_rows_dataset,
+    _embedded_video_group_id,
     _encode_metadata_attr,
+    _frames_video_ids_are_indices,
     _identity_index,
     _identity_link_rows_for_owner,
     _is_known_toplevel_name,
@@ -12299,3 +12301,45 @@ def test_save_merged_package_keeps_negative_frames(plain_and_package):
             (_root_folder(lf.video), lf.frame_idx) for lf in loaded if lf.is_negative
         ]
         assert negatives == [("cam2", 4)]
+
+
+def test_frames_video_ids_are_indices_reads_the_marker(tmp_path):
+    """Only an explicit `video_ids = "index"` marks /frames ids as positions."""
+    assert _frames_video_ids_are_indices(None) is False
+
+    with h5py.File(tmp_path / "marker.h5", "w") as f:
+        unmarked = f.create_dataset("unmarked", data=np.zeros(1))
+        assert _frames_video_ids_are_indices(unmarked) is False
+
+        as_str = f.create_dataset("as_str", data=np.zeros(1))
+        as_str.attrs["video_ids"] = "index"
+        assert _frames_video_ids_are_indices(as_str) is True
+
+        # Fixed-length string attributes come back as bytes.
+        as_bytes = f.create_dataset("as_bytes", data=np.zeros(1))
+        as_bytes.attrs["video_ids"] = np.bytes_("index")
+        assert _frames_video_ids_are_indices(as_bytes) is True
+
+        other = f.create_dataset("other", data=np.zeros(1))
+        other.attrs["video_ids"] = "sparse"
+        assert _frames_video_ids_are_indices(other) is False
+
+
+def test_embedded_video_group_id_parses_only_video_groups():
+    """`videoN/video` gives N; anything else (or no backend) gives None."""
+
+    class _Backend:
+        def __init__(self, dataset):
+            self.dataset = dataset
+
+    def video_with(dataset):
+        video = Video(filename="x.slp", open_backend=False)
+        video.backend = _Backend(dataset)
+        return video
+
+    assert _embedded_video_group_id(video_with("video15/video")) == 15
+    assert _embedded_video_group_id(video_with("video/video")) is None
+    assert _embedded_video_group_id(video_with("frames/video")) is None
+    assert _embedded_video_group_id(video_with("video15")) is None
+    assert _embedded_video_group_id(video_with(None)) is None
+    assert _embedded_video_group_id(Video(filename="x.mp4", open_backend=False)) is None
