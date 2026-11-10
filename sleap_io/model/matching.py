@@ -1153,7 +1153,28 @@ class VideoMatcher:
                     max((len(p) for _, p in all_existing_parts), default=0),
                 )
 
-                for depth in range(1, max_depth + 1):
+                # Start no shallower than the depth that tells `incoming` apart
+                # from its own siblings in the incoming labels. Cameras that share
+                # a file name in different folders (Camera1/x.mp4, Camera3/x.mp4)
+                # are then compared as "Camera3/x.mp4", never as just "x.mp4",
+                # which matched another camera whenever the originals could not be
+                # opened to tell them apart (#592). The same video stored under
+                # different absolute roots still matches on its shared suffix.
+                min_depth = 1
+                if labels_incoming is not None:
+                    sibling_parts = [
+                        get_path_parts(v)
+                        for v in labels_incoming.videos
+                        if v is not incoming
+                    ]
+                    while min_depth < len(incoming_parts) and any(
+                        len(p) >= min_depth
+                        and p[-min_depth:] == incoming_parts[-min_depth:]
+                        for p in sibling_parts
+                    ):
+                        min_depth += 1
+
+                for depth in range(min_depth, max_depth + 1):
                     if len(incoming_parts) < depth:
                         continue
                     incoming_leaf = "/".join(incoming_parts[-depth:])
