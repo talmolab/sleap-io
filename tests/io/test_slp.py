@@ -53,7 +53,9 @@ from sleap_io.io.slp import (
     LabelImageWriter,
     _check_format_id,
     _create_json_rows_dataset,
+    _embedded_video_group_id,
     _encode_metadata_attr,
+    _frames_video_ids_are_indices,
     _identity_index,
     _identity_link_rows_for_owner,
     _is_known_toplevel_name,
@@ -4662,6 +4664,17 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
             assert [n.name for n in lf.instances[0].skeleton.nodes] == [
                 n.name for n in skeleton.nodes
             ]
+            # Video i's instances were placed at x = 10 + i: frames sit on the
+            # right video, not just in the right number.
+            assert lf.instances[0].numpy()[0, 0] == 10.0 + i
+
+    # The lazy reader maps the same sparse ids to positions (it indexes the video
+    # list with the stored id directly, so unmapped sparse ids used to raise).
+    lazy_labels = load_slp(str(sparse_path), lazy=True)
+    assert len(lazy_labels) == 10
+    for lf in lazy_labels:
+        i = lazy_labels.videos.index(lf.video)
+        assert lf.instances[0].numpy()[0, 0] == 10.0 + i
 
     # test writing slp file with sparse video indices (hdf5 backend) and loading it back
     resaved_path = tmp_path / "resaved_sparse.slp"
@@ -12143,3 +12156,190 @@ def test_check_format_id_without_format_id(tmp_path, slp_minimal):
         _check_format_id(str(path), f)
         del f["metadata"]
         _check_format_id(str(path), f)
+
+
+# --- #590: /frames video ids are positions in the written videos_json ----------
+
+
+def _image_video(folder: Path, value: int, prefix: str = "") -> Video:
+    """Write a 5-frame grayscale image sequence (distinct pixels per folder)."""
+    folder.mkdir(parents=True)
+    paths = []
+    for i in range(5):
+        path = folder / f"{prefix}{i}.png"
+        Image.fromarray(np.full((16, 16), value + i, np.uint8)).save(path)
+        paths.append(str(path))
+    return Video.from_filename(paths)
+
+
+def _labeled(video: Video, frame_idx: int, x: float, skeleton: Skeleton):
+    return LabeledFrame(
+        video=video,
+        frame_idx=frame_idx,
+        instances=[
+            Instance.from_numpy(
+                np.array([[x, x], [x + 5, x + 3]], float), skeleton=skeleton
+            )
+        ],
+    )
+
+
+def _root_folder(video: Video) -> str:
+    """Name of the folder holding a video's original files (through embeds)."""
+    root = video
+    while root.source_video is not None:
+        root = root.source_video
+    fn = root.filename[0] if isinstance(root.filename, list) else root.filename
+    return Path(fn).parent.name
+
+
+def _where(labels: Labels) -> list[tuple[str, int, float]]:
+    """(original folder, frame index, first x) for every labeled frame."""
+    return sorted(
+        (_root_folder(lf.video), lf.frame_idx, float(lf.instances[0].numpy()[0, 0]))
+        for lf in labels
+    )
+
+
+@pytest.fixture
+def plain_and_package(tmp_path):
+    """A plain project on video A and a package with videos cam1 and cam2."""
+    skeleton = Skeleton(["a", "b"])
+    a = _image_video(tmp_path / "A", 0, prefix="a")
+    plain = Labels([_labeled(a, 0, 1.0, skeleton)], videos=[a], skeletons=[skeleton])
+    save_slp(plain, str(tmp_path / "plain.slp"))
+
+    c1 = _image_video(tmp_path / "cam1", 100)
+    c2 = _image_video(tmp_path / "cam2", 200)
+    package = Labels(
+        [_labeled(c1, 1, 4.0, skeleton), _labeled(c2, 3, 9.0, skeleton)],
+        videos=[c1, c2],
+        skeletons=[skeleton],
+    )
+    save_slp(package, str(tmp_path / "package.pkg.slp"), embed="user")
+    return tmp_path
+
+
+EXPECTED_MERGE = [("A", 0, 1.0), ("cam1", 1, 4.0), ("cam2", 3, 9.0)]
+
+
+@pytest.mark.parametrize(
+    "save_kwargs",
+    [
+        {},  # plain save, as SLEAP's File > Save
+        {"embed": "user"},  # re-embed into a new package
+        {"restore_original_videos": False},  # keep referencing the source package
+    ],
+    ids=["plain", "embed", "preserve_source"],
+)
+def test_save_merged_package_keeps_frames_on_their_videos(
+    plain_and_package, save_kwargs
+):
+    """A package merged after other videos is saved with each frame on its video.
+
+    The package's videos sit at positions 1-2 of the merged list but read their
+    images from datasets video0/video1 of the package; the saved /frames ids
+    used to come from those dataset names, moving every package label one video
+    early (#590).
+    """
+    tmp = plain_and_package
+    merged = load_slp(str(tmp / "plain.slp"))
+    merged.merge(load_slp(str(tmp / "package.pkg.slp")))
+    assert _where(merged) == EXPECTED_MERGE
+
+    out = str(tmp / "merged.slp")
+    save_slp(merged, out, **save_kwargs)
+
+    with h5py.File(out, "r") as f:
+        assert f["frames"].attrs["video_ids"] == "index"
+        assert f["frames"]["video"].tolist() == [0, 1, 2]
+        assert len(f["videos_json"]) == 3
+
+    assert _where(load_slp(out)) == EXPECTED_MERGE
+    assert _where(load_slp(out, lazy=True)) == EXPECTED_MERGE
+
+
+def test_save_package_subset_reads_back_eager_and_lazy(plain_and_package):
+    """A subset of a package (e.g. one split) keeps its frames on its videos.
+
+    The kept video reads dataset video1 of the package but is the only video of
+    the subset; eager loading used to work only by a guess and lazy loading
+    raised IndexError (#590).
+    """
+    tmp = plain_and_package
+    package = load_slp(str(tmp / "package.pkg.slp"))
+    cam2 = package.videos[1]
+    subset = Labels(
+        [lf for lf in package if lf.video is cam2],
+        videos=[cam2],
+        skeletons=package.skeletons,
+    )
+    out = str(tmp / "subset.slp")
+    save_slp(subset, out, restore_original_videos=False)
+
+    assert _where(load_slp(out)) == [("cam2", 3, 9.0)]
+    assert _where(load_slp(out, lazy=True)) == [("cam2", 3, 9.0)]
+
+
+def test_save_merged_package_keeps_negative_frames(plain_and_package):
+    """Negative-frame markers use the same positional ids as /frames (#590)."""
+    tmp = plain_and_package
+    merged = load_slp(str(tmp / "plain.slp"))
+    package = load_slp(str(tmp / "package.pkg.slp"))
+    package.labeled_frames.append(
+        LabeledFrame(video=package.videos[1], frame_idx=4, is_negative=True)
+    )
+    merged.merge(package)
+
+    out = str(tmp / "merged_negative.slp")
+    save_slp(merged, out)
+
+    with h5py.File(out, "r") as f:
+        assert f["negative_frames"].attrs["video_ids"] == "index"
+    for loaded in (load_slp(out), load_slp(out, lazy=True)):
+        negatives = [
+            (_root_folder(lf.video), lf.frame_idx) for lf in loaded if lf.is_negative
+        ]
+        assert negatives == [("cam2", 4)]
+
+
+def test_frames_video_ids_are_indices_reads_the_marker(tmp_path):
+    """Only an explicit `video_ids = "index"` marks /frames ids as positions."""
+    assert _frames_video_ids_are_indices(None) is False
+
+    with h5py.File(tmp_path / "marker.h5", "w") as f:
+        unmarked = f.create_dataset("unmarked", data=np.zeros(1))
+        assert _frames_video_ids_are_indices(unmarked) is False
+
+        as_str = f.create_dataset("as_str", data=np.zeros(1))
+        as_str.attrs["video_ids"] = "index"
+        assert _frames_video_ids_are_indices(as_str) is True
+
+        # Fixed-length string attributes come back as bytes.
+        as_bytes = f.create_dataset("as_bytes", data=np.zeros(1))
+        as_bytes.attrs["video_ids"] = np.bytes_("index")
+        assert _frames_video_ids_are_indices(as_bytes) is True
+
+        other = f.create_dataset("other", data=np.zeros(1))
+        other.attrs["video_ids"] = "sparse"
+        assert _frames_video_ids_are_indices(other) is False
+
+
+def test_embedded_video_group_id_parses_only_video_groups():
+    """`videoN/video` gives N; anything else (or no backend) gives None."""
+
+    class _Backend:
+        def __init__(self, dataset):
+            self.dataset = dataset
+
+    def video_with(dataset):
+        video = Video(filename="x.slp", open_backend=False)
+        video.backend = _Backend(dataset)
+        return video
+
+    assert _embedded_video_group_id(video_with("video15/video")) == 15
+    assert _embedded_video_group_id(video_with("video/video")) is None
+    assert _embedded_video_group_id(video_with("frames/video")) is None
+    assert _embedded_video_group_id(video_with("video15")) is None
+    assert _embedded_video_group_id(video_with(None)) is None
+    assert _embedded_video_group_id(Video(filename="x.mp4", open_backend=False)) is None
