@@ -3789,9 +3789,10 @@ def write_negative_frames(labels_path: str, labels: Labels):
 
     Notes:
         Uses the video ids of the 2.x `/frames` table already in the file, however
-        it numbers them, since the two tables are matched on those ids. Without
-        such a table it uses the ids a `/frames` table for the same labels would
-        get (see `_legacy_frame_video_ids`). The /negative_frames dataset stores
+        it numbers them, since the two tables are matched on those ids. If the
+        file has no such table, or a negative frame's video has no row in it, it
+        uses the ids a `/frames` table for the same labels would get (see
+        `_legacy_frame_video_ids`). The /negative_frames dataset stores
         (video_id, frame_idx) tuples identifying which frames are explicitly marked
         as negative (pure background, no instances).
     """
