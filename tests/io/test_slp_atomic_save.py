@@ -639,3 +639,13 @@ def test_read_only_folder_error_names_the_target(tmp_path, slp_typical):
             save_slp(load_slp(slp_typical), str(folder / "labels.slp"))
     finally:
         folder.chmod(0o755)
+
+
+def test_embed_source_with_closed_videos(tmp_path, slp_minimal_pkg):
+    """`embed="source"` works on labels loaded without opening their videos."""
+    labels = load_slp(slp_minimal_pkg, open_videos=False)
+    path = tmp_path / "source.slp"
+    save_slp(labels, str(path), embed="source", verbose=False)
+    loaded = load_slp(str(path), open_videos=False)
+    assert len(loaded) == len(labels)
+    assert loaded.videos[0].filename.endswith("centered_pair_low_quality.mp4")

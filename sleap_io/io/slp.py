@@ -2022,12 +2022,16 @@ def _create_empty_embedded_video(
             ds = f.create_dataset(f"{group}/video", shape=(0,), dtype="int8")
             ds.attrs["format"] = "png"
             ds.attrs["channel_order"] = "RGB"
-            # Store video shape metadata from the source video
+            # Store video shape metadata from the source video, when known (a
+            # video that isn't open may only know it from its metadata).
             video_shape = video.shape
-            ds.attrs["frames"] = video_shape[0]
-            ds.attrs["height"] = video_shape[1]
-            ds.attrs["width"] = video_shape[2]
-            ds.attrs["channels"] = video_shape[3]
+            if video_shape is None:
+                video_shape = video.backend_metadata.get("shape")
+            if video_shape is not None and len(video_shape) == 4:
+                ds.attrs["frames"] = video_shape[0]
+                ds.attrs["height"] = video_shape[1]
+                ds.attrs["width"] = video_shape[2]
+                ds.attrs["channels"] = video_shape[3]
             # Store FPS if available
             if video.fps is not None:
                 ds.attrs["fps"] = video.fps
