@@ -65,8 +65,25 @@ jobs:
           # Fetch the latest gh-pages state to reduce conflicts
           git fetch origin gh-pages --depth=1 || true
 
+          # Pick the alias this release's docs get. A pre-release gets
+          # "prerelease", never "latest". A stable release gets "latest" only if
+          # no newer stable version is already published (so a patch release of
+          # an older line, published later, doesn't take over the docs).
+          TAG="${{ github.event.release.tag_name }}"
+          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            ALIAS="prerelease"
+          else
+            git show origin/gh-pages:versions.json > /tmp/versions.json 2>/dev/null || echo "[]" > /tmp/versions.json
+            ALIAS=$(uv run python scripts/docs_alias.py "$TAG" /tmp/versions.json)
+          fi
+          echo "Docs for $TAG get the alias: ${ALIAS:-(none)}"
+
           # Build and commit docs locally (without pushing)
-          uv run mike deploy --update-aliases --allow-empty "${{ github.event.release.tag_name }}" latest
+          if [ -n "$ALIAS" ]; then
+            uv run mike deploy --update-aliases --allow-empty "$TAG" "$ALIAS"
+          else
+            uv run mike deploy --allow-empty "$TAG"
+          fi
 
           # Push with retry logic to handle race conditions
           for i in {1..3}; do
