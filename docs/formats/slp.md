@@ -1255,13 +1255,25 @@ indices.
 An embedded video's number can equal another video's list index, for example when
 a project refers to an external video and to frames embedded in a package. The
 guess then puts frames on the wrong video. `legacy_format=True` therefore picks the
-ids that are read back correctly: list indices when the guess reads them correctly
-(always the case when no embedded number differs from its index), otherwise the
-embedded numbers when the guess reads those correctly. If neither works, it stores
-list indices, sets the attribute `video_ids = "index"` on `/frames` and
-`/negative_frames`, and warns. A table with that attribute is read by list index,
-with no guessing. Readers that don't know the attribute (sleap-io 0.9.5 and older)
-misplace the frames of such a file, which is why the save warns.
+ids by what readers do with them:
+
+1. List indices, when the guess reads them correctly. Every reader does then. This
+   is always the case when no embedded number differs from its index.
+2. Otherwise, per video, its list index if the guess reads that back onto it, else
+   its embedded number.
+3. Otherwise the embedded numbers.
+4. If none of these is read correctly, list indices with the attribute
+   `video_ids = "index"` on `/frames` and `/negative_frames`, and a warning.
+
+A table with that attribute is read by list index, with no guessing.
+
+Which older readers read which case:
+
+| Stored | Readers that guess from opened videos (sleap-io 0.9.5 and older, eager) | Readers that take ids as list indices (sleap-io 0.9.5 lazy, or with `open_videos=False`) |
+| --- | --- | --- |
+| Case 1 | correct | correct |
+| Cases 2 and 3 | correct | wrong for the videos stored by embedded number (an error if the number is past the end of the list, the wrong video otherwise) |
+| Case 4 (marked) | wrong for some frames | correct |
 
 ## Record Metadata
 

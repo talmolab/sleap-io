@@ -3788,8 +3788,10 @@ def write_negative_frames(labels_path: str, labels: Labels):
         labels: A `Labels` object containing negative frames to write.
 
     Notes:
-        Uses the video ids of the 2.x `/frames` table written for the same labels
-        (see `_legacy_frame_video_ids`). The /negative_frames dataset stores
+        Uses the video ids of the 2.x `/frames` table already in the file, however
+        it numbers them, since the two tables are matched on those ids. Without
+        such a table it uses the ids a `/frames` table for the same labels would
+        get (see `_legacy_frame_video_ids`). The /negative_frames dataset stores
         (video_id, frame_idx) tuples identifying which frames are explicitly marked
         as negative (pure background, no instances).
     """
@@ -3806,7 +3808,18 @@ def write_negative_frames(labels_path: str, labels: Labels):
         return
 
     with h5py.File(labels_path, "a") as f:
-        stored, marked = _legacy_frame_video_ids(f, labels.videos, frame_videos)
+        in_file = _stored_frame_video_ids(f, labels.videos)
+        if in_file is not None and all(
+            video_idx in in_file[0]
+            for video_idx, negative in zip(frame_videos, is_negative)
+            if negative
+        ):
+            # Follow the `/frames` table in the file, whichever writer wrote it:
+            # the reader matches the two tables on the stored ids.
+            ids, marked = in_file
+            stored = [ids.get(video_idx, video_idx) for video_idx in frame_videos]
+        else:
+            stored, marked = _legacy_frame_video_ids(f, labels.videos, frame_videos)
         dtype = np.dtype([("video_id", "u4"), ("frame_idx", "u8")])
         data = np.array(
             [
@@ -3836,8 +3849,10 @@ def read_negative_frames(
             private argument used to thread a single open handle through reads.
 
     Returns:
-        A set of (sparse_video_id, frame_idx) tuples identifying negative frames.
-        Returns empty set if no negative frames dataset exists.
+        A set of (video_id, frame_idx) tuples identifying negative frames, with
+        the video ids as stored: numbered like the file's 2.x `/frames` table
+        (see `_legacy_frame_video_ids`). Returns empty set if no negative frames
+        dataset exists.
     """
     try:
         data = read_hdf5_dataset(labels_path, "negative_frames", _hdf5_file=_hdf5_file)
@@ -4879,7 +4894,7 @@ def _written_video_id_map(f: h5py.File, videos: list[Video]) -> np.ndarray:
         index for videos that aren't embedded.
     """
     if "videos_json" not in f:
-        return _video_id_map(videos)
+        return _video_id_map(videos, use_metadata=True)
     ids = [
         _dataset_video_id(json.loads(raw).get("backend", {}).get("dataset"))
         for raw in f["videos_json"][()]
@@ -4972,11 +4987,17 @@ def _legacy_frame_video_ids(
        does then, including those that take the ids as list indices outright.
        This is also what is stored whenever no embedded video's number differs
        from its index.
-    2. Otherwise each embedded video's `videoN` number (and the list index of
-       the others), when the rule reads those back correctly.
-    3. Otherwise list indices, with the table marked `video_ids = "index"`.
-       Readers that know the mark read them correctly; older ones can't be given
-       ids they would read correctly, so this warns.
+    2. Otherwise a choice per video: its list index when the rule reads that
+       back onto it, else its embedded `videoN` number when the rule reads that
+       back onto it. Readers that apply the rule to opened videos read these
+       correctly; readers that take ids as list indices do so for the videos
+       stored by index.
+    3. Otherwise every embedded video's `videoN` number, when the rule reads
+       those back correctly.
+    4. Otherwise list indices, with the table marked `video_ids = "index"`.
+       Readers that know the mark read them correctly, and so do readers that
+       take ids as list indices. Readers that apply the rule can't be given ids
+       they would read correctly, so this warns.
 
     Args:
         f: The file being written, with its `videos_json`.
@@ -4991,21 +5012,60 @@ def _legacy_frame_video_ids(
     video_ids = _written_video_id_map(f, videos)
     if np.array_equal(_decode_video_ids(indices, video_ids), indices):
         return indices, False
-    sparse = video_ids[indices]
-    if np.array_equal(_decode_video_ids(sparse, video_ids), indices):
-        return sparse, False
+
+    # What the rule maps an id to when the ids aren't exactly the list indices.
+    id_map = {vid: i for i, vid in enumerate(video_ids.tolist())}
+    per_video = np.array(
+        [
+            i if id_map.get(i, i) == i else vid
+            for i, vid in enumerate(video_ids.tolist())
+        ],
+        dtype="i8",
+    )
+    for candidate in (per_video[indices], video_ids[indices]):
+        if np.array_equal(_decode_video_ids(candidate, video_ids), indices):
+            return candidate, False
+
     warnings.warn(
-        "The videos of some frames can't be numbered in the legacy SLP layout in "
-        "a way that older readers work out correctly: an embedded video's number "
+        "Some frames can't be numbered in the legacy SLP layout in a way that "
+        "every older reader works out correctly: an embedded video's number "
         "equals another video's position in the video list. The frames are "
         'stored by position and marked (`video_ids = "index"`), which this '
-        "version reads correctly. Readers that don't know the mark (sleap-io "
-        "0.9.5 and older, and SLEAP releases that use them) will attach some of "
-        "these frames to the wrong video. Embed the frames (`embed=True`) or "
-        "restore the source videos to avoid this.",
-        stacklevel=2,
+        "version reads correctly. sleap-io 0.9.5 and older, and SLEAP releases "
+        "that read through them, attach some of these frames to the wrong video "
+        "when they open the videos. To avoid this, remove videos that have no "
+        "frames, embed the frames in the saved file (`embed=True`, which needs "
+        "the frames to be readable), or save with the source videos restored "
+        "(`embed=False, restore_original_videos=True`, which works when the "
+        "embedded videos record their source video).",
+        stacklevel=5,
     )
     return indices, True
+
+
+def _stored_frame_video_ids(
+    f: h5py.File, videos: list[Video]
+) -> tuple[dict[int, int], bool] | None:
+    """Return how the 2.x `/frames` table already in a file numbers its videos.
+
+    Args:
+        f: The file, with its `videos_json` and `/frames`.
+        videos: The file's videos, in order.
+
+    Returns:
+        A tuple `(ids, marked)`: the id stored for each list index that has a
+        frame, and whether the table carries the `video_ids = "index"` mark.
+        `None` if the file has no 2.x `/frames` table.
+    """
+    if "frames" not in f or not isinstance(f["frames"], h5py.Dataset):
+        return None
+    stored = f["frames"]["video"].astype("i8")
+    marked = _video_ids_are_indices(f["frames"])
+    if marked:
+        positions = stored
+    else:
+        positions = _decode_video_ids(stored, _written_video_id_map(f, videos))
+    return dict(zip(positions.tolist(), stored.tolist())), marked
 
 
 def _normalize_frames(
@@ -5337,6 +5397,19 @@ def _read_pose_tables(
         ),
         video_ids_are_indices=frame_legacy and _video_ids_are_indices(f["frames"]),
     )
+    if (
+        frame_legacy
+        and "negative_frames" in f
+        and len(f["negative_frames"])
+        and _video_ids_are_indices(f["negative_frames"])
+        != _video_ids_are_indices(f["frames"])
+    ):
+        warnings.warn(
+            f"{labels_path}: /frames and /negative_frames don't agree on how their "
+            "video ids are numbered (only one carries the `video_ids` mark), so "
+            "some negative frame markers may be missing or on the wrong frame.",
+            stacklevel=4,
+        )
     if frame_id_map is not None:
         instances["frame_id"] = _remap_ids(instances["frame_id"], frame_id_map)
     _check_pose_tables(

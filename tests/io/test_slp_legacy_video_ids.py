@@ -7,6 +7,7 @@ position in the video list. The writer picks ids that are read back correctly.
 
 from __future__ import annotations
 
+import shutil
 import warnings
 
 import h5py
@@ -27,6 +28,8 @@ from sleap_io.io.slp import (
     _decode_video_ids,
     _video_ids_are_indices,
     _written_video_id_map,
+    read_negative_frames,
+    write_negative_frames,
 )
 
 # Keep the videos pointing at the package they are embedded in, so that they are
@@ -122,6 +125,7 @@ def test_ids_no_rule_can_read_are_marked(tmp_path, videos, lazy):
     # frames on the embedded video: the reason the mark is needed.
     with h5py.File(path, "r+") as f:
         del f["frames"].attrs["video_ids"]
+        del f["negative_frames"].attrs["video_ids"]
     assert _where(load_slp(str(path))) == [(1, 3, False), (1, 5, True)]
 
 
@@ -156,9 +160,9 @@ def test_marked_table_is_read_by_position(tmp_path, slp_legacy_negative_frames):
         legacy_format=True,
         **KEEP_PACKAGE,
     )
-    # Two videos stored as `video0` and `video4`, and every frame on position 1.
-    # Unmarked, id 1 is no embedded number and is kept as a position; so make
-    # the ids ambiguous instead: all 0, with the videos swapped in the list.
+    # The package's videos are stored as `video0` and `video4`. Store every id
+    # as 0 and swap the two videos in the list: unmarked, 0 is read as the
+    # number of `video0`, now at position 1; marked, as position 0.
     with h5py.File(path, "r+") as f:
         frames = f["frames"][()]
         frames["video"] = 0
@@ -176,6 +180,7 @@ def test_marked_table_is_read_by_position(tmp_path, slp_legacy_negative_frames):
     for mark in ("index", np.bytes_("index")):
         with h5py.File(path, "r+") as f:
             f["frames"].attrs["video_ids"] = mark
+            f["negative_frames"].attrs["video_ids"] = mark
             assert _video_ids_are_indices(f["frames"])
         for lazy in (False, True):
             loaded = load_slp(str(path), lazy=lazy)
@@ -184,9 +189,16 @@ def test_marked_table_is_read_by_position(tmp_path, slp_legacy_negative_frames):
 
     with h5py.File(path, "r+") as f:
         f["frames"].attrs["video_ids"] = "sparse"
+        f["negative_frames"].attrs["video_ids"] = "sparse"
         assert not _video_ids_are_indices(f["frames"])
         assert not _video_ids_are_indices(None)
     assert {where[0] for where in _where(load_slp(str(path)))} == {1}
+
+    # Tables that disagree on the mark are reported.
+    with h5py.File(path, "r+") as f:
+        f["frames"].attrs["video_ids"] = "index"
+    with pytest.warns(UserWarning, match="don't agree on how their video ids"):
+        load_slp(str(path))
 
 
 def test_decode_video_ids():
@@ -237,3 +249,106 @@ def test_ordinary_saves_store_list_indices_unmarked(
         )
         assert "video_ids" not in f["frames"].attrs
     assert _where(load_slp(str(path))) == expected
+
+
+def test_write_negative_frames_follows_the_frames_table(tmp_path, videos):
+    """`write_negative_frames` numbers and marks its videos as `/frames` does."""
+    external, video0, _ = videos
+    skeleton = Skeleton(["a"])
+    path = tmp_path / "negative.slp"
+    with h5py.File(path, "w"):
+        pass
+
+    # No negative frames: nothing is written.
+    labels = Labels([_frame(external, 3, skeleton)], videos=[external, video0])
+    write_negative_frames(str(path), labels)
+    with h5py.File(path, "r") as f:
+        assert "negative_frames" not in f
+
+    # Frames on both videos: list indices, read correctly without a mark.
+    labels = Labels(
+        [
+            _frame(external, 3, skeleton),
+            LabeledFrame(video=video0, frame_idx=1, is_negative=True),
+        ],
+        videos=[external, video0],
+    )
+    write_negative_frames(str(path), labels)
+    assert read_negative_frames(str(path)) == {(1, 1)}
+    with h5py.File(path, "r") as f:
+        assert "video_ids" not in f["negative_frames"].attrs
+
+    # Frames on the external video only: marked, and the dataset is replaced.
+    labels = Labels(
+        [LabeledFrame(video=external, frame_idx=5, is_negative=True)],
+        videos=[external, video0],
+    )
+    with pytest.warns(UserWarning, match="can't be numbered in the legacy SLP layout"):
+        write_negative_frames(str(path), labels)
+    assert read_negative_frames(str(path)) == {(0, 5)}
+    with h5py.File(path, "r") as f:
+        assert f["negative_frames"].attrs["video_ids"] == "index"
+
+
+def test_write_negative_frames_follows_an_older_frames_table(
+    tmp_path, slp_legacy_negative_frames
+):
+    """Negative markers take the ids of a `/frames` table another writer wrote.
+
+    The fixture was written by an older writer, which stores the embedded numbers
+    `video0` and `video4`. This writer would store list indices for the same
+    labels; the markers must follow the file's table, or they match no frame.
+    """
+    path = tmp_path / "older.pkg.slp"
+    shutil.copy(slp_legacy_negative_frames, path)
+    with h5py.File(path, "r+") as f:
+        assert_equal(f["frames"]["video"], [0, 0, 4, 4])
+        del f["negative_frames"]
+
+    write_negative_frames(str(path), load_slp(slp_legacy_negative_frames))
+    with h5py.File(path, "r") as f:
+        assert sorted(f["negative_frames"][()].tolist()) == [(0, 1), (4, 1)]
+        assert "video_ids" not in f["negative_frames"].attrs
+    assert _where(load_slp(str(path))) == [
+        (0, 0, False),
+        (0, 1, True),
+        (1, 0, False),
+        (1, 1, True),
+    ]
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_mixed_numbering_is_used_before_marking(
+    tmp_path, slp_legacy_negative_frames, lazy
+):
+    """Some videos by list index and some by number, when only that reads back.
+
+    Videos `P/video4`, `P/video0` and `Q/video0`, with frames on the first two.
+    List indices are misread (0 is `Q/video0`'s number), and so are the embedded
+    numbers (0 is shared, and the later video wins). Storing `P/video4` by its
+    number and `P/video0` by its list index is read correctly by every reader
+    that works the ids out from opened videos, so nothing is marked.
+    """
+    other = tmp_path / "other.pkg.slp"
+    shutil.copy(slp_legacy_negative_frames, other)
+    p_video0, p_video4 = load_slp(slp_legacy_negative_frames).videos
+    q_video0, _ = load_slp(str(other)).videos
+    skeleton = Skeleton(["a"])
+    labels = Labels(
+        [_frame(p_video4, 0, skeleton), _frame(p_video0, 1, skeleton, x=3.0)],
+        videos=[p_video4, p_video0, q_video0],
+    )
+    path = tmp_path / "legacy.slp"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        _save_legacy(labels, path, lazy, tmp_path)
+
+    with h5py.File(path, "r") as f:
+        assert_equal(_written_video_id_map(f, labels.videos), [4, 0, 0])
+        assert_equal(f["frames"]["video"], [4, 1])
+        assert "video_ids" not in f["frames"].attrs
+    for reload_lazy in (False, True):
+        loaded = load_slp(str(path), lazy=reload_lazy)
+        assert _where(loaded) == [(0, 0, False), (1, 1, False)]
+        assert loaded.videos[0].backend.dataset == "video4/video"
+        assert loaded.videos[1].filename == p_video0.filename
