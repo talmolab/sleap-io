@@ -545,7 +545,8 @@ def test_save_to_new_path_keeps_a_source_with_the_same_relative_name(
     # then the original video.
     assert source["filename"] == "B.pkg.slp"
     assert source["source_video"]["filename"] == "A.pkg.slp"
-    assert source["source_video"]["source_video"]["filename"] == video_path
+    # Filenames are stored with forward slashes on every platform.
+    assert Path(source["source_video"]["source_video"]["filename"]) == Path(video_path)
 
 
 def test_flushing_to_disk_leaves_the_bytes_alone(tmp_path):
