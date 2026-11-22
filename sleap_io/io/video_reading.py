@@ -1459,15 +1459,23 @@ class HDF5Video(VideoBackend):
         default=None, repr=False, eq=False
     )
     _url_stream_mode: str = attrs.field(default="blockcache", repr=False, eq=False)
+    # The dataset of the kept-open reader, so that HDF5's chunk cache, which
+    # belongs to an open dataset, lasts across frame reads.
+    _open_dataset: object | None = attrs.field(
+        init=False, default=None, repr=False, eq=False
+    )
 
     EXTS = ("h5", "hdf5", "slp")
 
-    def _open_h5(self) -> h5py.File:
+    def _open_h5(self, **kwargs) -> h5py.File:
         """Open the backing HDF5 file as an ``h5py.File`` in read mode.
 
         For local paths this opens ``self.filename`` directly. For URLs it lazily
         opens (and caches on ``self._url_file``) an fsspec-backed file-like object
         via :func:`sleap_io.io._remote.open_url` and wraps it with ``h5py``.
+
+        Args:
+            **kwargs: Further arguments of ``h5py.File``, such as ``rdcc_nbytes``.
 
         Returns:
             An open ``h5py.File`` handle. The caller owns closing the returned
@@ -1483,8 +1491,8 @@ class HDF5Video(VideoBackend):
                     headers=self._url_headers,
                     stream_mode=self._url_stream_mode,
                 )
-            return h5py.File(self._url_file, "r")
-        return h5py.File(self.filename, "r")
+            return h5py.File(self._url_file, "r", **kwargs)
+        return h5py.File(self.filename, "r", **kwargs)
 
     def _close_url_file(self) -> None:
         """Close and drop the cached fsspec URL file-like, if any (idempotent).
@@ -1524,6 +1532,7 @@ class HDF5Video(VideoBackend):
         reads, which ``h5py.File.close()`` does not close on its own. Both are
         lazily reopened on the next read, so this is safe to call between reads.
         """
+        self._open_dataset = None
         super().close()
         self._close_url_file()
 
@@ -1531,11 +1540,39 @@ class HDF5Video(VideoBackend):
         """Return state for pickling/deepcopy, dropping unpicklable handles.
 
         Extends :meth:`VideoBackend.__getstate__` to also drop the cached
-        fsspec-backed ``_url_file`` (reopened lazily by :meth:`_open_h5`).
+        fsspec-backed ``_url_file`` (reopened lazily by :meth:`_open_h5`) and the
+        cached dataset of the open reader.
         """
         state = super().__getstate__()
         state["_url_file"] = None
+        state["_open_dataset"] = None
         return state
+
+    # Chunk cache of the kept-open reader, in bytes. HDF5's default (1 MB) holds
+    # less than one chunk of many embedded-frame datasets, so each frame read
+    # would inflate a whole compressed chunk again.
+    _READER_CHUNK_CACHE_BYTES = 64 * 1024 * 1024
+
+    def _frame_dataset(self) -> tuple[h5py.Dataset, h5py.File | None]:
+        """Return the frame dataset to read from, and a file the caller must close.
+
+        With `keep_open`, the file and its dataset stay open between reads, so
+        HDF5's chunk cache (per open dataset) is reused: reading consecutive
+        frames of a chunked, compressed dataset then inflates each chunk once
+        instead of once per frame. Otherwise the file is opened for this read and
+        returned for the caller to close.
+        """
+        if not self.keep_open:
+            f = self._open_h5()
+            return f[self.dataset], f
+        if self._open_reader is None:
+            self._open_dataset = None
+            self._open_reader = self._open_h5(
+                rdcc_nbytes=self._READER_CHUNK_CACHE_BYTES
+            )
+        if self._open_dataset is None or not self._open_dataset.id.valid:
+            self._open_dataset = self._open_reader[self.dataset]
+        return self._open_dataset, None
 
     def __attrs_post_init__(self):
         """Auto-detect dataset and frame map heuristically."""
@@ -1801,14 +1838,7 @@ class HDF5Video(VideoBackend):
         )
 
         # Read directly from dataset
-        if self.keep_open:
-            if self._open_reader is None:
-                self._open_reader = self._open_h5()
-            f = self._open_reader
-        else:
-            f = self._open_h5()
-
-        ds = f[self.dataset]
+        ds, f = self._frame_dataset()
         raw_bytes = ds[internal_idx]
 
         # Handle fixed-length padding (strip trailing zeros)
@@ -1820,7 +1850,7 @@ class HDF5Video(VideoBackend):
                 last_non_zero = np.where(non_zero_mask)[0][-1]
                 raw_bytes = raw_bytes[: last_non_zero + 1]
 
-        if not self.keep_open:
+        if f is not None:
             f.close()
 
         return raw_bytes
@@ -1838,14 +1868,7 @@ class HDF5Video(VideoBackend):
             This does not apply grayscale conversion. It is recommended to use the
             `get_frame` method of the `VideoBackend` class instead.
         """
-        if self.keep_open:
-            if self._open_reader is None:
-                self._open_reader = self._open_h5()
-            f = self._open_reader
-        else:
-            f = self._open_h5()
-
-        ds = f[self.dataset]
+        ds, f = self._frame_dataset()
 
         if self.frame_map:
             frame_idx = self.frame_map[frame_idx]
@@ -1858,7 +1881,7 @@ class HDF5Video(VideoBackend):
         if self.input_format == "channels_first":
             img = np.transpose(img, (2, 1, 0))
 
-        if not self.keep_open:
+        if f is not None:
             f.close()
         return img
 
@@ -1875,17 +1898,11 @@ class HDF5Video(VideoBackend):
             This does not apply grayscale conversion. It is recommended to use the
             `get_frames` method of the `VideoBackend` class instead.
         """
-        if self.keep_open:
-            if self._open_reader is None:
-                self._open_reader = self._open_h5()
-            f = self._open_reader
-        else:
-            f = self._open_h5()
+        ds, f = self._frame_dataset()
 
         if self.frame_map:
             frame_inds = [self.frame_map[idx] for idx in frame_inds]
 
-        ds = f[self.dataset]
         imgs = ds[frame_inds]
 
         if "format" in ds.attrs:
@@ -1897,7 +1914,7 @@ class HDF5Video(VideoBackend):
         if self.input_format == "channels_first":
             imgs = np.transpose(imgs, (0, 3, 2, 1))
 
-        if not self.keep_open:
+        if f is not None:
             f.close()
 
         return imgs
@@ -1978,10 +1995,7 @@ class HDF5Video(VideoBackend):
             return None
         try:
             if self.keep_open:
-                if self._open_reader is None:
-                    self._open_reader = self._open_h5()
-                f = self._open_reader
-                ds = f[self.dataset]
+                ds, _ = self._frame_dataset()
                 return self._read_crop_from_ds(ds, frame_idx, crop, fill)
             else:
                 with self._open_h5() as f:
@@ -2012,10 +2026,7 @@ class HDF5Video(VideoBackend):
             return None
         try:
             if self.keep_open:
-                if self._open_reader is None:
-                    self._open_reader = self._open_h5()
-                f = self._open_reader
-                ds = f[self.dataset]
+                ds, _ = self._frame_dataset()
                 return self._stack_crops(ds, frame_inds, crop, fill)
             else:
                 with self._open_h5() as f:
