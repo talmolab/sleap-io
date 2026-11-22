@@ -1252,6 +1252,17 @@ and otherwise each embedded video's number is mapped to its index. This guess ru
 once, when the table is read, so lazy labels and every raw-table consumer see list
 indices.
 
+An embedded video's number can equal another video's list index, for example when
+a project refers to an external video and to frames embedded in a package. The
+guess then puts frames on the wrong video. `legacy_format=True` therefore picks the
+ids that are read back correctly: list indices when the guess reads them correctly
+(always the case when no embedded number differs from its index), otherwise the
+embedded numbers when the guess reads those correctly. If neither works, it stores
+list indices, sets the attribute `video_ids = "index"` on `/frames` and
+`/negative_frames`, and warns. A table with that attribute is read by list index,
+with no guessing. Readers that don't know the attribute (sleap-io 0.9.5 and older)
+misplace the frames of such a file, which is why the save warns.
+
 ## Record Metadata
 
 Instances, frames and bounding boxes can carry a `metadata` dictionary of scalar
@@ -1298,7 +1309,7 @@ Older files (and `legacy_format=True`) mark negative frames in a separate
 
 ```python
 negative_frames_dtype = np.dtype([
-    ("video_id", "u4"),   # Video ID as stored in /frames (sparse for embedded videos)
+    ("video_id", "u4"),   # Video ID as stored in /frames (see Video ID Mapping)
     ("frame_idx", "u8"),  # Frame index within video
 ])
 ```
