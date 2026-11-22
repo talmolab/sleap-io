@@ -255,6 +255,12 @@ def save_slp(
             compression level (0-9) with `image_format="png"` for re-encoded
             frames. `None` (the default) uses the encoder's default (JPEG quality
             95 with OpenCV, 75 with imageio).
+
+    Notes:
+        The file is written to a temporary file in the same folder and renamed
+        over `filename` when it is complete, so a save that fails or is cancelled
+        leaves the previous file as it was. Replacing a file needs room for both
+        copies until the save is done.
     """
     from sleap_io.io import slp
 

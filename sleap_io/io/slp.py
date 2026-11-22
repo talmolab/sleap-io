@@ -99,14 +99,16 @@ Format version history:
 from __future__ import annotations
 
 import io
+import os
 import sys
+import uuid
 import warnings
 import zlib
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext, suppress
 from enum import Enum, IntEnum
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Iterable, NamedTuple
+from typing import TYPE_CHECKING, Callable, Iterable, Iterator, NamedTuple
 
 import h5py
 import imageio.v3 as iio
@@ -778,7 +780,9 @@ def video_to_dict(
     """
     from sleap_io.io.video_reading import CropVideoBackend
 
-    video_filename = sanitize_filename(video.filename)
+    # A video embedded by the save in progress refers to the temporary file
+    # being written: store the name of the file it becomes (see `_atomic_save`).
+    video_filename = sanitize_filename(_final_filename(video.filename))
     result = {"filename": video_filename}
 
     # Crop unwrap (D-123): a cropped Video serializes as its UNCROPPED source
@@ -853,6 +857,10 @@ def video_to_dict(
         # with make_video() which expects backend["filename"] to exist
         if "filename" not in result["backend"]:
             result["backend"]["filename"] = video_filename
+        else:
+            result["backend"]["filename"] = _final_filename(
+                result["backend"]["filename"]
+            )
         # Closed cropped path: the copied metadata carries the CROPPED shape plus
         # a crop record. Restore the UNCROPPED source shape so videos_json describes
         # the full frame (old-reader guarantee), then drop the crop keys (the crop
@@ -890,8 +898,7 @@ def video_to_dict(
         use_self_reference = (
             backend.has_embedded_images
             and labels_path is not None
-            and Path(sanitize_filename(video.filename)).resolve()
-            == Path(sanitize_filename(labels_path)).resolve()
+            and _is_save_target(video.filename, labels_path)
         )
 
         result["backend"] = {
@@ -933,9 +940,10 @@ def video_to_dict(
         }
 
     # Add source_video metadata if present
-    if hasattr(video, "source_video") and video.source_video is not None:
+    source_video = _source_to_record(getattr(video, "source_video", None), labels_path)
+    if source_video is not None:
         result["source_video"] = video_to_dict(
-            video.source_video, labels_path, prefer_metadata=prefer_metadata
+            source_video, labels_path, prefer_metadata=prefer_metadata
         )
 
     # Note: original_video is now a computed property derived from source_video,
@@ -1527,6 +1535,7 @@ def process_and_embed_frames(
                 source_video = video.source_video
             else:
                 source_video = video
+            source_video = _source_to_record(source_video, labels_path)
 
             # Create embedded video object
             embedded_backend = VideoBackend.from_filename(
@@ -1566,8 +1575,9 @@ def process_and_embed_frames(
                 )
 
             # Store source video metadata
-            grp = f.require_group(f"{group}/source_video")
-            _write_source_video_json(grp, video_to_dict(source_video, labels_path))
+            if source_video is not None:
+                grp = f.require_group(f"{group}/source_video")
+                _write_source_video_json(grp, video_to_dict(source_video, labels_path))
 
             # Store the embedded video for return
             replaced_videos[video] = embedded_video
@@ -1601,6 +1611,7 @@ def _create_empty_embedded_video(
 
     # Determine source video (preserve chain if already embedded)
     source_video = video.source_video if video.source_video is not None else video
+    source_video = _source_to_record(source_video, labels_path)
 
     # Write empty video group with source_video metadata to HDF5
     with h5py.File(labels_path, "a") as f:
@@ -1626,8 +1637,11 @@ def _create_empty_embedded_video(
                 ds.attrs["fps"] = video.fps
 
         # Store source video metadata for restoration
-        source_grp = f.require_group(f"{group}/source_video")
-        _write_source_video_json(source_grp, video_to_dict(source_video, labels_path))
+        if source_video is not None:
+            source_grp = f.require_group(f"{group}/source_video")
+            _write_source_video_json(
+                source_grp, video_to_dict(source_video, labels_path)
+            )
 
     # Create the embedded video object using VideoBackend.from_filename
     # This ensures the HDF5Video is properly initialized with the dataset metadata
@@ -2033,6 +2047,8 @@ def write_videos(
                     and pre_embed_video.source_video is not None
                 ):
                     source_to_save = pre_embed_video.source_video
+
+            source_to_save = _source_to_record(source_to_save, labels_path)
 
             # Write source_video metadata to the video group
             if dataset in f and source_to_save is not None:
@@ -11606,6 +11622,206 @@ def _restore_unknown_hdf5(dest_path: str, image: bytes | None) -> None:
                 mem.copy(name, f)
 
 
+# Saves in progress: the temporary file each save writes to (as a sanitized
+# filename), mapped to the file it replaces when it is done, as given to the save
+# and resolved. See `_atomic_save`.
+_SAVE_TARGETS: dict[str, tuple[str | Path, Path]] = {}
+
+
+def _final_filename(filename: object) -> object:
+    """Map the temporary file of a save in progress to the file it will replace.
+
+    Args:
+        filename: A video's filename (or list of filenames).
+
+    Returns:
+        The target of the save if `filename` is its temporary file (see
+        `_atomic_save`), so that the temporary name is never stored in the file.
+        Anything else is returned as it is.
+    """
+    if not _SAVE_TARGETS or not isinstance(filename, (str, Path)):
+        return filename
+    target = _SAVE_TARGETS.get(sanitize_filename(filename))
+    return filename if target is None else target[0]
+
+
+def _is_save_target(filename: str | Path, labels_path: str | Path) -> bool:
+    """Return whether a video's file is the labels file being written.
+
+    Args:
+        filename: The filename of a video.
+        labels_path: The path the labels are being written to. During a save
+            this is the temporary file of `_atomic_save`.
+
+    Returns:
+        `True` if `filename` is `labels_path`, or the file that `labels_path` will
+        replace once the save is done, so that a video stored in the file being
+        replaced is referenced the same way as before saves went through a
+        temporary file.
+    """
+    path = Path(sanitize_filename(filename)).resolve()
+    if path == Path(sanitize_filename(labels_path)).resolve():
+        return True
+    target = _SAVE_TARGETS.get(sanitize_filename(labels_path))
+    return target is not None and path == target[1]
+
+
+def _source_to_record(
+    video: Video | None, labels_path: str | Path | None
+) -> Video | None:
+    """Return the video to record as a source when writing a labels file.
+
+    A video whose frames are stored in the file that the save in progress replaces
+    can't be a source: its frames are gone once the new file is in place, and a
+    file naming itself as the source of its own video can't be read back. Its own
+    source is recorded instead.
+
+    Args:
+        video: The candidate source video, or `None`.
+        labels_path: The path the labels are being written to, or `None`.
+
+    Returns:
+        `video`, or the first video up its `source_video` chain that isn't stored
+        in the file being replaced, or `None` if there is none.
+    """
+    if labels_path is None or not _SAVE_TARGETS:
+        return video
+    target = _SAVE_TARGETS.get(sanitize_filename(labels_path))
+    if target is None:
+        return video
+    while (
+        video is not None
+        and isinstance(video.filename, (str, Path))
+        and Path(sanitize_filename(video.filename)).resolve() == target[1]
+    ):
+        video = video.source_video
+    return video
+
+
+def _same_path(a: object, b: str | Path) -> bool:
+    """Return whether `a` is a single path that names the same file as `b`."""
+    return isinstance(a, (str, Path)) and Path(a) == Path(b)
+
+
+class _AtomicSave:
+    """The state of one save through a temporary file (see `_atomic_save`).
+
+    Attributes:
+        path: The temporary file to write to. A `Path` if the target was given as
+            one, a string otherwise.
+        labels: The labels whose videos may refer to `path` when the save is done
+            (set by the writer when it embeds frames), or `None`. Those videos
+            are pointed at the target once it is in place.
+        restore: A callable that undoes the writer's changes to the labels in
+            memory, called if the save fails (set by the writer), or `None`.
+    """
+
+    def __init__(self, path: str | Path):
+        """Initialize the state for a temporary file."""
+        self.path = path
+        self.labels: Labels | None = None
+        self.restore: Callable[[], None] | None = None
+
+    def videos(self) -> list[Video]:
+        """Return the videos of `labels` that refer to the temporary file."""
+        if self.labels is None:
+            return []
+        return [v for v in self.labels.videos if _same_path(v.filename, self.path)]
+
+
+@contextmanager
+def _atomic_save(labels_path: str | Path) -> Iterator[_AtomicSave]:
+    """Write a labels file through a temporary file in the same folder.
+
+    The body writes to the yielded `path`. When it finishes, the temporary file
+    is flushed to disk and renamed over `labels_path` in one step, so the target
+    holds either the previous file or the complete new one, never a partial one.
+    If the body raises (a failed write, a cancelled export, an interrupt), the
+    temporary file is removed and the target is left as it was.
+
+    The temporary file keeps the target's name as its ending (and so its
+    extension), with a `.tmp-<random>-` prefix that hides it.
+
+    Args:
+        labels_path: The file to write.
+
+    Yields:
+        The `_AtomicSave` whose `path` the body writes to.
+    """
+    final = Path(labels_path)
+    tmp = final.with_name(f".tmp-{uuid.uuid4().hex[:8]}-{final.name}")
+    save = _AtomicSave(tmp if isinstance(labels_path, Path) else str(tmp))
+    key = sanitize_filename(save.path)
+    _SAVE_TARGETS[key] = (labels_path, final.resolve())
+    try:
+        try:
+            yield save
+        finally:
+            # Release any reader still open on the temporary file: it can't be
+            # renamed or removed on Windows while a handle is open.
+            moved = save.videos()
+            for video in moved:
+                _close_readers(video)
+        _sync_to_disk(tmp)
+        os.replace(tmp, final)
+    except BaseException:
+        with suppress(OSError):
+            tmp.unlink()
+        if save.restore is not None:
+            with suppress(Exception):
+                save.restore()
+        raise
+    finally:
+        _SAVE_TARGETS.pop(key, None)
+    for video in moved:
+        _repoint_video(video, save.path, labels_path)
+
+
+def _sync_to_disk(path: Path) -> None:
+    """Flush a written file to disk, so a rename over another file is safe."""
+    with suppress(OSError):
+        fd = os.open(path, os.O_RDWR)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
+def _video_backends(video: Video) -> Iterator[VideoBackend]:
+    """Yield a video's backend and the backends it wraps (see `CropVideoBackend`)."""
+    backend = video.backend
+    while backend is not None:
+        yield backend
+        backend = getattr(backend, "inner", None)
+
+
+def _close_readers(video: Video) -> None:
+    """Close the open file handles of a video's backends, keeping the backends.
+
+    The handles are opened again on the next read (see `VideoBackend.close`).
+    """
+    for backend in _video_backends(video):
+        with suppress(Exception):
+            backend.close()
+
+
+def _repoint_video(video: Video, old: str | Path, new: str | Path) -> None:
+    """Point a video that refers to the file `old` at `new`, in place.
+
+    Args:
+        video: A video whose `filename` is `old`.
+        old: The temporary file the video was written to.
+        new: The file it was renamed to, as given to the save.
+    """
+    video.filename = new
+    video._exists_cache.clear()
+    if _same_path(video.backend_metadata.get("filename"), old):
+        video.backend_metadata["filename"] = new
+    for backend in _video_backends(video):
+        if _same_path(backend.filename, old):
+            backend.filename = new.as_posix() if isinstance(new, Path) else new
+
+
 def _write_labels_lazy(
     labels_path: str,
     labels: Labels,
@@ -11705,17 +11921,69 @@ def _write_labels_lazy(
         # Check bounding box metadata kinds before touching the output file.
         metadata_column_kinds(lazy_bboxes, "bboxes")
 
-    # Capture unknown top-level members from the source file before it is
-    # truncated, to carry them across the load/save cycle (see write_labels).
+    # Capture unknown top-level members from the source file, to carry them
+    # across the load/save cycle (see write_labels).
     unknown_stash = (
         _stash_unknown_hdf5(labels.provenance.get("filename"))
         if preserve_unknown
         else None
     )
 
-    # Delete existing file if it exists
-    if Path(labels_path).exists():
-        Path(labels_path).unlink()
+    # Write to a temporary file that replaces the target once it is complete, so
+    # a save that fails partway leaves the previous file as it was.
+    with _atomic_save(labels_path) as save:
+        _write_lazy_tables(
+            save.path,
+            labels,
+            lazy_bboxes,
+            unknown_stash,
+            embed=embed,
+            restore_original_videos=restore_original_videos,
+            verbose=verbose,
+            prefer_metadata=prefer_metadata,
+            save_embedding_vectors=save_embedding_vectors,
+            legacy_format=legacy_format,
+            compression=compression,
+            image_format=image_format,
+            image_quality=image_quality,
+        )
+
+
+def _write_lazy_tables(
+    labels_path: str | Path,
+    labels: Labels,
+    lazy_bboxes: list,
+    unknown_stash: bytes | None,
+    *,
+    embed: bool | str | list[tuple[Video, int]] | None,
+    restore_original_videos: bool,
+    verbose: bool,
+    prefer_metadata: bool,
+    save_embedding_vectors: bool,
+    legacy_format: bool,
+    compression: str | None,
+    image_format: str | None,
+    image_quality: int | None,
+) -> None:
+    """Write every table of lazy labels to a new file (see `_write_labels_lazy`).
+
+    Args:
+        labels_path: The file to create. It must not exist.
+        labels: The lazy labels, already checked by `_write_labels_lazy`.
+        lazy_bboxes: The bounding boxes of the lazy store, in write order.
+        unknown_stash: The unknown top-level members to re-emit (see
+            `_stash_unknown_hdf5`), or `None`.
+        embed: See `_write_labels_lazy`.
+        restore_original_videos: See `_write_labels_lazy`.
+        verbose: See `_write_labels_lazy`.
+        prefer_metadata: See `_write_labels_lazy`.
+        save_embedding_vectors: See `_write_labels_lazy`.
+        legacy_format: See `_write_labels_lazy`.
+        compression: See `_write_labels_lazy`.
+        image_format: See `_write_labels_lazy`.
+        image_quality: See `_write_labels_lazy`.
+    """
+    lazy_store = labels._lazy_store
 
     # Determine reference mode based on parameters
     if embed == "source" or (embed is False and restore_original_videos):
@@ -12093,6 +12361,11 @@ def write_labels(
             `image_format`.
 
     Notes:
+        The file is written to a temporary file beside `labels_path` (named
+        `.tmp-<random>-<name>`) and renamed over it when it is complete, so a save
+        that fails or is cancelled leaves the previous file as it was. Replacing a
+        file therefore needs room for both copies until the save is done.
+
         Instance, frame and bounding box `metadata` is stored as columns of
         `/instances`, `/frames` and `/bboxes` (lazy labels write the instance and
         frame columns they were loaded with). `legacy_format=True` stores no
@@ -12162,17 +12435,82 @@ def write_labels(
         _check_unlabeled_points(labels, unlabeled_as)
     _check_dropped_metadata(labels, legacy_format=legacy_format)
 
-    # Capture unknown top-level members from the source file before it is
-    # truncated, so additions made by a newer sleap-io version survive a
-    # load/save cycle through this (potentially older) writer.
+    # Capture unknown top-level members from the source file, so additions made
+    # by a newer sleap-io version survive a load/save cycle through this
+    # (potentially older) writer.
     unknown_stash = (
         _stash_unknown_hdf5(labels.provenance.get("filename"))
         if preserve_unknown
         else None
     )
 
-    if Path(labels_path).exists():
-        Path(labels_path).unlink()
+    # Write to a temporary file that replaces the target once it is complete, so
+    # a save that fails partway leaves the previous file as it was.
+    with _atomic_save(labels_path) as save:
+        _write_eager_tables(
+            save,
+            labels,
+            unknown_stash,
+            embed=embed,
+            restore_original_videos=restore_original_videos,
+            embed_inplace=embed_inplace,
+            verbose=verbose,
+            plugin=plugin,
+            embed_all_videos=embed_all_videos,
+            progress_callback=progress_callback,
+            prefer_metadata=prefer_metadata,
+            save_embedding_vectors=save_embedding_vectors,
+            legacy_format=legacy_format,
+            compression=compression,
+            image_format=image_format,
+            image_quality=image_quality,
+        )
+
+
+def _write_eager_tables(
+    save: _AtomicSave,
+    labels: Labels,
+    unknown_stash: bytes | None,
+    *,
+    embed: bool | str | list[tuple[Video, int]] | None,
+    restore_original_videos: bool,
+    embed_inplace: bool,
+    verbose: bool,
+    plugin: str | None,
+    embed_all_videos: bool,
+    progress_callback: Callable[[int, int, str], bool] | None,
+    prefer_metadata: bool,
+    save_embedding_vectors: bool,
+    legacy_format: bool,
+    compression: str | None,
+    image_format: str | None,
+    image_quality: int | None,
+) -> None:
+    """Write every table of eager labels to a new file (see `write_labels`).
+
+    Args:
+        save: The save in progress, whose `path` is the file to create. It must
+            not exist. When frames are embedded, `save.labels` is set to the
+            labels whose videos then refer to that file, and with
+            `embed_inplace=True` `save.restore` is set to undo the swap.
+        labels: The labels, already checked by `write_labels`.
+        unknown_stash: The unknown top-level members to re-emit (see
+            `_stash_unknown_hdf5`), or `None`.
+        embed: See `write_labels`.
+        restore_original_videos: See `write_labels`.
+        embed_inplace: See `write_labels`.
+        verbose: See `write_labels`.
+        plugin: See `write_labels`.
+        embed_all_videos: See `write_labels`.
+        progress_callback: See `write_labels`.
+        prefer_metadata: See `write_labels`.
+        save_embedding_vectors: See `write_labels`.
+        legacy_format: See `write_labels`.
+        compression: See `write_labels`.
+        image_format: See `write_labels`.
+        image_quality: See `write_labels`.
+    """
+    labels_path = save.path
 
     # Make a copy to avoid mutating the input labels when embedding
     if embed and not embed_inplace:
@@ -12204,6 +12542,22 @@ def write_labels(
     original_videos = [v for v in labels.videos] if embed else None
 
     if embed:
+        # The embedded videos refer to the file being written: they are pointed
+        # at the target when the save is done, and with `embed_inplace=True` the
+        # caller's labels get their videos back if it fails.
+        save.labels = labels
+        if embed_inplace:
+
+            def restore_videos():
+                video_map = {
+                    new: old
+                    for new, old in zip(labels.videos, original_videos)
+                    if new is not old
+                }
+                if video_map:
+                    labels.replace_videos(video_map=video_map)
+
+            save.restore = restore_videos
         embed_videos(
             labels_path,
             labels,
