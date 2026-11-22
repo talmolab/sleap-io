@@ -343,6 +343,10 @@ def _write_sleap(
 ) -> None:
     """Write SLEAP Analysis CSV format.
 
+    One row per animal per frame, like Analysis HDF5: a predicted instance that a
+    user instance replaced (linked by `from_predicted`, or on the same track) is
+    not written.
+
     Output columns:
         track, frame_idx, instance.score, {node}.x, {node}.y, {node}.score, ...
     """
@@ -360,6 +364,7 @@ def _write_sleap(
             start_frame=start_frame,
             end_frame=end_frame,
             video_id=video_id,
+            prefer_user_instances=True,
         )
         df = _transform_to_sleap_format(df)
         df.to_csv(filename, index=False, na_rep="")
@@ -374,6 +379,7 @@ def _write_sleap(
             include_score=include_score,
             include_metadata=True,
             video_id=video_id,
+            prefer_user_instances=True,
         ):
             chunk = _transform_to_sleap_format(chunk)
             chunk.to_csv(
