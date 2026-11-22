@@ -101,6 +101,7 @@ from __future__ import annotations
 import io
 import os
 import sys
+import time
 import uuid
 import warnings
 import zlib
@@ -858,8 +859,8 @@ def video_to_dict(
         if "filename" not in result["backend"]:
             result["backend"]["filename"] = video_filename
         else:
-            result["backend"]["filename"] = _final_filename(
-                result["backend"]["filename"]
+            result["backend"]["filename"] = sanitize_filename(
+                _final_filename(result["backend"]["filename"])
             )
         # Closed cropped path: the copied metadata carries the CROPPED shape plus
         # a crop record. Restore the UNCROPPED source shape so videos_json describes
@@ -2012,6 +2013,15 @@ def write_videos(
                 with h5py.File(labels_path, "a") as dst_f:
                     # Copy the video group with all its datasets and attributes
                     src_f.copy(source_group, dst_f, name=dest_group)
+                    # When this save replaces a file, the copied source record
+                    # may name that file. Drop it: the pass below writes the
+                    # record again from the video's own source (see
+                    # `_source_to_record`).
+                    if (
+                        _replaced_file(labels_path) is not None
+                        and "source_video" in dst_f[dest_group]
+                    ):
+                        del dst_f[dest_group]["source_video"]
 
             # Add to videos_to_write - the metadata will reference the copied data
             videos_to_write.append((video_ind, video))
@@ -11623,9 +11633,10 @@ def _restore_unknown_hdf5(dest_path: str, image: bytes | None) -> None:
 
 
 # Saves in progress: the temporary file each save writes to (as a sanitized
-# filename), mapped to the file it replaces when it is done, as given to the save
-# and resolved. See `_atomic_save`.
-_SAVE_TARGETS: dict[str, tuple[str | Path, Path]] = {}
+# filename), mapped to the target as given to the save and, if the target existed
+# when the save started, its resolved path (`None` for a new file). See
+# `_atomic_save`.
+_SAVE_TARGETS: dict[str, tuple[str | Path, Path | None]] = {}
 
 
 def _final_filename(filename: object) -> object:
@@ -11645,6 +11656,24 @@ def _final_filename(filename: object) -> object:
     return filename if target is None else target[0]
 
 
+def _replaced_file(labels_path: str | Path | None) -> Path | None:
+    """Return the existing file that a save to `labels_path` will replace.
+
+    Args:
+        labels_path: The path the labels are being written to.
+
+    Returns:
+        The resolved path of the file that existed at the target when the save
+        started, if `labels_path` is the temporary file of a save in progress
+        (see `_atomic_save`). `None` for a save to a new path and for any other
+        path.
+    """
+    if labels_path is None or not _SAVE_TARGETS:
+        return None
+    target = _SAVE_TARGETS.get(sanitize_filename(labels_path))
+    return None if target is None else target[1]
+
+
 def _is_save_target(filename: str | Path, labels_path: str | Path) -> bool:
     """Return whether a video's file is the labels file being written.
 
@@ -11662,8 +11691,8 @@ def _is_save_target(filename: str | Path, labels_path: str | Path) -> bool:
     path = Path(sanitize_filename(filename)).resolve()
     if path == Path(sanitize_filename(labels_path)).resolve():
         return True
-    target = _SAVE_TARGETS.get(sanitize_filename(labels_path))
-    return target is not None and path == target[1]
+    replaced = _replaced_file(labels_path)
+    return replaced is not None and path == replaced
 
 
 def _source_to_record(
@@ -11674,7 +11703,8 @@ def _source_to_record(
     A video whose frames are stored in the file that the save in progress replaces
     can't be a source: its frames are gone once the new file is in place, and a
     file naming itself as the source of its own video can't be read back. Its own
-    source is recorded instead.
+    source is recorded instead. This only applies to a save over an existing
+    file; a save to a new path records what it is given.
 
     Args:
         video: The candidate source video, or `None`.
@@ -11684,16 +11714,17 @@ def _source_to_record(
         `video`, or the first video up its `source_video` chain that isn't stored
         in the file being replaced, or `None` if there is none.
     """
-    if labels_path is None or not _SAVE_TARGETS:
+    replaced = _replaced_file(labels_path)
+    if replaced is None:
         return video
-    target = _SAVE_TARGETS.get(sanitize_filename(labels_path))
-    if target is None:
-        return video
+    seen: set[int] = set()
     while (
         video is not None
+        and id(video) not in seen
         and isinstance(video.filename, (str, Path))
-        and Path(sanitize_filename(video.filename)).resolve() == target[1]
+        and Path(sanitize_filename(video.filename)).resolve() == replaced
     ):
+        seen.add(id(video))
         video = video.source_video
     return video
 
@@ -11729,6 +11760,60 @@ class _AtomicSave:
         return [v for v in self.labels.videos if _same_path(v.filename, self.path)]
 
 
+def _temporary_save_path(final: Path) -> Path:
+    """Return the path of the temporary file for a save to `final`.
+
+    The file is in the target's folder (so that renaming it over the target is
+    one step on one file system) and keeps the target's extensions (so that every
+    rule that reads an extension behaves as it does for the target). It is named
+    `.tmp-<8 random characters><extensions>`, which is easy to recognise if a
+    killed process leaves one behind.
+
+    Close to the file system's limits (a name of 255 bytes, or a path of about
+    260 characters on Windows) that name could be too long where the target's
+    is not. The name is then shortened to be no longer than the target's, down
+    to four random characters, so that a target that could be saved before can
+    still be saved.
+
+    Args:
+        final: The target of the save.
+
+    Returns:
+        A path in the target's folder that doesn't exist.
+    """
+    suffixes = "".join(final.suffixes[-2:])
+    folder_length = len(os.path.abspath(final)) - len(final.name)
+    room = len(final.name) - len(suffixes) - 1
+    while True:
+        token = uuid.uuid4().hex
+        name = f".tmp-{token[:8]}{suffixes}"
+        if len(name.encode()) > max(
+            len(final.name.encode()), 200
+        ) or folder_length + len(name) > max(folder_length + len(final.name), 240):
+            name = f".{token[: max(4, min(8, room))]}{suffixes}"
+        tmp = final.with_name(name)
+        if not tmp.exists():
+            return tmp
+
+
+def _replace_file(tmp: Path, final: Path) -> None:
+    """Rename the finished temporary file over the target.
+
+    On Windows a file that was just closed can be held open for a moment by
+    another program (a virus scanner, an indexer), which makes the rename fail
+    although nothing is wrong, so it is retried for about a second there.
+    """
+    tries = 6 if sys.platform == "win32" else 1
+    for attempt in range(tries):
+        try:
+            os.replace(tmp, final)
+            return
+        except PermissionError:
+            if attempt == tries - 1:
+                raise
+            time.sleep(0.2)
+
+
 @contextmanager
 def _atomic_save(labels_path: str | Path) -> Iterator[_AtomicSave]:
     """Write a labels file through a temporary file in the same folder.
@@ -11739,20 +11824,28 @@ def _atomic_save(labels_path: str | Path) -> Iterator[_AtomicSave]:
     If the body raises (a failed write, a cancelled export, an interrupt), the
     temporary file is removed and the target is left as it was.
 
-    The temporary file keeps the target's name as its ending (and so its
-    extension), with a `.tmp-<random>-` prefix that hides it.
+    The temporary file is hidden beside the target (see `_temporary_save_path`).
+    A failure that used to come before anything was written (a target that can't
+    be replaced) now comes after the whole file has been written.
 
     Args:
         labels_path: The file to write.
 
     Yields:
         The `_AtomicSave` whose `path` the body writes to.
+
+    Raises:
+        FileNotFoundError: If the target's folder doesn't exist.
     """
     final = Path(labels_path)
-    tmp = final.with_name(f".tmp-{uuid.uuid4().hex[:8]}-{final.name}")
+    if not final.parent.is_dir():
+        raise FileNotFoundError(
+            f"Cannot save {labels_path}: the folder {final.parent} does not exist."
+        )
+    tmp = _temporary_save_path(final)
     save = _AtomicSave(tmp if isinstance(labels_path, Path) else str(tmp))
     key = sanitize_filename(save.path)
-    _SAVE_TARGETS[key] = (labels_path, final.resolve())
+    _SAVE_TARGETS[key] = (labels_path, final.resolve() if final.exists() else None)
     try:
         try:
             yield save
@@ -11763,18 +11856,103 @@ def _atomic_save(labels_path: str | Path) -> Iterator[_AtomicSave]:
             for video in moved:
                 _close_readers(video)
         _sync_to_disk(tmp)
-        os.replace(tmp, final)
+        _replace_file(tmp, final)
     except BaseException:
         with suppress(OSError):
             tmp.unlink()
         if save.restore is not None:
-            with suppress(Exception):
+            try:
                 save.restore()
+            except Exception as e:
+                warnings.warn(
+                    f"The save to {labels_path} failed, and the videos of the "
+                    f"labels could not be put back as they were ({e}). Some of "
+                    "them may refer to a file that no longer exists.",
+                    stacklevel=3,
+                )
         raise
     finally:
         _SAVE_TARGETS.pop(key, None)
     for video in moved:
         _repoint_video(video, save.path, labels_path)
+
+
+def _is_embedded_in(video: Video, path: Path) -> bool:
+    """Return whether a video's frames are embedded in the file at `path`.
+
+    Args:
+        video: A video, with an open backend or not.
+        path: A resolved path.
+    """
+    if not isinstance(video.filename, (str, Path)):
+        return False
+    backend = video.backend
+    if backend is None:
+        embedded = _is_embedded_video_metadata(video)
+    else:
+        inner = getattr(backend, "inner", backend)
+        embedded = type(inner) is HDF5Video and inner.has_embedded_images
+    return embedded and Path(sanitize_filename(video.filename)).resolve() == path
+
+
+def _videos_embedded_in_target(labels: Labels, labels_path: str | Path) -> list[Video]:
+    """Return the videos of `labels` whose frames are embedded in an existing target.
+
+    These are the videos a save over `labels_path` leaves out of date: they read
+    their frames from a file that the save replaces (see `_refresh_videos`).
+
+    Args:
+        labels: The labels about to be saved.
+        labels_path: The target of the save.
+
+    Returns:
+        The videos embedded in the file at `labels_path`, or an empty list if
+        there is no file there.
+    """
+    final = Path(labels_path)
+    if not final.is_file():
+        return []
+    target = final.resolve()
+    return [video for video in labels.videos if _is_embedded_in(video, target)]
+
+
+def _refresh_videos(
+    videos: list[Video], stale: list[Video], labels_path: str | Path
+) -> None:
+    """Point videos that were embedded in a replaced file at its new contents.
+
+    A video embedded in a labels file keeps how its frames are stored there: the
+    dataset, and which row holds which frame. When the file is saved over itself
+    the new file may store them differently (other rows for a frame selection,
+    another dataset number), and a video still reading with the old layout would
+    return the wrong frames without an error. Each such video takes over the
+    backend that a fresh load of the new file gives the video at its position.
+    The `Video` objects stay the same.
+
+    Args:
+        videos: The videos of the labels that were saved, in order.
+        stale: The videos that were embedded in the target before the save (see
+            `_videos_embedded_in_target`).
+        labels_path: The target of the save, now holding the new file.
+    """
+    still_listed = {id(video) for video in videos}
+    stale_ids = {id(video) for video in stale if id(video) in still_listed}
+    if not stale_ids:
+        return
+    target = Path(labels_path).resolve()
+    filename = labels_path.as_posix() if isinstance(labels_path, Path) else labels_path
+    for old, new in zip(videos, read_videos(filename)):
+        if id(old) in stale_ids and _is_embedded_in(new, target):
+            was_open = old.backend is not None
+            if was_open:
+                with suppress(Exception):
+                    old.backend.close()
+                old.backend, new.backend = new.backend, None
+            else:
+                new.close()
+            old.backend_metadata = new.backend_metadata
+            old._exists_cache.clear()
+        new.close()
 
 
 def _sync_to_disk(path: Path) -> None:
@@ -11933,6 +12111,7 @@ def _write_labels_lazy(
 
     # Write to a temporary file that replaces the target once it is complete, so
     # a save that fails partway leaves the previous file as it was.
+    stale_videos = _videos_embedded_in_target(labels, labels_path)
     with _atomic_save(labels_path) as save:
         _write_lazy_tables(
             save.path,
@@ -11949,6 +12128,7 @@ def _write_labels_lazy(
             image_format=image_format,
             image_quality=image_quality,
         )
+    _refresh_videos(labels.videos, stale_videos, labels_path)
 
 
 def _write_lazy_tables(
@@ -12364,9 +12544,14 @@ def write_labels(
 
     Notes:
         The file is written to a temporary file beside `labels_path` (named
-        `.tmp-<random>-<name>`) and renamed over it when it is complete, so a save
-        that fails or is cancelled leaves the previous file as it was. Replacing a
-        file therefore needs room for both copies until the save is done.
+        `.tmp-<random>` with the target's extensions) and renamed over it when it
+        is complete, so a save that fails or is cancelled leaves the previous file
+        as it was. Replacing a file therefore needs room for both copies until the
+        save is done.
+
+        When a package is saved over itself, the videos of `labels` that read
+        their frames from it are pointed at the new file's contents, since the
+        new file may store other frames, or the same frames in other places.
 
         Instance, frame and bounding box `metadata` is stored as columns of
         `/instances`, `/frames` and `/bboxes` (lazy labels write the instance and
@@ -12393,6 +12578,9 @@ def write_labels(
         raise ValueError(
             f"compression must be one of {_COMPRESSION_MODES}, got {compression!r}."
         )
+
+    # The labels as given: materializing lazy labels below copies their videos.
+    given_labels = labels
 
     # Fast path for lazy labels (avoids materializing frames/instances)
     # Supported for simple embed modes: None, False, "source"
@@ -12448,6 +12636,7 @@ def write_labels(
 
     # Write to a temporary file that replaces the target once it is complete, so
     # a save that fails partway leaves the previous file as it was.
+    stale_videos = _videos_embedded_in_target(given_labels, labels_path)
     with _atomic_save(labels_path) as save:
         _write_eager_tables(
             save,
@@ -12467,6 +12656,9 @@ def write_labels(
             image_format=image_format,
             image_quality=image_quality,
         )
+    # Videos of the given labels that read their frames from the file just
+    # replaced now read them from the new one.
+    _refresh_videos(given_labels.videos, stale_videos, labels_path)
 
 
 def _write_eager_tables(
