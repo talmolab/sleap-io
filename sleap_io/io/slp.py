@@ -260,18 +260,20 @@ def _label_image_file_is_legacy(slp_version: str, sources_v3: bool = False) -> b
     return version == "v2"
 
 
-def _remember_saved_layout(labels: Labels, legacy_format: bool) -> None:
-    """Record the layout labels were just saved in, as if loaded from that file.
+def _remember_saved_layout(labels: Labels, labels_path: str | Path) -> None:
+    """Record the format labels were just saved in, as if loaded from that file.
 
     The next save with `slp_version="auto"` then keeps the file's layout: labels
     saved in format 3.0 stay in format 3.0, and labels saved in the 2.x layout go
-    back to the content rule (see `resolve_slp_version`).
+    back to the content rule (see `resolve_slp_version`). `Labels.source_format_id`
+    reports it.
 
     Args:
         labels: The labels as given to the save.
-        legacy_format: Whether the 2.x layout was written.
+        labels_path: The file just written.
     """
-    labels._source_format_id = None if legacy_format else SLP_FORMAT_ID
+    with h5py.File(labels_path, "r") as f:
+        labels._source_format_id = _file_format_id(f)
 
 
 def _loaded_as_v3(labels: Labels) -> bool:
@@ -12601,7 +12603,7 @@ def _write_labels_lazy(
             image_quality=image_quality,
         )
     _refresh_videos(labels.videos, stale_videos, labels_path)
-    _remember_saved_layout(labels, legacy_format)
+    _remember_saved_layout(labels, labels_path)
 
 
 def _write_lazy_tables(
@@ -13147,7 +13149,7 @@ def write_labels(
     # Videos of the given labels that read their frames from the file just
     # replaced now read them from the new one.
     _refresh_videos(given_labels.videos, stale_videos, labels_path)
-    _remember_saved_layout(given_labels, legacy_format)
+    _remember_saved_layout(given_labels, labels_path)
 
 
 def _write_eager_tables(

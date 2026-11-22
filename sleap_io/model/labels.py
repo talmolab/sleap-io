@@ -552,6 +552,80 @@ class Labels:
         materialized_labels._source_format_id = getattr(self, "_source_format_id", None)
         return materialized_labels
 
+    @property
+    def source_format_id(self) -> float | None:
+        """The SLP `format_id` of the file the labels were loaded from or saved to.
+
+        `None` for labels built in memory and not yet saved, or loaded from another
+        format. Below 3.0, the labels hold the points of an older file as stored,
+        unless they were loaded with `clean_legacy_points=True` (see
+        `clean_legacy_points`).
+
+        It follows the labels through `copy`, `extract` (and so `split` and
+        `make_training_splits`) and `materialize`. `merge` keeps the value of the
+        labels merged into, whatever the other labels came from. New `Labels`
+        built from the frames of loaded labels start with `None`. A save sets it to
+        the format just written.
+        """
+        return getattr(self, "_source_format_id", None)
+
+    def clean_legacy_points(self) -> int:
+        """Clean up the points of labels loaded from an SLP file older than 3.0.
+
+        Does in memory what `load_slp(..., clean_legacy_points=True)` does on load:
+        hidden points lose their coordinates (the SLEAP GUI leaves the last
+        position on a node it hides) and visible points without coordinates become
+        hidden. Use it to get sleap-io 0.9's results for `is_empty`,
+        `clean(empty_instances=True)` and the exports, or before training on old
+        files, where a hidden point's stored position is not an estimate.
+
+        It does nothing, and returns 0, unless `source_format_id` is below 3.0:
+        labels loaded from (or last saved as) format 3.0, and labels built in
+        memory, are left as they are, since their hidden points with coordinates
+        are occluded estimates.
+
+        Two limits come with the 2.x layout. Labels from an old file that are saved
+        as format 3.0 keep their stale hidden positions, which then read as
+        occluded estimates for good, so clean up first if they are stale. And an
+        occluded estimate saved in the 2.x layout can't be told from a stale
+        position when the file is read back, so this clears it; save as format 3.0
+        to keep occluded estimates.
+
+        After a `merge`, every instance is cleaned or not by the value of the labels
+        merged into (see `source_format_id`).
+
+        Returns:
+            The number of points changed. For lazily loaded labels the point
+            tables are cleaned in place, so frames read afterwards are cleaned.
+        """
+        source = self.source_format_id
+        if source is None or source >= 3.0:
+            return 0
+        changed = 0
+        if self.is_lazy:
+            store = self._lazy_store
+            tables = [store.points_data, store.pred_points_data]
+            for rows in tables:
+                if rows is None or len(rows) == 0:
+                    continue
+                located = ~(np.isnan(rows["x"]) | np.isnan(rows["y"]))
+                visible = rows["visible"].astype(bool) & located
+                stale = ~visible & located
+                changed += int(np.count_nonzero((visible != rows["visible"]) | stale))
+                rows["visible"] = visible
+                rows["x"][stale] = np.nan
+                rows["y"][stale] = np.nan
+            return changed
+        for inst in self.instances:
+            points = inst.points
+            located = np.isfinite(points["xy"]).all(axis=1)
+            visible = points["visible"].astype(bool) & located
+            stale = ~visible & located
+            changed += int(np.count_nonzero((visible != points["visible"]) | stale))
+            points["visible"] = visible
+            points["xy"][stale] = np.nan
+        return changed
+
     def __attrs_post_init__(self):
         """Update metadata lists."""
         # Skip update for lazy Labels - metadata is already

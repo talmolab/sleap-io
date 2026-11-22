@@ -306,3 +306,52 @@ def test_all_hidden_old_instance_is_not_empty_without_the_clean_up(tmp_path):
     save_slp(labels, str(path), slp_version="v2")
     assert not load_slp(str(path))[0].instances[0].is_empty
     assert load_slp(str(path), clean_legacy_points=True)[0].instances[0].is_empty
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_clean_legacy_points_in_memory(tmp_path, slp_legacy_hidden_complete, lazy):
+    """`Labels.clean_legacy_points` matches the load option, only for old files."""
+    labels = load_slp(slp_legacy_hidden_complete, lazy=lazy)
+    assert labels.source_format_id is not None and labels.source_format_id < 3.0
+    reference = load_slp(slp_legacy_hidden_complete, clean_legacy_points=True)
+    copy = labels.copy()
+    split = labels.extract([0])
+    assert labels.clean_legacy_points() == 2  # One hidden user point, one pred.
+    assert labels.clean_legacy_points() == 0  # Already clean.
+    for got, want in zip(labels[0].instances, reference[0].instances):
+        np.testing.assert_array_equal(got.point_states, want.point_states)
+        np.testing.assert_array_equal(got.points["xy"], want.points["xy"])
+    # The mark follows copies and extracts.
+    assert copy.source_format_id == labels.source_format_id
+    assert copy.clean_legacy_points() == 2
+    assert split.clean_legacy_points() == 2
+
+    # Labels from a format 3.0 file, or built in memory, are left alone.
+    v3 = tmp_path / "v3.slp"
+    save_slp(load_slp(slp_legacy_hidden_complete), str(v3), slp_version="v3")
+    from_v3 = load_slp(str(v3), lazy=lazy)
+    assert from_v3.source_format_id == 3.0
+    assert from_v3.clean_legacy_points() == 0
+    assert from_v3[0].instances[0].point_states[1] == STATES.OCCLUDED
+    built = Labels(
+        [LabeledFrame(video=Video("v.mp4"), frame_idx=0, instances=[_instance()])]
+    )
+    built[0].instances[0].points["visible"][1] = False
+    assert built.source_format_id is None
+    assert built.clean_legacy_points() == 0
+
+
+def test_source_format_id_follows_saves(tmp_path):
+    """A save sets `source_format_id` to the format just written."""
+    inst = _instance()
+    inst.points["visible"][1] = False  # An occluded estimate.
+    labels = Labels([LabeledFrame(video=Video("v.mp4"), frame_idx=0, instances=[inst])])
+    save_slp(labels, str(tmp_path / "a.slp"))
+    assert labels.source_format_id < 3.0
+    save_slp(labels, str(tmp_path / "b.slp"), slp_version="v3")
+    assert labels.source_format_id == 3.0
+    # Saved in the 2.x layout, an occluded estimate reads back like a stale
+    # position, and the clean-up clears it; format 3.0 keeps it.
+    old = load_slp(str(tmp_path / "a.slp"))
+    assert old.clean_legacy_points() == 1
+    assert load_slp(str(tmp_path / "b.slp")).clean_legacy_points() == 0
