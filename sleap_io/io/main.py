@@ -288,6 +288,10 @@ def save_slp(
         over `filename` when it is complete, so a save that fails or is cancelled
         leaves the previous file as it was. Replacing a file needs room for both
         copies until the save is done.
+        A URL's credentials aren't saved: a video's URL, or the URL the labels came
+        from, is written with its password or token masked (`?token=***`). The labels
+        in memory keep the whole URL, but a video that needs its credentials won't open
+        from the saved file until it's given them again (`Video.replace_filename`).
     """
     from sleap_io.io import slp
 

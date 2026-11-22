@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
+from sleap_io.io._remote import _mask_url_credentials_deep
 from sleap_io.transform.core import Transform
 from sleap_io.transform.points import get_out_of_bounds_mask
 
@@ -290,7 +291,7 @@ def transform_embedded_video(
         # Build source video dict
         source_dict = {
             "backend": {
-                "filename": source_video.filename,
+                "filename": _mask_url_credentials_deep(source_video.filename),
                 "grayscale": source_video.grayscale,
             }
         }
@@ -337,7 +338,7 @@ def _update_videos_json(output_path: Path, videos: list["Video"]) -> None:
             if str(video.filename) == str(output_path):
                 backend_dict["filename"] = "."
             else:
-                backend_dict["filename"] = backend.filename
+                backend_dict["filename"] = _mask_url_credentials_deep(backend.filename)
 
         if hasattr(backend, "dataset") and backend.dataset:
             backend_dict["dataset"] = backend.dataset

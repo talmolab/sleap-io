@@ -16,6 +16,7 @@ import time
 import traceback
 import urllib.parse
 import warnings
+from collections import namedtuple
 from pathlib import Path
 
 import aiohttp
@@ -42,6 +43,7 @@ from sleap_io.io._gdrive import (
 from sleap_io.io._remote import (
     _CACHE_MARKER_NAME,
     _RETRY_BACKOFF_BASE,
+    _SENSITIVE_QUERY_PARAMS,
     RemoteIOError,
     _build_fsspec_filesystem,
     _filename_from_url,
@@ -52,6 +54,8 @@ from sleap_io.io._remote import (
     _identity_headers,
     _is_url,
     _mark_cache_dir,
+    _mask_url_credentials,
+    _mask_url_credentials_deep,
     _raise_remote,
     _redact_url,
     _redacted_cause_summary,
@@ -256,6 +260,199 @@ def test_identify_magic_empty_unknown():
 def test_identify_magic_ascii_no_comma_unknown():
     """ASCII without a comma is not csv."""
     assert _identify_magic(b"hello world\n") == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# _mask_url_credentials
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value, masked",
+    [
+        ("https://x.test/v.mp4?token=SECRET", "https://x.test/v.mp4?token=***"),
+        (
+            "https://x.test/v.mp4?a=1&access_token=SECRET&b=2",
+            "https://x.test/v.mp4?a=1&access_token=***&b=2",
+        ),
+        ("https://x.test/v.mp4?TOKEN=SECRET", "https://x.test/v.mp4?TOKEN=***"),
+        # A URL parser reads this name as `token`.
+        ("https://x.test/v.mp4?%74oken=SECRET", "https://x.test/v.mp4?%74oken=***"),
+        ("https://x.test/v.mp4?token=SEC/RET", "https://x.test/v.mp4?token=***"),
+        ("https://x.test/v.mp4?token=SEC%2FRET", "https://x.test/v.mp4?token=***"),
+        # A dot is where `Path.stem` and `splitext` would cut a JWT in two.
+        ("https://x.test/v.mp4?token=SEC.RET.X", "https://x.test/v.mp4?token=***"),
+        # What's around the token stays, even what a URL parser would rewrite.
+        (
+            "https://x.test/a b.mp4?name=a b&token=SECRET&c=%7E",
+            "https://x.test/a b.mp4?name=a b&token=***&c=%7E",
+        ),
+        (
+            "https://x.test/v.mp4?name=o'b&token=SECRET",
+            "https://x.test/v.mp4?name=o'b&token=***",
+        ),
+        # A whole URL runs to the next `&`, whatever is in the value.
+        ("https://x.test/v.mp4?token=SEC RET", "https://x.test/v.mp4?token=***"),
+        ("https://x.test/v.mp4?token=SEC'RET", "https://x.test/v.mp4?token=***"),
+        ("https://x.test/v.mp4?TOKEN=SEC RET", "https://x.test/v.mp4?TOKEN=***"),
+        ("https://x.test/v.mp4#token=SECRET", "https://x.test/v.mp4#token=***"),
+        ("https://x.test/v.mp4#a=1&token=SECRET", "https://x.test/v.mp4#a=1&token=***"),
+        ("https://x.test/v.mp4#/r?token=SECRET", "https://x.test/v.mp4#/r?token=***"),
+        ("https://x.test/v.mp4#token=SEC RET", "https://x.test/v.mp4#token=***"),
+        ("https://x.test/v.mp4#%74oken=SECRET", "https://x.test/v.mp4#%74oken=***"),
+        ("https://me:SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:SEC RET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:SECRET@x.test", "https://***:***@x.test"),
+        ("https://me:SE@CRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        # These aren't hosts, so what's in front of the `@` is a password.
+        (
+            "https://me:SECRET@host:notaport/v.mp4",
+            "https://***:***@host:notaport/v.mp4",
+        ),
+        (
+            "https://me:SEC/RET@host:notaport/v.mp4",
+            "https://***:***@host:notaport/v.mp4",
+        ),
+        ("https://me:SEC/RET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:SEC?RET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:SECRET@[::1]:8080/v.mp4", "https://***:***@[::1]:8080/v.mp4"),
+        (
+            "https://me:SECRET@x.test/v.mp4?token=SECRET#sig=SECRET",
+            "https://***:***@x.test/v.mp4?token=***#sig=***",
+        ),
+        ("gs://me:SECRET@bucket/v.mp4", "gs://***:***@bucket/v.mp4"),
+        ("gs://bucket/v.mp4?sig=SECRET", "gs://bucket/v.mp4?sig=***"),
+        (
+            "s3://bucket/v.mp4?x-amz-security-token=SECRET",
+            "s3://bucket/v.mp4?x-amz-security-token=***",
+        ),
+        ("az://container/v.mp4?sas=SECRET", "az://container/v.mp4?sas=***"),
+        # A URL that's been through `Path` has lost a slash, and still says it.
+        ("https:/x.test/0.png?token=SECRET", "https:/x.test/0.png?token=***"),
+        ("https:/me:SECRET@x.test/0.png", "https:/***:***@x.test/0.png"),
+        # A name cut from a URL no longer looks like one, and still says it.
+        ("v.mp4?token=SECRET", "v.mp4?token=***"),
+        ("v.mp4?TOKEN=SECRET", "v.mp4?TOKEN=***"),
+        ("/some/dir/v.mp4?a=1&token=SECRET", "/some/dir/v.mp4?a=1&token=***"),
+        ("v.mp4&token=SECRET", "v.mp4&token=***"),
+        ("v.mp4#token=SECRET", "v.mp4#token=***"),
+        # A URL inside another, or inside a line of text.
+        (
+            "https://proxy.test/?https://b.test/y.slp?token=SECRET",
+            "https://proxy.test/?https://b.test/y.slp?token=***",
+        ),
+        (
+            "sleap-track https://x.test/3.mp4?token=SECRET --batch-size 4",
+            "sleap-track https://x.test/3.mp4?token=*** --batch-size 4",
+        ),
+        (
+            "sleap-track https://me:SECRET@x.test/3.mp4 --batch-size 4",
+            "sleap-track https://***:***@x.test/3.mp4 --batch-size 4",
+        ),
+        ("{'filename': 'v.mp4?token=SECRET'}", "{'filename': 'v.mp4?token=***'}"),
+        ("Saw v.mp4?token=SECRET.", "Saw v.mp4?token=***."),
+    ],
+)
+def test_mask_url_credentials_masks_only_the_credential(value, masked):
+    """A credential is masked and every other character stays as it was."""
+    assert _mask_url_credentials(value) == masked
+    # Masking what's masked changes nothing, so a saved file can be saved again.
+    assert _mask_url_credentials(masked) == masked
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://x.test",
+        "HTTP://X.TEST/a b.mp4?x=1 2",
+        "https://x.test/a%20b.mp4?x=\u00e9#frag",
+        "https://x.test/v.mp4?a=b&c=d+e&f=%7E",
+        "https://x.test/v.mp4?token=***",
+        "https://x.test/v.mp4?token=",
+        "https://x.test/v.mp4?token",
+        "https://***:***@x.test/v.mp4",
+        # Close to a listed name isn't one.
+        "https://x.test/v.mp4?tokens=a&x_token=b&signature_version=c&sigma=d",
+        # An `@` in a path is not a password.
+        "https://cdn.test/npm/pkg@1.2.3/v.mp4",
+        "https://x.test:8080/a@b.mp4",
+        "http://[::1]/a@b.mp4",
+        "http://[::1]:8080/a@b.mp4?x=1",
+        "https://x.test/v.mp4 by me@example.org",
+        "gs://bucket/a b.mp4",
+        "s3://bucket/run@2/v=1/a.mp4",
+        "https://host:notaport/v.mp4",
+        "https://host:notaport/v.mp4?x=1",
+        "/Users/me/a b#1?%.mp4",
+        "/Users/me@corp/run=1/v.mp4",
+        "C:\\Users\\me\\b.mp4",
+        "tests/data/videos/centered_pair_low_quality.mp4",
+        "\u65e5\u672c\u8a9e.mp4",
+        "me@example.org",
+        "",
+    ],
+)
+def test_mask_url_credentials_leaves_the_rest_alone(value):
+    """A value with nothing to mask comes back byte for byte."""
+    assert _mask_url_credentials(value) == value
+
+
+def test_mask_url_credentials_keeps_what_redact_url_rewrites():
+    """A message can show a URL as it's parsed. A file has to keep it as it is."""
+    url = "https://x.test/a.mp4?a=b c&d=%7E"
+    assert _redact_url(url) != url
+    assert _mask_url_credentials(url) == url
+
+
+@pytest.mark.parametrize("name", sorted(_SENSITIVE_QUERY_PARAMS))
+def test_mask_url_credentials_covers_every_listed_param(name):
+    """Whatever is on the list is masked, in all the ways a value can quote it."""
+    for value in (
+        f"https://x.test/v.mp4?{name}=VALUE",
+        f"https://x.test/v.mp4?{name.upper()}=VALUE",
+        f"https://x.test/v.mp4?a=b&{name}=VA LUE",
+        f"https://x.test/v.mp4#{name}=VALUE",
+        f"v.mp4?{name}=VALUE",
+        f"Saw https://x.test/v.mp4?{name}=VALUE today.",
+    ):
+        assert "VA" not in _mask_url_credentials(value)
+
+
+def test_mask_url_credentials_takes_a_path():
+    """A filename can be a `Path`."""
+    assert _mask_url_credentials(Path("a/v.mp4")) == os.fspath(Path("a/v.mp4"))
+    assert _mask_url_credentials(Path("v.mp4?token=SECRET")) == "v.mp4?token=***"
+
+
+def test_mask_url_credentials_deep_masks_every_string():
+    """Every string is masked at any depth, keys too, and the input isn't touched."""
+    point = namedtuple("point", ["url", "n"])
+    value = {
+        "filename": "https://x.test/1.slp?token=SECRET",
+        "merge_history": [{"source_filename": "https://x.test/2.slp?sig=SECRET"}],
+        "pair": ("https://x.test/3.slp?token=SECRET", 3),
+        "point": point("https://x.test/4.slp?token=SECRET", 4),
+        "https://x.test/5.mp4?token=SECRET": [0, 0, 10, 10],
+        7: None,
+        "ok": True,
+        "ratio": 0.5,
+        "path": Path("a/b.mp4"),
+    }
+    before = repr(value)
+    assert _mask_url_credentials_deep(value) == {
+        "filename": "https://x.test/1.slp?token=***",
+        "merge_history": [{"source_filename": "https://x.test/2.slp?sig=***"}],
+        "pair": ("https://x.test/3.slp?token=***", 3),
+        "point": point("https://x.test/4.slp?token=***", 4),
+        "https://x.test/5.mp4?token=***": [0, 0, 10, 10],
+        7: None,
+        "ok": True,
+        "ratio": 0.5,
+        "path": Path("a/b.mp4"),
+    }
+    assert isinstance(_mask_url_credentials_deep(value)["point"], point)
+    assert repr(value) == before
 
 
 # ---------------------------------------------------------------------------
