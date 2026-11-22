@@ -257,9 +257,26 @@ def _label_image_file_is_legacy(slp_version: str, sources_v3: bool = False) -> b
     return version == "v2"
 
 
+def _remember_saved_layout(labels: Labels, legacy_format: bool) -> None:
+    """Record the layout labels were just saved in, as if loaded from that file.
+
+    The next save with `slp_version="auto"` then keeps the file's layout: labels
+    saved in format 3.0 stay in format 3.0, and labels saved in the 2.x layout go
+    back to the content rule (see `resolve_slp_version`).
+
+    Args:
+        labels: The labels as given to the save.
+        legacy_format: Whether the 2.x layout was written.
+    """
+    labels._source_format_id = None if legacy_format else SLP_FORMAT_ID
+
+
 def _loaded_as_v3(labels: Labels) -> bool:
     """Return whether labels were loaded from an SLP file in format 3.0 or newer."""
-    source = getattr(labels, "_source_format_id", None)
+    try:
+        source = labels._source_format_id
+    except AttributeError:  # Labels unpickled from an older sleap-io.
+        source = None
     return source is not None and source >= SLP_FORMAT_ID
 
 
@@ -338,6 +355,38 @@ def _v3_content(labels: Labels) -> list[str]:
     return reasons
 
 
+def check_v2_set(labels: Labels | Iterable[Labels], unlabeled_as: str = "error"):
+    """Refuse, before anything is written, labels the strict 2.x layout can't take.
+
+    `slp_version="v2"` refuses points marked as not labeled unless
+    `unlabeled_as="absent"`. For files written together, checking them all first
+    keeps a refused set from leaving some of its files written.
+
+    Args:
+        labels: The labels of one file or of every file written together.
+        unlabeled_as: `"error"` or `"absent"` (see `write_labels`).
+
+    Raises:
+        ValueError: If `unlabeled_as` is `"error"` and some point is marked as not
+            labeled.
+    """
+    if unlabeled_as != "error":
+        return
+    labels_list = [labels] if isinstance(labels, Labels) else list(labels)
+    n_unlabeled = 0
+    for lbls in labels_list:
+        if lbls.is_lazy:
+            store = lbls._lazy_store
+            rows_list = [store.points_data, store.pred_points_data]
+        else:
+            rows_list = [inst.points for inst in lbls.instances]
+        n_unlabeled += sum(
+            int(np.count_nonzero(~(rows["labeled"] | rows["visible"])))
+            for rows in rows_list
+        )
+    _refuse_unlabeled_points(n_unlabeled, "error")
+
+
 def resolve_slp_version(
     labels: Labels | Iterable[Labels],
     slp_version: str = "auto",
@@ -383,7 +432,21 @@ def resolve_slp_version(
     if get_v3_defaults():
         return "v3"
     labels_list = [labels] if isinstance(labels, Labels) else list(labels)
-    if any(_loaded_as_v3(lbls) for lbls in labels_list):
+    loaded_v3 = [_loaded_as_v3(lbls) for lbls in labels_list]
+    if loaded_v3 and all(loaded_v3):
+        return "v3"
+    if any(loaded_v3):
+        # Files written together share a layout, so the others change layout.
+        if warn:
+            warnings.warn(
+                "Saving these files in SLP format 3.0, which sleap-io < 0.10 and "
+                "SLEAP releases that read through it can't open, because some of "
+                "them come from format 3.0 files and files written together share "
+                'one layout. Pass slp_version="v2" (--slp-version v2) to write the '
+                "older layout instead.",
+                SlpLayoutWarning,
+                stacklevel=_caller_stacklevel(),
+            )
         return "v3"
     reasons: list[str] = []
     for lbls in labels_list:
@@ -397,9 +460,9 @@ def resolve_slp_version(
             "Saving in SLP format 3.0, which sleap-io < 0.10 and SLEAP releases that "
             "read through it can't open, because the older layout can't store: "
             + "; ".join(reasons)
-            + '. Pass slp_version="v3" to choose format 3.0 without this warning, '
-            'or slp_version="v2" to write the older layout (see its notes on what '
-            "it drops).",
+            + '. Pass slp_version="v3" (--slp-version v3) to choose format 3.0 '
+            'without this warning, or slp_version="v2" (--slp-version v2) to write '
+            "the older layout, which drops that content or refuses it.",
             SlpLayoutWarning,
             stacklevel=_caller_stacklevel(),
         )
@@ -412,12 +475,19 @@ def _caller_stacklevel() -> int:
     A warning raised with it names the user's own call, whatever route through
     sleap-io the save took.
     """
-    package = str(Path(__file__).resolve().parents[1])
+    # sleap-io's own frames, and those of the command-line framework, so that a
+    # warning from a command points at the command rather than inside click.
+    skip = [str(Path(__file__).resolve().parents[1]) + os.sep]
+    for name in ("click", "rich_click"):
+        file = getattr(sys.modules.get(name), "__file__", None)
+        if file:
+            skip.append(str(Path(file).resolve().parent) + os.sep)
+    skip = tuple(skip)
     frame = sys._getframe(1)
     level = 1
     while frame is not None and str(
         Path(frame.f_code.co_filename).resolve()
-    ).startswith(package):
+    ).startswith(skip):
         frame = frame.f_back
         level += 1
     return level
@@ -12441,6 +12511,7 @@ def _write_labels_lazy(
             image_quality=image_quality,
         )
     _refresh_videos(labels.videos, stale_videos, labels_path)
+    _remember_saved_layout(labels, legacy_format)
 
 
 def _write_lazy_tables(
@@ -12986,6 +13057,7 @@ def write_labels(
     # Videos of the given labels that read their frames from the file just
     # replaced now read them from the new one.
     _refresh_videos(given_labels.videos, stale_videos, labels_path)
+    _remember_saved_layout(given_labels, legacy_format)
 
 
 def _write_eager_tables(

@@ -549,7 +549,7 @@ class Labels:
         materialized_labels._carried_columns = self._lazy_store.column_carry(
             materialized, replaced=copied_rois
         )
-        materialized_labels._source_format_id = self._source_format_id
+        materialized_labels._source_format_id = getattr(self, "_source_format_id", None)
         return materialized_labels
 
     def __attrs_post_init__(self):
@@ -1008,7 +1008,7 @@ class Labels:
                 categories=new_categories,
                 lazy_store=new_store,
             )
-            labels_copy._source_format_id = self._source_format_id
+            labels_copy._source_format_id = getattr(self, "_source_format_id", None)
         else:
             # __getstate__ excludes _label_image_file (h5py can't be deepcopied)
             labels_copy = deepcopy(self)
@@ -3282,7 +3282,7 @@ class Labels:
         # the extracted labels drops them with a warning instead of silently.
         labels._carried_columns = self._carried_columns
         # A subset of a format 3.0 file is saved in format 3.0 too.
-        labels._source_format_id = self._source_format_id
+        labels._source_format_id = getattr(self, "_source_format_id", None)
 
         return labels
 

@@ -2560,7 +2560,7 @@ def _infer_output_format(path: Path) -> str | None:
 
 # The options of every command that writes an SLP file, so that each can write what
 # `sio convert` can. A test walks the command list and fails when a command that
-# writes SLP files lacks them (see `tests/io/test_cli_slp_save_options.py`).
+# writes SLP files lacks them (see `tests/io/test_slp_version.py`).
 SLP_SAVE_OPTION_NAMES = (
     "slp_version",
     "legacy_format",
@@ -2669,6 +2669,13 @@ def _slp_save_kwargs(
             "--unlabeled-as only applies with --slp-version v2 or --legacy-format "
             "(format 3.0 stores points marked as not labeled)."
         )
+    # Check the frame encoding now, before a command does any slow work.
+    from sleap_io.io.slp import _check_embed_image_format
+
+    try:
+        _check_embed_image_format(image_format, image_quality)
+    except ValueError as e:
+        raise click.ClickException(str(e).replace("image_", "--image-"))
     kwargs: dict[str, Any] = {}
     for name, value in (
         ("unlabeled_as", unlabeled_as),
@@ -2710,11 +2717,14 @@ def _resolve_set_layout(slp_save: dict[str, Any], labels_list: list[Labels]) -> 
             `slp_version` is replaced by the layout all the files get.
         labels_list: The labels of every SLP file the command writes.
     """
-    from sleap_io.io.slp import resolve_slp_version
+    from sleap_io.io.slp import check_v2_set, resolve_slp_version
 
     slp_save["slp_version"] = resolve_slp_version(
         labels_list, slp_save.get("slp_version", "auto")
     )
+    # Refuse a strict 2.x set before any of its files is written.
+    if slp_save["slp_version"] == "v2":
+        check_v2_set(labels_list, slp_save.get("unlabeled_as", "error"))
 
 
 @cli.command()
@@ -8851,6 +8861,7 @@ def transform(
             no_audio=no_audio,
             progress_callback=progress_callback,
             dry_run=False,
+            save_kwargs=slp_save,
         )
 
     # Save the transformed SLP

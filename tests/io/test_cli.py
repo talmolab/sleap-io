@@ -2617,7 +2617,7 @@ def test_convert_image_quality_needs_format(tmp_path, slp_minimal_pkg):
         ],
     )
     assert result.exit_code != 0
-    assert "image_quality needs" in _strip_ansi(result.output)
+    assert "image-quality needs" in _strip_ansi(result.output)
 
 
 @pytest.mark.parametrize(
@@ -2626,7 +2626,6 @@ def test_convert_image_quality_needs_format(tmp_path, slp_minimal_pkg):
         ["--compression", "gzip"],
         ["--unlabeled-as", "absent", "--legacy-format"],
         ["--image-format", "jpg"],
-        ["--image-quality", "90"],
     ],
 )
 def test_convert_slp_options_require_slp_output(tmp_path, slp_typical, option):

@@ -426,3 +426,104 @@ def test_command_option_errors(tmp_path):
         cli, ["convert", str(src), "-o", str(out), "--image-format", "jpeg"]
     )
     assert result.exit_code == 0, result.output
+
+
+# --- Review follow-ups ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("version, v3", [("auto", False), ("v3", True)])
+def test_options_reach_the_save_of_more_commands(
+    tmp_path, slp_minimal_pkg, version, v3
+):
+    """`embed`, `unembed`, `split` and `transform` (embedded) save as asked."""
+    plain = tmp_path / "plain.slp"
+    save_slp(_labels(10), str(plain))
+    outputs = {
+        "embed": (
+            ["embed", slp_minimal_pkg, "-o", str(tmp_path / "e.pkg.slp")],
+            tmp_path / "e.pkg.slp",
+        ),
+        "unembed": (
+            ["unembed", slp_minimal_pkg, "-o", str(tmp_path / "u.slp")],
+            tmp_path / "u.slp",
+        ),
+        "split": (
+            ["split", str(plain), "-o", str(tmp_path / "s"), "--seed", "0"],
+            tmp_path / "s" / "train.slp",
+        ),
+        "transform": (
+            [
+                "transform",
+                slp_minimal_pkg,
+                "--scale",
+                "0.5",
+                "-o",
+                str(tmp_path / "t.pkg.slp"),
+            ],
+            tmp_path / "t.pkg.slp",
+        ),
+    }
+    for name, (args, out) in outputs.items():
+        result = CliRunner().invoke(
+            cli, [*args, "--slp-version", version, "--compression", "gzip"]
+        )
+        assert result.exit_code == 0, (name, result.output)
+        assert _is_v3(out) is v3, name
+        with h5py.File(out, "r") as f:
+            table = f["points/x"] if v3 else f["points"]
+            assert table.compression == "gzip", name
+
+
+def test_a_save_sets_the_layout_the_next_save_keeps(tmp_path):
+    """After a save, the next default save keeps the layout just written."""
+    path = tmp_path / "labels.slp"
+    labels = _labels()
+    save_slp(labels, str(path), slp_version="v3")
+    save_slp(labels, str(path))
+    assert _is_v3(path)
+
+    labels = load_slp(str(path))
+    save_slp(labels, str(path), slp_version="v2")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        save_slp(labels, str(path))
+    assert not _is_v3(path)
+
+
+def test_a_refused_2x_set_writes_nothing(tmp_path):
+    """A strict 2.x set that one file can't fit is refused before any is written."""
+    labels_set = LabelsSet({"train": _labels(), "val": _with_unlabeled(_labels())})
+    with pytest.raises(ValueError, match="unlabeled"):
+        labels_set.save(tmp_path / "out", embed=False, slp_version="v2")
+    assert not (tmp_path / "out" / "train.slp").exists()
+
+    src = tmp_path / "labels.slp"
+    labels = _labels(10)
+    for lf in labels:
+        _with_unlabeled(Labels([lf]))
+    save_slp(labels, str(src), slp_version="v3")
+    result = CliRunner().invoke(
+        cli, ["split", str(src), "-o", str(tmp_path / "s"), "--slp-version", "v2"]
+    )
+    assert result.exit_code != 0
+    assert not (tmp_path / "s" / "train.slp").exists()
+
+
+def test_a_mixed_set_warns(tmp_path):
+    """A set where only some labels come from format 3.0 files says so."""
+    v3_file = tmp_path / "v3.slp"
+    save_slp(_labels(), str(v3_file), slp_version="v3")
+    with pytest.warns(SlpLayoutWarning, match="come from format 3.0 files"):
+        assert resolve_slp_version([load_slp(str(v3_file)), _labels()]) == "v3"
+
+
+def test_bad_image_quality_is_refused_before_work(tmp_path):
+    """`--image-quality` without a format is refused before the command runs."""
+    src = tmp_path / "labels.slp"
+    save_slp(_labels(), str(src))
+    result = CliRunner().invoke(
+        cli, ["fix", str(src), "-o", str(tmp_path / "o.slp"), "--image-quality", "5"]
+    )
+    assert result.exit_code != 0
+    assert "--image-quality" in result.output
+    assert not (tmp_path / "o.slp").exists()

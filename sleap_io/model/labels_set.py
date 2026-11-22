@@ -186,7 +186,7 @@ class LabelsSet:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         if format == "slp":
-            from sleap_io.io.slp import resolve_slp_version
+            from sleap_io.io.slp import check_v2_set, resolve_slp_version
 
             slp_kwargs = dict(kwargs)
             # One layout for the whole set, decided (and warned about) once.
@@ -195,6 +195,11 @@ class LabelsSet:
                 slp_kwargs.get("slp_version", "auto"),
                 legacy_format=slp_kwargs.pop("legacy_format", False),
             )
+            # Refuse a strict 2.x set before any of its files is written.
+            if slp_kwargs["slp_version"] == "v2":
+                check_v2_set(
+                    list(self.values()), slp_kwargs.get("unlabeled_as", "error")
+                )
             for name, labels in self.items():
                 if embed:
                     filename = f"{name}.pkg.slp"

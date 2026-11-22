@@ -59,6 +59,9 @@ def get_v3_defaults() -> bool:
 def v3_defaults(enabled: bool = True) -> Iterator[None]:
     """Turn the format 3.0 defaults on (or off) within a `with` block.
 
+    The setting is process-wide, not per thread: other threads see it while the
+    block runs.
+
     Args:
         enabled: Whether the defaults are on inside the block.
 
