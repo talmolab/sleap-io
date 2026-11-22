@@ -61,6 +61,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EAGER_IMPORT: "1"  # Force eager imports for docs introspection
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           # Fetch the latest gh-pages state to reduce conflicts
           git fetch origin gh-pages --depth=1 || true
@@ -69,8 +71,7 @@ jobs:
           # "prerelease", never "latest". A stable release gets "latest" only if
           # no newer stable version is already published (so a patch release of
           # an older line, published later, doesn't take over the docs).
-          TAG="${{ github.event.release.tag_name }}"
-          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+          if [ "$PRERELEASE" = "true" ]; then
             ALIAS="prerelease"
           else
             git show origin/gh-pages:versions.json > /tmp/versions.json 2>/dev/null || echo "[]" > /tmp/versions.json
@@ -88,7 +89,7 @@ jobs:
           # Push with retry logic to handle race conditions
           for i in {1..3}; do
             if git push origin gh-pages; then
-              echo "Successfully pushed documentation for ${{ github.event.release.tag_name }}"
+              echo "Successfully pushed documentation for $TAG"
               break
             else
               echo "Push failed (attempt $i/3)"

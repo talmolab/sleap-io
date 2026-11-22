@@ -2956,3 +2956,21 @@ def test_hdf5_video_keeps_its_dataset_open(tmp_path):
     closed = HDF5Video(str(path), dataset="frames", keep_open=False)
     np.testing.assert_array_equal(closed.get_frame(2), frames[2])
     assert closed._open_dataset is None and closed._open_reader is None
+
+
+def test_hdf5_video_chunk_cache_fits_a_few_chunks(tmp_path):
+    """The kept-open dataset's chunk cache holds a few chunks, within bounds."""
+    path = tmp_path / "frames.h5"
+    frames = np.zeros((40, 64, 64, 1), dtype=np.uint8)
+    with h5py.File(path, "w") as f:
+        f.create_dataset("a", data=frames, chunks=(8, 64, 64, 1), compression="gzip")
+        f.create_dataset("b", data=frames)  # Contiguous: no cache needed.
+    video = HDF5Video(str(path), dataset="a", keep_open=True)
+    video.get_frame(0)
+    _, nbytes, _ = video._open_dataset.id.get_access_plist().get_chunk_cache()
+    assert nbytes == max(4 * 8 * 64 * 64, 1 << 20)
+    # A changed dataset name is followed.
+    video.dataset = "b"
+    video.get_frame(1)
+    assert video._open_dataset.name == "/b"
+    video.close()

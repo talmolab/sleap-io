@@ -1548,31 +1548,59 @@ class HDF5Video(VideoBackend):
         state["_open_dataset"] = None
         return state
 
-    # Chunk cache of the kept-open reader, in bytes. HDF5's default (1 MB) holds
-    # less than one chunk of many embedded-frame datasets, so each frame read
-    # would inflate a whole compressed chunk again.
-    _READER_CHUNK_CACHE_BYTES = 64 * 1024 * 1024
+    # Chunk cache of the kept-open frame dataset: room for a few chunks, within
+    # bounds. HDF5's default (1 MB) can hold less than one chunk of an embedded
+    # frame dataset, so each frame read would inflate a whole chunk again.
+    _CHUNK_CACHE_CHUNKS = 4
+    _CHUNK_CACHE_MIN_BYTES = 1 << 20
+    _CHUNK_CACHE_MAX_BYTES = 64 << 20
+
+    def _open_cached_dataset(self, f: h5py.File) -> h5py.Dataset:
+        """Open the frame dataset with a chunk cache sized for a few of its chunks.
+
+        The cache is set on the dataset, not the file, so it holds whether or not
+        the file is open elsewhere in the process, and costs memory only for
+        chunked datasets: `_CHUNK_CACHE_CHUNKS` chunks, between 1 and 64 MB.
+        """
+        ds = f[self.dataset]
+        if ds.chunks is None:
+            return ds
+        chunk_bytes = int(np.prod(ds.chunks)) * ds.dtype.itemsize
+        name = ds.name
+        # HDF5 shares one open dataset between handles, cache included, so the
+        # handle used to read the chunk shape must be closed before reopening.
+        del ds
+        nbytes = min(
+            max(self._CHUNK_CACHE_CHUNKS * chunk_bytes, self._CHUNK_CACHE_MIN_BYTES),
+            self._CHUNK_CACHE_MAX_BYTES,
+        )
+        dapl = h5py.h5p.create(h5py.h5p.DATASET_ACCESS)
+        dapl.set_chunk_cache(521, nbytes, 0.75)
+        return h5py.Dataset(h5py.h5d.open(f.id, name.encode(), dapl=dapl))
 
     def _frame_dataset(self) -> tuple[h5py.Dataset, h5py.File | None]:
         """Return the frame dataset to read from, and a file the caller must close.
 
         With `keep_open`, the file and its dataset stay open between reads, so
-        HDF5's chunk cache (per open dataset) is reused: reading consecutive
-        frames of a chunked, compressed dataset then inflates each chunk once
-        instead of once per frame. Otherwise the file is opened for this read and
-        returned for the caller to close.
+        HDF5's chunk cache (per open dataset, see `_open_cached_dataset`) is
+        reused: reading consecutive frames of a chunked, compressed dataset then
+        inflates each chunk once instead of once per frame. Otherwise the file is
+        opened for this read and returned for the caller to close.
         """
         if not self.keep_open:
             f = self._open_h5()
             return f[self.dataset], f
         if self._open_reader is None:
             self._open_dataset = None
-            self._open_reader = self._open_h5(
-                rdcc_nbytes=self._READER_CHUNK_CACHE_BYTES
-            )
-        if self._open_dataset is None or not self._open_dataset.id.valid:
-            self._open_dataset = self._open_reader[self.dataset]
-        return self._open_dataset, None
+            self._open_reader = self._open_h5()
+        ds = self._open_dataset
+        if (
+            ds is None
+            or not ds.id.valid
+            or ds.name.lstrip("/") != str(self.dataset).lstrip("/")
+        ):
+            ds = self._open_dataset = self._open_cached_dataset(self._open_reader)
+        return ds, None
 
     def __attrs_post_init__(self):
         """Auto-detect dataset and frame map heuristically."""
