@@ -9,6 +9,7 @@ together.
 from __future__ import annotations
 
 import os
+import re
 import warnings
 
 import click
@@ -37,6 +38,13 @@ from sleap_io.io.slp import (
     resolve_slp_version,
 )
 from sleap_io.model.label_image import UserLabelImage
+
+
+def _plain(output: str) -> str:
+    """Return command output without colours, box lines or line wrapping."""
+    output = re.sub(r"\x1b\[[0-9;]*m", "", output)
+    output = re.sub(r"[│╭╮╰╯─]", " ", output)
+    return " ".join(output.split())
 
 
 def _format_id(path) -> float:
@@ -419,7 +427,7 @@ def test_command_option_errors(tmp_path):
     ):
         result = CliRunner().invoke(cli, ["convert", str(src), "-o", str(out), *args])
         assert result.exit_code != 0
-        assert message in result.output
+        assert message in _plain(result.output)
         assert not os.path.exists(out)
     # `jpeg` is accepted, as in Python.
     result = CliRunner().invoke(
@@ -525,5 +533,5 @@ def test_bad_image_quality_is_refused_before_work(tmp_path):
         cli, ["fix", str(src), "-o", str(tmp_path / "o.slp"), "--image-quality", "5"]
     )
     assert result.exit_code != 0
-    assert "--image-quality" in result.output
+    assert "--image-quality" in _plain(result.output)
     assert not (tmp_path / "o.slp").exists()
