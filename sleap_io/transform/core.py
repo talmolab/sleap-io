@@ -115,9 +115,12 @@ class Transform:
         """Compute combined 3x3 affine transformation matrix.
 
         The transformation matrix can be used to transform homogeneous coordinates:
-            [new_x]   [a  b  tx] [old_x]
-            [new_y] = [c  d  ty] [old_y]
-            [  1  ]   [0  0   1] [  1  ]
+
+        ```
+        [new_x]   [a  b  tx] [old_x]
+        [new_y] = [c  d  ty] [old_y]
+        [  1  ]   [0  0   1] [  1  ]
+        ```
 
         Args:
             input_size: Input (width, height) in pixels.

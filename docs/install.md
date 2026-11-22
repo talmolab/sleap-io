@@ -2,6 +2,8 @@
 
 sleap-io can be used as a CLI tool, a Python library, or a dependency of another package. Choose the installation method that best fits your use case.
 
+Upgrading from 0.9? Files keep working both ways by default: see [Upgrading to 0.10](upgrading.md) for what changed and which versions work together.
+
 ---
 
 ## Quick Start

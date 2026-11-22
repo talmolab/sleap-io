@@ -151,6 +151,7 @@ copyright: >
 nav:
   - Overview: index.md
   - Installation: install.md
+  - Upgrading to 0.10: upgrading.md
   - Changelog: changelog.md
   - Releases: https://github.com/talmolab/sleap-io/releases
   - Guides:
