@@ -3739,7 +3739,7 @@
 <tr>
 <td>Loading a file older than 3.0</td>
 <td>Points as stored: hidden points keep their coordinates, states unchanged</td>
-<td><code>load_slp(..., clean_legacy_points=True)</code></td>
+<td><code>load_slp(..., clean_legacy_points=True)</code>, or <code>labels.clean_legacy_points()</code> on labels already loaded</td>
 <td>Hidden points lose their (stale) coordinates; visible points without coordinates become hidden. See <a href="../formats/slp/#files-before-30">Files before 3.0</a>.</td>
 </tr>
 <tr>
@@ -3779,7 +3779,7 @@
 <h2 id="changes-that-remain">Changes that remain<a class="headerlink" href="#changes-that-remain" title="Permanent link">&para;</a></h2>
 <p>These hold whatever you opt in to. Only the last one can raise an error.</p>
 <ul>
-<li><strong>Hidden points with coordinates are occluded estimates.</strong> The SLEAP GUI leaves the last position on a node it hides, and old files load with that position. sleap-io 0.10 treats a hidden point with coordinates as an occluded estimate, so an instance whose points are all hidden that way is not <code>is_empty</code>, <code>Labels.clean(empty_instances=True)</code> keeps it, and the COCO and Ultralytics exports write those coordinates as occluded keypoints. <code>Instance.numpy()</code> still returns NaN for hidden points, as before. Load with <code>clean_legacy_points=True</code> to get 0.9's results.</li>
+<li><strong>Hidden points with coordinates are occluded estimates.</strong> The SLEAP GUI leaves the last position on a node it hides, and old files load with that position. sleap-io 0.10 treats a hidden point with coordinates as an occluded estimate, so an instance whose points are all hidden that way is not <code>is_empty</code>, <code>Labels.clean(empty_instances=True)</code> keeps it, and the COCO and Ultralytics exports write those coordinates as occluded keypoints. <code>Instance.numpy()</code> still returns NaN for hidden points, as before. Load with <code>clean_legacy_points=True</code>, or call <code>labels.clean_legacy_points()</code>, to get 0.9's results. In the 2.x layout an occluded estimate can't be told from a stale position, so save as format 3.0 to keep occluded estimates.</li>
 <li><strong><code>is_empty</code> and <code>Labels.update_from_numpy</code>.</strong> An instance is empty when no labeled point has a location. <code>Labels.update_from_numpy</code> marks finite coordinates visible and labeled (in 0.9 a finite value left a hidden point hidden), and NaN hides a point that was visible (in 0.9 NaN left the point unchanged).</li>
 <li><strong>A lazily loaded <code>numpy()</code> starts at frame 0,</strong> as an eagerly loaded one does. In 0.9 a lazy <code>numpy()</code> started at the first labeled frame, so code that indexed it shifts.</li>
 <li><strong>The <code>complete</code> point field is now called <code>verified</code>.</strong> <code>points["complete"]</code> (on arrays, single points and rows of an instance) still works, with a <code>DeprecationWarning</code>. The dictionary codec (<code>to_dict</code>, layout version 1.1.0) names the key <code>verified</code>, with no alias, and keeps hidden points' coordinates; the "points" dataframe has a new <code>labeled</code> column, and Analysis HDF5 files gain a <code>point_labeled</code> dataset.</li>
