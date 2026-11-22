@@ -395,7 +395,15 @@ JPEG decodes several times faster than PNG and is smaller, which matters when
 training reads embedded frames at random. PNG stays lossless.
 
 The CLI exposes the same options as `--image-format` and `--image-quality` on
-`sio embed` and `sio convert`.
+every command that writes an SLP file (see [SLP save options](../cli.md#slp-save-options)).
+
+!!! tip "Keying frames of a package"
+    Every embedded video of a package has the package as its `filename`, so a
+    video's file name doesn't tell the videos of one package apart, and
+    `(video.filename, frame_idx)` can name two different frames. Key frames by the
+    video's position instead, `(labels.videos.index(lf.video), lf.frame_idx)`, or by
+    the `Video` object itself. A video's original file, when recorded, is
+    `video.source_video.filename`.
 
 ### Frame Selection Modes
 
