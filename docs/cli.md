@@ -604,8 +604,8 @@ sio convert spots.csv -o labels.slp --from trackmate
 | `--compression` | Compress the SLP table columns: `gzip` or `lzf` (default: uncompressed) (SLP output only) |
 | `--image-format` | Image format for embedded frames: `png`, `jpg` (or `jpeg`) or `hdf5` (default: keep PNG/JPEG sources, PNG otherwise) (SLP output only) |
 | `--image-quality` | JPEG quality (0-100) with `--image-format jpg`, or PNG compression level (0-9) with `--image-format png` (SLP output only) |
-| `--visibility-encoding` | How to read keypoint visibility codes: `auto` (default), `ternary` or `binary` (coco and ultralytics input only) |
-| `--v0-as` | How to read `v=0` keypoints: `unlabeled` or `absent` (coco and ultralytics input only) |
+| `--visibility-encoding` | How to read keypoint visibility codes: `legacy` (default: `v=0` hidden, any other code visible, as sleap-io 0.9 read them), `ternary`, `binary` or `auto` (the default with `--v0-as` or `SLEAP_IO_V3_DEFAULTS=1`) (coco and ultralytics input only) |
+| `--v0-as` | How to read `v=0` keypoints with the ternary or binary encoding: `unlabeled` or `absent` (coco and ultralytics input only) |
 | `--csv-format` | CSV output format: `sleap`, `dlc`, `points`, `instances`, `frames` |
 | `--scorer` | Scorer name for DLC CSV output (default: `sleap-io`) |
 | `--save-metadata` | Save JSON metadata file for CSV round-trip support |
@@ -658,14 +658,14 @@ sio convert annotations.json -o labels.slp --from coco \
     --coco-category-as-track --coco-segmentation roi
 ```
 
-COCO and Ultralytics keypoints carry a visibility code per point. `--visibility-encoding` and `--v0-as` set how those codes are read (see [Keypoint visibility](formats/coco.md#keypoint-visibility)). `auto` detects binary files, but CrowdPose and other binary datasets are safer to read with an explicit `binary`:
+COCO and Ultralytics keypoints carry a visibility code per point. By default they are read as sleap-io 0.9 read them (`v=0` hidden, any other code visible), which keeps the output in the SLP 2.x layout. `--visibility-encoding` and `--v0-as` choose another reading (see [Keypoint visibility](formats/coco.md#keypoint-visibility)). `auto` detects binary files, but CrowdPose and other binary datasets are safer to read with an explicit `binary`:
 
 ```bash
+# COCO's own reading: v=0 unlabeled, v=1 occluded (written in SLP format 3.0)
+sio convert annotations.json -o labels.slp --from coco --visibility-encoding auto
+
 # CrowdPose uses binary visibility (0/1)
 sio convert crowdpose_train.json -o labels.slp --from coco --visibility-encoding binary
-
-# Pre-0.10 reading: v=0 keypoints are hidden points, not unlabeled ones
-sio convert annotations.json -o labels.slp --from coco --v0-as absent
 ```
 
 **Ambiguous extensions** (`.json`, `.h5`) require explicit `--from`:

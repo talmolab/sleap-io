@@ -2771,11 +2771,14 @@ def _resolve_set_layout(slp_save: dict[str, Any], labels_list: list[Labels]) -> 
 @click.option(
     "--visibility-encoding",
     "visibility_encoding",
-    type=click.Choice(["auto", "ternary", "binary"]),
+    type=click.Choice(["auto", "ternary", "binary", "legacy"]),
     default=None,
     help=(
-        "How to read keypoint visibility codes: auto (the default), ternary "
-        "(0/1/2) or binary (0/1, e.g. CrowdPose). coco and ultralytics input only."
+        "How to read keypoint visibility codes: legacy (the default: v=0 hidden, "
+        "any other code visible, as sleap-io < 0.10 read them), ternary (0/1/2: "
+        "v=0 unlabeled, v=1 occluded), binary (0/1, e.g. CrowdPose) or auto "
+        "(ternary or binary from the codes; the default with --v0-as or "
+        "SLEAP_IO_V3_DEFAULTS=1). coco and ultralytics input only."
     ),
 )
 @click.option(

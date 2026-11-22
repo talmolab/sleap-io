@@ -1367,6 +1367,7 @@ def test_is_empty_cases():
 
 
 @pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+@pytest.mark.usefixtures("v3_defaults")
 def test_replace_skeleton_unmapped(cls):
     """Nodes without a source point become unlabeled, or absent if asked."""
     inst = cls.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=Skeleton(["A", "B"]))
@@ -1382,6 +1383,7 @@ def test_replace_skeleton_unmapped(cls):
 
 
 @pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+@pytest.mark.usefixtures("v3_defaults")
 def test_update_skeleton_unmapped(cls):
     """Nodes added to the skeleton become unlabeled, or absent if asked."""
     skel = Skeleton(["A", "B"])

@@ -263,10 +263,10 @@ new_skeleton = sio.Skeleton(["HEAD", "BODY", "TAIL"])
 labels.replace_skeleton(new_skeleton)
 ```
 
-Nodes of the new skeleton that no old node maps to become unlabeled by default. Pass `unmapped="absent"` to mark them as labeled but hidden with no location instead (see [Changing the skeleton](poses.md#changing-the-skeleton)):
+Nodes of the new skeleton that no old node maps to become hidden with no location by default, as in sleap-io 0.9. Pass `unmapped="unlabeled"` to mark them as unlabeled instead, which only SLP format 3.0 stores (see [Changing the skeleton](poses.md#changing-the-skeleton)):
 
 ```python
-labels.replace_skeleton(new_skeleton, unmapped="absent")
+labels.replace_skeleton(new_skeleton, unmapped="unlabeled")
 ```
 
 **Adding spatial annotations** to a frame by appending to its annotation lists. `LabeledFrame.append()` dispatches by type, routing each annotation into the correct list (`instances`, `centroids`, `bboxes`, `masks`, `label_images`, or `rois`):

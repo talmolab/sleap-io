@@ -1161,16 +1161,22 @@ point_dtype = np.dtype([
 predicted_point_dtype = np.dtype(point_dtype.descr + [("score", "f8")])
 ```
 
-They are cleaned up when read, so that they train exactly as before:
+They load with their points as stored, so an old file loads and saves back with
+the same points: every point is labeled, `complete` is read as `verified`, hidden
+points keep any coordinates they hold, and point states are not changed.
+`Instance.numpy()` returns NaN for hidden points, as in sleap-io 0.9.
 
-* every point is labeled, and `complete` is read as `verified`;
+An optional clean-up, `load_slp(..., clean_legacy_points=True)` (or the format
+3.0 defaults, `sio.set_v3_defaults(True)` or `SLEAP_IO_V3_DEFAULTS=1`), changes
+two things:
+
 * **hidden points lose their coordinates** (NaN). The SLEAP GUI keeps stale
   coordinates on hidden nodes, and `complete` can't tell them apart because the
-  hide toggle sets it. Un-hiding a node of an old project therefore no longer
+  hide toggle sets it. Un-hiding a node of a cleaned project therefore no longer
   restores its previous position;
 * **visible points with NaN coordinates become hidden.** This changes old
   prediction files: `n_visible`, `is_empty`, `remove_empty_instances` and the
-  dictionary and dataframe exports now count these points as hidden.
+  dictionary and dataframe exports then count these points as hidden.
 
 ### Which layout a save writes
 
@@ -1235,9 +1241,19 @@ Content the 2.x layout can't store is handled as follows:
 
 **The format 3.0 defaults.** `sio.set_v3_defaults(True)`, the context manager
 `with sio.v3_defaults(): ...`, or the environment variable
-`SLEAP_IO_V3_DEFAULTS=1` turn on format 3.0 for every `"auto"` save of a
-process. Explicit options win over them: `slp_version="v2"` still writes the 2.x
-layout.
+`SLEAP_IO_V3_DEFAULTS=1` turn on, for a whole process, everything that is
+opt-in because it creates content only format 3.0 stores or changes what is in a
+file:
+
+| Default | With the format 3.0 defaults | Option |
+| --- | --- | --- |
+| Saves write the 2.x layout unless needed | Saves write format 3.0 | `slp_version` |
+| COCO and Ultralytics `v=0` read as hidden, `v=1` as visible | `v=0` unlabeled, `v=1` occluded | `visibility_encoding`, `v0_as` |
+| COCO fields are not kept | Kept as record metadata | `keep_metadata` |
+| Nodes added by a skeleton change or merge are hidden | Unlabeled | `unmapped` |
+| Files before 3.0 load with their points as stored | Cleaned up (see [Files before 3.0](#files-before-30)) | `clean_legacy_points` |
+
+Explicit options win over them: `slp_version="v2"` still writes the 2.x layout.
 
 ### Coordinate System
 
@@ -2061,7 +2077,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Every table is range-checked on read: strictly for 3.0 tables, with a warning for older ones
 - New per-point `labeled` column, so unlabeled points round-trip; `complete` is renamed `verified`
 - Unknown columns are carried through re-saves, and `/metadata` gains an optional `required_features` attribute
-- Older files are cleaned up on read: hidden points lose their coordinates and visible points without coordinates become hidden
+- Older files load with their points as stored; `clean_legacy_points=True` cleans them up (hidden points lose their coordinates and visible points without coordinates become hidden)
 - Pose and row columns are uncompressed by default; `compression="gzip"` or `"lzf"` compresses them
 - [`LabelImageWriter`][sleap_io.LabelImageWriter] and [`merge_label_images`][sleap_io.merge_label_images] write 3.0 when asked (or when a merged source is 3.0), and lazy saves write session tables loaded from older files in the layout being saved
 - sleap-io 0.9.x and SLEAP refuse to open 3.0 files, so saves write the 2.x layout unless format 3.0 is needed or asked for (see [Which layout a save writes](#which-layout-a-save-writes))

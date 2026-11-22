@@ -30,6 +30,7 @@ from tqdm import tqdm
 from sleap_io.io.coco import (
     _check_visibility_options,
     decode_visibility,
+    default_visibility_options,
     encode_visibility,
     resolve_visibility_encoding,
 )
@@ -50,7 +51,7 @@ def read_labels(
     split: str = "train",
     skeleton: Skeleton | None = None,
     image_size: tuple[int, int] = (480, 640),
-    visibility_encoding: str = "auto",
+    visibility_encoding: str | None = None,
     v0_as: str | None = None,
 ) -> Labels:
     """Read Ultralytics YOLO dataset and return a `Labels` object.
@@ -59,9 +60,11 @@ def read_labels(
     from the label file content.
 
     Keypoint visibility codes map onto the point flags as for COCO (see
-    `sleap_io.io.coco.decode_visibility`): with the ternary encoding, `v=0` reads as
-    unlabeled, `v=1` as occluded with its coordinates kept, and `v=2` as visible.
-    Every labeled keypoint is marked `verified`.
+    `sleap_io.io.coco.decode_visibility`). By default they are read as sleap-io
+    < 0.10 read them: `v=0` is hidden with no location and every other code is
+    visible. With the ternary encoding, `v=0` reads as unlabeled (stored only by
+    SLP format 3.0), `v=1` as occluded with its coordinates kept, and `v=2` as
+    visible. Every labeled keypoint is marked `verified`.
 
     Args:
         dataset_path: Path to the Ultralytics dataset root directory containing
@@ -73,9 +76,12 @@ def read_labels(
                    Defaults to (480, 640). Will attempt to infer from actual images if
                    available.
         visibility_encoding: How to read keypoint visibility codes: ``"ternary"``
-            (0/1/2), ``"binary"`` (``v>0`` is visible), or ``"auto"`` (the default),
-            which picks binary, with a warning, when some keypoint in the split has
-            ``v=1`` and none has ``v=2``.
+            (0/1/2), ``"binary"`` (``v>0`` is visible), ``"auto"``, which picks
+            binary, with a warning, when some keypoint in the split has ``v=1`` and
+            none has ``v=2``, or ``"legacy"`` (``v=0`` hidden with no location,
+            every other code visible, as sleap-io < 0.10 read them). ``None`` (the
+            default) is ``"legacy"``, or ``"auto"`` when ``v0_as`` is given or the
+            format 3.0 defaults are on (`sleap_io.set_v3_defaults`).
         v0_as: ``"unlabeled"`` reads ``v=0`` keypoints as unlabeled. ``"absent"``
             reads them as labeled and not visible with no location, as sleap-io did
             before 0.10. ``None`` (the default) picks ``"absent"`` when the encoding
@@ -88,6 +94,7 @@ def read_labels(
     Raises:
         ValueError: If ``visibility_encoding`` or ``v0_as`` is not an accepted value.
     """
+    visibility_encoding = default_visibility_options(visibility_encoding, v0_as)
     _check_visibility_options(visibility_encoding, v0_as)
     dataset_path = Path(dataset_path)
 
@@ -200,7 +207,7 @@ def read_labels_set(
     splits: list[str] | None = None,
     skeleton: Skeleton | None = None,
     image_size: tuple[int, int] = (480, 640),
-    visibility_encoding: str = "auto",
+    visibility_encoding: str | None = None,
     v0_as: str | None = None,
 ) -> LabelsSet:
     """Read multiple splits from an Ultralytics dataset as a LabelsSet.
@@ -213,8 +220,9 @@ def read_labels_set(
             load from data.yaml file in the dataset root.
         image_size: Default image size (height, width) to use if unable to
             determine from the actual images. Default: (480, 640).
-        visibility_encoding: ``"auto"`` (the default), ``"ternary"`` or
-            ``"binary"``. ``"auto"`` is resolved per split. See `read_labels`.
+        visibility_encoding: ``None`` (the default), ``"auto"``, ``"ternary"``,
+            ``"binary"`` or ``"legacy"``. ``"auto"`` is resolved per split. See
+            `read_labels`.
         v0_as: ``"unlabeled"``, ``"absent"`` or ``None`` (the default, which
             depends on the encoding). See `read_labels`.
 
@@ -892,7 +900,7 @@ def parse_label_file(
     class_names: dict[int, str] | None = None,
     video: Video | None = None,
     frame_idx: int = 0,
-    visibility_encoding: str = "ternary",
+    visibility_encoding: str | None = None,
     v0_as: str | None = None,
 ) -> tuple[list[Instance], list[ROI], list[BoundingBox]]:
     """Parse a single Ultralytics label file and return instances, ROIs, and bboxes.
@@ -912,8 +920,8 @@ def parse_label_file(
         class_names: Optional mapping from class ID to category name.
         video: Optional ``Video`` to associate with ROIs and bounding boxes.
         frame_idx: Frame index for ROIs and bounding boxes. Defaults to 0.
-        visibility_encoding: ``"ternary"`` (the default), ``"binary"`` or
-            ``"auto"`` (resolved per line). See
+        visibility_encoding: ``None`` (the default), ``"ternary"``, ``"binary"``,
+            ``"legacy"`` or ``"auto"`` (resolved per line). See
             `sleap_io.io.coco.decode_visibility`.
         v0_as: ``"unlabeled"``, ``"absent"`` or ``None`` (the default, which
             depends on the encoding). See `sleap_io.io.coco.decode_visibility`.
@@ -1328,7 +1336,7 @@ def normalize_coordinates(
 def denormalize_coordinates(
     normalized_points: list[tuple[float, float, int]],
     image_shape: tuple[int, int],
-    visibility_encoding: str = "ternary",
+    visibility_encoding: str | None = None,
     v0_as: str | None = None,
 ) -> np.ndarray:
     """Denormalize coordinates from [0,1] range to pixel coordinates.
@@ -1336,8 +1344,8 @@ def denormalize_coordinates(
     Args:
         normalized_points: One ``(x_norm, y_norm, visibility)`` tuple per point.
         image_shape: Image dimensions ``(height, width)``.
-        visibility_encoding: ``"ternary"`` (the default), ``"binary"`` or
-            ``"auto"``. See `sleap_io.io.coco.decode_visibility`.
+        visibility_encoding: ``None`` (the default), ``"ternary"``, ``"binary"``,
+            ``"legacy"`` or ``"auto"``. See `sleap_io.io.coco.decode_visibility`.
         v0_as: ``"unlabeled"``, ``"absent"`` or ``None`` (the default, which
             depends on the encoding). See `sleap_io.io.coco.decode_visibility`.
 

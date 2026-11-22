@@ -129,11 +129,12 @@ If no match is found, the skeleton is added as new to the base dataset.
 
 When a matched skeleton has nodes the incoming instance's skeleton lacks (for
 example, a 2-node instance merged into a 3-node skeleton with `"overlap"`), the
-merged instance marks those nodes as
-[unlabeled](model/poses.md#point-flags-and-states): not labeled, not visible,
-with no location. This matches the default of
-[`replace_skeleton`][sleap_io.Labels.replace_skeleton], so training ignores the
-nodes instead of treating them as annotated absent.
+merged instance marks those nodes as hidden with no location, as sleap-io 0.9
+did and as [`replace_skeleton`][sleap_io.Labels.replace_skeleton] does by default.
+Pass `unmapped="unlabeled"` to `merge` to mark them as
+[unlabeled](model/poses.md#point-flags-and-states) instead, so training ignores
+them rather than treating them as annotated absent; points marked as not labeled
+are saved only in [SLP format 3.0](formats/slp.md#which-layout-a-save-writes).
 
 !!! note "Changed in 0.10"
     Before 0.10, these nodes were filled as hidden with no location, which reads

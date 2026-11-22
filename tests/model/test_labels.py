@@ -9711,6 +9711,7 @@ def test_labels_numpy_return_states_untracked_with_confidence():
     assert (states[0, 1] == sleap_io.PointState.VISIBLE).all()
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_labels_replace_skeleton_unmapped():
     """New nodes become unlabeled by default, or absent with unmapped="absent"."""
     labels, inst = _flag_labels()
@@ -9771,6 +9772,7 @@ def test_update_from_numpy_nan_keeps_hidden_points():
     assert other.point_states[1] == sleap_io.PointState.VISIBLE
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_map_instance_fills_unlabeled_and_copies_metadata():
     """Merge remapping marks unplaced nodes unlabeled and copies metadata."""
     labels = Labels()
@@ -9790,6 +9792,7 @@ def test_map_instance_fills_unlabeled_and_copies_metadata():
         assert mapped.metadata is not inst.metadata
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_merge_overlap_skeleton_fills_unlabeled():
     """Merging into a skeleton with an extra node leaves that node unlabeled."""
     video = Video("test.mp4")

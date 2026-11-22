@@ -320,6 +320,7 @@ def test_normalize_coordinates():
     assert binary[2] == (0.0, 0.0, 0)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_denormalize_coordinates():
     """Test coordinate denormalization."""
     normalized = [(0.125, 0.5, 2), (0.0, 0.0, 0)]
@@ -1724,6 +1725,7 @@ def _write_pose_dataset(root: Path, lines: dict[str, list[str]]) -> Path:
     return root
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_read_ternary_visibility(tmp_path):
     """v=0/1/2/-1 read as unlabeled/occluded/visible/unlabeled."""
     root = _write_pose_dataset(
@@ -1745,6 +1747,7 @@ def test_read_ternary_visibility(tmp_path):
     assert labels[0].instances[0].point_states.tolist() == [3, 1, 2]
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_read_binary_visibility_auto_warns(tmp_path):
     """A split with v=1 and no v=2 reads as binary, with a warning."""
     root = _write_pose_dataset(
@@ -1766,6 +1769,7 @@ def test_read_binary_visibility_auto_warns(tmp_path):
     assert labels[0].instances[0].point_states.tolist() == [1, 0, 1]
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_read_visibility_auto_skips_unparsable_lines(tmp_path):
     """Pose lines that don't parse are skipped by the scan and by the parser."""
     root = _write_pose_dataset(
@@ -1834,6 +1838,7 @@ def test_write_occluded_points(tmp_path):
     assert lines[1].split()[7::3] == ["0", "0", "0"]
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_ternary_write_read_round_trip(tmp_path):
     """Occluded estimates survive a save and load through Ultralytics."""
     skeleton = Skeleton(["a", "b", "c"])
@@ -1864,6 +1869,7 @@ def test_ternary_write_read_round_trip(tmp_path):
     np.testing.assert_allclose(reread_inst.points["xy"][:2], inst.points["xy"][:2])
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_binary_write_read_round_trip(tmp_path):
     """A binary save reads back as binary, keeping the visible points."""
     skeleton = Skeleton(["a", "b", "c"])
@@ -1897,6 +1903,7 @@ def test_binary_write_read_round_trip(tmp_path):
     np.testing.assert_allclose(reread_inst.numpy(), inst.numpy())
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_binary_round_trip_keeps_hidden_points(tmp_path):
     """Hidden points, and all-occluded instances, come back hidden from binary."""
     skeleton = Skeleton(["a", "b", "c"])

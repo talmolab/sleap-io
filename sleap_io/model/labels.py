@@ -2809,7 +2809,7 @@ class Labels:
         new_skeleton: Skeleton,
         old_skeleton: Skeleton | None = None,
         node_map: dict[NodeOrIndex, NodeOrIndex] | None = None,
-        unmapped: str = "unlabeled",
+        unmapped: str | None = None,
     ):
         """Replace the skeleton in the labels.
 
@@ -2824,10 +2824,12 @@ class Labels:
                 names will be mapped. Points associated with unmapped nodes will be
                 removed.
             unmapped: How to fill nodes of the new skeleton that no old node maps to
-                (for example, newly added nodes). `"unlabeled"` (the default) marks
-                them as unlabeled, so training ignores them. `"absent"` marks them as
-                labeled but not visible, with no location (the behavior before
-                sleap-io 0.10).
+                (for example, newly added nodes). `"absent"` marks them as labeled
+                but not visible, with no location (hidden, as sleap-io < 0.10 did).
+                `"unlabeled"` marks them as unlabeled, so training ignores them;
+                only SLP format 3.0 stores that. `None` (the default) is
+                `"absent"`, or `"unlabeled"` when the format 3.0 defaults are on
+                (`sleap_io.set_v3_defaults`).
 
         Raises:
             ValueError: If there is more than one skeleton in the `Labels` but it is not
@@ -2838,7 +2840,7 @@ class Labels:
             have the old skeleton. **All point data associated with nodes not in the
             `node_map` will be lost.**
         """
-        _check_unmapped(unmapped)
+        unmapped = _check_unmapped(unmapped)
         if old_skeleton is None:
             if len(self.skeletons) != 1:
                 raise ValueError(
@@ -3913,6 +3915,7 @@ class Labels:
         progress_callback: Callable | None = None,
         error_mode: str = "continue",
         max_merge_history: int | None = DEFAULT_MERGE_HISTORY_LIMIT,
+        unmapped: str | None = None,
     ) -> "MergeResult":
         """Merge another Labels object into this one.
 
@@ -3964,6 +3967,12 @@ class Labels:
                 kept so provenance can't grow without bound across many merges.
                 Defaults to ``DEFAULT_MERGE_HISTORY_LIMIT``; pass ``None`` to keep
                 the full history.
+            unmapped: How to fill nodes of a matched skeleton that an incoming
+                instance has no point for. `"absent"` marks them as labeled but not
+                visible, with no location (hidden, as sleap-io < 0.10 did).
+                `"unlabeled"` marks them as unlabeled, which only SLP format 3.0
+                stores. `None` (the default) is `"absent"`, or `"unlabeled"` when
+                the format 3.0 defaults are on (`sleap_io.set_v3_defaults`).
 
         Returns:
             MergeResult object with statistics and any errors/conflicts.
@@ -4381,6 +4390,7 @@ class Labels:
                             identity_map=identity_map,
                             category_map=category_map,
                             memo=instance_memo,
+                            unmapped=unmapped,
                         )
                         new_frame.instances.append(new_inst)
                         result.instances_added += 1
@@ -4422,6 +4432,7 @@ class Labels:
                                 identity_map=identity_map,
                                 category_map=category_map,
                                 memo=instance_memo,
+                                unmapped=unmapped,
                             )
                             remapped_instances.append(remapped_inst)
                         else:
@@ -4714,6 +4725,7 @@ class Labels:
         identity_map: dict[int, Identity] | None = None,
         category_map: dict[int, Category] | None = None,
         memo: dict[int, Instance | PredictedInstance] | None = None,
+        unmapped: str | None = None,
     ) -> Instance | PredictedInstance:
         """Map an instance to use mapped skeleton, track, and identity.
 
@@ -4738,6 +4750,8 @@ class Labels:
                 links so a remapped user instance references the remapped source
                 prediction now in the merged frame (see
                 ``_relink_from_predicted``).
+            unmapped: How to fill nodes the source instance has no point for (see
+                `Labels.merge`).
 
         Returns:
             New instance with mapped skeleton and track.
@@ -4784,10 +4798,11 @@ class Labels:
             new_node_inds, old_node_inds = mapped_skeleton.match_nodes(
                 source_points["name"]
             )
-            # Nodes the source skeleton lacks are unlabeled, as in
-            # `Instance.replace_skeleton`'s default.
+            # Nodes the source skeleton lacks are filled as `unmapped` says, as in
+            # `Instance.replace_skeleton`.
             mapped_points = type(source_points).empty(len(mapped_skeleton))
-            mapped_points["labeled"] = False
+            if _check_unmapped(unmapped) == "unlabeled":
+                mapped_points["labeled"] = False
             mapped_points[new_node_inds] = source_points[old_node_inds]
             mapped_points["name"] = mapped_skeleton.node_names
 
