@@ -242,8 +242,9 @@ class Labels:
         default=None, init=False, repr=False, eq=False, hash=False
     )
 
-    # The `format_id` of the SLP file these labels were loaded from, or `None`. A
-    # save with `slp_version="auto"` keeps a format 3.0 file in format 3.0 (see
+    # The `format_id` of the SLP file these labels were loaded from or last saved
+    # to, or `None` (see `source_format_id`). A save with `slp_version="auto"`
+    # keeps a format 3.0 file in format 3.0 (see
     # `sleap_io.io.slp.resolve_slp_version`). Kept by `copy`, `extract` and
     # `materialize`.
     _source_format_id: "float | None" = field(
@@ -556,16 +557,19 @@ class Labels:
     def source_format_id(self) -> float | None:
         """The SLP `format_id` of the file the labels were loaded from or saved to.
 
-        `None` for labels built in memory and not yet saved, or loaded from another
-        format. Below 3.0, the labels hold the points of an older file as stored,
-        unless they were loaded with `clean_legacy_points=True` (see
-        `clean_legacy_points`).
+        `None` for labels built in memory, or loaded from another format. Below
+        3.0, the labels hold the points of an older file as stored, unless they
+        were loaded with `clean_legacy_points=True` or cleaned up since (see
+        `clean_legacy_points`; the value stays below 3.0 after a clean-up). A file
+        older than 3.0 with no `format_id` counts as 1.0.
 
         It follows the labels through `copy`, `extract` (and so `split` and
         `make_training_splits`) and `materialize`. `merge` keeps the value of the
-        labels merged into, whatever the other labels came from. New `Labels`
-        built from the frames of loaded labels start with `None`. A save sets it to
-        the format just written.
+        labels merged into, whatever the other labels came from, so clean up each
+        old file before merging it into other labels. New `Labels` built from the
+        frames of loaded labels start with `None`. A save in format 3.0 sets it to
+        3.0; a save in the 2.x layout keeps a value below 3.0 and otherwise leaves
+        `None`, so labels built in memory are never taken for an old file.
         """
         return getattr(self, "_source_format_id", None)
 
@@ -596,7 +600,8 @@ class Labels:
 
         Returns:
             The number of points changed. For lazily loaded labels the point
-            tables are cleaned in place, so frames read afterwards are cleaned.
+            tables are cleaned in place: frames read afterwards are cleaned, and
+            frame objects read before keep their old points.
         """
         source = self.source_format_id
         if source is None or source >= 3.0:
@@ -618,7 +623,7 @@ class Labels:
             return changed
         for inst in self.instances:
             points = inst.points
-            located = np.isfinite(points["xy"]).all(axis=1)
+            located = ~np.isnan(points["xy"]).any(axis=1)
             visible = points["visible"].astype(bool) & located
             stale = ~visible & located
             changed += int(np.count_nonzero((visible != points["visible"]) | stale))

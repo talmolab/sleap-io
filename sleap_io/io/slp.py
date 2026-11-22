@@ -268,12 +268,25 @@ def _remember_saved_layout(labels: Labels, labels_path: str | Path) -> None:
     back to the content rule (see `resolve_slp_version`). `Labels.source_format_id`
     reports it.
 
+    Labels saved in the 2.x layout keep a value below 3.0 they already had, and
+    otherwise get `None`: hidden points with coordinates written by this save are
+    what the labels held (occluded estimates of labels built in memory, say), so
+    they must not count as an old file's stale positions (see
+    `Labels.clean_legacy_points`).
+
     Args:
         labels: The labels as given to the save.
         labels_path: The file just written.
     """
     with h5py.File(labels_path, "r") as f:
-        labels._source_format_id = _file_format_id(f)
+        written = _file_format_id(f)
+    if written is not None and written >= SLP_FORMAT_ID:
+        labels._source_format_id = written
+    else:
+        source = labels._source_format_id
+        labels._source_format_id = (
+            source if source is not None and source < SLP_FORMAT_ID else None
+        )
 
 
 def _loaded_as_v3(labels: Labels) -> bool:
@@ -503,6 +516,18 @@ def _file_format_id(f: h5py.File) -> float | None:
     if "metadata" in f and "format_id" in f["metadata"].attrs:
         return float(f["metadata"].attrs["format_id"])
     return None
+
+
+def _loaded_format_id(f: h5py.File) -> float | None:
+    """Return the format to record for labels loaded from a file.
+
+    The file's `format_id`, or 1.0 for an old file that has none but stores its
+    points in the 2.x compound layout.
+    """
+    format_id = _file_format_id(f)
+    if format_id is None and isinstance(f.get("points"), h5py.Dataset):
+        return 1.0
+    return format_id
 
 
 def _check_format_id(labels_path: str, f: h5py.File) -> None:
@@ -8992,7 +9017,7 @@ def _read_labels_lazy_from_open_file(
     if annotation_only_frames:
         lazy_frames._supplementary.extend(annotation_only_frames)
     labels.provenance["filename"] = labels_path
-    labels._source_format_id = _file_format_id(f)
+    labels._source_format_id = _loaded_format_id(f)
 
     # Keep the HDF5 file handle alive for lazy label image data
     if li_file is not None:
@@ -11855,7 +11880,7 @@ def _read_labels_from_open_file(
         rois=undist_rois,
     )
     labels.provenance["filename"] = labels_path
-    labels._source_format_id = _file_format_id(f)
+    labels._source_format_id = _loaded_format_id(f)
 
     # Store the HDF5 file handle for lazy label image data (keeps it alive)
     if _li_file is not None:

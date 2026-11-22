@@ -347,11 +347,29 @@ def test_source_format_id_follows_saves(tmp_path):
     inst.points["visible"][1] = False  # An occluded estimate.
     labels = Labels([LabeledFrame(video=Video("v.mp4"), frame_idx=0, instances=[inst])])
     save_slp(labels, str(tmp_path / "a.slp"))
-    assert labels.source_format_id < 3.0
+    # Built in memory, saved in the 2.x layout: still not an old file, so the
+    # clean-up leaves its occluded estimate alone.
+    assert labels.source_format_id is None
+    assert labels.clean_legacy_points() == 0
     save_slp(labels, str(tmp_path / "b.slp"), slp_version="v3")
     assert labels.source_format_id == 3.0
+    # Loaded from an old file, saved in the 2.x layout: still an old file.
+    old = load_slp(str(tmp_path / "a.slp"))
+    save_slp(old, str(tmp_path / "c.slp"))
+    assert old.source_format_id is not None and old.source_format_id < 3.0
     # Saved in the 2.x layout, an occluded estimate reads back like a stale
     # position, and the clean-up clears it; format 3.0 keeps it.
     old = load_slp(str(tmp_path / "a.slp"))
     assert old.clean_legacy_points() == 1
     assert load_slp(str(tmp_path / "b.slp")).clean_legacy_points() == 0
+
+
+def test_old_file_without_format_id_counts_as_old(tmp_path, slp_legacy_hidden_complete):
+    """An old-layout file with no `format_id` is an old file for the clean-up."""
+    path = tmp_path / "no_format.slp"
+    shutil.copy(slp_legacy_hidden_complete, path)
+    with h5py.File(path, "r+") as f:
+        del f["metadata"].attrs["format_id"]
+    labels = load_slp(str(path))
+    assert labels.source_format_id == 1.0
+    assert labels.clean_legacy_points() > 0
