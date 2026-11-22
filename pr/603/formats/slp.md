@@ -1182,12 +1182,6 @@ Ultralytics exports write those coordinates as occluded keypoints. Load with the
 clean-up below to get 0.9's results. `Labels.source_format_id` says which format
 the labels were loaded from (or last saved to).
 
-Two limits come with the 2.x layout. Labels from an old file saved as format 3.0
-keep their stale hidden positions, which then read as occluded estimates for
-good, so clean up first if they are stale. And an occluded estimate saved in the
-2.x layout can't be told from a stale position when the file is read back, so a
-clean-up clears it: save as format 3.0 to keep occluded estimates.
-
 An optional clean-up, `load_slp(..., clean_legacy_points=True)` (or the format
 3.0 defaults, `sio.set_v3_defaults(True)` or `SLEAP_IO_V3_DEFAULTS=1`), or
 `labels.clean_legacy_points()` on labels already loaded, changes two things:
@@ -1199,6 +1193,16 @@ An optional clean-up, `load_slp(..., clean_legacy_points=True)` (or the format
 * **visible points with NaN coordinates become hidden.** This changes old
   prediction files: `n_visible`, `is_empty`, `remove_empty_instances` and the
   dictionary and dataframe exports then count these points as hidden.
+
+`labels.clean_legacy_points()` does nothing for labels loaded from (or last saved
+as) format 3.0, or built in memory. A merge keeps the mark of the labels merged
+into, so clean up each old file before merging it into other labels.
+
+Two limits come with the 2.x layout. Labels from an old file saved as format 3.0
+keep their stale hidden positions, which then read as occluded estimates for
+good, so clean up first if they are stale. And an occluded estimate saved in the
+2.x layout can't be told from a stale position when the file is read back, so a
+clean-up clears it: save as format 3.0 to keep occluded estimates.
 
 ### Which layout a save writes
 
