@@ -7433,11 +7433,12 @@ content only format 3.0 can store (see <a href="#slp-save-options">SLP save opti
 be sure of the older layout, pass <code>--slp-version v2</code> (or <code>--legacy-format</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>sio<span class="w"> </span>convert<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels.v2.slp<span class="w"> </span>--slp-version<span class="w"> </span>v2
 </code></pre></div>
-<p>The 2.x layout can't store points marked as not labeled, so the conversion fails
-(with a non-zero exit code) when there are any. Pass <code>--unlabeled-as absent</code> to
-save them as hidden points instead:</p>
+<p>The 2.x layout can't store points marked as not labeled (for example COCO <code>v=0</code>
+keypoints read with <code>--visibility-encoding auto</code>), so the conversion fails (with
+a non-zero exit code) when there are any. Pass <code>--unlabeled-as absent</code> to save
+them as hidden points instead:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>sio<span class="w"> </span>convert<span class="w"> </span>annotations.json<span class="w"> </span>-o<span class="w"> </span>labels.v2.slp<span class="w"> </span>--from<span class="w"> </span>coco<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">    </span>--slp-version<span class="w"> </span>v2<span class="w"> </span>--unlabeled-as<span class="w"> </span>absent
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">    </span>--visibility-encoding<span class="w"> </span>auto<span class="w"> </span>--slp-version<span class="w"> </span>v2<span class="w"> </span>--unlabeled-as<span class="w"> </span>absent
 </code></pre></div>
 <p><code>--compression gzip</code> or <code>--compression lzf</code> writes smaller SLP files (in either
 layout) at some cost in read speed; see <a href="../formats/slp/#compression">Compression</a>:</p>

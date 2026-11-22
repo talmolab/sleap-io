@@ -691,13 +691,14 @@ be sure of the older layout, pass `--slp-version v2` (or `--legacy-format`):
 sio convert labels.slp -o labels.v2.slp --slp-version v2
 ```
 
-The 2.x layout can't store points marked as not labeled, so the conversion fails
-(with a non-zero exit code) when there are any. Pass `--unlabeled-as absent` to
-save them as hidden points instead:
+The 2.x layout can't store points marked as not labeled (for example COCO `v=0`
+keypoints read with `--visibility-encoding auto`), so the conversion fails (with
+a non-zero exit code) when there are any. Pass `--unlabeled-as absent` to save
+them as hidden points instead:
 
 ```bash
 sio convert annotations.json -o labels.v2.slp --from coco \
-    --slp-version v2 --unlabeled-as absent
+    --visibility-encoding auto --slp-version v2 --unlabeled-as absent
 ```
 
 `--compression gzip` or `--compression lzf` writes smaller SLP files (in either
