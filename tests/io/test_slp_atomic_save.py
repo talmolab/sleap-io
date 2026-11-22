@@ -277,3 +277,18 @@ def test_temporary_file_is_hidden_beside_the_target(tmp_path, monkeypatch):
     assert not tmp.exists()
     assert not slp._SAVE_TARGETS
     assert _folder(tmp_path) == ["labels.pkg.slp"]
+
+
+def test_flushing_to_disk_leaves_the_bytes_alone(tmp_path):
+    """Flushing a file doesn't change it, even one that ends with Ctrl-Z.
+
+    A handle opened for reading and writing in text mode on Windows drops a
+    trailing Ctrl-Z byte (0x1A), which cuts an HDF5 file that ends with one.
+    """
+    path = tmp_path / "data.bin"
+    for content in (b"abc\x1a", b"\r\n\x1a\x1a", b""):
+        path.write_bytes(content)
+        slp._sync_to_disk(path)
+        assert path.read_bytes() == content
+    # A missing file is not an error: the rename that follows reports it.
+    slp._sync_to_disk(tmp_path / "missing.bin")

@@ -11778,13 +11778,15 @@ def _atomic_save(labels_path: str | Path) -> Iterator[_AtomicSave]:
 
 
 def _sync_to_disk(path: Path) -> None:
-    """Flush a written file to disk, so a rename over another file is safe."""
+    """Flush a written file to disk, so a rename over another file is safe.
+
+    The file is opened in binary mode: a text-mode handle opened for reading and
+    writing on Windows removes a trailing Ctrl-Z byte, which would cut a file
+    that happens to end with one.
+    """
     with suppress(OSError):
-        fd = os.open(path, os.O_RDWR)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
+        with open(path, "rb+") as fh:
+            os.fsync(fh.fileno())
 
 
 def _video_backends(video: Video) -> Iterator[VideoBackend]:
