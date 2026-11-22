@@ -312,10 +312,13 @@ def test_temporary_name_is_shortened_in_a_deep_folder(tmp_path):
         folder = folder / "deep_folder"
     final = folder / "x.slp"
     tmp = slp._temporary_save_path(final)
-    # Four random characters is the least it keeps.
+    # A dot and as many random characters as the target's name has room for
+    # (at least one): ".N.slp" for "x.slp".
     assert tmp.name.startswith(".")
-    assert len(tmp.name) == len(".1234.slp")
+    assert len(tmp.name) == len(".1.slp")
     assert tmp.suffix == ".slp"
+    final = folder / "labels.slp"
+    assert len(slp._temporary_save_path(final).name) == len(final.name)
 
 
 def test_save_to_the_longest_file_name(tmp_path):
@@ -324,17 +327,21 @@ def test_save_to_the_longest_file_name(tmp_path):
         limit = os.pathconf(tmp_path, "PC_NAME_MAX")
     except (AttributeError, OSError, ValueError):
         pytest.skip("The file name limit of this file system isn't known.")
-    path = tmp_path / ("a" * (limit - 4) + ".slp")
-    try:
-        path.touch()
-    except OSError:
-        pytest.skip("A name this long can't be created here at all.")
-    path.unlink()
-    save_slp(_labels(2), str(path))
-    assert len(load_slp(str(path))) == 2
-    save_slp(_labels(3), str(path))
-    assert len(load_slp(str(path))) == 3
-    assert _folder(tmp_path) == [path.name]
+    # A long stem, and a long second-to-last "extension" that leaves room for
+    # little else in the temporary name.
+    for name in ("a" * (limit - 4) + ".slp", "ab." + "c" * (limit - 9) + ".slp"):
+        path = tmp_path / name
+        try:
+            path.touch()
+        except OSError:
+            pytest.skip("A name this long can't be created here at all.")
+        path.unlink()
+        save_slp(_labels(2), str(path))
+        assert len(load_slp(str(path))) == 2
+        save_slp(_labels(3), str(path))
+        assert len(load_slp(str(path))) == 3
+        assert _folder(tmp_path) == [path.name]
+        path.unlink()
 
 
 def test_save_to_missing_folder_names_the_target(tmp_path):
@@ -562,3 +569,73 @@ def test_flushing_to_disk_leaves_the_bytes_alone(tmp_path):
         assert path.read_bytes() == content
     # A missing file is not an error: the rename that follows reports it.
     slp._sync_to_disk(tmp_path / "missing.bin")
+
+
+def _h5_contents(path) -> dict:
+    """Return every dataset's bytes and every attribute of an HDF5 file, by name."""
+    out = {}
+
+    def visit(name, obj):
+        attrs = {k: repr(v) for k, v in obj.attrs.items()}
+        data = None
+        if isinstance(obj, h5py.Dataset):
+            value = obj[()]
+            if isinstance(value, np.ndarray) and value.dtype.kind == "O":
+                data = [bytes(np.asarray(x).tobytes()) for x in value.ravel()]
+            else:
+                data = np.asarray(value).tobytes()
+        out[name] = (data, attrs)
+
+    with h5py.File(path, "r") as f:
+        f.visititems(visit)
+    return out
+
+
+@pytest.mark.parametrize("legacy_format", [False, True])
+def test_closed_videos_saved_over_an_unrelated_file_match_a_new_save(
+    tmp_path, slp_minimal_pkg, legacy_format
+):
+    """A save over an unrelated file writes what a save to a new path writes."""
+    labels = load_slp(slp_minimal_pkg, open_videos=False)
+    new = tmp_path / "new.slp"
+    save_slp(labels, str(new), embed=None, legacy_format=legacy_format)
+
+    over = tmp_path / "over.slp"
+    shutil.copy(slp_minimal_pkg, over)
+    save_slp(labels, str(over), embed=None, legacy_format=legacy_format)
+
+    assert over.stat().st_size == new.stat().st_size
+    assert _h5_contents(over) == _h5_contents(new)
+
+
+@pytest.mark.parametrize(
+    "filename", ["C:/data\\clips\\x.mp4", "./clips/x.mp4", "a//b/x.mp4", None]
+)
+def test_closed_video_backend_filenames_are_kept_as_stored(tmp_path, filename):
+    """Stored backend filenames of closed videos are written back unchanged."""
+    video = Video(
+        "x.mp4",
+        backend_metadata={"type": "MediaVideo", "filename": filename},
+        open_backend=False,
+    )
+    path = tmp_path / "labels.slp"
+    save_slp(Labels(videos=[video]), str(path))
+    with h5py.File(path, "r") as f:
+        stored = json.loads(f["videos_json"][0])["backend"]["filename"]
+    assert stored == filename
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="Folder permissions are not enforced here.",
+)
+def test_read_only_folder_error_names_the_target(tmp_path, slp_typical):
+    """A folder that can't be written to is reported with the target's name."""
+    folder = tmp_path / "read_only"
+    folder.mkdir()
+    folder.chmod(0o555)
+    try:
+        with pytest.raises(PermissionError, match="labels.slp"):
+            save_slp(load_slp(slp_typical), str(folder / "labels.slp"))
+    finally:
+        folder.chmod(0o755)

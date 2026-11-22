@@ -859,9 +859,12 @@ def video_to_dict(
         if "filename" not in result["backend"]:
             result["backend"]["filename"] = video_filename
         else:
-            result["backend"]["filename"] = sanitize_filename(
-                _final_filename(result["backend"]["filename"])
-            )
+            # Only a name mapped from the temporary file of the save in progress is
+            # rewritten; any other stored name is kept exactly as it was.
+            stored = result["backend"]["filename"]
+            final = _final_filename(stored)
+            if final is not stored:
+                result["backend"]["filename"] = sanitize_filename(final)
         # Closed cropped path: the copied metadata carries the CROPPED shape plus
         # a crop record. Restore the UNCROPPED source shape so videos_json describes
         # the full frame (old-reader guarantee), then drop the crop keys (the crop
@@ -2014,12 +2017,16 @@ def write_videos(
                     # Copy the video group with all its datasets and attributes
                     src_f.copy(source_group, dst_f, name=dest_group)
                     # When this save replaces a file, the copied source record
-                    # may name that file. Drop it: the pass below writes the
-                    # record again from the video's own source (see
-                    # `_source_to_record`).
-                    if (
-                        _replaced_file(labels_path) is not None
-                        and "source_video" in dst_f[dest_group]
+                    # may name that file. Drop it only then: the pass below
+                    # writes the record again from the video's own source (see
+                    # `_source_to_record`). Any other copied record is kept as
+                    # it was.
+                    if "source_video" in dst_f[dest_group] and (
+                        _source_to_record(video.source_video, labels_path)
+                        is not video.source_video
+                        or _record_names_replaced_file(
+                            dst_f[dest_group]["source_video"], labels_path
+                        )
                     ):
                         del dst_f[dest_group]["source_video"]
 
@@ -11729,6 +11736,31 @@ def _source_to_record(
     return video
 
 
+def _record_names_replaced_file(record: h5py.Group, labels_path: str | Path) -> bool:
+    """Return whether a stored `source_video` record names the file being replaced.
+
+    Args:
+        record: A video group's `source_video` group, whose `json` attribute holds
+            the source video's record.
+        labels_path: The path the labels are being written to.
+
+    Returns:
+        `True` if this save replaces an existing file and the record's filename is
+        that file. `False` otherwise, including when the record can't be read.
+    """
+    replaced = _replaced_file(labels_path)
+    if replaced is None:
+        return False
+    try:
+        filename = json.loads(record.attrs["json"]).get("filename")
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return False
+    return (
+        isinstance(filename, (str, Path))
+        and Path(sanitize_filename(filename)).resolve() == replaced
+    )
+
+
 def _same_path(a: object, b: str | Path) -> bool:
     """Return whether `a` is a single path that names the same file as `b`."""
     return isinstance(a, (str, Path)) and Path(a) == Path(b)
@@ -11771,9 +11803,9 @@ def _temporary_save_path(final: Path) -> Path:
 
     Close to the file system's limits (a name of 255 bytes, or a path of about
     260 characters on Windows) that name could be too long where the target's
-    is not. The name is then shortened to be no longer than the target's, down
-    to four random characters, so that a target that could be saved before can
-    still be saved.
+    is not. The name is then shortened to be no longer than the target's where
+    the target's name has room for at least one random character, so that a
+    target that could be saved before can still be saved.
 
     Args:
         final: The target of the save.
@@ -11790,7 +11822,7 @@ def _temporary_save_path(final: Path) -> Path:
         if len(name.encode()) > max(
             len(final.name.encode()), 200
         ) or folder_length + len(name) > max(folder_length + len(final.name), 240):
-            name = f".{token[: max(4, min(8, room))]}{suffixes}"
+            name = f".{token[: max(1, min(8, room))]}{suffixes}"
         tmp = final.with_name(name)
         if not tmp.exists():
             return tmp
@@ -11836,11 +11868,17 @@ def _atomic_save(labels_path: str | Path) -> Iterator[_AtomicSave]:
 
     Raises:
         FileNotFoundError: If the target's folder doesn't exist.
+        PermissionError: If the target's folder can't be written to.
     """
     final = Path(labels_path)
     if not final.parent.is_dir():
         raise FileNotFoundError(
             f"Cannot save {labels_path}: the folder {final.parent} does not exist."
+        )
+    if not os.access(final.parent, os.W_OK):
+        # Name the target, not the temporary file the write would fail on.
+        raise PermissionError(
+            f"Cannot save {labels_path}: the folder {final.parent} is not writable."
         )
     tmp = _temporary_save_path(final)
     save = _AtomicSave(tmp if isinstance(labels_path, Path) else str(tmp))
