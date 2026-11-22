@@ -13690,29 +13690,105 @@ def test_corrupt_legacy_ranges_warn(tmp_path):
         assert [len(lf) for lf in labels] == [2, 0, 0]
 
 
-def test_corrupt_legacy_references_warn(tmp_path):
-    """Skeleton and track references out of range in 2.x tables warn."""
+def _set_legacy_instance_columns(path, **columns) -> None:
+    """Replace columns of a 2.x `/instances` table."""
+    with h5py.File(path, "r+") as f:
+        instances = f["instances"][()]
+        for name, values in columns.items():
+            instances[name] = values
+        f["instances"][...] = instances
+
+
+@pytest.mark.parametrize("track", [-2, 1, 7])
+@pytest.mark.parametrize("lazy", [False, True])
+def test_corrupt_legacy_track_warns_and_reads_as_no_track(tmp_path, track, lazy):
+    """A 2.x track that names no track warns and is read as no track."""
     path = tmp_path / "legacy.slp"
     save_slp(_labels_with_links(), str(path), legacy_format=True)
-    with h5py.File(path, "r+") as f:
-        instances = f["instances"][()]
-        instances["track"] = [0, -1, -2]
-        f["instances"][...] = instances
-    for lazy in (False, True):
-        with pytest.warns(UserWarning, match="track is not one of the 1 tracks"):
-            labels = load_slp(str(path), lazy=lazy)
-        # Read as before the check existed: a negative track is no track.
-        assert [len(lf) for lf in labels] == [2, 0, 1]
-        assert labels[2].instances[0].track is None
+    _set_legacy_instance_columns(path, track=[0, -1, track])
+    with pytest.warns(UserWarning, match="track is not one of the 1 tracks"):
+        labels = load_slp(str(path), lazy=lazy)
+    assert [len(lf) for lf in labels] == [2, 0, 1]
+    assert labels[0].instances[0].track is labels.tracks[0]
+    assert labels[2].instances[0].track is None
 
-    with h5py.File(path, "r+") as f:
-        instances = f["instances"][()]
-        instances["track"] = [0, -1, -1]
-        instances["skeleton"] = [0, 0, 1]
-        f["instances"][...] = instances
-    with pytest.warns(UserWarning, match="skeleton is not one of the 1 skeletons"):
+
+@pytest.mark.parametrize("legacy_format", [False, True])
+@pytest.mark.parametrize("lazy", [False, True])
+def test_corrupt_legacy_links_are_not_saved(tmp_path, legacy_format, lazy):
+    """Saving a 2.x file read with bad links gives a file that opens cleanly."""
+    path = tmp_path / "legacy.slp"
+    save_slp(_labels_with_links(), str(path), legacy_format=True)
+    _set_legacy_instance_columns(path, track=[0, -1, -2], from_predicted=[-3, 0, 9])
+    with pytest.warns(UserWarning, match="inconsistent pose tables"):
+        labels = load_slp(str(path), lazy=lazy)
+
+    resaved = tmp_path / "resaved.slp"
+    save_slp(labels, str(resaved), legacy_format=legacy_format)
+    for reload_lazy in (False, True):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            loaded = load_slp(str(resaved), lazy=reload_lazy)
+        assert [len(lf) for lf in loaded] == [2, 0, 1]
+        pred, user = loaded[0].instances
+        assert pred.track is loaded.tracks[0]
+        assert user.from_predicted is pred
+        assert loaded[2].instances[0].track is None
+        assert loaded[2].instances[0].from_predicted is None
+
+
+def test_corrupt_legacy_skeleton_warns_then_raises_when_read(tmp_path):
+    """A 2.x skeleton that names no skeleton warns, and its instances can't be read."""
+    path = tmp_path / "legacy.slp"
+    save_slp(_labels_with_links(), str(path), legacy_format=True)
+    _set_legacy_instance_columns(path, skeleton=[0, 0, 1])
+    match = "skeleton is not one of the 1 skeletons"
+    # A lazy load reads the tables only.
+    with pytest.warns(UserWarning, match=match):
         labels = load_slp(str(path), lazy=True)
     assert len(labels) == 3
+    # An eager load builds the instances, which names the table instead of
+    # raising a bare IndexError.
+    with pytest.warns(UserWarning, match=match):
+        with pytest.raises(ValueError, match=match):
+            load_slp(str(path))
+
+
+def test_read_instances_checks_skeleton_and_track(tmp_path):
+    """`read_instances` refuses a skeleton or track that isn't in its lists."""
+    path = tmp_path / "labels.slp"
+    save_slp(_labels_with_links(), str(path))
+    skeletons = read_skeletons(str(path))
+    tracks = read_tracks(str(path))
+    points = read_points(str(path))
+    pred_points = read_pred_points(str(path))
+
+    assert len(read_instances(str(path), skeletons, tracks, points, pred_points, 3.0))
+    with pytest.raises(ValueError, match="skeleton is not one of the 0 skeletons"):
+        read_instances(str(path), [], tracks, points, pred_points, 3.0)
+    with pytest.raises(ValueError, match="track is not one of the 0 tracks"):
+        read_instances(str(path), skeletons, [], points, pred_points, 3.0)
+
+
+@pytest.mark.parametrize("legacy_format", [False, True])
+@pytest.mark.parametrize("lazy", [False, True])
+def test_untracked_instances_pass_the_checks(tmp_path, legacy_format, lazy):
+    """A file with no tracks, or without the optional track column, reads cleanly."""
+    labels = _labels_with_links()
+    for lf in labels:
+        for inst in lf:
+            inst.track = None
+    labels.tracks.clear()
+    path = tmp_path / "labels.slp"
+    save_slp(labels, str(path), legacy_format=legacy_format)
+    if not legacy_format:
+        with h5py.File(path, "r+") as f:
+            del f["instances/track"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        loaded = load_slp(str(path), lazy=lazy)
+    assert [len(lf) for lf in loaded] == [2, 0, 1]
+    assert all(inst.track is None for lf in loaded for inst in lf)
 
 
 def test_valid_references_do_not_warn(tmp_path):

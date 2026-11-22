@@ -5259,6 +5259,15 @@ def _read_pose_tables(
         n_tracks=n_tracks,
         strict=not (inst_legacy or frame_legacy),
     )
+    if inst_legacy:
+        # A 2.x track or `from_predicted` link that names no row has always been
+        # read as none (after the warning above). Store it as none too, so that
+        # a lazy save, which copies these rows, never writes it into a 3.0 table
+        # that the strict check would then refuse.
+        track = instances["track"]
+        track[(track < -1) | (track >= n_tracks)] = -1
+        from_predicted = instances["from_predicted"]
+        from_predicted[(from_predicted < -1) | (from_predicted >= len(instances))] = -1
     return _PoseTables(
         points=points,
         pred_points=pred_points,
@@ -5336,12 +5345,26 @@ def _instances_from_rows(
         One instance per row, or `None` for rows of an unknown instance type.
         `from_predicted` links are resolved, and a NaN `tracking_score` reads as
         `None`.
+
+    Raises:
+        ValueError: If a row's `skeleton` is not one of `skeletons`, or its
+            `track` is past the end of `tracks`. A negative `track` is no track.
     """
     n = len(rows)
     records = _metadata_records(metadata, n) if metadata else None
     types = rows["instance_type"].tolist()
     skeleton_ids = rows["skeleton"].tolist()
     track_ids = rows["track"].tolist()
+    if n and not 0 <= min(skeleton_ids) <= max(skeleton_ids) < len(skeletons):
+        raise ValueError(
+            f"/instances skeleton is not one of the {len(skeletons)} skeletons, so "
+            "its instances can't be read."
+        )
+    if n and max(track_ids) >= len(tracks):
+        raise ValueError(
+            f"/instances track is not one of the {len(tracks)} tracks, so its "
+            "instances can't be read."
+        )
     scores = rows["score"].tolist()
     starts = rows["point_id_start"].tolist()
     ends = rows["point_id_end"].tolist()
@@ -5415,6 +5438,11 @@ def read_instances(
         A list of `Instance` and/or `PredictedInstance` objects, in row order, with
         their metadata and `from_predicted` links. Rows of an unknown instance type
         are skipped.
+
+    Raises:
+        ValueError: If a row's `skeleton` is not one of `skeletons`, or its
+            `track` is past the end of `tracks`. The other ranges and links are
+            only checked when a whole file is read (see `read_labels`).
     """
     with (
         nullcontext(_hdf5_file)
