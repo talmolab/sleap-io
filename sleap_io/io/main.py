@@ -1940,7 +1940,8 @@ def load_labels_set(
         format: Optional format specification. If None, will try to infer from path.
             Supported formats: "slp", "ultralytics"
         open_videos: If `True` (the default), attempt to open video backends.
-        **kwargs: Additional format-specific arguments.
+        **kwargs: Additional format-specific arguments. For SLP files,
+            `clean_legacy_points` (see `load_slp`).
 
     Returns:
         A LabelsSet containing the loaded Labels objects.
@@ -1984,7 +1985,11 @@ def load_labels_set(
     if format == "slp":
         from sleap_io.io import slp
 
-        return slp.read_labels_set(path, open_videos=open_videos)
+        return slp.read_labels_set(
+            path,
+            open_videos=open_videos,
+            clean_legacy_points=kwargs.pop("clean_legacy_points", None),
+        )
     elif format == "ultralytics":
         # Extract ultralytics-specific kwargs
         splits = kwargs.pop("splits", None)

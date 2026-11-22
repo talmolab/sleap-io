@@ -85,8 +85,13 @@ class TestCOCOBasicLoading:
         assert points_array[0, 0] == 100.0  # x
         assert points_array[0, 1] == 100.0  # y
         assert points_array[0, 2] == 1.0  # visible (converted from visibility=2)
-        assert points_array[0, 3] == 1.0  # verified
+        assert points_array[0, 3] == 0.0  # not verified, as sleap-io 0.9 read it
         assert points_array[0, 4] == 1.0  # labeled
+        # The newer reading marks labeled keypoints as verified.
+        points_array = coco.decode_keypoints(
+            keypoints, len(skeleton.nodes), skeleton, visibility_encoding="ternary"
+        )
+        assert points_array[0, 3] == 1.0
 
 
 class TestCOCODatasetVariants:

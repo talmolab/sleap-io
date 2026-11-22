@@ -1166,6 +1166,13 @@ the same points: every point is labeled, `complete` is read as `verified`, hidde
 points keep any coordinates they hold, and point states are not changed.
 `Instance.numpy()` returns NaN for hidden points, as in sleap-io 0.9.
 
+One difference from 0.9 remains for hidden points that keep coordinates (the SLEAP
+GUI leaves the last position on a node it hides): sleap-io 0.10 reads them as
+occluded estimates. An instance whose points are all hidden that way is therefore
+not `is_empty`, `Labels.clean(empty_instances=True)` keeps it, and the COCO and
+Ultralytics exports write those coordinates as occluded keypoints. Load with the
+clean-up below to get 0.9's results.
+
 An optional clean-up, `load_slp(..., clean_legacy_points=True)` (or the format
 3.0 defaults, `sio.set_v3_defaults(True)` or `SLEAP_IO_V3_DEFAULTS=1`), changes
 two things:

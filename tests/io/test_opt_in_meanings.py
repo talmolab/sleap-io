@@ -39,13 +39,17 @@ def _no_switch(monkeypatch):
 
 def test_ultralytics_default_reading_is_the_pre_0_10_one():
     """v=0 reads as hidden and v=1 as visible, unless asked otherwise."""
-    rows = [(0.5, 0.25, 0), (0.25, 0.5, 1), (0.125, 0.125, 2)]
+    rows = [(0.5, 0.25, 0), (0.25, 0.5, 1), (0.125, 0.125, 2), (0.5, 0.5, -1)]
     points = denormalize_coordinates(rows, (400, 800))
-    # Columns: x, y, visible, verified, labeled.
+    # Columns: x, y, visible, verified, labeled. Nothing is verified, and codes
+    # of 0 or below are hidden with no location, as sleap-io 0.9 read them.
     assert np.isnan(points[0, :2]).all()
-    np.testing.assert_array_equal(points[0, 2:], [0, 1, 1])
-    np.testing.assert_array_equal(points[1], [200, 200, 1, 1, 1])
+    np.testing.assert_array_equal(points[0, 2:], [0, 0, 1])
+    np.testing.assert_array_equal(points[1], [200, 200, 1, 0, 1])
+    assert np.isnan(points[3, :2]).all()
+    np.testing.assert_array_equal(points[3, 2:], [0, 0, 1])
 
+    rows = rows[:3]
     ternary = denormalize_coordinates(rows, (400, 800), visibility_encoding="ternary")
     assert ternary[0, 4] == 0  # v=0 is unlabeled.
     assert ternary[1, 2] == 0  # v=1 is occluded.
@@ -242,3 +246,63 @@ def test_complete_is_an_alias_of_verified():
         points["visible"]
         points[0]
         points[["xy", "visible"]]
+
+
+def test_complete_alias_on_single_points():
+    """`points[i]["complete"]`, rows of an instance and iteration work too."""
+    inst = _instance()
+    with pytest.warns(DeprecationWarning) as record:
+        assert not inst.points[0]["complete"]
+    assert record[0].filename == __file__
+    with pytest.warns(DeprecationWarning):
+        inst.points[1]["complete"] = True
+    assert inst.points["verified"][1]
+    with pytest.warns(DeprecationWarning):
+        assert inst["b"]["complete"]
+    with pytest.warns(DeprecationWarning):
+        assert [bool(p["complete"]) for p in inst.points] == [False, True]
+    with pytest.warns(DeprecationWarning) as record:
+        inst.points[np.str_("complete")]
+    assert record[0].filename == __file__
+    # The points dtype still equals the plain structured dtype.
+    assert inst.points.dtype == np.dtype(inst.points.dtype.descr)
+
+
+def test_default_imports_mark_nothing_verified(tmp_path):
+    """As sleap-io 0.9, imported keypoints are not marked as verified."""
+    from tests.io.test_coco import _write_keypoint_coco
+
+    path = _write_keypoint_coco(tmp_path, [[10, 11, 2, 20, 21, 1, 0, 0, 0, 1, 1, 2]])
+    inst = sio.load_coco(str(path))[0].instances[0]
+    assert not inst.points["verified"].any()
+    inst = sio.load_coco(str(path), visibility_encoding="ternary")[0].instances[0]
+    assert inst.points["verified"][0]
+
+
+def test_load_labels_set_takes_the_clean_up_option(
+    tmp_path, slp_legacy_hidden_complete
+):
+    """`load_labels_set` passes `clean_legacy_points` to each file."""
+    folder = tmp_path / "set"
+    folder.mkdir()
+    shutil.copy(slp_legacy_hidden_complete, folder / "train.slp")
+    kept = sio.load_labels_set(str(folder))["train"][0].instances[0]
+    assert kept.point_states[1] == STATES.OCCLUDED
+    cleaned = sio.load_labels_set(str(folder), clean_legacy_points=True)["train"]
+    assert cleaned[0].instances[0].point_states[1] == STATES.ABSENT
+
+
+def test_all_hidden_old_instance_is_not_empty_without_the_clean_up(tmp_path):
+    """Hidden points that keep coordinates read as occluded unless cleaned up.
+
+    This is the one difference from sleap-io 0.9 for old files loaded as stored:
+    an instance whose nodes are all hidden with coordinates is not empty.
+    """
+    skeleton = Skeleton(["a", "b"])
+    inst = Instance.from_numpy(np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton)
+    inst.points["visible"] = False
+    labels = Labels([LabeledFrame(video=Video("v.mp4"), frame_idx=0, instances=[inst])])
+    path = tmp_path / "old.slp"
+    save_slp(labels, str(path), slp_version="v2")
+    assert not load_slp(str(path))[0].instances[0].is_empty
+    assert load_slp(str(path), clean_legacy_points=True)[0].instances[0].is_empty

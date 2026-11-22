@@ -77,10 +77,12 @@ Format version history:
             predictions) instead of compound datasets. A missing `labeled` column
             reads as True, and unknown columns are carried through re-saves. The
             optional `required_features` attribute on `/metadata` lists features a
-            reader must understand. Older files are cleaned up on read: hidden
-            points lose their (stale) coordinates and visible points without
-            coordinates become hidden. `save_slp(..., legacy_format=True)` still
-            writes the 2.x layout. `/instances` and `/frames` are groups of
+            reader must understand. Older files load with their points as
+            stored; `clean_legacy_points=True` clears hidden points' (stale)
+            coordinates and hides visible points without coordinates. Saves
+            write the 2.x layout unless the content needs 3.0 or
+            `slp_version="v3"` is given (see `resolve_slp_version`).
+            `/instances` and `/frames` are groups of
             columns too, without the id columns (the row number is the id):
             `/frames/video` is the index into the videos, `/frames/is_negative`
             replaces `/negative_frames`, and `metadata/` subgroups hold
@@ -5777,8 +5779,9 @@ def _read_pose_tables(
     """Read, normalise and check `/points`, `/pred_points`, `/instances`, `/frames`.
 
     Each table is read in its own layout (3.0 columns or 2.x compound), so files
-    mixing the two read too. 2.x tables are cleaned up by the normalisers, and
-    `/negative_frames` is read into `is_negative` for 2.x frame tables. The range
+    mixing the two read too. 2.x point tables are cleaned up by the normalisers
+    only when asked (see `_normalize_points`), and `/negative_frames` is read
+    into `is_negative` for 2.x frame tables. The range
     checks (`_check_pose_tables`) raise for 3.0 tables and warn for 2.x ones.
 
     Args:
@@ -11863,6 +11866,7 @@ def _read_labels_from_open_file(
 def read_labels_set(
     path: str | Path | list[str | Path] | dict[str, str | Path],
     open_videos: bool = True,
+    clean_legacy_points: bool | None = None,
 ) -> "LabelsSet":
     """Load a LabelsSet from multiple SLP files.
 
@@ -11873,6 +11877,8 @@ def read_labels_set(
             - A dictionary mapping names to .slp file paths
         open_videos: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened.
+        clean_legacy_points: Whether to clean up the points of files older than
+            3.0 (see `read_labels`).
 
     Returns:
         A LabelsSet containing the loaded Labels objects.
@@ -11894,7 +11900,11 @@ def read_labels_set(
     if isinstance(path, dict):
         # Dictionary of name -> path mappings
         for name, file_path in path.items():
-            labels_dict[name] = read_labels(str(file_path), open_videos=open_videos)
+            labels_dict[name] = read_labels(
+                str(file_path),
+                open_videos=open_videos,
+                clean_legacy_points=clean_legacy_points,
+            )
 
     elif isinstance(path, list):
         # List of paths - auto-generate names
@@ -11902,7 +11912,11 @@ def read_labels_set(
             file_path = Path(file_path)
             # Use filename without extension as key, or fall back to generic name
             name = file_path.stem if file_path.stem else f"labels_{i}"
-            labels_dict[name] = read_labels(str(file_path), open_videos=open_videos)
+            labels_dict[name] = read_labels(
+                str(file_path),
+                open_videos=open_videos,
+                clean_legacy_points=clean_legacy_points,
+            )
 
     else:
         # Directory path - find all .slp files
@@ -11917,7 +11931,11 @@ def read_labels_set(
         for slp_file in slp_files:
             # Use filename without extension as key
             name = slp_file.stem
-            labels_dict[name] = read_labels(str(slp_file), open_videos=open_videos)
+            labels_dict[name] = read_labels(
+                str(slp_file),
+                open_videos=open_videos,
+                clean_legacy_points=clean_legacy_points,
+            )
 
     return LabelsSet(labels=labels_dict)
 

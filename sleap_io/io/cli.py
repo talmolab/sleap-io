@@ -2892,7 +2892,7 @@ def convert(
         $ sio convert labels.slp -o labels.pkg.slp --embed user --image-format jpg
         $ sio convert labels.slp -o labels.v2.slp --slp-version v2
         $ sio convert labels.slp -o labels.v3.slp --slp-version v3
-        $ sio convert coco.json -o labels.v2.slp --slp-version v2 --unlabeled-as absent
+        $ sio convert coco.json -o v2.slp --slp-version v2 --unlabeled-as absent
         $ sio convert crowdpose.json -o labels.slp --visibility-encoding binary
         $ sio convert labels.slp -o dataset/ --to ultralytics
         $ sio convert labels.slp -o analysis.h5 --to analysis_h5

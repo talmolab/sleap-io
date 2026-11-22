@@ -330,8 +330,8 @@ def decode_visibility(
     With `"binary"`, `v>0` is visible, `v=0` follows `v0_as`, and `v<0` is unlabeled.
 
     With `"legacy"` (how sleap-io < 0.10 read keypoints), `v=0` is labeled and not
-    visible with no location, and every other code is visible with its
-    coordinates.
+    visible with no location, every other code is visible with its coordinates,
+    and no point is marked verified.
 
     `v0_as` defaults to `"unlabeled"` for the ternary encoding and to `"absent"` for
     the binary one. A binary file has no code for occluded keypoints, so sleap-io's
@@ -354,8 +354,9 @@ def decode_visibility(
     Returns:
         A `float64` array of shape `(n_points, 5)` with columns x, y, visible,
         verified and labeled, the column layout `Instance.from_numpy` accepts.
-        Points without a location have NaN coordinates, and every labeled point is
-        marked verified, since these codes come from human annotations.
+        Points without a location have NaN coordinates. Except with the legacy
+        reading, every labeled point is marked verified, since these codes come
+        from human annotations.
 
     Raises:
         ValueError: If `visibility_encoding` or `v0_as` is not an accepted value.
@@ -369,10 +370,11 @@ def decode_visibility(
         visibility_encoding = resolve_visibility_encoding("auto", [v.tolist()])
     points = np.empty((len(v), 5), dtype="float64")
     if visibility_encoding == "legacy":
+        # As sleap-io < 0.10 read them, with nothing marked as verified.
         located = v != 0
         points[:, :2] = np.where(located.reshape(-1, 1), xy, np.nan)
         points[:, 2] = located
-        points[:, 3] = True
+        points[:, 3] = False
         points[:, 4] = True
         return points
     if v0_as is None:

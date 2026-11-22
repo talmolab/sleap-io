@@ -82,7 +82,7 @@ def compute_point_states(
     return states
 
 
-def _renamed_field(key):
+def _renamed_field(key, stacklevel: int = 3):
     """Map the field name used before sleap-io 0.10 onto its new name, with a warning.
 
     `complete` was renamed `verified` in sleap-io 0.10. It keeps working as an alias
@@ -91,27 +91,57 @@ def _renamed_field(key):
 
     Args:
         key: An index into a points array.
+        stacklevel: The `stacklevel` of the warning, to name the caller's line.
 
     Returns:
         `key`, with `"complete"` (alone or in a list of field names) replaced by
         `"verified"`.
     """
-    if type(key) is str:
+    if isinstance(key, str):
         if key != "complete":
             return key
     elif not (
-        isinstance(key, list) and any(type(k) is str and k == "complete" for k in key)
+        isinstance(key, list)
+        and any(isinstance(k, str) and k == "complete" for k in key)
     ):
         return key
     warnings.warn(
         'The points field "complete" is now called "verified" (sleap-io 0.10); '
         '"complete" is an alias that will be removed in a future release.',
         DeprecationWarning,
-        stacklevel=3,
+        stacklevel=stacklevel,
     )
-    if type(key) is str:
+    if isinstance(key, str):
         return "verified"
     return ["verified" if k == "complete" else k for k in key]
+
+
+class _PointRecord(np.record):
+    """One point of a points array, accepting `"complete"` as an alias of `"verified"`.
+
+    `points[i]` and iterating over a points array give these records, so code that
+    reads `points[i]["complete"]` (written against sleap-io < 0.10) keeps working.
+    """
+
+    def __getitem__(self, key):
+        """Read a field, accepting `"complete"` as an alias of `"verified"`."""
+        if self.dtype.names and "complete" not in self.dtype.names:
+            key = _renamed_field(key, stacklevel=3)
+        return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        """Set a field, accepting `"complete"` as an alias of `"verified"`."""
+        if self.dtype.names and "complete" not in self.dtype.names:
+            key = _renamed_field(key, stacklevel=3)
+        super().__setitem__(key, value)
+
+
+def _point_record_dtype(fields: list) -> np.dtype:
+    """Return a points dtype whose single elements are `_PointRecord`s.
+
+    It compares equal to the plain structured dtype of the same fields.
+    """
+    return np.dtype((_PointRecord, np.dtype(fields)))
 
 
 class PointsArray(np.ndarray):
@@ -153,7 +183,7 @@ class PointsArray(np.ndarray):
         names = self.dtype.names
         if names is None or "complete" in names:
             return key
-        return _renamed_field(key)
+        return _renamed_field(key, stacklevel=4)
 
     @classmethod
     def _get_dtype(cls):
@@ -166,7 +196,7 @@ class PointsArray(np.ndarray):
         # Cache the dtype at the class level for performance
         # Use cls.__dict__ to check if defined on this class (not inherited)
         if "_cached_dtype" not in cls.__dict__:
-            cls._cached_dtype = np.dtype(
+            cls._cached_dtype = _point_record_dtype(
                 [
                     ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
                     ("visible", "bool"),
@@ -356,7 +386,7 @@ class PredictedPointsArray(PointsArray):
         # Cache the dtype at the class level for performance
         # Use cls.__dict__ to check if defined on this class (not inherited)
         if "_cached_dtype" not in cls.__dict__:
-            cls._cached_dtype = np.dtype(
+            cls._cached_dtype = _point_record_dtype(
                 [
                     ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
                     ("score", "<f8"),  # 64-bit (8-byte) little-endian double

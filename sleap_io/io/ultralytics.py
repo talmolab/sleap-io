@@ -1026,11 +1026,8 @@ def parse_label_file(
 
                     values = np.array(keypoint_data, dtype="float64").reshape(-1, 3)
                     xy = values[:, :2] * [width_px, height_px]
-                    points_array = decode_visibility(
-                        xy,
-                        values[:, 2],
-                        visibility_encoding=visibility_encoding,
-                        v0_as=v0_as,
+                    points_array = _decode_keypoints(
+                        xy, values[:, 2], visibility_encoding, v0_as
                     )
                     instance = Instance.from_numpy(
                         points_data=points_array, skeleton=skeleton
@@ -1355,12 +1352,29 @@ def denormalize_coordinates(
     """
     height, width = image_shape
     values = np.array(normalized_points, dtype="float64").reshape(-1, 3)
-    return decode_visibility(
-        values[:, :2] * [width, height],
-        values[:, 2],
-        visibility_encoding=visibility_encoding,
-        v0_as=v0_as,
+    return _decode_keypoints(
+        values[:, :2] * [width, height], values[:, 2], visibility_encoding, v0_as
     )
+
+
+def _decode_keypoints(
+    xy: np.ndarray,
+    codes: np.ndarray,
+    visibility_encoding: str | None,
+    v0_as: str | None,
+) -> np.ndarray:
+    """Decode Ultralytics keypoints (see `sleap_io.io.coco.decode_visibility`).
+
+    The legacy reading is the one sleap-io < 0.10 used for Ultralytics labels: a
+    code above 0 is visible, and any other code (0, negative or not a number) is
+    hidden with no location.
+    """
+    encoding = default_visibility_options(
+        visibility_encoding, v0_as, new_reading="ternary"
+    )
+    if encoding == "legacy":
+        codes = np.where(np.asarray(codes, dtype="float64") > 0, codes, 0)
+    return decode_visibility(xy, codes, visibility_encoding=encoding, v0_as=v0_as)
 
 
 def _iter_visibility_codes(label_files: list[Path]) -> Iterator[list[float]]:
