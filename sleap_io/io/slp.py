@@ -183,13 +183,251 @@ except ImportError:
 # partway through with an h5py error.
 SLP_FORMAT_ID_LIMIT = 4.0
 
-# The `format_id` written by default. Files below it use the compound (2.x) layout.
+# The `format_id` of the 3.0 layout, where every table is a group of columns. Files
+# below it use the compound (2.x) layout.
 SLP_FORMAT_ID = 3.0
 
 # Features listed in a file's `/metadata` `required_features` attribute that this
 # version of sleap-io understands. A file that requires anything else is refused,
 # since reading it without understanding the feature could silently misread it.
 SLP_SUPPORTED_FEATURES: frozenset[str] = frozenset()
+
+
+# Values of the `slp_version` save option: "auto" writes the 2.x layout unless the
+# labels need format 3.0 (see `resolve_slp_version`), "v2" always writes the 2.x
+# layout and "v3" always writes format 3.0.
+SLP_VERSIONS = ("auto", "v2", "v3")
+
+
+class SlpLayoutWarning(UserWarning):
+    """A save wrote SLP format 3.0, which it wasn't asked for, because of content.
+
+    Raised once per save (or once per set of files saved together) by
+    `slp_version="auto"`, naming what the 2.x layout can't store. Files in format
+    3.0 can't be opened by sleap-io < 0.10 or by SLEAP releases that read through
+    it.
+    """
+
+
+def _normalize_slp_version(slp_version: str, legacy_format: bool) -> str:
+    """Check the layout options and fold `legacy_format` into `slp_version`.
+
+    Args:
+        slp_version: `"auto"`, `"v2"` or `"v3"` (see `SLP_VERSIONS`).
+        legacy_format: `True` is the same as `slp_version="v2"`.
+
+    Returns:
+        `"auto"`, `"v2"` or `"v3"`.
+
+    Raises:
+        ValueError: If `slp_version` is not one of `SLP_VERSIONS`, or if
+            `legacy_format=True` is combined with `slp_version="v3"`.
+    """
+    if slp_version not in SLP_VERSIONS:
+        raise ValueError(
+            f"slp_version must be one of {SLP_VERSIONS}, got {slp_version!r}."
+        )
+    if legacy_format:
+        if slp_version == "v3":
+            raise ValueError(
+                'legacy_format=True means slp_version="v2" and can\'t be combined '
+                'with slp_version="v3".'
+            )
+        return "v2"
+    return slp_version
+
+
+def _label_image_file_is_legacy(slp_version: str, sources_v3: bool = False) -> bool:
+    """Decide the layout of a file written by the label image writers.
+
+    Args:
+        slp_version: `"auto"`, `"v2"` or `"v3"`.
+        sources_v3: Whether any file the content comes from is in format 3.0.
+
+    Returns:
+        `True` for the 2.x layout. With `"auto"`, the 2.x layout unless the format
+        3.0 defaults are on or a source is in format 3.0: these files hold only
+        label images, which both layouts store.
+    """
+    from sleap_io.io.format_defaults import get_v3_defaults
+
+    version = _normalize_slp_version(slp_version, False)
+    if version == "auto":
+        return not (get_v3_defaults() or sources_v3)
+    return version == "v2"
+
+
+def _loaded_as_v3(labels: Labels) -> bool:
+    """Return whether labels were loaded from an SLP file in format 3.0 or newer."""
+    source = getattr(labels, "_source_format_id", None)
+    return source is not None and source >= SLP_FORMAT_ID
+
+
+def _v3_content(labels: Labels) -> list[str]:
+    """Return what in the labels only SLP format 3.0 can store.
+
+    Three things need format 3.0: points marked as not labeled, metadata on
+    instances, frames or bounding boxes, and unknown table columns kept from a file
+    written by a newer sleap-io. Hidden points that keep their coordinates don't:
+    the 2.x layout stores them.
+
+    Args:
+        labels: Eager or lazily loaded labels.
+
+    Returns:
+        One short description per kind of content found, in a fixed order. Empty if
+        the 2.x layout can store the labels as they are.
+
+    Raises:
+        TypeError: If a metadata key of eager labels mixes kinds across a table's
+            records (see `Labels.check_metadata`).
+    """
+    reasons = []
+    if labels.is_lazy:
+        store = labels._lazy_store
+        n_unlabeled = sum(
+            int(np.count_nonzero(~(rows["labeled"] | rows["visible"])))
+            for rows in (store.points_data, store.pred_points_data)
+        )
+        bboxes = [b for anns in store._bbox_by_frame.values() for b in anns] + list(
+            store._undistributed_bboxes
+        )
+        has_metadata = bool(
+            store.instance_metadata
+            or store.frame_metadata
+            or any(b.metadata for b in bboxes)
+        )
+        unknown = [
+            f"/{name}"
+            for name, rows, base in (
+                ("points", store.points_data, RAW_POINT_DTYPE),
+                ("pred_points", store.pred_points_data, RAW_PRED_POINT_DTYPE),
+                ("instances", store.instances_data, RAW_INSTANCE_DTYPE),
+                ("frames", store.frames_data, RAW_FRAME_DTYPE),
+            )
+            if _unknown_columns(rows, base)
+        ]
+        carry = store.annotation_carry
+        session_data = getattr(store, "session_data", None) or {}
+        for name, arr in session_data.items():
+            table = f"session_data/{name}"
+            if (
+                arr is not None
+                and table in _TABLE_SPECS
+                and _unknown_columns(arr, _TABLE_SPECS[table].raw)
+            ):
+                unknown.append(f"/{table}")
+    else:
+        n_unlabeled = sum(
+            int(np.count_nonzero(~(inst.points["labeled"] | inst.points["visible"])))
+            for inst in labels.instances
+        )
+        has_metadata = any(labels.check_metadata().values())
+        unknown = []
+        carry = getattr(labels, "_carried_columns", None)
+    if carry is not None:
+        unknown.extend(f"/{name}" for name in carry.tables)
+    if n_unlabeled:
+        reasons.append(f"{n_unlabeled} point(s) marked as not labeled")
+    if has_metadata:
+        reasons.append("metadata on instances, frames or bounding boxes")
+    if unknown:
+        reasons.append(
+            "unknown columns kept from a newer file (" + ", ".join(unknown) + ")"
+        )
+    return reasons
+
+
+def resolve_slp_version(
+    labels: Labels | Iterable[Labels],
+    slp_version: str = "auto",
+    *,
+    legacy_format: bool = False,
+    warn: bool = True,
+) -> str:
+    """Decide the SLP layout of a save: `"v2"` (the 2.x layout) or `"v3"`.
+
+    With `slp_version="auto"` (the default of every save), the layout is:
+
+    1. Format 3.0 when the format 3.0 defaults are on (see `set_v3_defaults`).
+    2. Format 3.0 when any of the labels were loaded from a format 3.0 file, so a
+       file never changes layout without being asked to.
+    3. Format 3.0 when any of the labels hold content only format 3.0 can store:
+       points marked as not labeled, metadata on instances, frames or bounding
+       boxes, or unknown table columns kept from a newer file. This warns once
+       (`SlpLayoutWarning`), naming the content.
+    4. The 2.x layout otherwise, which sleap-io < 0.10 and SLEAP can open.
+
+    Several files written together (for example the splits of a dataset) are
+    decided together by passing all their labels, so they share one layout.
+
+    Args:
+        labels: The labels of one file, or of every file written together.
+        slp_version: `"auto"`, `"v2"` or `"v3"`. `"v2"` and `"v3"` are returned as
+            they are.
+        legacy_format: `True` is the same as `slp_version="v2"`.
+        warn: If `True` (the default), warn when `"auto"` picks format 3.0 because
+            of content.
+
+    Returns:
+        `"v2"` or `"v3"`.
+
+    Raises:
+        ValueError: If the options are invalid (see `SLP_VERSIONS`).
+    """
+    from sleap_io.io.format_defaults import get_v3_defaults
+
+    version = _normalize_slp_version(slp_version, legacy_format)
+    if version != "auto":
+        return version
+    if get_v3_defaults():
+        return "v3"
+    labels_list = [labels] if isinstance(labels, Labels) else list(labels)
+    if any(_loaded_as_v3(lbls) for lbls in labels_list):
+        return "v3"
+    reasons: list[str] = []
+    for lbls in labels_list:
+        for reason in _v3_content(lbls):
+            if reason not in reasons:
+                reasons.append(reason)
+    if not reasons:
+        return "v2"
+    if warn:
+        warnings.warn(
+            "Saving in SLP format 3.0, which sleap-io < 0.10 and SLEAP releases that "
+            "read through it can't open, because the older layout can't store: "
+            + "; ".join(reasons)
+            + '. Pass slp_version="v3" to choose format 3.0 without this warning, '
+            'or slp_version="v2" to write the older layout (see its notes on what '
+            "it drops).",
+            SlpLayoutWarning,
+            stacklevel=_caller_stacklevel(),
+        )
+    return "v3"
+
+
+def _caller_stacklevel() -> int:
+    """Return the `stacklevel` of the first caller outside sleap-io.
+
+    A warning raised with it names the user's own call, whatever route through
+    sleap-io the save took.
+    """
+    package = str(Path(__file__).resolve().parents[1])
+    frame = sys._getframe(1)
+    level = 1
+    while frame is not None and str(
+        Path(frame.f_code.co_filename).resolve()
+    ).startswith(package):
+        frame = frame.f_back
+        level += 1
+    return level
+
+
+def _file_format_id(f: h5py.File) -> float | None:
+    """Return a file's `/metadata` `format_id`, or `None` if it has none."""
+    if "metadata" in f and "format_id" in f["metadata"].attrs:
+        return float(f["metadata"].attrs["format_id"])
+    return None
 
 
 def _check_format_id(labels_path: str, f: h5py.File) -> None:
@@ -8619,6 +8857,7 @@ def _read_labels_lazy_from_open_file(
     if annotation_only_frames:
         lazy_frames._supplementary.extend(annotation_only_frames)
     labels.provenance["filename"] = labels_path
+    labels._source_format_id = _file_format_id(f)
 
     # Keep the HDF5 file handle alive for lazy label image data
     if li_file is not None:
@@ -10395,20 +10634,19 @@ def _write_metadata_standalone(
         _write_provenance_dataset(f, provenance)
         grp.attrs["json"] = _encode_metadata_attr(md)
 
-        # Write empty placeholder datasets so read_labels can parse the file
-        if "points" not in f:
-            _write_columns(f, "points", np.empty(0, dtype=RAW_POINT_DTYPE))
-        if "pred_points" not in f:
-            _write_columns(f, "pred_points", np.empty(0, dtype=RAW_PRED_POINT_DTYPE))
-        if "instances" not in f:
-            _write_columns(
+        # Write empty placeholder pose tables so read_labels can parse the file,
+        # in the layout the format number says: compound datasets below 3.0.
+        if not any(name in f for name in ("points", "pred_points", "instances")):
+            _write_pose_tables(
                 f,
-                "instances",
-                _without_field(np.empty(0, RAW_INSTANCE_DTYPE), "instance_id"),
-            )
-        if "frames" not in f:
-            _write_columns(
-                f, "frames", _without_field(np.empty(0, RAW_FRAME_DTYPE), "frame_id")
+                np.empty(0, dtype=RAW_POINT_DTYPE),
+                np.empty(0, dtype=RAW_PRED_POINT_DTYPE),
+                np.empty(0, dtype=RAW_INSTANCE_DTYPE),
+                np.empty(0, dtype=RAW_FRAME_DTYPE),
+                videos=list(videos or []),
+                instance_metadata={},
+                frame_metadata={},
+                legacy_format=format_id < SLP_FORMAT_ID,
             )
 
 
@@ -10418,9 +10656,12 @@ class LabelImageWriter:
     Writes label images one at a time (or in batches) to an HDF5/SLP file
     without holding all pixel data in memory simultaneously. Uses the chunked
     ``(T, H, W)`` int32 format with ``write_direct_chunk`` for maximum
-    throughput. The file is SLP 3.0: the pixels go to ``/label_images/data`` and
-    the tables are written as columns by ``finalize()``. The file holds no
-    instances, so label image objects link to none.
+    throughput. The file is in the SLP 2.x layout that sleap-io < 0.10 and SLEAP
+    can open (pixels in ``/label_image_data``, compound tables), or in SLP 3.0
+    with ``slp_version="v3"`` or the format 3.0 defaults (pixels in
+    ``/label_images/data``, tables as columns). The tables are written by
+    ``finalize()``. The file holds no instances, so label image objects link to
+    none.
 
     The HDF5 file and pixel dataset are created lazily on the first ``add()``
     call, since the frame dimensions ``(H, W)`` are needed to define the
@@ -10449,6 +10690,7 @@ class LabelImageWriter:
         tracks: list[Track] | None = None,
         skeleton: Skeleton | None = None,
         initial_capacity: int = 100,
+        slp_version: str = "auto",
     ):
         """Initialize the streaming label image writer.
 
@@ -10461,7 +10703,12 @@ class LabelImageWriter:
             skeleton: Optional skeleton for metadata.
             initial_capacity: Initial number of frames to allocate. The dataset
                 grows exponentially (doubles) when capacity is exceeded.
+            slp_version: The file's layout: `"auto"` (the default) writes the
+                2.x layout unless the format 3.0 defaults are on
+                (`set_v3_defaults`), `"v2"` always the 2.x layout and `"v3"`
+                always format 3.0.
         """
+        self._legacy = _label_image_file_is_legacy(slp_version)
         self.path = str(path)
         self.video = video
         self.tracks = tracks or []
@@ -10503,7 +10750,7 @@ class LabelImageWriter:
 
         self._file = h5py.File(self.path, "w")
         self._pixel_dset = self._file.create_dataset(
-            _label_image_data_path(legacy_format=False),
+            _label_image_data_path(legacy_format=self._legacy),
             shape=(self._capacity, height, width),
             maxshape=(None, height, width),
             chunks=(1, height, width),
@@ -10654,7 +10901,12 @@ class LabelImageWriter:
             write_videos(self.path, videos)
             write_video_crops(self.path, Labels(videos=videos))
             write_tracks(self.path, self.tracks)
-            _write_metadata_standalone(self.path, skeletons=skeletons, videos=videos)
+            _write_metadata_standalone(
+                self.path,
+                format_id=1.4 if self._legacy else SLP_FORMAT_ID,
+                skeletons=skeletons,
+                videos=videos,
+            )
             return Labels(
                 videos=videos,
                 skeletons=skeletons,
@@ -10664,7 +10916,7 @@ class LabelImageWriter:
         # Trim pixel dataset to actual count
         self._pixel_dset.resize(self._count, axis=0)
 
-        # Write the label image tables (SLP 3.0 columns) next to the pixel data
+        # Write the label image tables next to the pixel data, in the file's layout
         f = self._file
         _write_label_image_tables(
             f,
@@ -10674,6 +10926,7 @@ class LabelImageWriter:
             np.concatenate(self._sm_chunks)
             if self._sm_chunks
             else np.empty(0, np.uint8),
+            legacy_format=self._legacy,
         )
 
         # Close HDF5 file before writing video/track/metadata
@@ -10686,7 +10939,12 @@ class LabelImageWriter:
         write_videos(self.path, videos)
         write_video_crops(self.path, Labels(videos=videos))
         write_tracks(self.path, self.tracks)
-        _write_metadata_standalone(self.path, skeletons=skeletons, videos=videos)
+        _write_metadata_standalone(
+            self.path,
+            format_id=1.8 if self._legacy else SLP_FORMAT_ID,
+            skeletons=skeletons,
+            videos=videos,
+        )
 
         li_tuples, li_file = read_label_images(self.path, videos, self.tracks, [])
         # Distribute label images to frames
@@ -10729,14 +10987,17 @@ def merge_label_images(
     source_paths: list[str | Path],
     dest_path: str | Path,
     video: Video | None = None,
+    slp_version: str = "auto",
 ) -> Labels:
     """Merge label images from multiple SLP files into one.
 
     Copies compressed chunks directly (no decompression) via
     ``read_direct_chunk`` -> ``write_direct_chunk`` when possible, falling
     back to decompress + recompress for legacy blob-format sources. Sources may
-    use any SLP layout and are checked as reading them would; the merged file is
-    SLP 3.0. It holds no instances, so label image objects link to none.
+    use any SLP layout and are checked as reading them would. The merged file is
+    in the SLP 2.x layout that sleap-io < 0.10 and SLEAP can open, unless a
+    source is in format 3.0, the format 3.0 defaults are on or `slp_version`
+    says otherwise. It holds no instances, so label image objects link to none.
 
     Args:
         source_paths: List of paths to source SLP files containing label
@@ -10744,6 +11005,8 @@ def merge_label_images(
         dest_path: Path to the destination SLP file to create.
         video: Optional ``Video`` to associate with all merged label images.
             If ``None``, videos are deduplicated by filename across sources.
+        slp_version: The merged file's layout: `"auto"` (the default), `"v2"`
+            or `"v3"` (see above).
 
     Returns:
         A ``Labels`` object pointing at the merged file.
@@ -10760,6 +11023,8 @@ def merge_label_images(
 
     source_paths = [str(p) for p in source_paths]
     dest_path = str(dest_path)
+    _normalize_slp_version(slp_version, False)
+    sources_v3 = False
 
     # --- Phase 1: Open all sources, read index tables, validate dimensions ---
     source_files: list[h5py.File] = []
@@ -10776,6 +11041,8 @@ def merge_label_images(
             f = h5py.File(src_path, "r")
             source_files.append(f)
             _check_format_id(src_path, f)
+            source_format = _file_format_id(f)
+            sources_v3 |= source_format is not None and source_format >= SLP_FORMAT_ID
 
             # Read the index table (any layout) and its pixel data
             table = _read_table(f, "label_images")
@@ -10862,9 +11129,10 @@ def merge_label_images(
         dest_sm_chunks: list[np.ndarray] = []
         dest_sm_offset = 0
 
+        legacy = _label_image_file_is_legacy(slp_version, sources_v3)
         with h5py.File(dest_path, "w") as dest_f:
             dest_pixel_dset = dest_f.create_dataset(
-                _label_image_data_path(legacy_format=False),
+                _label_image_data_path(legacy_format=legacy),
                 shape=(total_frames, frame_h, frame_w),
                 chunks=(1, frame_h, frame_w),
                 dtype=np.int32,
@@ -10998,7 +11266,7 @@ def merge_label_images(
 
                     dest_frame_idx += 1
 
-            # Write the label image tables (SLP 3.0 columns)
+            # Write the label image tables in the merged file's layout
             _write_label_image_tables(
                 dest_f,
                 dest_li_rows,
@@ -11007,13 +11275,18 @@ def merge_label_images(
                 np.concatenate(dest_sm_chunks)
                 if dest_sm_chunks
                 else np.empty(0, np.uint8),
+                legacy_format=legacy,
             )
 
         # Write video, track, and metadata info
         write_videos(dest_path, merged_videos)
         write_video_crops(dest_path, Labels(videos=merged_videos))
         write_tracks(dest_path, merged_tracks)
-        _write_metadata_standalone(dest_path, videos=merged_videos)
+        _write_metadata_standalone(
+            dest_path,
+            format_id=1.8 if legacy else SLP_FORMAT_ID,
+            videos=merged_videos,
+        )
 
         # Return Labels pointing at the merged file
         li_tuples, li_file = read_label_images(
@@ -11435,6 +11708,7 @@ def _read_labels_from_open_file(
         rois=undist_rois,
     )
     labels.provenance["filename"] = labels_path
+    labels._source_format_id = _file_format_id(f)
 
     # Store the HDF5 file handle for lazy label image data (keeps it alive)
     if _li_file is not None:
@@ -12487,6 +12761,7 @@ def write_labels(
     compression: str | None = None,
     image_format: str | None = None,
     image_quality: int | None = None,
+    slp_version: str = "auto",
 ):
     """Write a SLEAP labels file.
 
@@ -12548,17 +12823,13 @@ def write_labels(
             keeping the vectors in memory. Set `True` to also write the attached
             re-ID appearance embeddings. Off by default, mirroring `embed` (which
             embeds *video frames*).
-        unlabeled_as: How `legacy_format=True` handles unlabeled points
+        unlabeled_as: How `slp_version="v2"` handles unlabeled points
             (`labeled=False`), which the 2.x layout can't store. `"error"` (the
             default) raises a `ValueError` before anything is written. `"absent"`
             saves them as hidden points (labeled, not visible, no location) and
-            warns. Ignored for the default (3.0) layout, which stores them.
-        legacy_format: If `True`, write the SLP 2.x layout (compound `/points`,
-            `/pred_points`, `/instances` and `/frames` datasets, `/negative_frames`,
-            compound ROI, mask, label image, link and session tables with their
-            separate string datasets, and the 2.x `format_id`) that older sleap-io
-            and SLEAP releases can read. Default `False` writes SLP format 3.0,
-            where every table is a group of columns.
+            warns. Ignored when format 3.0 is written, which stores them.
+        legacy_format: `True` is the same as `slp_version="v2"`, and can't be
+            combined with `slp_version="v3"`.
         compression: Compression for the table columns (the pose tables and their
             metadata columns, and the ROI, mask, label image, link and session
             tables): `None` (the default) for contiguous, uncompressed data that
@@ -12579,6 +12850,18 @@ def write_labels(
             `image_format="png"`. `None` (the default) uses the encoder's default
             (JPEG quality 95 with OpenCV, 75 with imageio). Needs an explicit
             `image_format`.
+        slp_version: The layout to write. `"auto"` (the default) writes the SLP
+            2.x layout that sleap-io < 0.10 and SLEAP can open, unless the labels
+            were loaded from a format 3.0 file or hold content only format 3.0 can
+            store (points marked as not labeled, metadata on instances, frames or
+            bounding boxes, unknown columns kept from a newer file); see
+            `resolve_slp_version`. `"v2"` always writes the 2.x layout (compound
+            `/points`, `/pred_points`, `/instances` and `/frames` datasets,
+            `/negative_frames`, compound ROI, mask, label image, link and session
+            tables with their separate string datasets, and the 2.x `format_id`):
+            unlabeled points follow `unlabeled_as`, and metadata and unknown
+            columns are dropped with a warning. `"v3"` always writes SLP format
+            3.0, where every table is a group of columns.
 
     Notes:
         The file is written to a temporary file beside `labels_path` (named
@@ -12591,10 +12874,11 @@ def write_labels(
         their frames from it are pointed at the new file's contents, since the
         new file may store other frames, or the same frames in other places.
 
-        Instance, frame and bounding box `metadata` is stored as columns of
-        `/instances`, `/frames` and `/bboxes` (lazy labels write the instance and
-        frame columns they were loaded with). `legacy_format=True` stores no
-        metadata; it is dropped with a warning. Metadata kinds are checked first
+        In format 3.0, instance, frame and bounding box `metadata` is stored as
+        columns of `/instances`, `/frames` and `/bboxes` (lazy labels write the
+        instance and frame columns they were loaded with). The 2.x layout stores
+        no metadata, so `slp_version="auto"` writes format 3.0 when there is any,
+        and `slp_version="v2"` drops it with a warning. Metadata kinds are checked first
         (`Labels.check_metadata`) for eager labels, so a key that mixes kinds
         across records raises a `TypeError` before anything is written.
 
@@ -12616,6 +12900,11 @@ def write_labels(
         raise ValueError(
             f"compression must be one of {_COMPRESSION_MODES}, got {compression!r}."
         )
+    # Decide the layout once, before anything is written: every table writer below
+    # follows it, and the format number written matches it.
+    legacy_format = (
+        resolve_slp_version(labels, slp_version, legacy_format=legacy_format) == "v2"
+    )
 
     # The labels as given: materializing lazy labels below copies their videos.
     given_labels = labels

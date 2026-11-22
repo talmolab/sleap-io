@@ -164,7 +164,12 @@ class LabelsSet:
                 Can be True, False, "user", "predictions", or "all".
                 See Labels.save() for details.
             format: Output format. Currently supports "slp" (default) and "ultralytics".
-            **kwargs: Additional format-specific arguments. For ultralytics format,
+            **kwargs: Additional format-specific arguments. For SLP format, the
+                arguments of `sleap_io.save_slp`, such as `slp_version`,
+                `image_format` or `compression`. The files share one layout: with
+                `slp_version="auto"` (the default), all are written in format 3.0
+                if any of them needs it, with one warning (see
+                `sleap_io.io.slp.resolve_slp_version`). For ultralytics format,
                 these might include skeleton, image_size, etc.
 
         Examples:
@@ -181,12 +186,21 @@ class LabelsSet:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         if format == "slp":
+            from sleap_io.io.slp import resolve_slp_version
+
+            slp_kwargs = dict(kwargs)
+            # One layout for the whole set, decided (and warned about) once.
+            slp_kwargs["slp_version"] = resolve_slp_version(
+                list(self.values()),
+                slp_kwargs.get("slp_version", "auto"),
+                legacy_format=slp_kwargs.pop("legacy_format", False),
+            )
             for name, labels in self.items():
                 if embed:
                     filename = f"{name}.pkg.slp"
                 else:
                     filename = f"{name}.slp"
-                labels.save(save_dir / filename, embed=embed)
+                labels.save(save_dir / filename, embed=embed, **slp_kwargs)
 
         elif format == "ultralytics":
             # Import here to avoid circular imports

@@ -491,12 +491,13 @@ argument decides how those nodes are filled:
 ```
 
 !!! note "Saving unlabeled points to SLP"
-    SLP format 3.0 (the default) stores the `labeled` flag, so unlabeled points
-    round-trip. The older layout written with `legacy_format=True` has no `labeled`
-    column, so [`save_slp`][sleap_io.save_slp] refuses to write unlabeled points
-    there by default (`unlabeled_as="error"`). Pass `unlabeled_as="absent"` to save
-    them as hidden points with no location instead (with a warning). See
-    [Labels → Saving](labels.md#saving).
+    SLP format 3.0 stores the `labeled` flag, so unlabeled points round-trip, and
+    a save with the default `slp_version="auto"` writes format 3.0 when there are
+    any (with a warning). The 2.x layout, written with `slp_version="v2"`, has no
+    `labeled` column, so [`save_slp`][sleap_io.save_slp] refuses to write
+    unlabeled points there by default (`unlabeled_as="error"`). Pass
+    `unlabeled_as="absent"` to save them as hidden points with no location instead
+    (with a warning). See [Labels → Saving](labels.md#saving).
 
 ### Point flags in other formats
 
@@ -551,7 +552,8 @@ source annotation id:
 !!! note
     SLP format 3.0 stores instance, frame and bounding box metadata as typed
     columns (see [Record Metadata](../formats/slp.md#record-metadata)), including
-    through lazy saves. `legacy_format=True` drops all metadata with a warning.
+    through lazy saves; a save with the default `slp_version="auto"` writes format
+    3.0 when there is any. `slp_version="v2"` drops all metadata with a warning.
 
 ---
 

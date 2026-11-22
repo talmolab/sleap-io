@@ -8,6 +8,7 @@ in minimal environments and CI.
 
 from __future__ import annotations
 
+import functools
 import json
 import posixpath
 import re
@@ -17,7 +18,7 @@ import urllib.parse
 from dataclasses import dataclass
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from sleap_io.model.event import Event, EventType
@@ -2557,26 +2558,163 @@ def _infer_output_format(path: Path) -> str | None:
     return None
 
 
-_image_format_option = click.option(
-    "--image-format",
+# The options of every command that writes an SLP file, so that each can write what
+# `sio convert` can. A test walks the command list and fails when a command that
+# writes SLP files lacks them (see `tests/io/test_cli_slp_save_options.py`).
+SLP_SAVE_OPTION_NAMES = (
+    "slp_version",
+    "legacy_format",
+    "unlabeled_as",
+    "compression",
     "image_format",
-    type=click.Choice(["png", "jpg", "hdf5"]),
-    default=None,
-    help=(
-        "Image format for embedded frames (default: keep PNG/JPEG sources as they "
-        "are, PNG otherwise)."
-    ),
-)
-_image_quality_option = click.option(
-    "--image-quality",
     "image_quality",
-    type=int,
-    default=None,
-    help=(
-        "JPEG quality (0-100) with --image-format jpg, or PNG compression level "
-        "(0-9) with --image-format png."
+)
+
+_SLP_SAVE_OPTIONS = (
+    click.option(
+        "--slp-version",
+        "slp_version",
+        type=click.Choice(["auto", "v2", "v3"]),
+        default="auto",
+        show_default=True,
+        help=(
+            "SLP layout to write. auto: the 2.x layout that sleap-io < 0.10 and "
+            "SLEAP can open, unless the input is a format 3.0 file or holds "
+            "content only format 3.0 can store (then format 3.0, with a "
+            "warning). v2: always the 2.x layout. v3: always format 3.0."
+        ),
+    ),
+    click.option(
+        "--legacy-format",
+        "legacy_format",
+        is_flag=True,
+        default=False,
+        help="Same as --slp-version v2.",
+    ),
+    click.option(
+        "--unlabeled-as",
+        "unlabeled_as",
+        type=click.Choice(["error", "absent"]),
+        default=None,
+        help=(
+            "How --slp-version v2 handles points marked as not labeled, which the "
+            "2.x layout can't store: error (the default) or absent (save them as "
+            "hidden points)."
+        ),
+    ),
+    click.option(
+        "--compression",
+        "compression",
+        type=click.Choice(["gzip", "lzf"]),
+        default=None,
+        help="Compress the SLP table columns (default: uncompressed).",
+    ),
+    click.option(
+        "--image-format",
+        "image_format",
+        type=click.Choice(["png", "jpg", "jpeg", "hdf5"]),
+        default=None,
+        help=(
+            "Image format for embedded frames; jpg and jpeg are the same (default: "
+            "keep PNG/JPEG sources as they are, PNG otherwise)."
+        ),
+    ),
+    click.option(
+        "--image-quality",
+        "image_quality",
+        type=int,
+        default=None,
+        help=(
+            "JPEG quality (0-100) with --image-format jpg, or PNG compression level "
+            "(0-9) with --image-format png."
+        ),
     ),
 )
+
+
+def _slp_save_kwargs(
+    slp_version: str = "auto",
+    legacy_format: bool = False,
+    unlabeled_as: str | None = None,
+    compression: str | None = None,
+    image_format: str | None = None,
+    image_quality: int | None = None,
+) -> dict[str, Any]:
+    """Check the shared SLP save options and turn them into `save_slp` arguments.
+
+    Args:
+        slp_version: `--slp-version`.
+        legacy_format: `--legacy-format`, the same as `--slp-version v2`.
+        unlabeled_as: `--unlabeled-as`, or `None` if not given.
+        compression: `--compression`, or `None` if not given.
+        image_format: `--image-format`, or `None` if not given.
+        image_quality: `--image-quality`, or `None` if not given.
+
+    Returns:
+        The arguments to pass to `save_slp` (or `Labels.save`): each option
+        that was given, then `slp_version`, which is always there.
+
+    Raises:
+        click.ClickException: If the options contradict each other.
+    """
+    if legacy_format:
+        if slp_version == "v3":
+            raise click.ClickException(
+                "--legacy-format means --slp-version v2 and can't be combined with "
+                "--slp-version v3."
+            )
+        slp_version = "v2"
+    if unlabeled_as is not None and slp_version != "v2":
+        raise click.ClickException(
+            "--unlabeled-as only applies with --slp-version v2 or --legacy-format "
+            "(format 3.0 stores points marked as not labeled)."
+        )
+    kwargs: dict[str, Any] = {}
+    for name, value in (
+        ("unlabeled_as", unlabeled_as),
+        ("compression", compression),
+        ("image_format", image_format),
+        ("image_quality", image_quality),
+    ):
+        if value is not None:
+            kwargs[name] = value
+    kwargs["slp_version"] = slp_version
+    return kwargs
+
+
+def _slp_save_options(func: Callable) -> Callable:
+    """Add the shared SLP save options to a command that writes SLP files.
+
+    The command receives them as one argument, `slp_save`: the `save_slp`
+    arguments from `_slp_save_kwargs`, to pass to every SLP save it makes. A
+    command that writes several files decides their layout together with
+    `resolve_slp_version` first.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        values = {name: kwargs.pop(name) for name in SLP_SAVE_OPTION_NAMES}
+        kwargs["slp_save"] = _slp_save_kwargs(**values)
+        return func(*args, **kwargs)
+
+    for option in reversed(_SLP_SAVE_OPTIONS):
+        wrapper = option(wrapper)
+    return wrapper
+
+
+def _resolve_set_layout(slp_save: dict[str, Any], labels_list: list[Labels]) -> None:
+    """Decide one layout for several SLP files written by one command, in place.
+
+    Args:
+        slp_save: The `save_slp` arguments from `_slp_save_options`. Its
+            `slp_version` is replaced by the layout all the files get.
+        labels_list: The labels of every SLP file the command writes.
+    """
+    from sleap_io.io.slp import resolve_slp_version
+
+    slp_save["slp_version"] = resolve_slp_version(
+        labels_list, slp_save.get("slp_version", "auto")
+    )
 
 
 @cli.command()
@@ -2619,35 +2757,7 @@ _image_quality_option = click.option(
     type=click.Choice(["user", "all", "suggestions", "source"]),
     help="Embed frames in output (SLP format only).",
 )
-@click.option(
-    "--legacy-format",
-    "legacy_format",
-    is_flag=True,
-    default=False,
-    help=(
-        "Write the SLP 2.x layout that sleap-io < 0.10 and SLEAP can open "
-        "(SLP output only)."
-    ),
-)
-@click.option(
-    "--unlabeled-as",
-    "unlabeled_as",
-    type=click.Choice(["error", "absent"]),
-    default=None,
-    help=(
-        "How --legacy-format handles unlabeled points, which the 2.x layout can't "
-        "store: error (the default) or absent (save them as hidden points). "
-        "SLP output with --legacy-format only."
-    ),
-)
-@click.option(
-    "--compression",
-    type=click.Choice(["gzip", "lzf"]),
-    default=None,
-    help="Compress the SLP table columns (default: uncompressed). SLP output only.",
-)
-@_image_format_option
-@_image_quality_option
+@_slp_save_options
 @click.option(
     "--visibility-encoding",
     "visibility_encoding",
@@ -2723,11 +2833,7 @@ def convert(
     input_format: str | None,
     output_format: str | None,
     embed: str | None,
-    legacy_format: bool,
-    unlabeled_as: str | None,
-    compression: str | None,
-    image_format: str | None,
-    image_quality: int | None,
+    slp_save: dict[str, Any],
     visibility_encoding: str | None,
     v0_as: str | None,
     csv_format: str,
@@ -2756,9 +2862,11 @@ def convert(
     --coco-category-as-track and --coco-segmentation control identity tracks and
     polygon handling. For COCO and Ultralytics input, --visibility-encoding and
     --v0-as control how keypoint visibility codes are read. For SLP output,
-    --compression compresses the tables, --unlabeled-as sets how
-    --legacy-format handles unlabeled points, and --image-format and
-    --image-quality set how embedded frames are encoded.
+    --slp-version picks the layout (by default the 2.x layout SLEAP opens, unless
+    the input is a format 3.0 file or needs format 3.0), --compression compresses
+    the tables, --unlabeled-as sets how --slp-version v2 handles points marked as
+    not labeled, and --image-format and --image-quality set how embedded frames
+    are encoded.
 
     [dim]Examples:[/]
 
@@ -2769,8 +2877,9 @@ def convert(
         $ sio convert seg.json -o labels.slp --from coco --coco-category-as-track
         $ sio convert labels.slp -o labels.pkg.slp --embed user
         $ sio convert labels.slp -o labels.pkg.slp --embed user --image-format jpg
-        $ sio convert labels.slp -o labels.v2.slp --legacy-format
-        $ sio convert coco.json -o labels.v2.slp --legacy-format --unlabeled-as absent
+        $ sio convert labels.slp -o labels.v2.slp --slp-version v2
+        $ sio convert labels.slp -o labels.v3.slp --slp-version v3
+        $ sio convert coco.json -o labels.v2.slp --slp-version v2 --unlabeled-as absent
         $ sio convert crowdpose.json -o labels.slp --visibility-encoding binary
         $ sio convert labels.slp -o dataset/ --to ultralytics
         $ sio convert labels.slp -o analysis.h5 --to analysis_h5
@@ -2824,19 +2933,17 @@ def convert(
         raise click.ClickException("--embed is only valid for SLP output format.")
 
     # Validate SLP output options
-    for flag, value in [
-        ("--unlabeled-as", unlabeled_as),
-        ("--compression", compression),
-        ("--image-format", image_format),
-        ("--image-quality", image_quality),
-    ]:
-        if value is not None and resolved_output_format != "slp":
-            raise click.ClickException(f"{flag} is only valid for SLP output format.")
-    if unlabeled_as is not None and not legacy_format:
-        raise click.ClickException(
-            "--unlabeled-as only applies with --legacy-format (the default SLP "
-            "layout stores unlabeled points)."
-        )
+    if resolved_output_format != "slp":
+        for name, value in slp_save.items():
+            if name != "slp_version" or value != "auto":
+                flag = (
+                    "--slp-version (or --legacy-format)"
+                    if name == "slp_version"
+                    else "--" + name.replace("_", "-")
+                )
+                raise click.ClickException(
+                    f"{flag} is only valid for SLP output format."
+                )
 
     # Validate keypoint visibility options
     for flag, value in [
@@ -2909,16 +3016,7 @@ def convert(
             else:
                 # Preserve any existing embedded images
                 save_kwargs["embed"] = None
-            if legacy_format:
-                save_kwargs["legacy_format"] = True
-            if unlabeled_as is not None:
-                save_kwargs["unlabeled_as"] = unlabeled_as
-            if compression is not None:
-                save_kwargs["compression"] = compression
-            if image_format is not None:
-                save_kwargs["image_format"] = image_format
-            if image_quality is not None:
-                save_kwargs["image_quality"] = image_quality
+            save_kwargs.update(slp_save)
         # Handle CSV-specific options
         if resolved_output_format == "csv":
             io_main.save_csv(
@@ -3261,6 +3359,7 @@ def export(
     type=click.Choice(["user", "all", "suggestions", "source"]),
     help="Embed frames in output files.",
 )
+@_slp_save_options
 def split(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -3271,6 +3370,7 @@ def split(
     remove_predictions: bool,
     seed: int | None,
     embed: str | None,
+    slp_save: dict[str, Any],
 ):
     """Split labels into train/val/test sets.
 
@@ -3280,6 +3380,9 @@ def split(
     [bold]Proportions:[/]
     By default, 80% of frames go to training and 20% to validation.
     Use --test to create a three-way split.
+
+    [bold]Layout:[/] the split files share one layout. With --slp-version auto
+    (the default), all are written in format 3.0 if any of them needs it.
 
     [dim]Examples:[/]
 
@@ -3426,9 +3529,13 @@ def split(
     else:
         ext = ".slp"
 
-    # Save splits
+    # Save splits, all in one layout.
     try:
-        save_kwargs: dict = {}
+        _resolve_set_layout(
+            slp_save,
+            [labels_train, labels_val] + ([labels_test] if n_test > 0 else []),
+        )
+        save_kwargs: dict = dict(slp_save)
         if embed is not None:
             save_kwargs["embed"] = embed
 
@@ -3480,10 +3587,12 @@ def split(
     type=click.Choice(["user", "all", "suggestions", "source"]),
     help="Embed frames in output file.",
 )
+@_slp_save_options
 def unsplit(
     input_files: tuple[Path, ...],
     output_path: Path,
     embed: str | None,
+    slp_save: dict[str, Any],
 ):
     """Merge split files back into a single labels file.
 
@@ -3583,7 +3692,7 @@ def unsplit(
     try:
         # Preserve existing embedded videos by default.
         # Use embed=None (preserve state) unless user explicitly specified --embed.
-        save_kwargs: dict = {}
+        save_kwargs: dict = dict(slp_save)
         if embed is not None:
             save_kwargs["embed"] = embed
         else:
@@ -3682,6 +3791,7 @@ def unsplit(
     is_flag=True,
     help="Show detailed merge information.",
 )
+@_slp_save_options
 def merge(
     input_files: tuple[Path, ...],
     output_path: Path,
@@ -3694,6 +3804,7 @@ def merge(
     instance: str,
     embed: str | None,
     verbose: bool,
+    slp_save: dict[str, Any],
 ):
     """Merge multiple labels files into one.
 
@@ -3851,7 +3962,7 @@ def merge(
     try:
         # Preserve existing embedded videos by default.
         # Use embed=None (preserve state) unless user explicitly specified --embed.
-        save_kwargs: dict = {}
+        save_kwargs: dict = dict(slp_save)
         if embed is not None:
             save_kwargs["embed"] = embed
         else:
@@ -3942,6 +4053,7 @@ def merge(
     is_flag=True,
     help="Output as JSON (inspection mode only, includes source/original videos).",
 )
+@_slp_save_options
 def filenames(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -3953,6 +4065,7 @@ def filenames(
     show_original: bool,
     show_all: bool,
     as_json: bool,
+    slp_save: dict[str, Any],
 ):
     r"""List or update video filenames in a labels file.
 
@@ -4116,7 +4229,7 @@ def filenames(
 
     # Save the output file
     try:
-        io_main.save_file(labels, str(output_path))
+        io_main.save_file(labels, str(output_path), **slp_save)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 
@@ -5130,6 +5243,7 @@ def _analyze_video_colors(labels: Labels) -> list[dict]:
     default=False,
     help="Show detailed analysis.",
 )
+@_slp_save_options
 def fix(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -5148,6 +5262,7 @@ def fix(
     video_color_mode: str | None,
     dry_run: bool,
     verbose: bool,
+    slp_save: dict[str, Any],
 ):
     r"""Fix common issues in labels files.
 
@@ -5605,7 +5720,7 @@ def fix(
     try:
         # Always use embed=None to preserve any existing embedded images.
         # The fix command should clean up labels, not change video embedding state.
-        io_main.save_file(labels, str(output_path), embed=None)
+        io_main.save_file(labels, str(output_path), embed=None, **slp_save)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 
@@ -5662,8 +5777,7 @@ def fix(
     show_default=True,
     help="Include suggested frames.",
 )
-@_image_format_option
-@_image_quality_option
+@_slp_save_options
 def embed(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -5671,8 +5785,7 @@ def embed(
     include_user: bool,
     include_predictions: bool,
     include_suggestions: bool,
-    image_format: str | None,
-    image_quality: int | None,
+    slp_save: dict[str, Any],
 ):
     """Embed video frames into a labels file.
 
@@ -5685,7 +5798,8 @@ def embed(
     - --suggestions: Suggested frames for labeling (default: off)
 
     [bold]Encoding:[/] --image-format (png, jpg or hdf5) and --image-quality (JPEG
-    quality 0-100 or PNG compression level 0-9) set how frames are stored.
+    quality 0-100 or PNG compression level 0-9) set how frames are stored, and
+    --slp-version the file's layout.
 
     [dim]Examples:[/]
 
@@ -5754,12 +5868,7 @@ def embed(
 
     # Save with embedding
     try:
-        labels.save(
-            str(output_path),
-            embed=frames_to_embed,
-            image_format=image_format,
-            image_quality=image_quality,
-        )
+        labels.save(str(output_path), embed=frames_to_embed, **slp_save)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 
@@ -5792,10 +5901,12 @@ def embed(
     type=click.Path(path_type=Path),
     help="Output .slp file path.",
 )
+@_slp_save_options
 def unembed(
     input_arg: Path | None,
     input_opt: Path | None,
     output_path: Path,
+    slp_save: dict[str, Any],
 ):
     """Remove embedded frames and restore video references.
 
@@ -5859,7 +5970,9 @@ def unembed(
 
     # Save with source video restoration
     try:
-        labels.save(str(output_path), embed=False, restore_original_videos=True)
+        labels.save(
+            str(output_path), embed=False, restore_original_videos=True, **slp_save
+        )
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 
@@ -5939,6 +6052,7 @@ def unembed(
     show_default=True,
     help="H.264 encoding speed/compression trade-off.",
 )
+@_slp_save_options
 def trim(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -5949,6 +6063,7 @@ def trim(
     fps: float | None,
     crf: int,
     x264_preset: str,
+    slp_save: dict[str, Any],
 ) -> None:
     """Trim video and labels to a frame range.
 
@@ -6018,6 +6133,7 @@ def trim(
             end_frame=end_frame,
             video_ind=video_ind,
             video_kwargs=video_kwargs,
+            slp_save=slp_save,
         )
     else:
         # Video mode: trim video only (video is guaranteed non-None here)
@@ -6040,8 +6156,12 @@ def _trim_labels(
     end_frame: int | None,
     video_ind: int | None,
     video_kwargs: dict[str, Any],
+    slp_save: dict[str, Any] | None = None,
 ) -> None:
-    """Trim labels and associated video to a frame range."""
+    """Trim labels and associated video to a frame range.
+
+    `slp_save` holds the `save_slp` arguments of the trimmed labels file.
+    """
     import numpy as np
 
     # Resolve video selection
@@ -6106,6 +6226,7 @@ def _trim_labels(
             frame_inds=frame_inds,
             video=video_ind,
             video_kwargs=video_kwargs,
+            **(slp_save or {}),
         )
     except Exception as e:
         raise click.ClickException(f"Failed to trim: {e}")
@@ -6932,6 +7053,7 @@ def _reencode_slp(
     use_ffmpeg: bool | None = None,
     overwrite: bool = False,
     dry_run: bool = False,
+    slp_save: dict[str, Any] | None = None,
 ) -> None:
     """Reencode all videos in an SLP file and create a new SLP with updated paths.
 
@@ -6948,6 +7070,7 @@ def _reencode_slp(
         use_ffmpeg: Force ffmpeg path (True), Python path (False), or auto (None).
         overwrite: Whether to overwrite existing files.
         dry_run: If True, show what would be done without executing.
+        slp_save: The `save_slp` arguments of the new SLP file.
 
     Raises:
         click.ClickException: If processing fails.
@@ -7069,7 +7192,7 @@ def _reencode_slp(
 
     # Save the new SLP file
     console.print(f"\n[bold]Saving SLP:[/] {output_path}")
-    labels.save(str(output_path))
+    labels.save(str(output_path), **(slp_save or {}))
     console.print(f"[bold green]Saved:[/] {output_path}")
 
 
@@ -7178,6 +7301,7 @@ def _reencode_slp(
     help="Reencode in place: replace the input with {stem}.mp4 and delete the "
     "original. Mutually exclusive with -o/--output.",
 )
+@_slp_save_options
 def reencode(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -7192,6 +7316,7 @@ def reencode(
     dry_run: bool,
     overwrite: bool,
     replace: bool,
+    slp_save: dict[str, Any],
 ) -> None:
     """Reencode video for improved seekability.
 
@@ -7306,6 +7431,7 @@ def reencode(
             use_ffmpeg=use_ffmpeg,
             overwrite=overwrite,
             dry_run=dry_run,
+            slp_save=slp_save,
         )
         return
 
@@ -7601,6 +7727,7 @@ def reencode(
     default=False,
     help="Overwrite existing output SLP file.",
 )
+@_slp_save_options
 def apply_crops(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -7613,6 +7740,7 @@ def apply_crops(
     output_fps: float | None,
     dry_run: bool,
     overwrite: bool,
+    slp_save: dict[str, Any],
 ) -> None:
     """Materialize virtual crops in an SLP to physical video files.
 
@@ -7710,7 +7838,7 @@ def apply_crops(
             )
             return
         console.print(f"[bold]Saving SLP:[/] {output_path}")
-        labels.save(str(output_path))
+        labels.save(str(output_path), **slp_save)
         console.print(f"[bold green]Saved:[/] {output_path}")
         return
 
@@ -7742,7 +7870,7 @@ def apply_crops(
 
     # Save the updated labels.
     console.print(f"[bold]Saving SLP:[/] {output_path}")
-    labels.save(str(output_path))
+    labels.save(str(output_path), **slp_save)
     console.print(f"[bold green]Saved:[/] {output_path}")
     console.print(f"[dim]  Baked {n_cropped} cropped video(s) to {video_dir}[/]")
 
@@ -8400,6 +8528,7 @@ def _export_transform_metadata(metadata: dict, output_path: Path) -> None:
     default=False,
     help="Overwrite existing output files.",
 )
+@_slp_save_options
 def transform(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -8424,6 +8553,7 @@ def transform(
     dry_run: bool,
     dry_run_frame: int | None,
     overwrite: bool,
+    slp_save: dict[str, Any],
 ) -> None:
     """Transform video and adjust label coordinates.
 
@@ -8743,7 +8873,7 @@ def transform(
 
     if not has_embedded:
         console.print(f"\n[bold]Saving SLP:[/] {output_path}")
-        transformed_labels.save(str(output_path))
+        transformed_labels.save(str(output_path), **slp_save)
     elif embed_provenance:
         # For embedded videos, we need to update the provenance in the file
         # since it was already saved

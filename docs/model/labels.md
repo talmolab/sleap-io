@@ -317,17 +317,21 @@ To embed images directly into an SLP file (creating a self-contained package):
 labels.save("output.pkg.slp", embed=True)
 ```
 
-SLP files are written in [format 3.0](../formats/slp.md#format-30-current), which
-stores [unlabeled points](poses.md#point-flags-and-states). sleap-io < 0.10 and SLEAP
-can't open 3.0 files; to share labels with them, save the older layout with
-`legacy_format=True`. That layout has no `labeled` column, so saving unlabeled
-points raises a `ValueError` before anything is written; pass
-`unlabeled_as="absent"` to save them as hidden points with no location (labeled, not
-visible, NaN coordinates) with a warning. That layout also drops instance, frame
-and bounding box `metadata` with a warning. Format 3.0 stores all three.
+SLP files are written in the 2.x layout that sleap-io < 0.10 and SLEAP can open,
+unless the labels were loaded from a [format 3.0](../formats/slp.md#format-30-current)
+file or hold something only format 3.0 can store: [unlabeled
+points](poses.md#point-flags-and-states), instance, frame or bounding box
+`metadata`, or unknown columns from a newer file. Such a save writes format 3.0
+and warns once. `slp_version="v3"` always writes format 3.0, and
+`slp_version="v2"` always the 2.x layout; there, unlabeled points raise a
+`ValueError` before anything is written unless `unlabeled_as="absent"` saves them
+as hidden points with no location (labeled, not visible, NaN coordinates), and
+metadata is dropped with a warning. See
+[Which layout a save writes](../formats/slp.md#which-layout-a-save-writes).
 
 ```python
-labels.save("output.slp", legacy_format=True, unlabeled_as="absent")
+labels.save("output.slp", slp_version="v3")
+labels.save("output.slp", slp_version="v2", unlabeled_as="absent")
 ```
 
 Pose tables (points, instances and frames) are uncompressed by default for read

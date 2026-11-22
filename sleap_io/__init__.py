@@ -65,8 +65,10 @@ __getattr__, __dir__, __all__ = lazy.attach(
         ],
         # Video writing from sleap_io.io.video_writing
         "io.video_writing": ["VideoWriter"],
-        # Streaming label image writer from sleap_io.io.slp
-        "io.slp": ["LabelImageWriter"],
+        # Streaming label image writer and the save layout from sleap_io.io.slp
+        "io.slp": ["LabelImageWriter", "SlpLayoutWarning", "resolve_slp_version"],
+        # The process-wide switch for the format 3.0 defaults
+        "io.format_defaults": ["get_v3_defaults", "set_v3_defaults", "v3_defaults"],
         # Remote URL loading helpers from sleap_io.io._remote
         "io._remote": ["clear_remote_cache", "RemoteIOError", "download"],
         # Rendering from sleap_io.rendering

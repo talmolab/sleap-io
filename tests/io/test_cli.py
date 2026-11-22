@@ -2454,9 +2454,10 @@ def test_convert_slp_to_slp(tmp_path, slp_typical):
     original = load_slp(slp_typical)
     converted = load_slp(str(output_path))
     assert len(converted.labeled_frames) == len(original.labeled_frames)
+    # A 2.x file stays in the 2.x layout.
     with h5py.File(output_path, "r") as f:
-        assert f["metadata"].attrs["format_id"] == 3.0
-        assert isinstance(f["points"], h5py.Group)
+        assert f["metadata"].attrs["format_id"] < 3.0
+        assert isinstance(f["points"], h5py.Dataset)
 
 
 def test_convert_slp_legacy_format(tmp_path, slp_typical):
@@ -2553,7 +2554,16 @@ def test_convert_compression(tmp_path, slp_typical, compression):
     output_path = tmp_path / "out.slp"
     result = CliRunner().invoke(
         cli,
-        ["convert", slp_typical, "-o", str(output_path), "--compression", compression],
+        [
+            "convert",
+            slp_typical,
+            "-o",
+            str(output_path),
+            "--compression",
+            compression,
+            "--slp-version",
+            "v3",
+        ],
     )
     assert result.exit_code == 0, result.output
     with h5py.File(output_path, "r") as f:

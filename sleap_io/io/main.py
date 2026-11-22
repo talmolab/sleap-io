@@ -175,6 +175,7 @@ def save_slp(
     compression: str | None = None,
     image_format: str | None = None,
     image_quality: int | None = None,
+    slp_version: str = "auto",
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -231,15 +232,13 @@ def save_slp(
             off by default for video frames. Set `True` to also write the
             `/embeddings` group. Identity links (`/identity/links`) are written
             regardless.
-        unlabeled_as: How `legacy_format=True` handles unlabeled points
+        unlabeled_as: How `slp_version="v2"` handles unlabeled points
             (`labeled=False`), which the 2.x layout can't store. `"error"` (the
             default) raises a `ValueError` before anything is written. `"absent"`
             saves them as hidden points (labeled, not visible, no location) and
-            warns. Ignored for the default (3.0) layout, which stores them.
-        legacy_format: If `True`, write the SLP 2.x layout that older sleap-io
-            (< 0.10) and SLEAP releases can read. Default `False` writes SLP format
-            3.0, where every table is a group of columns, which they refuse to
-            open.
+            warns. Ignored when format 3.0 is written, which stores them.
+        legacy_format: `True` is the same as `slp_version="v2"`, and can't be
+            combined with `slp_version="v3"`.
         compression: Compression for the table columns (points, instances,
             frames, ROIs, masks, label images, links and session tables): `None`
             (the default) for uncompressed data that reads fastest, or `"gzip"` or
@@ -255,6 +254,18 @@ def save_slp(
             compression level (0-9) with `image_format="png"` for re-encoded
             frames. `None` (the default) uses the encoder's default (JPEG quality
             95 with OpenCV, 75 with imageio).
+        slp_version: The layout to write. `"auto"` (the default) writes the SLP
+            2.x layout that sleap-io < 0.10 and SLEAP can open, unless the labels
+            were loaded from a format 3.0 file or hold content only format 3.0 can
+            store: points marked as not labeled, metadata on instances, frames or
+            bounding boxes, or unknown columns kept from a newer file. It then
+            writes format 3.0 and, unless the labels were loaded from a format 3.0
+            file, warns once (`SlpLayoutWarning`) naming that content. `"v2"`
+            always writes the 2.x layout: unlabeled points follow `unlabeled_as`,
+            and metadata and unknown columns are dropped with a warning. `"v3"`
+            always writes format 3.0, which sleap-io < 0.10 and SLEAP can't open.
+            The format 3.0 defaults (`set_v3_defaults`) make `"auto"` write
+            format 3.0. See `resolve_slp_version`.
 
     Notes:
         The file is written to a temporary file in the same folder and renamed
@@ -281,6 +292,7 @@ def save_slp(
         compression=compression,
         image_format=image_format,
         image_quality=image_quality,
+        slp_version=slp_version,
     )
 
 
@@ -1739,6 +1751,8 @@ def save_file(
               (video, frame_idx). If False (the default), no frames are embedded.
               embed_inplace (bool): If False (default), copy labels before embedding
               to avoid mutating the input. If True, modify labels in-place.
+              slp_version, legacy_format, unlabeled_as, compression, image_format
+              and image_quality: the file's layout and encoding; see `save_slp`.
             - For "nwb" format: pose_estimation_metadata (dict): Metadata to store
               in the
               NWB file. append (bool): If True, append to existing NWB file.
@@ -2040,14 +2054,17 @@ def merge_label_images(
     source_paths: list[str | Path],
     dest_path: str | Path,
     video: Video | None = None,
+    slp_version: str = "auto",
 ) -> Labels:
     """Merge label images from multiple SLP files into one.
 
     Copies compressed chunks directly (no decompression) via
     ``read_direct_chunk`` -> ``write_direct_chunk`` when possible, falling
     back to decompress + recompress for legacy blob-format sources. Sources may
-    use any SLP layout; the merged file is SLP 3.0. The merged file holds no
-    instances, so label image objects link to none.
+    use any SLP layout. The merged file is in the SLP 2.x layout that sleap-io
+    < 0.10 and SLEAP can open, unless a source is in format 3.0, the format 3.0
+    defaults are on or `slp_version` says otherwise. It holds no instances, so
+    label image objects link to none.
 
     Args:
         source_paths: List of paths to source SLP files containing label
@@ -2055,6 +2072,8 @@ def merge_label_images(
         dest_path: Path to the destination SLP file to create.
         video: Optional ``Video`` to associate with all merged label images.
             If ``None``, videos are deduplicated by filename across sources.
+        slp_version: The merged file's layout: `"auto"` (the default), `"v2"`
+            or `"v3"` (see above).
 
     Returns:
         A ``Labels`` object pointing at the merged file.
@@ -2069,7 +2088,9 @@ def merge_label_images(
     """
     from sleap_io.io.slp import merge_label_images as _merge_label_images
 
-    return _merge_label_images(source_paths, dest_path, video=video)
+    return _merge_label_images(
+        source_paths, dest_path, video=video, slp_version=slp_version
+    )
 
 
 def save_skeleton(skeleton: Skeleton | list[Skeleton], filename: str | Path):

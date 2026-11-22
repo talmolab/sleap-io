@@ -180,6 +180,26 @@ sio transform video.mp4 --scale 0.5 -o video_scaled.mp4    # Transform raw video
 
 ---
 
+## SLP save options
+
+Every command that writes an SLP file (`convert`, `embed`, `split`, `unsplit`,
+`merge`, `filenames`, `fix`, `unembed`, `trim`, `reencode`, `apply-crops` and
+`transform`) takes the same options for it:
+
+| Option | Description |
+|--------|-------------|
+| `--slp-version` | `auto` (default): the 2.x layout that sleap-io < 0.10 and SLEAP can open, unless the input is a format 3.0 file or holds content only format 3.0 can store (then format 3.0, with a warning). `v2`: always the 2.x layout. `v3`: always format 3.0 |
+| `--legacy-format` | Same as `--slp-version v2` |
+| `--unlabeled-as` | With `--slp-version v2`: `error` (default) or `absent` for points marked as not labeled |
+| `--compression` | `gzip` or `lzf` for the table columns (default: uncompressed) |
+| `--image-format` | `png`, `jpg` (or `jpeg`) or `hdf5` for embedded frames |
+| `--image-quality` | JPEG quality (0-100) or PNG compression level (0-9), with `--image-format` |
+
+Commands that write several files (`split`) give them one layout: format 3.0 if
+any of them needs it. Setting the environment variable `SLEAP_IO_V3_DEFAULTS=1`
+makes `auto` write format 3.0. See
+[Which layout a save writes](formats/slp.md#which-layout-a-save-writes).
+
 ## `sio show`
 
 Display information about a SLEAP labels file or video file with rich formatted output.
@@ -578,10 +598,11 @@ sio convert spots.csv -o labels.slp --from trackmate
 | `--from` | Input format (required for `.json` and `.h5` files) |
 | `--to` | Output format (inferred from extension if not specified) |
 | `--embed` | Embed video frames in output (`user`, `all`, `suggestions`, `source`) |
-| `--legacy-format` | Write the SLP 2.x layout that sleap-io < 0.10 and SLEAP can open (SLP output only) |
-| `--unlabeled-as` | How `--legacy-format` handles unlabeled points: `error` (default) or `absent` (save them as hidden points) (SLP output with `--legacy-format` only) |
+| `--slp-version` | SLP layout: `auto` (default), `v2` or `v3`; see [SLP save options](#slp-save-options) (SLP output only) |
+| `--legacy-format` | Same as `--slp-version v2` (SLP output only) |
+| `--unlabeled-as` | How `--slp-version v2` handles points marked as not labeled: `error` (default) or `absent` (save them as hidden points) (SLP output with `--slp-version v2` only) |
 | `--compression` | Compress the SLP table columns: `gzip` or `lzf` (default: uncompressed) (SLP output only) |
-| `--image-format` | Image format for embedded frames: `png`, `jpg` or `hdf5` (default: keep PNG/JPEG sources, PNG otherwise) (SLP output only) |
+| `--image-format` | Image format for embedded frames: `png`, `jpg` (or `jpeg`) or `hdf5` (default: keep PNG/JPEG sources, PNG otherwise) (SLP output only) |
 | `--image-quality` | JPEG quality (0-100) with `--image-format jpg`, or PNG compression level (0-9) with `--image-format png` (SLP output only) |
 | `--visibility-encoding` | How to read keypoint visibility codes: `auto` (default), `ternary` or `binary` (coco and ultralytics input only) |
 | `--v0-as` | How to read `v=0` keypoints: `unlabeled` or `absent` (coco and ultralytics input only) |
@@ -661,21 +682,22 @@ sio convert -i data.h5 -o labels.slp --from jabs
 
 ### Files for older SLEAP releases
 
-SLP files are written in [format 3.0](formats/slp.md#format-30-current), which
-sleap-io < 0.10 and SLEAP can't open. Write the older layout with `--legacy-format`:
+SLP files are written in the 2.x layout that sleap-io < 0.10 and SLEAP can open,
+unless the input is a [format 3.0](formats/slp.md#format-30-current) file or holds
+content only format 3.0 can store (see [SLP save options](#slp-save-options)). To
+be sure of the older layout, pass `--slp-version v2` (or `--legacy-format`):
 
 ```bash
-sio convert labels.slp -o labels.v2.slp --legacy-format
+sio convert labels.slp -o labels.v2.slp --slp-version v2
 ```
 
-The 2.x layout can't store unlabeled points, which COCO and Ultralytics imports can
-produce from `v=0` keypoints, so the conversion fails (with a non-zero exit code)
-when there are any. Pass `--unlabeled-as absent` to save them as hidden points
-instead:
+The 2.x layout can't store points marked as not labeled, so the conversion fails
+(with a non-zero exit code) when there are any. Pass `--unlabeled-as absent` to
+save them as hidden points instead:
 
 ```bash
 sio convert annotations.json -o labels.v2.slp --from coco \
-    --legacy-format --unlabeled-as absent
+    --slp-version v2 --unlabeled-as absent
 ```
 
 `--compression gzip` or `--compression lzf` writes smaller SLP files (in either

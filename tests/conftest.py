@@ -36,3 +36,16 @@ def force_eager_imports():
     os.environ["EAGER_IMPORT"] = "1"
     yield
     os.environ.pop("EAGER_IMPORT", None)
+
+
+@pytest.fixture
+def v3_defaults():
+    """Turn on the format 3.0 defaults, for tests of the format 3.0 layout.
+
+    Saves then write format 3.0 unless a test asks for another layout.
+    """
+    from sleap_io.io.format_defaults import set_v3_defaults
+
+    set_v3_defaults(True)
+    yield
+    set_v3_defaults(None)
