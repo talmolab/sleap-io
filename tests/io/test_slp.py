@@ -13616,6 +13616,10 @@ def _corrupt_columns(path, table: str, name: str, values) -> None:
         ("instances", "from_predicted", [-2, 0, -1], "from_predicted is not"),
         ("frames", "video", [0, 1, 0], "video is not one of the 1 videos"),
         ("frames", "video", [0, -1, 0], "video is not one of the 1 videos"),
+        ("instances", "skeleton", [0, 1, 0], "skeleton is not one of the 1 skel"),
+        ("instances", "skeleton", [0, -1, 0], "skeleton is not one of the 1 skel"),
+        ("instances", "track", [0, 1, -1], "track is not one of the 1 tracks"),
+        ("instances", "track", [-2, -1, -1], "track is not one of the 1 tracks"),
         ("instances", "score", [0.5, 0.0], "columns have different lengths"),
     ],
 )
@@ -13684,6 +13688,45 @@ def test_corrupt_legacy_ranges_warn(tmp_path):
         with pytest.warns(UserWarning, match="end at 2, not at the instance count"):
             labels = load_slp(str(path), lazy=lazy)
         assert [len(lf) for lf in labels] == [2, 0, 0]
+
+
+def test_corrupt_legacy_references_warn(tmp_path):
+    """Skeleton and track references out of range in 2.x tables warn."""
+    path = tmp_path / "legacy.slp"
+    save_slp(_labels_with_links(), str(path), legacy_format=True)
+    with h5py.File(path, "r+") as f:
+        instances = f["instances"][()]
+        instances["track"] = [0, -1, -2]
+        f["instances"][...] = instances
+    for lazy in (False, True):
+        with pytest.warns(UserWarning, match="track is not one of the 1 tracks"):
+            labels = load_slp(str(path), lazy=lazy)
+        # Read as before the check existed: a negative track is no track.
+        assert [len(lf) for lf in labels] == [2, 0, 1]
+        assert labels[2].instances[0].track is None
+
+    with h5py.File(path, "r+") as f:
+        instances = f["instances"][()]
+        instances["track"] = [0, -1, -1]
+        instances["skeleton"] = [0, 0, 1]
+        f["instances"][...] = instances
+    with pytest.warns(UserWarning, match="skeleton is not one of the 1 skeletons"):
+        labels = load_slp(str(path), lazy=True)
+    assert len(labels) == 3
+
+
+def test_valid_references_do_not_warn(tmp_path):
+    """Untracked instances (-1) and every valid reference pass the checks."""
+    labels = _labels_with_links()
+    labels.tracks.append(Track("unused"))
+    for legacy_format in (False, True):
+        path = tmp_path / f"labels_{legacy_format}.slp"
+        save_slp(labels, str(path), legacy_format=legacy_format)
+        for lazy in (False, True):
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", UserWarning)
+                loaded = load_slp(str(path), lazy=lazy)
+            assert _pose_summary(loaded) == _pose_summary(labels)
 
 
 def test_legacy_frame_ids_are_remapped(tmp_path):

@@ -4953,6 +4953,8 @@ def _check_pose_tables(
     n_points: int,
     n_pred_points: int,
     n_videos: int,
+    n_skeletons: int,
+    n_tracks: int,
     strict: bool,
 ) -> None:
     """Check the ranges and links between the pose tables, in one pass.
@@ -4960,6 +4962,7 @@ def _check_pose_tables(
     Checks that the frames' instance ranges never decrease and end at the instance
     count, that each instance's `frame_id` is the frame whose range holds it, that
     point ranges fit inside their point table, that `from_predicted` is a row (or
+    -1), that `skeleton` indexes a skeleton, that `track` indexes a track (or is
     -1) and that `video` indexes a video. Empty tables are valid.
 
     Args:
@@ -4969,6 +4972,8 @@ def _check_pose_tables(
         n_points: Number of rows in `/points`.
         n_pred_points: Number of rows in `/pred_points`.
         n_videos: Number of videos in the file.
+        n_skeletons: Number of skeletons in the file.
+        n_tracks: Number of tracks in the file.
         strict: If `True` (SLP 3.0 tables), raise on a problem. Otherwise (2.x
             tables, which have always been read leniently) warn.
 
@@ -5011,6 +5016,14 @@ def _check_pose_tables(
     from_predicted = instances["from_predicted"]
     if np.any((from_predicted < -1) | (from_predicted >= n_instances)):
         problems.append("/instances from_predicted is not an instance row")
+    skeleton = instances["skeleton"]
+    if np.any((skeleton < 0) | (skeleton >= n_skeletons)):
+        problems.append(
+            f"/instances skeleton is not one of the {n_skeletons} skeletons"
+        )
+    track = instances["track"]
+    if np.any((track < -1) | (track >= n_tracks)):
+        problems.append(f"/instances track is not one of the {n_tracks} tracks")
     video = frames["video"]
     if np.any((video < 0) | (video >= n_videos)):
         problems.append(f"/frames video is not one of the {n_videos} videos")
@@ -5194,7 +5207,12 @@ class _PoseTables(NamedTuple):
 
 
 def _read_pose_tables(
-    labels_path: str, f: h5py.File, videos: list[Video]
+    labels_path: str,
+    f: h5py.File,
+    videos: list[Video],
+    *,
+    n_skeletons: int,
+    n_tracks: int,
 ) -> _PoseTables:
     """Read, normalise and check `/points`, `/pred_points`, `/instances`, `/frames`.
 
@@ -5207,6 +5225,8 @@ def _read_pose_tables(
         labels_path: Path or URL of the file.
         f: The open file.
         videos: The file's videos (see `read_videos`).
+        n_skeletons: Number of skeletons in the file (see `read_skeletons`).
+        n_tracks: Number of tracks in the file (see `read_tracks`).
 
     Returns:
         The normalised tables.
@@ -5235,6 +5255,8 @@ def _read_pose_tables(
         n_points=len(points),
         n_pred_points=len(pred_points),
         n_videos=len(videos),
+        n_skeletons=n_skeletons,
+        n_tracks=n_tracks,
         strict=not (inst_legacy or frame_legacy),
     )
     return _PoseTables(
@@ -8062,11 +8084,13 @@ def _read_labels_lazy_from_open_file(
         _url_headers=_url_headers,
         _url_stream_mode=_url_stream_mode,
     )
-    # Read the raw pose tables (normalised and checked, see `_read_pose_tables`).
-    tables = _read_pose_tables(labels_path, f, videos)
-    frames_data = tables.frames
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
     tracks = read_tracks(labels_path, _hdf5_file=f)
+    # Read the raw pose tables (normalised and checked, see `_read_pose_tables`).
+    tables = _read_pose_tables(
+        labels_path, f, videos, n_skeletons=len(skeletons), n_tracks=len(tracks)
+    )
+    frames_data = tables.frames
     identities = read_identities(labels_path, _hdf5_file=f)
     # Class/category catalog (SLP 2.7+). Self-contained mirror of /identity; a
     # top-level list read eagerly like identities.
@@ -10837,7 +10861,9 @@ def _read_labels_from_open_file(
         _url_stream_mode=_url_stream_mode,
     )
     skeletons = read_skeletons(labels_path, _hdf5_file=f)
-    tables = _read_pose_tables(labels_path, f, videos)
+    tables = _read_pose_tables(
+        labels_path, f, videos, n_skeletons=len(skeletons), n_tracks=len(tracks)
+    )
     point_owners: list = []
     # One entry per /instances row (None for rows of an unknown type), so links to
     # instances index it by row.
