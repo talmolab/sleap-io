@@ -4035,7 +4035,7 @@
 <tr>
 <td><code>sleap</code></td>
 <td>SLEAP Analysis CSV</td>
-<td>Native SLEAP exports, one row per instance</td>
+<td>Native SLEAP exports, one row per animal</td>
 </tr>
 <tr>
 <td><code>dlc</code></td>
@@ -4061,7 +4061,7 @@
 </table>
 <h2 id="format-details">Format Details<a class="headerlink" href="#format-details" title="Permanent link">&para;</a></h2>
 <h3 id="sleap-format-sleap">SLEAP Format (<code>sleap</code>)<a class="headerlink" href="#sleap-format-sleap" title="Permanent link">&para;</a></h3>
-<p>The default SLEAP Analysis CSV format produces one row per instance.</p>
+<p>The default SLEAP Analysis CSV format produces one row per animal per frame, like the Analysis HDF5 export. A user instance made from a prediction (for example with <em>Accept All Predictions</em> in SLEAP) keeps that prediction in the file; the CSV writes only the user instance. Predicted instances are dropped when a user instance in the same frame links to them (<code>from_predicted</code>) or is on the same track, and in single-instance projects any user instance replaces the frame's predictions. Use the <code>instances</code> format, or <code>to_dataframe(..., format="instances")</code>, to get every user and predicted instance.</p>
 <p><strong>Columns:</strong></p>
 <table>
 <thead>
