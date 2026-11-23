@@ -1,6 +1,7 @@
 """Tests for methods in the sleap_io.io.video_reading file."""
 
 import copy
+import gc
 import os
 import pickle
 import signal
@@ -3093,6 +3094,10 @@ def test_pyav_read_in_forked_child(centered_pair_low_quality_path):
     path = centered_pair_low_quality_path
     video = sio.load_video(path, plugin="pyav", grayscale=False)
     video[0]
+    # Collect garbage first: a pyav reader left in a reference cycle by an earlier
+    # test would otherwise be freed in the child, where its decoder threads are
+    # gone, and hang it for a reason this test is not about.
+    gc.collect()
 
     pid = os.fork()
     if pid == 0:  # pragma: no cover - runs in the child

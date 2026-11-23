@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import urllib.parse
 from io import BytesIO
 from pathlib import Path
@@ -39,8 +40,9 @@ if "av" in sys.modules:  # pragma: no branch - pyav is an optional extra
     from av.video.reformatter import VideoReformatter
     from imageio.plugins.pyav import PyAVPlugin
 
-    # pyav 17.0 started converting with the frame's own color tags and a shared,
-    # threaded reformatter; `_PyAVPlugin._unpack_frame` undoes both.
+    # pyav 17.0 started converting with the frame's own color tags, and 18.1.1 with
+    # a reformatter shared per thread that keeps worker threads;
+    # `_PyAVPlugin._unpack_frame` undoes both.
     _PYAV_TAGGED_COLOR = int(sys.modules["av"].__version__.split(".")[0]) >= 17
 
     class _PyAVPlugin(PyAVPlugin):
@@ -71,19 +73,21 @@ if "av" in sys.modules:  # pragma: no branch - pyav is an optional extra
             (full range only for the `yuvj` formats). This keeps the old conversion,
             so 8-bit video reads back exactly as with pyav 15.
 
-            The conversion also runs on one thread with a reformatter owned by this
-            reader. pyav's default reformatter is shared per thread and keeps a pool
-            of worker threads, which a forked child process inherits without the
-            threads: a child that then reads a video through pyav hangs.
+            The conversion also runs on one thread, with a reformatter this reader
+            keeps for each thread that uses it. pyav's default reformatter (from
+            18.1.1) is shared by every reader on a thread and keeps a pool of worker
+            threads, which a forked child process inherits without the threads: a
+            child that then reads a video through pyav hangs.
             """
             if (
                 _PYAV_TAGGED_COLOR
                 and format is not None
                 and frame.format.name != format
             ):
-                if getattr(self, "_reformatter", None) is None:
-                    self._reformatter = VideoReformatter()
-                frame = self._reformatter.reformat(
+                local = self.__dict__.setdefault("_reformatters", threading.local())
+                if getattr(local, "reformatter", None) is None:
+                    local.reformatter = VideoReformatter()
+                frame = local.reformatter.reformat(
                     frame,
                     format=format,
                     src_colorspace="ITU601",
