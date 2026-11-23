@@ -60,6 +60,11 @@ _GDRIVE_HOSTS = frozenset({"drive.google.com", "docs.google.com"})
 #: HTTP headers stripped on cross-origin redirect (case-insensitive).
 _SENSITIVE_HEADERS = frozenset({"authorization", "cookie", "proxy-authorization"})
 
+#: Schemes whose authority names a container before the ``@``, not a user:
+#: ``abfs://<container>@<account>.dfs.core.windows.net/<path>`` (adlfs reads it so).
+#: Azure secrets travel as a SAS query (``sig=``), which is masked as a parameter.
+_CONTAINER_AT_SCHEMES = frozenset({"az", "abfs"})
+
 #: Query-string parameter names whose values are redacted by :func:`_redact_url`.
 _SENSITIVE_QUERY_PARAMS = frozenset(
     {"token", "access_token", "x-amz-security-token", "sas", "sig"}
@@ -273,6 +278,10 @@ def _mask_url_userinfo(url: str) -> str:
     ``/`` is a host only if it can be one: in ``https://me:a/b@host/v.mp4`` the ``a``
     isn't a port, so everything up to the last ``@`` is the password it has to be.
 
+    In ``abfs://`` and ``az://`` links the name before the ``@`` is the container
+    (:data:`_CONTAINER_AT_SCHEMES`), so it stays unless it has a ``:`` as a
+    ``user:password`` would.
+
     Args:
         url: A value that matches :data:`_URL_START_PATTERN`.
 
@@ -282,6 +291,9 @@ def _mask_url_userinfo(url: str) -> str:
     start = _URL_START_PATTERN.match(url).end()
     authority = re.split(r"[/\\?#]", url[start:], maxsplit=1)[0]
     at = authority.rfind("@")
+    scheme = url.partition(":")[0].lower()
+    if at >= 0 and scheme in _CONTAINER_AT_SCHEMES and ":" not in authority[:at]:
+        return url
     if at < 0:
         port = authority.rpartition(":")[2] if ":" in authority else ""
         if authority.endswith("]") or port == "" or port.isdecimal():
@@ -350,8 +362,9 @@ def _mask_url_credentials(value: str | os.PathLike) -> str:
         value: The string about to be written.
 
     Returns:
-        The string with userinfo replaced by ``***:***`` and the values of sensitive
-        query parameters (:data:`_SENSITIVE_QUERY_PARAMS`) replaced by ``***``.
+        The string with userinfo replaced by ``***:***`` (an Azure container is not
+        userinfo; see :func:`_mask_url_userinfo`) and the values of sensitive query
+        parameters (:data:`_SENSITIVE_QUERY_PARAMS`) replaced by ``***``.
     """
     if isinstance(value, os.PathLike):
         value = os.fspath(value)

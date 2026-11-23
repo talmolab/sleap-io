@@ -328,6 +328,25 @@ def test_identify_magic_ascii_no_comma_unknown():
             "s3://bucket/v.mp4?x-amz-security-token=***",
         ),
         ("az://container/v.mp4?sas=SECRET", "az://container/v.mp4?sas=***"),
+        # Before the `@` of an Azure link is the container; a SAS is its secret.
+        (
+            "az://videos@acct.blob.core.windows.net/v.mp4?sv=1&sig=SECRET",
+            "az://videos@acct.blob.core.windows.net/v.mp4?sv=1&sig=***",
+        ),
+        # A `user:password` is still one.
+        (
+            "abfs://me:SECRET@acct.dfs.core.windows.net/v.mp4",
+            "abfs://***:***@acct.dfs.core.windows.net/v.mp4",
+        ),
+        (
+            "AZ://me:SECRET@acct.blob.core.windows.net/v.mp4",
+            "AZ://***:***@acct.blob.core.windows.net/v.mp4",
+        ),
+        # A container name can't hold a `:`, so this is a password.
+        (
+            "abfs://c:SEC/RET@acct.dfs.core.windows.net/v.mp4",
+            "abfs://***:***@acct.dfs.core.windows.net/v.mp4",
+        ),
         # A URL that's been through `Path` has lost a slash, and still says it.
         ("https:/x.test/0.png?token=SECRET", "https:/x.test/0.png?token=***"),
         ("https:/me:SECRET@x.test/0.png", "https:/***:***@x.test/0.png"),
@@ -382,6 +401,15 @@ def test_mask_url_credentials_masks_only_the_credential(value, masked):
         "https://x.test/v.mp4 by me@example.org",
         "gs://bucket/a b.mp4",
         "s3://bucket/run@2/v=1/a.mp4",
+        # Azure's `<container>@<account>` form names no user.
+        "abfs://videos@myaccount.dfs.core.windows.net/exp1/v.mp4",
+        "az://videos@myaccount.blob.core.windows.net/exp1/v.mp4",
+        "ABFS://videos@myaccount.dfs.core.windows.net/v.mp4",
+        "abfs://videos@myaccount.dfs.core.windows.net:443/v.mp4",
+        "sleap-track abfs://videos@acct.dfs.core.windows.net/v.mp4 --x=1",
+        # S3 and GCS signed links are kept whole.
+        "s3://bucket/v.mp4?X-Amz-Credential=AKIA&X-Amz-Signature=abc",
+        "https://storage.googleapis.com/b/v.mp4?X-Goog-Signature=abc",
         "https://host:notaport/v.mp4",
         "https://host:notaport/v.mp4?x=1",
         "/Users/me/a b#1?%.mp4",
