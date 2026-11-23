@@ -251,14 +251,12 @@ instance metadata).
     (e.g. to a pre-signed CDN URL), put the credentials in the redirect
     target's query string rather than in `headers`.
 
-Other security guarantees: TLS is always on; URLs are redacted (userinfo and
-the values of the query parameters named under
-[Credentials in saved files](#credentials-in-saved-files) stripped; S3 and GCS
-signatures are left in) in error messages and tracebacks; and an identity
-`Accept-Encoding` is forced
-so range reads stay byte-exact. Remote loading needs `aiohttp >= 3.13.5` for
-the cross-origin header stripping — an older version emits a `RuntimeWarning`
-at import time.
+Other security guarantees: TLS is always on; error messages and tracebacks
+don't show a URL's credentials (see
+[Credentials in error messages](#credentials-in-error-messages)); and an
+identity `Accept-Encoding` is forced so range reads stay byte-exact. Remote
+loading needs `aiohttp >= 3.13.5` for the cross-origin header stripping — an
+older version emits a `RuntimeWarning` at import time.
 
 ### Credentials in saved files
 
@@ -296,6 +294,36 @@ labels.videos[0].replace_filename("https://host/video.mp4?token=...")
 
 To have a saved file that opens by itself, embed the frames (`embed=True`) or point
 it at a local copy of the video.
+
+### Credentials in error messages
+
+Error messages, warnings and tracebacks, and the `repr` of a `Video` or its
+backend, mask a URL's credentials more strictly than a saved file does, since
+nobody reopens a video from a message:
+
+- A user name, a password or both, in a link of any scheme and in a link inside
+  another link's parameters: `https://me:pw@host/...` becomes
+  `https://***:***@host/...`, also when the password holds `/`, `@`, `?` or `#`.
+  As in saved files, `https://me:12/pw@host/` reads as host `me`, port `12` and
+  a path, as URL parsers read it, and the container of an `az://` or `abfs://`
+  link is kept.
+- The value of every query or fragment parameter (after `?`, `&`, `;` or `#`,
+  also in text that isn't a whole link) whose name, read as a URL parser reads
+  it and in any case, is one of the names masked in saved files, contains
+  `token`, `secret`, `passw`, `signature`, `credential`, `apikey` or
+  `accesskey`, or has one of the words `sig`, `sas`, `pwd`, `key`, `auth` or
+  `authorization` (a name splits into words at punctuation and where lower case
+  turns to upper: `X-Amz-Signature`, `api_key`, `accessToken`).
+
+So a signed link loses its signature in a message: `X-Amz-Signature`,
+`X-Amz-Credential`, `X-Goog-Signature`, `X-Goog-Credential`, `Signature` and
+`Key-Pair-Id` become `***`, while `X-Amz-Expires` and the other parameters stay.
+Everything else is shown as it is, so the host, container and path stay
+readable. Errors from the libraries that open and decode a video (such as
+imageio and PyAV) are masked the same way, along with the errors they chain; one
+whose text can't be masked is replaced by a `RemoteIOError` carrying its masked
+summary. Output of the `sio` command line that lists a file's videos or the
+path you gave it is not covered.
 
 ---
 
@@ -418,8 +446,8 @@ downloaded only once whether you call `load_slp` or `load_file` (an explicit
 
 Remote HTTP/cloud failures surface as
 [`RemoteIOError`][sleap_io.RemoteIOError] (a subclass of `OSError`). It carries
-a `status` (HTTP code or `None`) and a `url` with its credentials redacted as in
-error messages above, for logs and tracebacks:
+a `status` (HTTP code or `None`) and a `url` with its credentials masked as in
+[error messages](#credentials-in-error-messages), for logs and tracebacks:
 
 ```python
 import sleap_io as sio
@@ -428,7 +456,7 @@ try:
     labels = sio.load_slp("https://example.com/labels.slp")
 except sio.RemoteIOError as e:
     print(e.status)  # e.g. 404, 416, 503, or None for connection errors
-    print(e.url)     # redacted URL (tokens/userinfo stripped)
+    print(e.url)     # the URL with its credentials masked
 ```
 
 Only transient statuses (`429`, `500`, `502`, `503`, `504`) are retried (with

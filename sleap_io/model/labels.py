@@ -1813,9 +1813,11 @@ class Labels:
                 return video
 
         def _ambiguous(candidates: list[Video], by: str) -> ValueError:
-            names = ", ".join(repr(v.filename) for v in candidates)
+            from sleap_io.io._remote import _redact_names
+
+            names = ", ".join(repr(_redact_names(v.filename)) for v in candidates)
             return ValueError(
-                f"Ambiguous video match for {query.filename!r}: matched "
+                f"Ambiguous video match for {_redact_names(query.filename)!r}: matched "
                 f"{len(candidates)} videos {by}: {names}."
             )
 

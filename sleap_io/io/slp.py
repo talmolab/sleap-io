@@ -120,7 +120,11 @@ import numpy as np
 import simplejson as json
 from tqdm import tqdm
 
-from sleap_io.io._remote import _mask_url_credentials_deep
+from sleap_io.io._remote import (
+    _mask_url_credentials_deep,
+    _redact_names,
+    _redact_text,
+)
 from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
 from sleap_io.io.utils import (
     _read_dataset_from_open_file,
@@ -552,7 +556,8 @@ def _check_format_id(labels_path: str, f: h5py.File) -> None:
         format_id = float(attrs["format_id"])
         if format_id >= SLP_FORMAT_ID_LIMIT:
             raise ValueError(
-                f"{labels_path} uses SLP format {format_id:g}, which is newer than "
+                f"{_redact_names(labels_path)} uses SLP format {format_id:g}, which is "
+                "newer than "
                 "this version of sleap-io supports (max "
                 f"{int(SLP_FORMAT_ID_LIMIT) - 1}.x); upgrade sleap-io to read it."
             )
@@ -563,7 +568,8 @@ def _check_format_id(labels_path: str, f: h5py.File) -> None:
     unsupported = sorted(set(required) - SLP_SUPPORTED_FEATURES)
     if unsupported:
         raise ValueError(
-            f"{labels_path} requires SLP features this version of sleap-io doesn't "
+            f"{_redact_names(labels_path)} requires SLP features this version of "
+            "sleap-io doesn't "
             f"support ({', '.join(unsupported)}); upgrade sleap-io to read it."
         )
 
@@ -1789,8 +1795,8 @@ def process_and_embed_frames(
             # project has more than one video.
             raise IndexError(
                 f"Frame index {frame_idx} out of range for video "
-                f"{frame_meta['video_ind']} ({video.filename}), which has "
-                f"{len(video)} frames."
+                f"{frame_meta['video_ind']} ({_redact_names(video.filename)}), "
+                f"which has {len(video)} frames."
             ) from e
 
         # Encode the frame to this group's format.
@@ -4318,7 +4324,8 @@ def read_metadata(labels_path: str, *, _hdf5_file: h5py.File | None = None) -> d
         md = read_hdf5_attrs(labels_path, "metadata", "json", _hdf5_file=_hdf5_file)
     except KeyError as e:
         raise ValueError(
-            f"The SLEAP labels file {labels_path!r} is missing its required "
+            f"The SLEAP labels file {_redact_names(labels_path)!r} is missing its "
+            "required "
             "metadata JSON blob (the 'metadata' HDF5 group has no readable 'json' "
             "attribute) and is likely corrupt. If you have a working .slp file "
             "with the same skeleton, you can copy the attribute into a BACKUP "
@@ -5685,7 +5692,10 @@ def _check_pose_tables(
         problems.append(f"/frames video is not one of the {n_videos} videos")
     if not problems:
         return
-    message = f"{labels_path} has inconsistent pose tables: {'; '.join(problems)}."
+    message = (
+        f"{_redact_names(labels_path)} has inconsistent pose tables: "
+        f"{'; '.join(problems)}."
+    )
     if strict:
         raise ValueError(message)
     warnings.warn(f"{message} Reading it leniently, as an SLP 2.x file.", stacklevel=4)
@@ -5912,7 +5922,8 @@ def _read_pose_tables(
         != _video_ids_are_indices(f["frames"])
     ):
         warnings.warn(
-            f"{labels_path}: /frames and /negative_frames don't agree on how their "
+            f"{_redact_names(labels_path)}: /frames and /negative_frames don't agree "
+            "on how their "
             "video ids are numbered (only one carries the `video_ids` mark), so "
             "some negative frame markers may be missing or on the wrong frame.",
             stacklevel=4,
@@ -7191,7 +7202,9 @@ def _report_table_problems(
     """
     if not problems:
         return
-    message = f"{labels_path} has inconsistent tables: {'; '.join(problems)}."
+    message = (
+        f"{_redact_names(labels_path)} has inconsistent tables: {'; '.join(problems)}."
+    )
     if strict:
         raise ValueError(message)
     warnings.warn(f"{message} Reading it leniently, as an SLP 2.x file.", stacklevel=3)
@@ -12402,12 +12415,14 @@ def _atomic_save(labels_path: str | Path) -> Iterator[_AtomicSave]:
     final = Path(labels_path)
     if not final.parent.is_dir():
         raise FileNotFoundError(
-            f"Cannot save {labels_path}: the folder {final.parent} does not exist."
+            f"Cannot save {_redact_names(labels_path)}: the folder "
+            f"{_redact_names(str(final.parent))} does not exist."
         )
     if not os.access(final.parent, os.W_OK):
         # Name the target, not the temporary file the write would fail on.
         raise PermissionError(
-            f"Cannot save {labels_path}: the folder {final.parent} is not writable."
+            f"Cannot save {_redact_names(labels_path)}: the folder "
+            f"{_redact_names(str(final.parent))} is not writable."
         )
     tmp = _temporary_save_path(final)
     save = _AtomicSave(tmp if isinstance(labels_path, Path) else str(tmp))
@@ -12432,8 +12447,9 @@ def _atomic_save(labels_path: str | Path) -> Iterator[_AtomicSave]:
                 save.restore()
             except Exception as e:
                 warnings.warn(
-                    f"The save to {labels_path} failed, and the videos of the "
-                    f"labels could not be put back as they were ({e}). Some of "
+                    f"The save to {_redact_names(labels_path)} failed, and the "
+                    "videos of the labels could not be put back as they were "
+                    f"({_redact_text(str(e))}). Some of "
                     "them may refer to a file that no longer exists.",
                     stacklevel=3,
                 )

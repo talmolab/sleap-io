@@ -11,6 +11,7 @@ live-internet test is marked ``@pytest.mark.live``.
 """
 
 import asyncio
+import builtins
 import os
 import time
 import traceback
@@ -57,8 +58,12 @@ from sleap_io.io._remote import (
     _mask_url_credentials,
     _mask_url_credentials_deep,
     _raise_remote,
+    _redact_exception,
+    _redact_names,
+    _redact_text,
     _redact_url,
     _redacted_cause_summary,
+    _redacting_errors,
     _redirect_target,
     _require_package,
     _resolve_target_path,
@@ -215,6 +220,338 @@ def test_redact_url_userinfo_and_token_combined():
     assert "TOK" not in out
     assert "SAS" not in out
     assert "***:***@host" in out
+
+
+@pytest.mark.parametrize(
+    "value, redacted",
+    [
+        # Userinfo, whatever the password holds: a URL parser stops at the `/`, `?`
+        # or `#`, so `a` would be a port; it can't be, so the password runs on.
+        ("https://me:SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:a/SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:a/SECRET@x.test", "https://***:***@x.test"),
+        ("https://me:a@SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:a:SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:a?SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:a#SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:%53ECRET%2F1@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        ("https://me:SEC RET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        # Every scheme, not only the ones sleap-io opens.
+        ("ftp://me:SECRET@x.test/v.mp4", "ftp://***:***@x.test/v.mp4"),
+        (
+            "abfss://me:SECRET@acct.dfs.core.windows.net/v.mp4",
+            "abfss://***:***@acct.dfs.core.windows.net/v.mp4",
+        ),
+        (
+            "abfs://me:SECRET@acct.dfs.core.windows.net/v.mp4",
+            "abfs://***:***@acct.dfs.core.windows.net/v.mp4",
+        ),
+        # The names a saved file masks, in the query and in the fragment.
+        ("https://x.test/v.mp4?token=SECRET", "https://x.test/v.mp4?token=***"),
+        ("https://x.test/v.mp4?TOKEN=SECRET", "https://x.test/v.mp4?TOKEN=***"),
+        ("https://x.test/v.mp4?%74oken=SECRET", "https://x.test/v.mp4?%74oken=***"),
+        ("https://x.test/v.mp4?token=SEC%2FRET", "https://x.test/v.mp4?token=***"),
+        ("https://x.test/v.mp4?token=SEC RET", "https://x.test/v.mp4?token=***"),
+        ("https://x.test/v.mp4?token=a?SECRET", "https://x.test/v.mp4?token=***"),
+        (
+            "https://x.test/v.mp4?a=1&access_token=SECRET&b=2",
+            "https://x.test/v.mp4?a=1&access_token=***&b=2",
+        ),
+        (
+            "s3://b/v.mp4?x-amz-security-token=SECRET",
+            "s3://b/v.mp4?x-amz-security-token=***",
+        ),
+        ("az://c/v.mp4?sas=SECRET", "az://c/v.mp4?sas=***"),
+        (
+            "az://videos@acct.blob.core.windows.net/v.mp4?sv=1&sig=SECRET",
+            "az://videos@acct.blob.core.windows.net/v.mp4?sv=1&sig=***",
+        ),
+        ("https://x.test/v.mp4#token=SECRET", "https://x.test/v.mp4#token=***"),
+        (
+            "https://x.test/cb#access_token=SECRET&x=1",
+            "https://x.test/cb#access_token=***&x=1",
+        ),
+        ("https://x.test/v.mp4#/r?token=SECRET", "https://x.test/v.mp4#/r?token=***"),
+        # A secret's name inside another parameter's value is still found.
+        (
+            "https://x.test/v.mp4?a=1?token=SECRET",
+            "https://x.test/v.mp4?a=1?token=***",
+        ),
+        # Signed links: a message has no reason to keep a signature.
+        (
+            "https://b.s3.amazonaws.com/v.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256"
+            "&X-Amz-Credential=AKIASECRET%2F20261123%2Fus-east-1%2Fs3%2Faws4_request"
+            "&X-Amz-Date=20261123T000000Z&X-Amz-Expires=3600"
+            "&X-Amz-SignedHeaders=host&X-Amz-Signature=SECRET",
+            "https://b.s3.amazonaws.com/v.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256"
+            "&X-Amz-Credential=***&X-Amz-Date=20261123T000000Z&X-Amz-Expires=3600"
+            "&X-Amz-SignedHeaders=host&X-Amz-Signature=***",
+        ),
+        (
+            "https://storage.googleapis.com/b/v.mp4?X-Goog-Algorithm=GOOG4-RSA-SHA256"
+            "&X-Goog-Credential=svcSECRET&X-Goog-Expires=60&X-Goog-Signature=SECRET",
+            "https://storage.googleapis.com/b/v.mp4?X-Goog-Algorithm=GOOG4-RSA-SHA256"
+            "&X-Goog-Credential=***&X-Goog-Expires=60&X-Goog-Signature=***",
+        ),
+        (
+            "https://d1.cloudfront.net/v.mp4?Expires=1&Signature=SECRET"
+            "&Key-Pair-Id=SECRET",
+            "https://d1.cloudfront.net/v.mp4?Expires=1&Signature=***&Key-Pair-Id=***",
+        ),
+        # Other names that say they hold a secret.
+        ("https://x.test/v.mp4?api_key=SECRET", "https://x.test/v.mp4?api_key=***"),
+        ("https://x.test/v.mp4?apiKey=SECRET", "https://x.test/v.mp4?apiKey=***"),
+        ("https://x.test/v.mp4?key=SECRET", "https://x.test/v.mp4?key=***"),
+        ("https://x.test/v.mp4?password=SECRET", "https://x.test/v.mp4?password=***"),
+        (
+            "https://x.test/v.mp4?client_secret=SECRET",
+            "https://x.test/v.mp4?client_secret=***",
+        ),
+        (
+            "https://x.test/v.mp4?accessToken=SECRET",
+            "https://x.test/v.mp4?accessToken=***",
+        ),
+        # Names written as one word.
+        ("https://x.test/v.mp4?apitoken=SECRET", "https://x.test/v.mp4?apitoken=***"),
+        ("https://x.test/v.mp4?secretkey=SECRET", "https://x.test/v.mp4?secretkey=***"),
+        ("https://x.test/v.mp4?accesskey=SECRET", "https://x.test/v.mp4?accesskey=***"),
+        (
+            "https://x.test/v.mp4?sessiontoken=SECRET",
+            "https://x.test/v.mp4?sessiontoken=***",
+        ),
+        # A `;` separates parameters too.
+        ("https://x.test/v.mp4?a=1;token=SECRET", "https://x.test/v.mp4?a=1;token=***"),
+        # A link inside another link's parameter.
+        (
+            "https://x.test/v.mp4?redirect=https://me:SECRET@h2.test/x",
+            "https://x.test/v.mp4?redirect=https://***:***@h2.test/x",
+        ),
+        (
+            "see https://x.test/cb?next=ftp://me:SECRET@h2.test/x for more",
+            "see https://x.test/cb?next=ftp://***:***@h2.test/x for more",
+        ),
+    ],
+)
+def test_redact_url_masks_every_credential(value, redacted):
+    """A message shows no credential of a link, whatever form it takes."""
+    assert _redact_url(value) == redacted
+    assert "SECRET" not in _redact_url(value)
+    # Masking twice changes nothing.
+    assert _redact_url(redacted) == redacted
+
+
+@pytest.mark.parametrize(
+    "value, redacted",
+    [
+        # Links in text, and a parameter cut from one.
+        (
+            "GET https://me:SECRET@x.test/v.mp4?token=SECRET failed: 403.",
+            "GET https://***:***@x.test/v.mp4?token=*** failed: 403.",
+        ),
+        (
+            "PyAV does not support `https://x.test/v.mp4?X-Amz-Signature=SECRET`",
+            "PyAV does not support `https://x.test/v.mp4?X-Amz-Signature=***`",
+        ),
+        ("could not open y.slp?token=SECRET", "could not open y.slp?token=***"),
+        # A sentence's punctuation is not part of a value.
+        (
+            "GET https://x.test/v.mp4?token=SECRET, retrying.",
+            "GET https://x.test/v.mp4?token=***, retrying.",
+        ),
+        ("(see y.slp?key=SECRET)", "(see y.slp?key=***)"),
+        ("y.slp?token=SECRET.", "y.slp?token=***."),
+        ("y.slp?token=SECRET; cause=x", "y.slp?token=***; cause=x"),
+        # A message that starts with a link: the rest is not read as a password.
+        (
+            "https://me:a/SECRET@x.test/v.mp4 failed, ask admin@example.org",
+            "https://***:***@x.test/v.mp4 failed, ask admin@example.org",
+        ),
+        (
+            "`https://x.test` failed for me@example.org?token=SECRET",
+            "`https://x.test` failed for me@example.org?token=***",
+        ),
+        (
+            "simplecache::https://me:SECRET@x.test/v.slp",
+            "simplecache::https://***:***@x.test/v.slp",
+        ),
+    ],
+)
+def test_redact_text_masks_links_in_a_message(value, redacted):
+    """A message shows no credential of the links in it, and keeps its words."""
+    assert _redact_text(value) == redacted
+    assert _redact_text(redacted) == redacted
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://x.test/path/labels.slp",
+        "https://x.test",
+        "HTTP://X.TEST/a b.mp4?x=1 2",
+        "https://x.test/a%20b.mp4?x=\u00e9#frag",
+        "https://x.test/v.mp4?a=b&c=d+e&f=%7E&version=3",
+        "https://x.test/v.mp4?sigma=b&keyframe=c&monkey=d&sasquatch=e",
+        "https://cdn.test/npm/pkg@1.2.3/v.mp4",
+        "https://x.test:8080/a@b.mp4",
+        "http://[::1]:8080/a@b.mp4?x=1",
+        "s3://bucket/run@2/v=1/a.mp4",
+        "https://x.test/v.mp4 by me@example.org",
+        "abfs://videos@acct.dfs.core.windows.net/exp1/v.mp4",
+        "az://videos@acct.blob.core.windows.net/exp1/v.mp4?sv=2020&se=2030",
+        "https://b.s3.amazonaws.com/v.mp4?X-Amz-Expires=60&X-Amz-SignedHeaders=host",
+        "/Users/me@corp/run=1/v.mp4",
+        "C:\\Users\\me\\b.mp4",
+        "tests/data/videos/centered_pair_low_quality.mp4",
+        "me@example.org",
+        "x=1 and y=2",
+        "",
+    ],
+)
+def test_redact_url_leaves_the_rest_alone(value):
+    """A message keeps a value with no credential character for character."""
+    assert _redact_url(value) == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://me:SECRET@x.test/v.mp4",
+        "https://me:a/SECRET@x.test/v.mp4",
+        "https://x.test/v.mp4#token=SECRET",
+        "https://x.test/v.mp4#/r?token=SECRET",
+        "abfs://c:SEC/RET@acct.dfs.core.windows.net/v.mp4",
+        "sleap-track https://x.test/v.mp4?token=SECRET --x=1",
+        "file y.slp?token=SECRET.",
+    ]
+    + [
+        f"https://x.test/v.mp4?{name}=SECRET"
+        for name in sorted(_SENSITIVE_QUERY_PARAMS)
+    ],
+)
+def test_redact_url_is_as_strict_as_a_saved_file(value):
+    """What a saved file masks, a message masks too."""
+    assert "SEC" not in _mask_url_credentials(value)
+    assert "SEC" not in _redact_url(value)
+
+
+def test_redact_names_masks_each_filename():
+    """A list of names (an image sequence) is masked name by name."""
+    names = ["https://x.test/0.png?token=SECRET", "https://x.test/1.png"]
+    assert _redact_names(names) == ["https://x.test/0.png?token=***", names[1]]
+    assert _redact_names(Path("a/b.mp4")) == Path("a/b.mp4")
+    # A link that has been through `Path` keeps one slash.
+    assert _redact_names(Path("https://me:SECRET@x.test/v.mp4")) == (
+        "https:/***:***@x.test/v.mp4"
+    )
+    assert _redact_names(None) is None
+
+
+def test_redact_exception_masks_args_filename_and_notes():
+    """An exception from other code is masked in place and keeps its type."""
+    error = FileNotFoundError(2, "No such file", "https://me:SECRET@x.test/v.mp4")
+    error.add_note("while reading https://x.test/v.mp4?token=SECRET")
+    assert _redact_exception(error) is error
+    assert error.filename == "https://***:***@x.test/v.mp4"
+    assert "SECRET" not in str(error)
+    assert error.__notes__ == ["while reading https://x.test/v.mp4?token=***"]
+
+
+def test_redact_exception_masks_and_cuts_the_chain():
+    """A chained exception is masked, or cut if its text can't be."""
+
+    class Opaque(Exception):
+        def __str__(self):
+            return "GET https://x.test/v.mp4?token=SECRET"
+
+    inner = ValueError("PyAV does not support `https://x.test/v.mp4?sig=SECRET`")
+    outer = OSError("`pyav` can not handle the given uri.")
+    outer.__context__ = inner
+    _redact_exception(outer)
+    assert outer.__context__ is inner
+    assert "SECRET" not in str(inner)
+
+    outer = OSError("can not read")
+    outer.__cause__ = Opaque()
+    _redact_exception(outer)
+    assert outer.__cause__ is None
+
+    # An exception whose own text can't be masked is replaced.
+    replaced = _redact_exception(Opaque())
+    assert isinstance(replaced, RemoteIOError)
+    assert "SECRET" not in str(replaced)
+
+
+def test_redact_exception_keeps_types_and_tracebacks():
+    """Non-string arguments and exception groups are masked; types stay."""
+    error = ValueError(("open", "https://x.test/v.mp4?token=SECRET"))
+    assert _redact_exception(error) is error
+    assert "SECRET" not in str(error)
+
+    group_type = getattr(builtins, "ExceptionGroup", None)  # Python 3.11+
+    if group_type is not None:
+        group = group_type("g", [ValueError("https://x.test/v.mp4#token=SECRET")])
+        assert _redact_exception(group) is group
+        assert "SECRET" not in str(group.exceptions[0])
+
+    class Opaque(Exception):
+        def __str__(self):
+            return "GET https://x.test/v.mp4?token=SECRET"
+
+    try:
+        raise Opaque()
+    except Opaque as e:
+        replaced = _redact_exception(e)
+    assert replaced.__traceback__ is not None
+
+
+def test_redact_text_takes_time_in_proportion_to_the_message():
+    """Long messages are masked in one pass, not once per link or per character."""
+    cases = [
+        str(["https://x.test/v.mp4?token=SECRET"] * 8000),
+        " ".join(["ab://me:SECRET@y"] * 20000),
+        "https://x.test/" + "a" * 200000 + "?token=SECRET",
+        "https://h/?r=" * 20000 + "https://me:SECRET@h/",
+        "y.slp?token=SECRET" + "." * 20000,
+    ]
+    start = time.perf_counter()
+    for value in cases:
+        assert "SECRET" not in _redact_text(value)
+    assert time.perf_counter() - start < 5
+
+
+def test_redact_url_leaves_a_remote_io_error_alone():
+    """A message that is already masked comes back unchanged."""
+    message = str(RemoteIOError("timeout", url="https://x.test/v.slp?token=SECRET"))
+    assert _redact_text(message) == message
+
+
+def test_redacting_errors_passes_clean_exceptions_through():
+    """An exception with no credential leaves the block as it came."""
+    error = ValueError("frame 3 out of range")
+    with pytest.raises(ValueError) as exc_info:
+        with _redacting_errors():
+            raise error
+    assert exc_info.value is error
+
+
+def test_redacting_errors_masks_a_traceback():
+    """Nothing in a printed traceback shows the credential."""
+    # Built here so that no line the traceback quotes holds the secret.
+    url = "https://x.test/v.mp4?X-Amz-Signature=" + "SECRET"
+
+    @_redacting_errors()
+    def read():
+        try:
+            raise ValueError(f"bad uri `{url}`")
+        except ValueError as e:
+            raise OSError("can not handle the given uri") from e
+
+    with pytest.raises(OSError) as exc_info:
+        read()
+    text = "".join(traceback.format_exception(exc_info.value))
+    assert "SECRET" not in text
+    assert "X-Amz-Signature=***" in text
 
 
 # ---------------------------------------------------------------------------
@@ -426,10 +763,10 @@ def test_mask_url_credentials_leaves_the_rest_alone(value):
     assert _mask_url_credentials(value) == value
 
 
-def test_mask_url_credentials_keeps_what_redact_url_rewrites():
-    """A message can show a URL as it's parsed. A file has to keep it as it is."""
+def test_redact_url_and_mask_url_credentials_keep_the_rest():
+    """Neither a message nor a file rewrites what holds no credential."""
     url = "https://x.test/a.mp4?a=b c&d=%7E"
-    assert _redact_url(url) != url
+    assert _redact_url(url) == url
     assert _mask_url_credentials(url) == url
 
 
