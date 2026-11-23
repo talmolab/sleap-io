@@ -7,6 +7,9 @@ on:
   push:
     branches:
       - main
+      # Every merge into a release branch runs the full matrix, macOS included
+      # (see the `tests` matrix below).
+      - "release/**"
   workflow_dispatch:  # Allow manual triggers
 
 jobs:
@@ -22,6 +25,9 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # On a push, compare with the branch's previous tip (what was just
+          # merged), not with `main`. Empty means the default branch, as before.
+          base: ${{ github.event_name == 'push' && github.ref || '' }}
           filters: |
             code:
               - 'sleap_io/**'
@@ -78,7 +84,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest", "windows-latest", "macos-latest"]
+        # macOS runners queue for close to an hour, so pull requests into any
+        # branch other than `main` (release branches, stacked branches) skip
+        # the macOS legs; pushes to a release branch run them after each merge.
+        # Pull requests into `main`, pushes to `main` and manual runs keep all
+        # three systems.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref != 'main' && '["ubuntu-latest", "windows-latest"]' || '["ubuntu-latest", "windows-latest", "macos-latest"]') }}
         python: ["3.10", "3.13"]
 
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
