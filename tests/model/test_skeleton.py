@@ -750,3 +750,19 @@ def test_infer_symmetries_by_name_apply_is_idempotent():
     # Applying again does not duplicate.
     skel.add_symmetries(skel.infer_symmetries_by_name())
     assert len(skel.symmetries) == 2
+
+
+def test_skeleton_leaves_the_callers_lists_alone():
+    """Building a skeleton from names doesn't turn the caller's lists into nodes."""
+    names = ["head", "thorax", "tail"]
+    edges = [("head", "thorax"), (1, 2)]
+    symmetries = [("head", "tail")]
+    skeleton = Skeleton(names, edges=edges, symmetries=symmetries)
+    assert names == ["head", "thorax", "tail"]
+    assert edges == [("head", "thorax"), (1, 2)]
+    assert symmetries == [("head", "tail")]
+    assert skeleton.node_names == names
+    assert len(skeleton.edges) == 2 and len(skeleton.symmetries) == 1
+    # A list of nodes is used as given.
+    nodes = [Node("a"), Node("b")]
+    assert Skeleton(nodes).nodes is nodes
