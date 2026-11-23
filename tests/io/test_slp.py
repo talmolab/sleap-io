@@ -13763,7 +13763,7 @@ def test_corrupt_legacy_links_are_not_saved(tmp_path, legacy_format, lazy):
         labels = load_slp(str(path), lazy=lazy)
 
     resaved = tmp_path / "resaved.slp"
-    save_slp(labels, str(resaved), legacy_format=legacy_format)
+    save_slp(labels, str(resaved), slp_version="v2" if legacy_format else "v3")
     for reload_lazy in (False, True):
         with warnings.catch_warnings():
             warnings.simplefilter("error", UserWarning)
@@ -13796,7 +13796,7 @@ def test_corrupt_legacy_skeleton_warns_then_raises_when_read(tmp_path):
 def test_read_instances_checks_skeleton_and_track(tmp_path):
     """`read_instances` refuses a skeleton or track that isn't in its lists."""
     path = tmp_path / "labels.slp"
-    save_slp(_labels_with_links(), str(path))
+    save_slp(_labels_with_links(), str(path), slp_version="v3")
     skeletons = read_skeletons(str(path))
     tracks = read_tracks(str(path))
     points = read_points(str(path))
@@ -13819,7 +13819,7 @@ def test_untracked_instances_pass_the_checks(tmp_path, legacy_format, lazy):
             inst.track = None
     labels.tracks.clear()
     path = tmp_path / "labels.slp"
-    save_slp(labels, str(path), legacy_format=legacy_format)
+    save_slp(labels, str(path), slp_version="v2" if legacy_format else "v3")
     if not legacy_format:
         with h5py.File(path, "r+") as f:
             del f["instances/track"]
@@ -13836,7 +13836,7 @@ def test_valid_references_do_not_warn(tmp_path):
     labels.tracks.append(Track("unused"))
     for legacy_format in (False, True):
         path = tmp_path / f"labels_{legacy_format}.slp"
-        save_slp(labels, str(path), legacy_format=legacy_format)
+        save_slp(labels, str(path), slp_version="v2" if legacy_format else "v3")
         for lazy in (False, True):
             with warnings.catch_warnings():
                 warnings.simplefilter("error", UserWarning)
