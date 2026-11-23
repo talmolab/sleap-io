@@ -113,7 +113,9 @@ class Video:
         filename: The filename(s) of the video. Supported extensions: "mp4", "avi",
             "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
             "tiff", "bmp", "seq". If the filename is a list, a list of image filenames
-            are expected. If filename is a folder, it will be searched for images.
+            are expected. If filename is a folder, it will be searched for images. A URL
+            keeps its credentials here, because `exists` and `open` go back to it. A
+            save masks them, so a URL that needs them won't open from a saved file.
         backend: An object that implements the basic methods for reading and
             manipulating frames of a specific video type.
         backend_metadata: A dictionary of metadata specific to the backend. This is

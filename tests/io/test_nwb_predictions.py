@@ -7,7 +7,15 @@ import numpy as np
 import pytest
 from pynwb import NWBHDF5IO, NWBFile
 
-from sleap_io import load_slp
+from sleap_io import (
+    LabeledFrame,
+    Labels,
+    PredictedInstance,
+    Skeleton,
+    Track,
+    Video,
+    load_slp,
+)
 from sleap_io.io.nwb_predictions import append_nwb_data, get_timestamps, write_nwb
 
 
@@ -294,3 +302,42 @@ def test_get_timestamps(nwbfile, centered_pair):
     assert len(ts) == 10
     assert ts[0] == 0
     assert ts[-1] == 9
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://x.test/v.mp4?token=SECRET",
+        # A file's stem stops at a dot, and a token can have dots in it.
+        "https://x.test/v.mp4?token=SECRET.AND.MORE",
+        "https://me:SECRET@x.test/v.mp4",
+    ],
+)
+def test_write_nwb_holds_no_url_credentials(tmp_path, saved_bytes_without, url):
+    """Video paths, provenance and what's named after the video."""
+    video = Video(
+        filename=url, open_backend=False, backend_metadata={"shape": (9, 4, 4, 1)}
+    )
+    skeleton = Skeleton(["a", "b"], name="s")
+    track = Track("t")
+    instance = PredictedInstance.from_numpy(
+        np.ones((2, 2)),
+        skeleton=skeleton,
+        score=0.5,
+        point_scores=np.ones(2),
+        track=track,
+    )
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[instance])],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
+        provenance={"filename": url, "sleap_version": "1.0"},
+    )
+    path = tmp_path / "a.nwb"
+
+    write_nwb(labels=labels, nwbfile_path=path)
+
+    assert b"***" in saved_bytes_without(path)
+    assert video.filename == url
+    assert labels.provenance["filename"] == url

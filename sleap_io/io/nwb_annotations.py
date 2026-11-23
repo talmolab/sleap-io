@@ -38,6 +38,7 @@ from sleap_io import LabeledFrame as SleapLabeledFrame
 from sleap_io import Labels as SleapLabels
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
+from sleap_io.io._remote import _mask_url_credentials_deep
 from sleap_io.io.utils import sanitize_filename
 from sleap_io.io.video_reading import ImageVideo, MediaVideo
 from sleap_io.io.video_writing import MJPEGFrameWriter
@@ -334,15 +335,18 @@ def sleap_video_to_nwb_image_series(
             f"Supported backends: MediaVideo, ImageVideo"
         )
 
+    # What goes in the file: a URL's credentials stop here.
+    saved_filename = _mask_url_credentials_deep(sleap_video.filename)
+
     # Set default name if not provided
     if name is None:
-        if isinstance(sleap_video.filename, list):
-            name = sanitize_nwb_name(sleap_video.filename[0])
+        if isinstance(saved_filename, list):
+            name = sanitize_nwb_name(saved_filename[0])
         else:
-            name = sanitize_nwb_name(sleap_video.filename)
+            name = sanitize_nwb_name(saved_filename)
 
     # Pull out filename
-    filename = sanitize_filename(sleap_video.filename)
+    filename = sanitize_filename(saved_filename)
     if isinstance(filename, str):
         filename = [filename]
 
@@ -1143,8 +1147,10 @@ class FrameMap:
             "mjpeg_filename": self.mjpeg_filename,
             "videos": [
                 {
-                    "filename": video.filename,
-                    "backend_metadata": video.backend_metadata,
+                    "filename": _mask_url_credentials_deep(video.filename),
+                    "backend_metadata": _mask_url_credentials_deep(
+                        video.backend_metadata
+                    ),
                 }
                 for video in self.videos
             ],

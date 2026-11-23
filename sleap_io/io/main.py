@@ -226,6 +226,12 @@ def save_slp(
             off by default for video frames. Set `True` to also write the
             `/embeddings` group. Identity links (`/identity/links`) are written
             regardless.
+
+    Notes:
+        A URL's credentials aren't saved: a video's URL, or the URL the labels came
+        from, is written with its password or token masked (`?token=***`). The labels
+        in memory keep the whole URL, but a video that needs its credentials won't open
+        from the saved file until it's given them again (`Video.replace_filename`).
     """
     from sleap_io.io import slp
 

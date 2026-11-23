@@ -1,10 +1,12 @@
 """Tests for functions in the sleap_io.io.jabs file."""
 
+import sys
+
 import h5py
 import numpy as np
 import pytest
 
-from sleap_io import Labels, PredictedInstance, Skeleton
+from sleap_io import LabeledFrame, Labels, PredictedInstance, Skeleton, Track, Video
 from sleap_io.io.jabs import (
     JABS_DEFAULT_SKELETON,
     _roi_to_static_object_coords,
@@ -15,6 +17,7 @@ from sleap_io.io.jabs import (
     prediction_to_instance,
     read_labels,
     tracklets_to_v3,
+    write_labels,
 )
 
 
@@ -205,3 +208,44 @@ def test_roi_to_static_object_coords_unsupported_geometry():
     roi = UserROI(geometry=LineString([(0, 0), (1, 1)]), name="line")
     result = _roi_to_static_object_coords(roi)
     assert result is None
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="A folder on Windows can't be named after a URL."
+)
+@pytest.mark.parametrize(
+    "url, name",
+    [
+        ("https://x.test/v.mp4?token=SECRET", "v_pose_est_v3.h5"),
+        # `splitext` stops at the last dot, and a token can have dots in it.
+        ("https://x.test/v.mp4?token=SECRET.AND.MORE", "v_pose_est_v3.h5"),
+        ("https://me:SECRET@x.test/v.mp4", "v_pose_est_v3.h5"),
+    ],
+)
+def test_write_labels_holds_no_url_credentials(
+    tmp_path, saved_bytes_without, url, name
+):
+    """A JABS file is named after its video, and is written under a folder for it."""
+    video = Video(
+        filename=url, open_backend=False, backend_metadata={"shape": (9, 4, 4, 1)}
+    )
+    track = Track("1")
+    instance = PredictedInstance.from_numpy(
+        np.ones((12, 2)),
+        skeleton=JABS_DEFAULT_SKELETON,
+        score=0.5,
+        point_scores=np.ones(12),
+        track=track,
+    )
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[instance])],
+        videos=[video],
+        skeletons=[JABS_DEFAULT_SKELETON],
+        tracks=[track],
+    )
+
+    write_labels(labels, 3, str(tmp_path / "out"))
+
+    saved_bytes_without(tmp_path / "out")
+    assert [p.name for p in (tmp_path / "out").rglob("*.h5")] == [name]
+    assert video.filename == url

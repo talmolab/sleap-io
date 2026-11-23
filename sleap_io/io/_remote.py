@@ -60,6 +60,11 @@ _GDRIVE_HOSTS = frozenset({"drive.google.com", "docs.google.com"})
 #: HTTP headers stripped on cross-origin redirect (case-insensitive).
 _SENSITIVE_HEADERS = frozenset({"authorization", "cookie", "proxy-authorization"})
 
+#: Schemes whose authority names a container before the ``@``, not a user:
+#: ``abfs://<container>@<account>.dfs.core.windows.net/<path>`` (adlfs reads it so).
+#: Azure secrets travel as a SAS query (``sig=``), which is masked as a parameter.
+_CONTAINER_AT_SCHEMES = frozenset({"az", "abfs"})
+
 #: Query-string parameter names whose values are redacted by :func:`_redact_url`.
 _SENSITIVE_QUERY_PARAMS = frozenset(
     {"token", "access_token", "x-amz-security-token", "sas", "sig"}
@@ -95,12 +100,32 @@ _RETRY_BACKOFF_MAX = 30.0
 #: Pattern matching fsspec cache filenames (sha hex hashes, optional ``.tags``).
 _CACHE_KEY_PATTERN = re.compile(r"^[0-9a-f]{32,64}(\.tags)?$")
 
+#: Pattern matching the start of a value that is a URL as a whole. One slash is
+#: enough: a URL that has been through ``Path`` (an image sequence's names, for one)
+#: has lost the other.
+_URL_START_PATTERN = re.compile(
+    r"(?:" + "|".join(sorted(_URL_SCHEMES)) + r"):/+",
+    re.IGNORECASE,
+)
+
 #: Pattern matching any remote URL embedded in free text (e.g. an exception
 #: message). Used to redact credential-bearing URLs out of a cause summary. The
 #: scheme alternation mirrors :data:`_URL_SCHEMES`; the body stops at the first
 #: whitespace or quote so a single URL token is captured.
 _URL_IN_TEXT_PATTERN = re.compile(
     r"(?:" + "|".join(sorted(_URL_SCHEMES)) + r")://[^\s\"'<>]+",
+    re.IGNORECASE,
+)
+
+#: Pattern matching a sensitive query parameter and its value anywhere in text, URL
+#: or no URL: a space or a quote ends what :data:`_URL_IN_TEXT_PATTERN` can see of a
+#: URL, and a name cut from one (``y.slp?token=...``) no longer looks like one. The
+#: ``#`` is for the same parameter in a fragment. Punctuation at the end belongs to
+#: the sentence, not the value.
+_SENSITIVE_PARAM_PATTERN = re.compile(
+    r"([?&#](?:"
+    + "|".join(re.escape(name) for name in sorted(_SENSITIVE_QUERY_PARAMS))
+    + r")=)[^\s\"'<>&#]*[^\s\"'<>&#.,;:!?)]",
     re.IGNORECASE,
 )
 
@@ -243,6 +268,141 @@ def _redact_url(url: str) -> str:
     else:
         new_query = ""
     return urllib.parse.urlunparse(parsed._replace(netloc=netloc, query=new_query))
+
+
+def _mask_url_userinfo(url: str) -> str:
+    """Mask a URL's userinfo, leaving every other character as it was.
+
+    Only what a URL parser would read as userinfo counts, so the ``@`` in
+    ``https://cdn.example/npm/pkg@1.2/v.mp4`` stays. What comes before the first
+    ``/`` is a host only if it can be one: in ``https://me:a/b@host/v.mp4`` the ``a``
+    isn't a port, so everything up to the last ``@`` is the password it has to be.
+
+    In ``abfs://`` and ``az://`` links the name before the ``@`` is the container
+    (:data:`_CONTAINER_AT_SCHEMES`), so it stays unless it has a ``:`` as a
+    ``user:password`` would.
+
+    Args:
+        url: A value that matches :data:`_URL_START_PATTERN`.
+
+    Returns:
+        The URL with any userinfo replaced by ``***:***``.
+    """
+    start = _URL_START_PATTERN.match(url).end()
+    authority = re.split(r"[/\\?#]", url[start:], maxsplit=1)[0]
+    at = authority.rfind("@")
+    scheme = url.partition(":")[0].lower()
+    if at >= 0 and scheme in _CONTAINER_AT_SCHEMES and ":" not in authority[:at]:
+        return url
+    if at < 0:
+        port = authority.rpartition(":")[2] if ":" in authority else ""
+        if authority.endswith("]") or port == "" or port.isdecimal():
+            return url
+        at = url.rfind("@", start) - start
+        if at < 0:
+            return url
+    return url[:start] + "***:***" + url[start + at :]
+
+
+def _mask_query_params(query: str) -> str:
+    """Mask the values of sensitive parameters in a query string.
+
+    A name is read as a URL parser reads it (``%74oken`` is ``token``), and a value
+    runs to the next ``&`` whatever is in it, which is what the text pattern
+    :data:`_SENSITIVE_PARAM_PATTERN` can't see past. Everything else stays as it was.
+
+    Args:
+        query: A query string or fragment, without its leading ``?`` or ``#``.
+
+    Returns:
+        The query string with each sensitive value replaced by ``***``.
+    """
+    params = query.split("&")
+    for i, param in enumerate(params):
+        name, _, value = param.partition("=")
+        if value and urllib.parse.unquote_plus(name).lower() in _SENSITIVE_QUERY_PARAMS:
+            params[i] = f"{name}=***"
+    return "&".join(params)
+
+
+def _mask_whole_url(url: str) -> str:
+    """Mask the credentials of a value that is a URL from start to end.
+
+    Args:
+        url: A value that matches :data:`_URL_START_PATTERN`.
+
+    Returns:
+        The URL with its credentials masked and every other character as it was.
+    """
+    head, hash_mark, fragment = _mask_url_userinfo(url).partition("#")
+    base, question_mark, query = head.partition("?")
+    return (
+        base
+        + question_mark
+        + _mask_query_params(query)
+        + hash_mark
+        + _mask_query_params(fragment)
+    )
+
+
+def _mask_url_credentials(value: str | os.PathLike) -> str:
+    """Make a path, a URL or a line of text holding one fit to go in a file.
+
+    A URL's credentials are masked and every other character stays as it was. That's
+    the difference from :func:`_redact_url`, which writes any URL back as it parses
+    it (``a b`` becomes ``a+b``). So a public URL or a local path saved through this
+    comes back byte for byte, and a saved URL differs from the one in memory only
+    where a credential was.
+
+    Saving is the only place for this. A `Video` keeps its whole URL in memory, since
+    `Video.exists` and `Video.open` go back to it, so a URL that needs its credentials
+    won't open from a saved file until it's given them again.
+
+    Args:
+        value: The string about to be written.
+
+    Returns:
+        The string with userinfo replaced by ``***:***`` (an Azure container is not
+        userinfo; see :func:`_mask_url_userinfo`) and the values of sensitive query
+        parameters (:data:`_SENSITIVE_QUERY_PARAMS`) replaced by ``***``.
+    """
+    if isinstance(value, os.PathLike):
+        value = os.fspath(value)
+    # Neither a parameter nor a password without one of these, and an image sequence
+    # is many names.
+    if "=" not in value and "@" not in value:
+        return value
+    if _URL_START_PATTERN.match(value):
+        value = _mask_whole_url(value)
+    value = _SENSITIVE_PARAM_PATTERN.sub(r"\1***", value)
+    return _URL_IN_TEXT_PATTERN.sub(lambda m: _mask_whole_url(m.group(0)), value)
+
+
+def _mask_url_credentials_deep(value: Any) -> Any:
+    """Apply :func:`_mask_url_credentials` to every string in a value being saved.
+
+    Args:
+        value: A string, or dicts (keys included), lists and tuples holding strings at
+            any depth. Anything else is returned as it is.
+
+    Returns:
+        A copy of the containers with every string masked. The input isn't changed.
+    """
+    if isinstance(value, str):
+        return _mask_url_credentials(value)
+    if isinstance(value, dict):
+        return {
+            _mask_url_credentials(k) if isinstance(k, str) else k: (
+                _mask_url_credentials_deep(v)
+            )
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_mask_url_credentials_deep(v) for v in value]
+    if isinstance(value, tuple):
+        items = [_mask_url_credentials_deep(v) for v in value]
+        return type(value)(*items) if hasattr(value, "_fields") else tuple(items)
+    return value
 
 
 # ---------------------------------------------------------------------------

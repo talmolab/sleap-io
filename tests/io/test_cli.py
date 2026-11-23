@@ -11942,6 +11942,68 @@ def test_transform_embed_provenance(tmp_path, slp_real_data):
     assert "videos" in transform_meta
 
 
+def test_transform_metadata_holds_no_url_credentials(
+    tmp_path,
+    slp_minimal,
+    gated_files,
+    saved_bytes_without,
+    centered_pair_low_quality_path,
+):
+    """The metadata of a transform goes in its output and in a YAML file next to it."""
+    url = gated_files.serve("/v.mp4", centered_pair_low_quality_path)
+    # Labels on a URL, as a file saved before saves masked them can be.
+    source = tmp_path / "source.slp"
+    shutil.copy(slp_minimal, source)
+    with h5py.File(source, "a") as f:
+        rows = [json.loads(row) for row in f["videos_json"][:]]
+        for row in rows:
+            row["filename"] = url
+            row["backend"]["filename"] = url
+        del f["videos_json"]
+        f.create_dataset(
+            "videos_json",
+            data=[json.dumps(row) for row in rows],
+            dtype=h5py.string_dtype(),
+            maxshape=(None,),
+        )
+    out = tmp_path / "out"
+    out.mkdir()
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "transform",
+            str(source),
+            "--scale",
+            "0.5",
+            "-o",
+            str(out / "a.slp"),
+            "--embed-provenance",
+            "--output-transforms",
+            str(out / "a.yaml"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    saved_bytes_without(out)
+    assert "/v.mp4?token=***" in (out / "a.yaml").read_text()
+    assert b"/v.mp4?token=***" in (out / "a.slp").read_bytes()
+
+
+def test_convert_of_a_url_holds_no_credentials(
+    tmp_path, slp_minimal_pkg, gated_files, saved_bytes_without
+):
+    """A command that reads a URL saves what any other save does."""
+    url = gated_files.serve("/pkg.slp", slp_minimal_pkg)
+    out = tmp_path / "out"
+    out.mkdir()
+
+    result = CliRunner().invoke(cli, ["convert", "-i", url, "-o", str(out / "a.slp")])
+
+    assert result.exit_code == 0, result.output
+    assert b"/pkg.slp?token=***" in saved_bytes_without(out)
+
+
 def test_transform_config_file_crop(tmp_path, slp_real_data):
     """Test config file with crop as list."""
     import yaml

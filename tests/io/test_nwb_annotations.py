@@ -1573,3 +1573,55 @@ def test_multisubjects_skeleton_instance_id_linkage(slp_real_data, tmp_path):
             for inst in frame.skeleton_instances.skeleton_instances.values():
                 # The instance ID should be a valid row index in SubjectsTable
                 assert 0 <= inst.id < len(subject_ids)
+
+
+def test_annotations_hold_no_url_credentials(
+    tmp_path, saved_bytes_without, gated_files, centered_pair_low_quality_path
+):
+    """A source video's path and name go in the NWB file."""
+    url = gated_files.serve("/v.mp4", centered_pair_low_quality_path)
+    video = sio.load_video(url)
+    skeleton = sio.Skeleton(["a", "b"], name="s")
+    instance = SleapInstance.from_numpy(np.ones((2, 2)), skeleton=skeleton)
+    labels = SleapLabels(
+        labeled_frames=[
+            sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        ],
+        videos=[video],
+        skeletons=[skeleton],
+    )
+    path = tmp_path / "a.nwb"
+
+    sio.save_nwb(labels, str(path), nwb_format="annotations")
+
+    assert b"/v.mp4?token=***" in saved_bytes_without(path)
+    assert video.filename == url
+    assert video.exists()
+    video.close()
+
+
+def test_frame_map_holds_no_url_credentials(tmp_path, saved_bytes_without):
+    """A frame map is saved as JSON next to what it maps."""
+    url = "https://x.test/v.mp4?token=SECRET"
+    video = sio.Video(
+        filename=url, open_backend=False, backend_metadata={"filename": url}
+    )
+    skeleton = sio.Skeleton(["a", "b"], name="s")
+    instance = SleapInstance.from_numpy(np.ones((2, 2)), skeleton=skeleton)
+    labels = SleapLabels(
+        labeled_frames=[
+            sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        ],
+        videos=[video],
+        skeletons=[skeleton],
+    )
+    frame_map = FrameMap.from_labels(labels)
+    path = tmp_path / "frame_map.json"
+
+    frame_map.save(path)
+
+    saved_bytes_without(path)
+    saved = json.loads(path.read_text())["videos"][0]
+    assert saved["filename"] == "https://x.test/v.mp4?token=***"
+    assert saved["backend_metadata"]["filename"] == "https://x.test/v.mp4?token=***"
+    assert frame_map.videos[0].filename == url

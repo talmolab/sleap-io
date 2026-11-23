@@ -3503,3 +3503,35 @@ def test_resolve_image_path_reuses_file_index(tmp_path):
     # ...but a fresh lookup without the index finds them.
     found = coco.resolve_image_path("second.png", tmp_path)
     assert found == tmp_path / "sub" / "second.png"
+
+
+@pytest.mark.parametrize(
+    "filename, image_name",
+    [
+        # A file's stem stops at a dot, and a token can have dots in it.
+        ("https://x.test/v.mp4?token=SECRET.AND.MORE", "v_frame_000000.png"),
+        (["https://x.test/0.png?token=SECRET"], "0.png?token=***"),
+        (["https://x.test/0.png?token=SECRET.AND.MORE"], "0.png?token=***"),
+    ],
+)
+def test_write_labels_holds_no_url_credentials(
+    tmp_path, saved_bytes_without, filename, image_name
+):
+    """An image's name is made from its video's."""
+    video = sio.Video(filename=filename, open_backend=False)
+    skeleton = sio.Skeleton(["a", "b"])
+    instance = sio.Instance.from_numpy(np.ones((2, 2)), skeleton=skeleton)
+    labels = Labels(
+        labeled_frames=[
+            sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        ],
+        videos=[video],
+        skeletons=[skeleton],
+    )
+    path = tmp_path / "a.json"
+
+    sio.save_coco(labels, str(path))
+
+    saved_bytes_without(path)
+    assert json.loads(path.read_text())["images"][0]["file_name"] == image_name
+    assert video.filename == filename

@@ -252,11 +252,50 @@ instance metadata).
     target's query string rather than in `headers`.
 
 Other security guarantees: TLS is always on; URLs are redacted (userinfo and
-token-like query parameters stripped) in error messages and tracebacks so
-credentials never leak into logs; and an identity `Accept-Encoding` is forced
+the values of the query parameters named under
+[Credentials in saved files](#credentials-in-saved-files) stripped; S3 and GCS
+signatures are left in) in error messages and tracebacks; and an identity
+`Accept-Encoding` is forced
 so range reads stay byte-exact. Remote loading needs `aiohttp >= 3.13.5` for
 the cross-origin header stripping — an older version emits a `RuntimeWarning`
 at import time.
+
+### Credentials in saved files
+
+Files get passed around, so a save masks a URL's credentials wherever it writes
+one. That covers a video's filename, its backend metadata and its source videos,
+and anything in provenance, for every `embed` setting and every format that
+records them. Exactly these are masked:
+
+- A user name, a password or both in the link: `https://me:pw@host/...` becomes
+  `https://***:***@host/...`. In `az://` and `abfs://` links the name before the
+  `@` is the container (`abfs://<container>@<account>.dfs.core.windows.net/...`),
+  so it is kept unless it holds a `:`.
+- The values of the query parameters `token`, `access_token`,
+  `x-amz-security-token`, `sas` and `sig`, whatever their case (and, in a URL,
+  their percent-encoding), also after a `#`: `?token=...` becomes `?token=***`.
+
+Nothing else is masked. **S3 and GCS signed links are saved whole**:
+`X-Amz-Signature`, `X-Amz-Credential` and the `X-Goog-...` parameters stay, so a
+saved file can hold a signed link that works until it expires (one signed with
+temporary credentials loses its `X-Amz-Security-Token` and stops working).
+Embedding the frames doesn't drop the link: an embedded video keeps it as its
+source. Before sharing such a file, point the video at a local copy
+(`video.replace_filename(path)`) and save again. The rest of the name is saved
+exactly as it was, and `headers=` are never saved.
+
+The labels in memory keep the whole URL, so they go on working after a save. But a
+video whose URL needs its credentials **won't open from the saved file**, just like
+an expired link: the labels load, and `video.exists()` is `False`, until you give it
+the link again.
+
+```python
+labels = sio.load_slp("labels.slp")
+labels.videos[0].replace_filename("https://host/video.mp4?token=...")
+```
+
+To have a saved file that opens by itself, embed the frames (`embed=True`) or point
+it at a local copy of the video.
 
 ---
 
@@ -308,7 +347,10 @@ raises an `ImportError` with the install hint.
     rather than silently returning an unauthenticated backend. To read an
     auth-gated remote video, use a **pre-signed URL** that embeds credentials in
     the query string (e.g. `https://host/video.mp4?X-Amz-...`), or download the
-    file locally first.
+    file locally first. A saved file keeps an S3 or GCS signed link whole, even
+    with its frames embedded (only the names listed in
+    [Credentials in saved files](#credentials-in-saved-files) are masked), so
+    point the video at a local copy before sharing it.
 
 !!! danger "Security: remote video hands untrusted data to FFmpeg"
     Decoding a remote video streams bytes from the URL into FFmpeg (via pyav).
@@ -376,8 +418,8 @@ downloaded only once whether you call `load_slp` or `load_file` (an explicit
 
 Remote HTTP/cloud failures surface as
 [`RemoteIOError`][sleap_io.RemoteIOError] (a subclass of `OSError`). It carries
-a `status` (HTTP code or `None`) and a credential-redacted `url`, so tokens
-never leak into logs or tracebacks:
+a `status` (HTTP code or `None`) and a `url` with its credentials redacted as in
+error messages above, for logs and tracebacks:
 
 ```python
 import sleap_io as sio

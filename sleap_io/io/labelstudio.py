@@ -16,6 +16,7 @@ from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import simplejson as json
 
+from sleap_io.io._remote import _mask_url_credentials_deep
 from sleap_io.model.instance import Instance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -193,7 +194,7 @@ def convert_labels(labels: Labels) -> List[dict]:
                 },
                 "meta": {
                     "video": {
-                        "filename": frame.video.filename,
+                        "filename": _mask_url_credentials_deep(frame.video.filename),
                         "frame_idx": frame.frame_idx,
                         "shape": frame.video.shape,
                     }

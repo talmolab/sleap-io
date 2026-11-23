@@ -1571,6 +1571,63 @@ class TestVideoTransforms:
             assert "backend" in video0_data
             assert "filename" in video0_data["backend"]
 
+    def test_update_videos_json_holds_no_url_credentials(
+        self, tmp_path, slp_minimal_pkg, gated_files, saved_bytes_without
+    ):
+        """The hand-written videos_json of a transform doesn't keep a URL's token."""
+        import json
+
+        import h5py
+
+        import sleap_io as sio
+        from sleap_io.transform.video import _update_videos_json
+
+        url = gated_files.serve("/pkg.slp", slp_minimal_pkg)
+        labels = sio.load_slp(url)
+        output_path = tmp_path / "a.slp"
+        assert labels.videos[0].backend.filename == url
+
+        _update_videos_json(output_path, labels.videos)
+
+        saved_bytes_without(output_path)
+        with h5py.File(output_path, "r") as f:
+            saved = json.loads(f["videos_json"][0])
+        assert saved["backend"]["filename"] == url.replace("SECRET", "***")
+        assert labels.videos[0].backend.filename == url
+
+    def test_transform_embedded_video_holds_no_url_credentials(
+        self, tmp_path, slp_minimal_pkg, saved_bytes_without
+    ):
+        """An embedded video's source goes in its group as it's transformed."""
+        import json
+
+        import h5py
+
+        import sleap_io as sio
+        from sleap_io.transform import Transform
+        from sleap_io.transform.video import transform_embedded_video
+
+        labels = sio.load_slp(slp_minimal_pkg)
+        video = labels.videos[0]
+        source = sio.Video(
+            filename="https://x.test/v.mp4?token=SECRET", open_backend=False
+        )
+        video.source_video = source
+        output_path = tmp_path / "a.slp"
+
+        transform_embedded_video(
+            video=video,
+            output_path=output_path,
+            video_idx=0,
+            transform=Transform(scale=(0.5, 0.5)),
+        )
+
+        saved_bytes_without(output_path)
+        with h5py.File(output_path, "r") as f:
+            saved = json.loads(f["video0/source_video"].attrs["json"])
+        assert saved["backend"]["filename"] == "https://x.test/v.mp4?token=***"
+        assert source.filename == "https://x.test/v.mp4?token=SECRET"
+
     def test_transform_embedded_video_with_progress(self, tmp_path, slp_minimal_pkg):
         """Test transform_embedded_video with progress callback."""
         import sleap_io as sio
