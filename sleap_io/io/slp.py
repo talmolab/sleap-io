@@ -310,9 +310,10 @@ def _identity_index(items: Iterable) -> dict[int, int]:
 
 # Attribute on ``/frames`` (and ``/negative_frames``) recording how the ``video``
 # column is numbered. ``"index"`` means it is the video's position in the
-# ``videos_json`` written to the same file, which is what this writer always
-# emits. Files without the attribute (older writers) may hold sparse ids taken
-# from embedded ``videoN/video`` dataset names; readers fall back to guessing.
+# ``videos_json`` written to the same file. Without it, readers work the
+# numbering out from the ids (see `_decode_video_ids`); the writer marks a table
+# only when no numbering exists that they work out correctly (see
+# `_legacy_frame_video_ids`).
 FRAMES_VIDEO_IDS_ATTR = "video_ids"
 FRAMES_VIDEO_IDS_INDEX = "index"
 
@@ -329,6 +330,20 @@ def _embedded_video_group_id(video: Video) -> int | None:
     """
     backend = getattr(video, "backend", None)
     dataset = getattr(backend, "dataset", None) if backend is not None else None
+    if not dataset:
+        dataset = (getattr(video, "backend_metadata", None) or {}).get("dataset")
+    return _dataset_video_group_id(dataset)
+
+
+def _dataset_video_group_id(dataset: str | None) -> int | None:
+    """Return ``N`` for a dataset name like ``videoN/video``, else `None`.
+
+    Args:
+        dataset: A video backend's dataset name, or `None`.
+
+    Returns:
+        The integer ``N``, or `None` for any other name.
+    """
     if not dataset or "/" not in dataset:
         return None
     group = dataset.split("/")[0]
@@ -354,16 +369,42 @@ def _frames_video_ids_are_indices(dataset: h5py.Dataset | None) -> bool:
     return value == FRAMES_VIDEO_IDS_INDEX
 
 
+def _warn_if_video_id_marks_disagree(f: h5py.File, labels_path: str) -> None:
+    """Warn when only one of ``/frames`` and ``/negative_frames`` is marked.
+
+    The two tables are matched on their stored video ids, so they must be
+    numbered alike.
+
+    Args:
+        f: The open labels file.
+        labels_path: The file's path, for the message.
+    """
+    if (
+        "frames" in f
+        and "negative_frames" in f
+        and len(f["negative_frames"])
+        and _frames_video_ids_are_indices(f["negative_frames"])
+        != _frames_video_ids_are_indices(f["frames"])
+    ):
+        warnings.warn(
+            f"{labels_path}: /frames and /negative_frames don't agree on how their "
+            "video ids are numbered (only one carries the `video_ids` mark), so "
+            "some negative frame markers may be missing or on the wrong frame.",
+            stacklevel=5,
+        )
+
+
 def _frame_video_id_to_index(
     f: h5py.File, frame_video_ids: Iterable, videos: list[Video]
 ) -> dict[int, int]:
     """Map the ``video`` ids stored in ``/frames`` to positions in `videos`.
 
-    Files written by this version say so with ``video_ids = "index"`` on
-    ``/frames``, and the ids are used as positions. Older files are guessed: ids
-    that are exactly ``0..n-1`` are positions; otherwise an embedded video's id is
-    the ``N`` of its ``videoN/video`` dataset (old SLEAP / #268 files), and any
-    other video keeps its position.
+    A ``/frames`` table marked ``video_ids = "index"`` (written only when no
+    other numbering reads back correctly, see `_legacy_frame_video_ids`) stores
+    positions. Otherwise the ids are worked out: ids that are exactly
+    ``0..n-1`` are positions; otherwise an embedded video's id is the ``N`` of
+    its ``videoN/video`` dataset (old SLEAP / #268 files), and any other video
+    keeps its position.
 
     Args:
         f: The open labels file.
@@ -392,6 +433,152 @@ def _frame_video_id_to_index(
         else:
             mapping[i] = i
     return mapping
+
+
+def _written_video_id_map(f: h5py.File, videos: list[Video]) -> np.ndarray:
+    """Return the id each written video gets from readers that guess the ids.
+
+    Readers of a ``/frames`` table without the ``video_ids`` mark take an
+    embedded video's ``N`` from its ``videoN/video`` dataset as its id, and any
+    other video's position. The datasets are those of the ``videos_json`` already
+    written to `f`, since a save may write videos differently from how they are
+    held in memory (for example restoring the source video of an embedded one).
+
+    Args:
+        f: The file being written.
+        videos: The videos written, in order.
+
+    Returns:
+        An array with each video's ``videoN`` number, or its position for videos
+        that aren't embedded.
+    """
+    if "videos_json" in f:
+        ids = [
+            _dataset_video_group_id(json.loads(raw).get("backend", {}).get("dataset"))
+            for raw in f["videos_json"][()]
+        ]
+    else:
+        ids = [_embedded_video_group_id(video) for video in videos]
+    return np.array(
+        [i if vid is None else vid for i, vid in enumerate(ids)], dtype="i8"
+    )
+
+
+def _decode_video_ids(stored: Iterable, video_ids: np.ndarray) -> np.ndarray:
+    """Map the video ids of an unmarked ``/frames`` table to positions.
+
+    This is the rule readers apply to a table without the ``video_ids`` mark (see
+    `_frame_video_id_to_index`): ids that are exactly ``0..n-1`` are positions;
+    otherwise each video's id in `video_ids` maps to its position (the last video
+    wins when two share an id), and other ids are kept as they are.
+
+    Args:
+        stored: The stored video id of each frame.
+        video_ids: The id of each video (see `_written_video_id_map`).
+
+    Returns:
+        The position each frame is read onto.
+    """
+    stored = np.asarray(stored, dtype="i8")
+    if np.array_equal(np.unique(stored), np.arange(len(video_ids))):
+        return stored
+    id_map = {vid: i for i, vid in enumerate(np.asarray(video_ids).tolist())}
+    return np.array([id_map.get(v, v) for v in stored.tolist()], dtype="i8")
+
+
+def _legacy_frame_video_ids(
+    f: h5py.File, videos: list[Video], frame_videos: Iterable
+) -> tuple[np.ndarray, bool]:
+    """Choose the video id to store for each frame of the ``/frames`` table.
+
+    Readers without the ``video_ids`` mark (sleap-io 0.9.5 and older, and SLEAP
+    releases that read through them) work out how the ids are numbered from the
+    ids themselves (see `_decode_video_ids`), and an embedded video's ``videoN``
+    number can equal another video's position, so some numberings are read back
+    onto the wrong video. The ids are chosen so that as many readers as possible
+    read them correctly:
+
+    1. Positions, when that rule reads them back correctly. Every reader does
+       then, including those that take the ids as positions outright. This is
+       also what is stored whenever no embedded video's number differs from its
+       position, so these saves are unchanged.
+    2. Otherwise a choice per video: its position when the rule reads that back
+       onto it, else its embedded ``videoN`` number when the rule reads that
+       back onto it.
+    3. Otherwise every embedded video's ``videoN`` number, when the rule reads
+       those back correctly.
+    4. Otherwise positions, with the table marked ``video_ids = "index"``, and a
+       warning: readers that know the mark read them correctly, and so do readers
+       that take ids as positions, but readers that apply the rule can't be
+       given ids they would read correctly.
+
+    Args:
+        f: The file being written, with its ``videos_json``.
+        videos: The videos written, in order.
+        frame_videos: The position of each frame's video.
+
+    Returns:
+        A tuple ``(ids, marked)`` of the id to store for each frame and whether
+        the tables that hold them must carry the ``video_ids = "index"`` mark.
+    """
+    indices = np.asarray(frame_videos, dtype="i8")
+    video_ids = _written_video_id_map(f, videos)
+    if np.array_equal(_decode_video_ids(indices, video_ids), indices):
+        return indices, False
+
+    # What the rule maps an id to when the ids aren't exactly the positions.
+    id_map = {vid: i for i, vid in enumerate(video_ids.tolist())}
+    per_video = np.array(
+        [
+            i if id_map.get(i, i) == i else vid
+            for i, vid in enumerate(video_ids.tolist())
+        ],
+        dtype="i8",
+    )
+    for candidate in (per_video[indices], video_ids[indices]):
+        if np.array_equal(_decode_video_ids(candidate, video_ids), indices):
+            return candidate, False
+
+    warnings.warn(
+        "Some frames can't be numbered in the SLP layout in a way that every "
+        "older reader works out correctly: an embedded video's number equals "
+        "another video's position in the video list. The frames are stored by "
+        'position and marked (`video_ids = "index"`), which this version reads '
+        "correctly. sleap-io 0.9.5 and older, and SLEAP releases that read "
+        "through them, attach some of these frames to the wrong video when they "
+        "open the videos. To avoid this, remove videos that have no frames, embed "
+        "the frames in the saved file (`embed=True`, which needs the frames to be "
+        "readable), or save with the source videos restored "
+        "(`embed=False, restore_original_videos=True`, which works when the "
+        "embedded videos record their source video).",
+        stacklevel=5,
+    )
+    return indices, True
+
+
+def _stored_frame_video_ids(
+    f: h5py.File, videos: list[Video]
+) -> tuple[dict[int, int], bool] | None:
+    """Return how the ``/frames`` table already in a file numbers its videos.
+
+    Args:
+        f: The file, with its ``videos_json`` and ``/frames``.
+        videos: The file's videos, in order.
+
+    Returns:
+        A tuple ``(ids, marked)``: the id stored for each position that has a
+        frame, and whether the table carries the ``video_ids = "index"`` mark.
+        `None` if the file has no ``/frames`` table.
+    """
+    if "frames" not in f or not isinstance(f["frames"], h5py.Dataset):
+        return None
+    stored = f["frames"]["video"].astype("i8")
+    marked = _frames_video_ids_are_indices(f["frames"])
+    if marked:
+        positions = stored
+    else:
+        positions = _decode_video_ids(stored, _written_video_id_map(f, videos))
+    return dict(zip(positions.tolist(), stored.tolist())), marked
 
 
 def _create_json_rows_dataset(f: h5py.File, name: str, rows: list | np.ndarray):
@@ -3571,29 +3758,52 @@ def write_negative_frames(labels_path: str, labels: Labels):
         labels: A `Labels` object containing negative frames to write.
 
     Notes:
-        Uses the same video ids as /frames: each video's position in the
-        ``videos_json`` written to this file (see `FRAMES_VIDEO_IDS_ATTR`). The
-        /negative_frames dataset stores (video_id, frame_idx) tuples identifying
-        which frames are explicitly marked as negative (pure background, no
-        instances).
+        Uses the video ids of the `/frames` table already in the file, however it
+        numbers them, since the two tables are matched on those ids. If the file
+        has no such table, or a negative frame's video has no row in it, it uses
+        the ids a `/frames` table for the same labels would get (see
+        `_legacy_frame_video_ids`). The /negative_frames dataset stores
+        (video_id, frame_idx) tuples identifying which frames are explicitly
+        marked as negative (pure background, no instances).
     """
-    # Collect negative frames
-    negative_data = []
     video_ids = _identity_index(labels.videos)
+    frame_videos, is_negative, frame_inds = [], [], []
     for lf in labels.labeled_frames:
-        if lf.is_negative:
-            video_idx = video_ids.get(id(lf.video))
-            if video_idx is None:
-                video_idx = labels.videos.index(lf.video)  # Raises if unknown.
-            negative_data.append((video_idx, lf.frame_idx))
+        video_idx = video_ids.get(id(lf.video))
+        if video_idx is None:
+            video_idx = labels.videos.index(lf.video)  # Raises if unknown.
+        frame_videos.append(video_idx)
+        is_negative.append(lf.is_negative)
+        frame_inds.append(lf.frame_idx)
+    if not any(is_negative):
+        return
 
-    if negative_data:
+    with h5py.File(labels_path, "a") as f:
+        in_file = _stored_frame_video_ids(f, labels.videos)
+        if in_file is not None and all(
+            video_idx in in_file[0]
+            for video_idx, negative in zip(frame_videos, is_negative)
+            if negative
+        ):
+            # Follow the `/frames` table in the file, whichever writer wrote it:
+            # the reader matches the two tables on the stored ids.
+            ids, marked = in_file
+            stored = [ids.get(video_idx, video_idx) for video_idx in frame_videos]
+        else:
+            stored, marked = _legacy_frame_video_ids(f, labels.videos, frame_videos)
         dtype = np.dtype([("video_id", "u4"), ("frame_idx", "u8")])
-        data = np.array(negative_data, dtype=dtype)
-        with h5py.File(labels_path, "a") as f:
-            if "negative_frames" in f:
-                del f["negative_frames"]  # Replace if exists
-            ds = f.create_dataset("negative_frames", data=data)
+        data = np.array(
+            [
+                (int(vid), frame_idx)
+                for vid, frame_idx, negative in zip(stored, frame_inds, is_negative)
+                if negative
+            ],
+            dtype=dtype,
+        )
+        if "negative_frames" in f:
+            del f["negative_frames"]  # Replace if exists
+        ds = f.create_dataset("negative_frames", data=data)
+        if marked:
             ds.attrs[FRAMES_VIDEO_IDS_ATTR] = FRAMES_VIDEO_IDS_INDEX
 
 
@@ -3610,8 +3820,10 @@ def read_negative_frames(
             private argument used to thread a single open handle through reads.
 
     Returns:
-        A set of (sparse_video_id, frame_idx) tuples identifying negative frames.
-        Returns empty set if no negative frames dataset exists.
+        A set of (video_id, frame_idx) tuples identifying negative frames, with
+        the video ids as stored: numbered like the file's `/frames` table (see
+        `_legacy_frame_video_ids`). Returns empty set if no negative frames
+        dataset exists.
     """
     try:
         data = read_hdf5_dataset(labels_path, "negative_frames", _hdf5_file=_hdf5_file)
@@ -4302,11 +4514,13 @@ def write_lfs(labels_path: str, labels: Labels):
     # Next, we extract the data from the labels object into lists with the same fields.
     frames, instances, points, predicted_points, to_link = [], [], [], [], []
     inst_to_id = {}
-    # The /frames video id is the video's position in labels.videos, which is the
-    # order write_videos writes videos_json in. Never use an embedded videoN/video
-    # dataset name here: it names a group in the file the video was READ from,
-    # which after a merge, a subset or a restore-original save is not the group
-    # (or even the file) the written videos_json entry points at (#590).
+    # Frames are collected with their video's position in labels.videos, which is
+    # the order write_videos writes videos_json in. Never take the id from the
+    # in-memory video's embedded videoN/video dataset name: it names a group in
+    # the file the video was READ from, which after a merge, a subset or a
+    # restore-original save is not the group (or even the file) the written
+    # videos_json entry points at (#590). The ids stored are chosen from the
+    # written videos_json below (see `_legacy_frame_video_ids`).
     video_ids = _identity_index(labels.videos)
     track_ids = _identity_index(labels.tracks)
     for lf in labels:
@@ -4406,6 +4620,9 @@ def write_lfs(labels_path: str, labels: Labels):
 
     # Write to file.
     with h5py.File(labels_path, "a") as f:
+        frames["video"], marked = _legacy_frame_video_ids(
+            f, labels.videos, frames["video"]
+        )
         f.create_dataset("points", data=points, dtype=points.dtype)
         f.create_dataset(
             "pred_points",
@@ -4422,7 +4639,8 @@ def write_lfs(labels_path: str, labels: Labels):
             data=frames,
             dtype=frames.dtype,
         )
-        frames_ds.attrs[FRAMES_VIDEO_IDS_ATTR] = FRAMES_VIDEO_IDS_INDEX
+        if marked:
+            frames_ds.attrs[FRAMES_VIDEO_IDS_ATTR] = FRAMES_VIDEO_IDS_INDEX
 
 
 def make_instance_group(
@@ -5775,6 +5993,7 @@ def _read_labels_lazy_from_open_file(
     metadata = read_metadata(labels_path, _hdf5_file=f)
     provenance = read_provenance(labels_path, metadata, _hdf5_file=f)
     negative_frames = read_negative_frames(labels_path, _hdf5_file=f)
+    _warn_if_video_id_marks_disagree(f, labels_path)
 
     # The lazy store indexes `videos` with the stored id directly, so turn the
     # sparse ids an older file may hold into positions now (as the eager reader
@@ -8609,8 +8828,9 @@ def _read_labels_from_open_file(
     frames = read_hdf5_dataset(labels_path, "frames", _hdf5_file=f)
     negative_markers = read_negative_frames(labels_path, _hdf5_file=f)
 
-    # Map stored video ids to list positions: files from this writer declare them
-    # positions; older files may hold sparse embedded ids (see the helper).
+    # Map stored video ids to list positions: a marked table stores positions;
+    # otherwise the ids may be embedded videoN numbers (see the helper).
+    _warn_if_video_id_marks_disagree(f, labels_path)
     video_id_to_index = _frame_video_id_to_index(
         f, (frame[1] for frame in frames), videos
     )
@@ -9279,21 +9499,39 @@ def _write_labels_lazy(
             dtype=lazy_store.instances_data.dtype,
         )
         # The lazy reader turned any sparse ids into positions at load, so the
-        # store's video ids are positions in labels.videos (#590).
+        # store's video ids are positions in labels.videos (#590). Store them as
+        # the eager writer does (see `_legacy_frame_video_ids`).
+        frames_data = lazy_store.frames_data.copy()
+        positions = frames_data["video"].astype("i8")
+        frames_data["video"], marked = _legacy_frame_video_ids(
+            f, labels.videos, positions
+        )
         frames_ds = f.create_dataset(
             "frames",
-            data=lazy_store.frames_data,
-            dtype=lazy_store.frames_data.dtype,
+            data=frames_data,
+            dtype=frames_data.dtype,
         )
-        frames_ds.attrs[FRAMES_VIDEO_IDS_ATTR] = FRAMES_VIDEO_IDS_INDEX
+        if marked:
+            frames_ds.attrs[FRAMES_VIDEO_IDS_ATTR] = FRAMES_VIDEO_IDS_INDEX
+        # Negative markers are matched to /frames on the stored ids.
+        stored_ids = dict(
+            zip(positions.tolist(), frames_data["video"].astype("i8").tolist())
+        )
 
     # Write negative frames directly from lazy store data
     if lazy_store._negative_frames:
         neg_dtype = np.dtype([("video_id", "u4"), ("frame_idx", "u8")])
-        neg_data = np.array(sorted(lazy_store._negative_frames), dtype=neg_dtype)
+        neg_data = np.array(
+            sorted(
+                (stored_ids.get(video_idx, video_idx), frame_idx)
+                for video_idx, frame_idx in lazy_store._negative_frames
+            ),
+            dtype=neg_dtype,
+        )
         with h5py.File(labels_path, "a") as f:
             neg_ds = f.create_dataset("negative_frames", data=neg_data)
-            neg_ds.attrs[FRAMES_VIDEO_IDS_ATTR] = FRAMES_VIDEO_IDS_INDEX
+            if marked:
+                neg_ds.attrs[FRAMES_VIDEO_IDS_ATTR] = FRAMES_VIDEO_IDS_INDEX
 
     # Write annotations from lazy store (per-frame dicts + undistributed)
     # Build annotation lists with routing contexts from the lazy store keys

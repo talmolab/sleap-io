@@ -12251,7 +12251,8 @@ def test_save_merged_package_keeps_frames_on_their_videos(
     save_slp(merged, out, **save_kwargs)
 
     with h5py.File(out, "r") as f:
-        assert f["frames"].attrs["video_ids"] == "index"
+        # Positions that every reader works out unaided, so no mark is needed.
+        assert "video_ids" not in f["frames"].attrs
         assert f["frames"]["video"].tolist() == [0, 1, 2]
         assert len(f["videos_json"]) == 3
 
@@ -12295,7 +12296,8 @@ def test_save_merged_package_keeps_negative_frames(plain_and_package):
     save_slp(merged, out)
 
     with h5py.File(out, "r") as f:
-        assert f["negative_frames"].attrs["video_ids"] == "index"
+        assert "video_ids" not in f["negative_frames"].attrs
+        assert f["negative_frames"]["video_id"].tolist() == [2]
     for loaded in (load_slp(out), load_slp(out, lazy=True)):
         negatives = [
             (_root_folder(lf.video), lf.frame_idx) for lf in loaded if lf.is_negative
@@ -12343,3 +12345,36 @@ def test_embedded_video_group_id_parses_only_video_groups():
     assert _embedded_video_group_id(video_with("video15")) is None
     assert _embedded_video_group_id(video_with(None)) is None
     assert _embedded_video_group_id(Video(filename="x.mp4", open_backend=False)) is None
+
+
+def test_lazy_resave_without_videos_keeps_frames_on_their_videos(plain_and_package):
+    """An older file's sparse ids are mapped even when videos aren't opened.
+
+    A subset of a package saved by an older writer stores the package's group
+    number (video1) for its only video. Loading it lazily without opening videos
+    and saving it again must store the position (0), since the save marks the ids
+    as positions.
+    """
+    tmp = plain_and_package
+    package = load_slp(str(tmp / "package.pkg.slp"))
+    cam2 = package.videos[1]
+    subset = Labels(
+        [lf for lf in package if lf.video is cam2],
+        videos=[cam2],
+        skeletons=package.skeletons,
+    )
+    old = str(tmp / "old_subset.slp")
+    save_slp(subset, old, restore_original_videos=False)
+    with h5py.File(old, "r+") as f:  # as an older writer stored it
+        frames = f["frames"][:]
+        frames["video"] = 1
+        del f["frames"]
+        f.create_dataset("frames", data=frames)
+
+    lazy = load_slp(old, lazy=True, open_videos=False)
+    out = str(tmp / "resaved.slp")
+    save_slp(lazy, out, restore_original_videos=False)
+
+    with h5py.File(out, "r") as f:
+        assert f["frames"]["video"].tolist() == [0]
+    assert _where(load_slp(out)) == [("cam2", 3, 9.0)]
