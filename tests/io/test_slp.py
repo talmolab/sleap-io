@@ -13383,13 +13383,16 @@ def test_legacy_negative_frames_fixture(slp_legacy_negative_frames, lazy, open_v
 def test_legacy_negative_frames_written_by_legacy_format(
     tmp_path, slp_legacy_negative_frames
 ):
-    """The legacy layout writes the 2.x video ids of the videos as written."""
+    """The legacy layout writes video ids that every 2.x reader reads correctly."""
     for lazy in (False, True):
         for kwargs, video_ids in (
             # The source videos are restored, so the ids are list indices.
             ({}, [0, 0, 1, 1]),
             # The videos keep referring to the package's `video0` and `video4`.
-            (dict(embed=False, restore_original_videos=False), [0, 0, 4, 4]),
+            # List indices are read correctly by every reader here, while the
+            # embedded numbers (0 and 4) are not: readers that take the ids as
+            # list indices outright would look for a fifth video.
+            (dict(embed=False, restore_original_videos=False), [0, 0, 1, 1]),
         ):
             out = tmp_path / f"legacy_{lazy}.slp"
             save_slp(
@@ -13401,6 +13404,7 @@ def test_legacy_negative_frames_written_by_legacy_format(
             with h5py.File(out, "r") as f:
                 assert isinstance(f["frames"], h5py.Dataset)
                 assert_equal(f["frames"]["video"], video_ids)
+                assert "video_ids" not in f["frames"].attrs
                 assert_equal(f["frames"]["frame_id"], [0, 1, 2, 3])
                 assert_equal(f["instances"]["instance_id"], [0, 1, 2])
                 assert sorted(map(tuple, f["negative_frames"][()].tolist())) == [
@@ -13848,16 +13852,16 @@ def test_read_instances_by_row(tmp_path):
     assert dict(instances[1].metadata) == {"kind": "user"}
 
 
-def test_write_negative_frames_uses_embedded_video_ids(
+def test_write_negative_frames_uses_the_frame_video_ids(
     tmp_path, slp_legacy_negative_frames
 ):
-    """`write_negative_frames` stores the 2.x video ids of embedded videos."""
+    """`write_negative_frames` stores the video ids a 2.x `/frames` table gets."""
     labels = load_slp(slp_legacy_negative_frames)
     path = tmp_path / "negative.slp"
     with h5py.File(path, "w"):
         pass
     write_negative_frames(str(path), labels)
-    assert read_negative_frames(str(path)) == {(0, 1), (4, 1)}
+    assert read_negative_frames(str(path)) == {(0, 1), (1, 1)}
 
 
 def _labels_with_metadata() -> Labels:
