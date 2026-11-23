@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
-from sleap_io.io._remote import _mask_url_credentials_deep
+from sleap_io.io._remote import _mask_url_credentials_deep, _redact_names
 from sleap_io.transform.core import Transform
 from sleap_io.transform.points import get_out_of_bounds_mask
 
@@ -488,12 +488,12 @@ def transform_labels(
                 except Exception:
                     raise ValueError(
                         f"Cannot determine dimensions for video {video_idx}: "
-                        f"{video.filename}"
+                        f"{_redact_names(video.filename)}"
                     )
             else:
                 raise ValueError(
                     f"Cannot determine dimensions for video {video_idx}: "
-                    f"{video.filename}"
+                    f"{_redact_names(video.filename)}"
                 )
 
         # Handle embedded vs regular videos differently

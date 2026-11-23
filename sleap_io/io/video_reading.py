@@ -496,7 +496,9 @@ class VideoBackend:
             be set explicitly or will be None.
     """
 
-    filename: str | Path | list[str] | list[Path]
+    filename: str | Path | list[str] | list[Path] = attrs.field(
+        repr=lambda value: repr(_remote._redact_names(value))
+    )
     grayscale: bool | None = None
     keep_open: bool = True
     _cached_shape: tuple[int, int, int, int] | None = None
@@ -578,6 +580,7 @@ class VideoBackend:
             pass
 
     @classmethod
+    @_remote._redacting_errors()
     def from_filename(
         cls,
         filename: str | list[str],
@@ -787,6 +790,7 @@ class VideoBackend:
         """Read a list of frames from the video."""
         return np.stack([self.get_frame(i) for i in frame_inds], axis=0)
 
+    @_remote._redacting_errors()
     def read_test_frame(self) -> np.ndarray:
         """Read a single frame from the video to test for grayscale.
 
@@ -835,6 +839,7 @@ class VideoBackend:
         return int(height), int(width), int(channels)
 
     @property
+    @_remote._redacting_errors()
     def shape(self) -> tuple[int, int, int, int]:
         """Shape of the video as a tuple of `(frames, height, width, channels)`.
 
@@ -885,6 +890,7 @@ class VideoBackend:
         """
         return self._read_frame(frame_idx)
 
+    @_remote._redacting_errors()
     def get_frame_size(self, frame_idx: int) -> tuple[int, int]:
         """Return the stored `(height, width)` of a single frame without decoding it.
 
@@ -905,6 +911,7 @@ class VideoBackend:
         _, height, width, _ = self.shape
         return int(height), int(width)
 
+    @_remote._redacting_errors()
     def get_frame(self, frame_idx: int, downscale: int = 1) -> np.ndarray:
         """Read a single frame from the video.
 
@@ -956,6 +963,7 @@ class VideoBackend:
 
         return img
 
+    @_remote._redacting_errors()
     def get_frames(self, frame_inds: list[int]) -> np.ndarray:
         """Read a list of frames from the video.
 
@@ -1134,6 +1142,7 @@ class MediaVideo(VideoBackend):
         return self.plugin
 
     @property
+    @_remote._redacting_errors()
     def reader(self) -> object:
         """Return the reader object for the video, caching if necessary."""
         if self.keep_open:
@@ -1152,6 +1161,7 @@ class MediaVideo(VideoBackend):
                 return iio.imopen(self.filename, "r", plugin=self._imageio_plugin)
 
     @property
+    @_remote._redacting_errors()
     def num_frames(self) -> int:
         """Number of frames in the video."""
         if self.plugin == "opencv":
@@ -1715,6 +1725,7 @@ class HDF5Video(VideoBackend):
                 self.plugin = "imageio"  # imageio fallback
 
     @property
+    @_remote._redacting_errors()
     def num_frames(self) -> int:
         """Number of frames in the video."""
         with self._open_h5() as f:
@@ -1768,6 +1779,7 @@ class HDF5Video(VideoBackend):
         """
         return self._stored_channels
 
+    @_remote._redacting_errors()
     def read_test_frame(self) -> np.ndarray:
         """Read a single frame from the video to test for grayscale."""
         if self.frame_map:
@@ -1786,6 +1798,7 @@ class HDF5Video(VideoBackend):
         """Return the frame indices of the embedded images."""
         return list(self.frame_map.keys())
 
+    @_remote._redacting_errors()
     def decode_embedded(self, img_string: np.ndarray) -> np.ndarray:
         """Decode an embedded image string into a numpy array.
 
@@ -1834,6 +1847,7 @@ class HDF5Video(VideoBackend):
         else:
             return frame_idx < len(self)
 
+    @_remote._redacting_errors()
     def get_frame_raw_bytes(self, frame_idx: int) -> np.ndarray | None:
         """Get raw encoded bytes for a frame without decoding.
 
@@ -1990,6 +2004,7 @@ class HDF5Video(VideoBackend):
         except (OSError, KeyError, TypeError):  # pragma: no cover - defensive
             return False
 
+    @_remote._redacting_errors()
     def read_crop(
         self,
         frame_idx: int,
@@ -2032,6 +2047,7 @@ class HDF5Video(VideoBackend):
         except (OSError, KeyError, IndexError):  # pragma: no cover - defensive
             return None
 
+    @_remote._redacting_errors()
     def read_crops(
         self,
         frame_inds: list,
@@ -2302,6 +2318,7 @@ class ImageVideo(VideoBackend):
         """Number of frames in the video."""
         return len(self.filename)
 
+    @_remote._redacting_errors()
     def get_frame_raw_bytes(self, frame_idx: int) -> np.ndarray | None:
         """Return the raw encoded bytes of the source image file for a frame.
 
@@ -2436,6 +2453,7 @@ class ImageVideo(VideoBackend):
 
         return img
 
+    @_remote._redacting_errors()
     def get_frame_size(self, frame_idx: int) -> tuple[int, int]:
         """Return the stored `(height, width)` of a single image from its header.
 
@@ -2641,6 +2659,7 @@ class TiffVideo(VideoBackend):
                 self.format = "multi_page"
 
     @property
+    @_remote._redacting_errors()
     def num_frames(self) -> int:
         """Number of frames in the TIFF stack."""
         if self.format == "multi_page":
@@ -2768,7 +2787,7 @@ class CropVideoBackend(VideoBackend):
     """
 
     filename: str | Path | list[str] | list[Path] = attrs.field(
-        init=False, default=None
+        init=False, default=None, repr=lambda value: repr(_remote._redact_names(value))
     )
     inner: VideoBackend = attrs.field(kw_only=True)
     crop: tuple[int, int, int, int] = attrs.field(
@@ -2888,6 +2907,7 @@ class CropVideoBackend(VideoBackend):
         """
         return self.inner.has_frame(frame_idx)
 
+    @_remote._redacting_errors()
     def read_test_frame(self) -> np.ndarray:
         """Read the inner backend's UNCROPPED test frame (frame_map-safe)."""
         return self.inner.read_test_frame()

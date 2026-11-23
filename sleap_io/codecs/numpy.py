@@ -406,7 +406,9 @@ def to_analysis_arrays(
     # Get labeled frames for this video.
     lfs = labels.find(video)
     if not lfs:
-        raise ValueError(f"No labeled frames in video: {video.filename}")
+        from sleap_io.io._remote import _redact_names
+
+        raise ValueError(f"No labeled frames in video: {_redact_names(video.filename)}")
 
     frame_idxs = sorted(lf.frame_idx for lf in lfs)
     first_frame = 0 if all_frames else frame_idxs[0]

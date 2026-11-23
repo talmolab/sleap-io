@@ -15,6 +15,7 @@ import attrs
 import h5py
 import numpy as np
 
+from sleap_io.io import _remote
 from sleap_io.io.utils import is_file_accessible
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo, VideoBackend
 from sleap_io.io.video_writing import VideoWriter
@@ -645,7 +646,7 @@ class Video:
         )
         return (
             "Video("
-            f'filename="{self.filename}", '
+            f'filename="{_remote._redact_names(self.filename)}", '
             f"shape={self.shape}, "
             f"{dataset}"
             f"backend={type(self.backend).__name__}"
@@ -926,16 +927,10 @@ class Video:
                     grayscale = self.backend_metadata["shape"][-1] == 1
 
         if not self.exists(dataset=dataset):
-            from sleap_io.io._remote import _is_url, _redact_url
-
             # Redact credential-bearing URLs (e.g. presigned ``?token=`` links)
             # so they never surface in tracebacks/logs. Local paths are shown
             # verbatim.
-            name = (
-                _redact_url(self.filename)
-                if isinstance(self.filename, str) and _is_url(self.filename)
-                else self.filename
-            )
+            name = _remote._redact_names(self.filename)
             msg = f"Video does not exist or cannot be opened for reading: {name}"
             if dataset is not None:
                 msg += f" (dataset: {dataset})"
@@ -1473,7 +1468,10 @@ class Video:
         from sleap_io.io.video_reading import MediaVideo, normalize_plugin_name
 
         if not self.filename.endswith(MediaVideo.EXTS):
-            raise ValueError(f"Cannot set plugin for non-media video: {self.filename}")
+            raise ValueError(
+                "Cannot set plugin for non-media video: "
+                f"{_remote._redact_names(self.filename)}"
+            )
 
         plugin = normalize_plugin_name(plugin)
 
