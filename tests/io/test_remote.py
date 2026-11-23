@@ -42,8 +42,10 @@ from sleap_io.io._gdrive import (
 )
 from sleap_io.io._remote import (
     _CACHE_MARKER_NAME,
+    _MASKED_ONLY_SCHEMES,
     _RETRY_BACKOFF_BASE,
     _SENSITIVE_QUERY_PARAMS,
+    _URL_SCHEMES,
     RemoteIOError,
     _build_fsspec_filesystem,
     _filename_from_url,
@@ -347,6 +349,73 @@ def test_identify_magic_ascii_no_comma_unknown():
             "abfs://c:SEC/RET@acct.dfs.core.windows.net/v.mp4",
             "abfs://***:***@acct.dfs.core.windows.net/v.mp4",
         ),
+        # Other spellings of remote stores: sleap-io doesn't open them, and masks
+        # them as it masks `abfs://`.
+        (
+            "abfss://me:SECRET@acct.dfs.core.windows.net/v.mp4",
+            "abfss://***:***@acct.dfs.core.windows.net/v.mp4",
+        ),
+        (
+            "ABFSS://me:SECRET@acct.dfs.core.windows.net/v.mp4",
+            "ABFSS://***:***@acct.dfs.core.windows.net/v.mp4",
+        ),
+        (
+            "abfss://c:SEC/RET@acct.dfs.core.windows.net/v.mp4",
+            "abfss://***:***@acct.dfs.core.windows.net/v.mp4",
+        ),
+        # What `Path` makes of it, since it isn't a URL to sleap-io.
+        (
+            "abfss:/me:SECRET@acct.dfs.core.windows.net/v.mp4",
+            "abfss:/***:***@acct.dfs.core.windows.net/v.mp4",
+        ),
+        (
+            "abfss://videos@acct.dfs.core.windows.net/v.mp4?sv=1&sig=SECRET",
+            "abfss://videos@acct.dfs.core.windows.net/v.mp4?sv=1&sig=***",
+        ),
+        (
+            "abfss://videos@acct.dfs.core.windows.net/v.mp4#sig=SECRET",
+            "abfss://videos@acct.dfs.core.windows.net/v.mp4#sig=***",
+        ),
+        # What only a whole-link mask sees: an encoded name, a value with a space.
+        (
+            "abfss://videos@acct.dfs.core.windows.net/v.mp4?sv=1&%73ig=SECRET",
+            "abfss://videos@acct.dfs.core.windows.net/v.mp4?sv=1&%73ig=***",
+        ),
+        (
+            "abfss://videos@acct.dfs.core.windows.net/v.mp4?sig=SEC RET",
+            "abfss://videos@acct.dfs.core.windows.net/v.mp4?sig=***",
+        ),
+        (
+            "wasbs://me:SECRET@acct.blob.core.windows.net/v.mp4",
+            "wasbs://***:***@acct.blob.core.windows.net/v.mp4",
+        ),
+        (
+            "wasb://me:SECRET@acct.blob.core.windows.net/v.mp4",
+            "wasb://***:***@acct.blob.core.windows.net/v.mp4",
+        ),
+        (
+            "adl://me:SECRET@acct.azuredatalakestore.net/v.mp4",
+            "adl://***:***@acct.azuredatalakestore.net/v.mp4",
+        ),
+        ("s3a://AKIA:SECRET@bucket/v.mp4", "s3a://***:***@bucket/v.mp4"),
+        ("s3n://AKIA:SECRET@bucket/v.mp4", "s3n://***:***@bucket/v.mp4"),
+        ("sftp://me:SECRET@host/v.mp4", "sftp://***:***@host/v.mp4"),
+        ("ssh://me:SECRET@host:22/v.mp4", "ssh://***:***@host:22/v.mp4"),
+        ("ftp://me:SECRET@host/v.mp4", "ftp://***:***@host/v.mp4"),
+        ("smb://me:SECRET@host/share/v.mp4", "smb://***:***@host/share/v.mp4"),
+        ("webdav://me:SECRET@host/v.mp4", "webdav://***:***@host/v.mp4"),
+        ("webdavs://me:SECRET@host/v.mp4", "webdavs://***:***@host/v.mp4"),
+        ("davs://me:SECRET@host/v.mp4", "davs://***:***@host/v.mp4"),
+        ("ftps://me:SECRET@host/v.mp4", "ftps://***:***@host/v.mp4"),
+        ("oss://AKID:SECRET@bucket/v.mp4", "oss://***:***@bucket/v.mp4"),
+        (
+            "sleap-track abfss://me:SECRET@acct.dfs.core.windows.net/v.mp4 --x=1",
+            "sleap-track abfss://***:***@acct.dfs.core.windows.net/v.mp4 --x=1",
+        ),
+        (
+            "rsync from sftp://me:SECRET@host/v.mp4",
+            "rsync from sftp://***:***@host/v.mp4",
+        ),
         # A URL that's been through `Path` has lost a slash, and still says it.
         ("https:/x.test/0.png?token=SECRET", "https:/x.test/0.png?token=***"),
         ("https:/me:SECRET@x.test/0.png", "https:/***:***@x.test/0.png"),
@@ -407,6 +476,24 @@ def test_mask_url_credentials_masks_only_the_credential(value, masked):
         "ABFS://videos@myaccount.dfs.core.windows.net/v.mp4",
         "abfs://videos@myaccount.dfs.core.windows.net:443/v.mp4",
         "sleap-track abfs://videos@acct.dfs.core.windows.net/v.mp4 --x=1",
+        # So does the same form in the other Azure spellings, and a user name alone
+        # is no secret in the other stores sleap-io masks but doesn't open.
+        "abfss://videos@myaccount.dfs.core.windows.net/exp1/v.mp4",
+        "abfss:/videos@myaccount.dfs.core.windows.net/exp1/v.mp4",
+        "ABFSS://videos@myaccount.dfs.core.windows.net:443/v.mp4",
+        "wasbs://videos@myaccount.blob.core.windows.net/v.mp4",
+        "wasb://videos@myaccount.blob.core.windows.net/v.mp4",
+        "adl://myaccount.azuredatalakestore.net/a@b.mp4",
+        "sleap-track abfss://videos@acct.dfs.core.windows.net/v.mp4 --x=1",
+        "s3a://bucket/run@2/v.mp4",
+        "sftp://me@host/v.mp4",
+        "ssh://git@host:22/v.mp4",
+        "ftp://host:2121/a@b.mp4",
+        "smb://host/share/a@b.mp4",
+        "smb://WORKGROUP;me@host/share/v.mp4",
+        "davs://me@host/v.mp4",
+        # Not a store sleap-io masks: fsspec's `<org>:<repo>@<ref>` holds no password.
+        "github://org:repo@main/v.mp4",
         # S3 and GCS signed links are kept whole.
         "s3://bucket/v.mp4?X-Amz-Credential=AKIA&X-Amz-Signature=abc",
         "https://storage.googleapis.com/b/v.mp4?X-Goog-Signature=abc",
@@ -424,6 +511,16 @@ def test_mask_url_credentials_masks_only_the_credential(value, masked):
 def test_mask_url_credentials_leaves_the_rest_alone(value):
     """A value with nothing to mask comes back byte for byte."""
     assert _mask_url_credentials(value) == value
+
+
+@pytest.mark.parametrize("scheme", sorted(_MASKED_ONLY_SCHEMES))
+def test_masked_only_schemes_are_not_urls_to_sleap_io(scheme):
+    """Masking a scheme's links doesn't make them URLs to sleap-io."""
+    assert scheme not in _URL_SCHEMES
+    assert not _is_url(f"{scheme}://videos@acct.example.net/v.mp4")
+    assert _mask_url_credentials(f"{scheme}://me:SECRET@acct.example.net/v.mp4") == (
+        f"{scheme}://***:***@acct.example.net/v.mp4"
+    )
 
 
 def test_mask_url_credentials_keeps_what_redact_url_rewrites():
