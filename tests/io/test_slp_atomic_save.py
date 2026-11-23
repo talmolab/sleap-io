@@ -77,7 +77,7 @@ def _refuse(*args, **kwargs):
 def test_failed_save_keeps_previous_file(tmp_path, monkeypatch, legacy_format, lazy):
     """A save that fails partway leaves the previous file byte for byte."""
     path = tmp_path / "labels.slp"
-    save_slp(_labels(2), str(path), legacy_format=legacy_format)
+    save_slp(_labels(2), str(path), slp_version="v2" if legacy_format else "v3")
     before = path.read_bytes()
 
     source = tmp_path / "source.slp"
@@ -87,7 +87,7 @@ def test_failed_save_keeps_previous_file(tmp_path, monkeypatch, legacy_format, l
     # The annotation tables are written after the pose tables, near the end.
     monkeypatch.setattr(slp, "write_label_images", _fail)
     with pytest.raises(RuntimeError, match="disk full"):
-        save_slp(labels, str(path), legacy_format=legacy_format)
+        save_slp(labels, str(path), slp_version="v2" if legacy_format else "v3")
 
     assert path.read_bytes() == before
     assert _folder(tmp_path) == ["labels.slp", "source.slp"]
@@ -598,11 +598,11 @@ def test_closed_videos_saved_over_an_unrelated_file_match_a_new_save(
     """A save over an unrelated file writes what a save to a new path writes."""
     labels = load_slp(slp_minimal_pkg, open_videos=False)
     new = tmp_path / "new.slp"
-    save_slp(labels, str(new), embed=None, legacy_format=legacy_format)
+    save_slp(labels, str(new), embed=None, slp_version="v2" if legacy_format else "v3")
 
     over = tmp_path / "over.slp"
     shutil.copy(slp_minimal_pkg, over)
-    save_slp(labels, str(over), embed=None, legacy_format=legacy_format)
+    save_slp(labels, str(over), embed=None, slp_version="v2" if legacy_format else "v3")
 
     assert over.stat().st_size == new.stat().st_size
     assert _h5_contents(over) == _h5_contents(new)

@@ -242,6 +242,14 @@ class Labels:
         default=None, init=False, repr=False, eq=False, hash=False
     )
 
+    # The `format_id` of the SLP file these labels were loaded from, or `None`. A
+    # save with `slp_version="auto"` keeps a format 3.0 file in format 3.0 (see
+    # `sleap_io.io.slp.resolve_slp_version`). Kept by `copy`, `extract` and
+    # `materialize`.
+    _source_format_id: "float | None" = field(
+        default=None, init=False, repr=False, eq=False, hash=False
+    )
+
     # Frame index: (id(video), frame_idx) -> LabeledFrame. Rebuilt on demand.
     _frame_index: "dict[tuple[int, int], LabeledFrame] | None" = field(
         default=None, init=False, repr=False, eq=False
@@ -541,6 +549,7 @@ class Labels:
         materialized_labels._carried_columns = self._lazy_store.column_carry(
             materialized, replaced=copied_rois
         )
+        materialized_labels._source_format_id = getattr(self, "_source_format_id", None)
         return materialized_labels
 
     def __attrs_post_init__(self):
@@ -999,6 +1008,7 @@ class Labels:
                 categories=new_categories,
                 lazy_store=new_store,
             )
+            labels_copy._source_format_id = getattr(self, "_source_format_id", None)
         else:
             # __getstate__ excludes _label_image_file (h5py can't be deepcopied)
             labels_copy = deepcopy(self)
@@ -3271,6 +3281,8 @@ class Labels:
         # Unknown pose table columns can't follow a subset of the rows, so saving
         # the extracted labels drops them with a warning instead of silently.
         labels._carried_columns = self._carried_columns
+        # A subset of a format 3.0 file is saved in format 3.0 too.
+        labels._source_format_id = getattr(self, "_source_format_id", None)
 
         return labels
 
@@ -3338,6 +3350,7 @@ class Labels:
         save_dir: str | Path | None = None,
         seed: int | None = None,
         embed: bool = True,
+        **save_kwargs,
     ) -> "LabelsSet":
         """Make splits for training with embedded images.
 
@@ -3355,6 +3368,9 @@ class Labels:
                 files, which is useful for portability but can be slow for large
                 projects. If `False`, labels are saved with references to the source
                 videos files.
+            **save_kwargs: Further arguments of `sleap_io.save_slp` for the saved
+                files, such as `slp_version`, `image_format`, `image_quality` or
+                `compression`. The files share one layout (see `LabelsSet.save`).
 
         Returns:
             A `LabelsSet` containing "train", "val", and optionally "test" keys.
@@ -3428,7 +3444,7 @@ class Labels:
 
         # Save.
         if save_dir is not None:
-            labels_set.save(save_dir, embed=embed)
+            labels_set.save(save_dir, embed=embed, **save_kwargs)
 
         return labels_set
 
@@ -3438,6 +3454,7 @@ class Labels:
         frame_inds: list[int] | np.ndarray,
         video: Video | int | None = None,
         video_kwargs: dict[str, Any] | None = None,
+        **save_kwargs,
     ) -> "Labels":
         """Trim the labels to a subset of frames and videos accordingly.
 
@@ -3450,6 +3467,8 @@ class Labels:
                 specified for single-video projects.
             video_kwargs: A dictionary of keyword arguments to provide to
                 `sio.save_video` for video compression.
+            **save_kwargs: Further arguments of `sleap_io.save_slp` for the trimmed
+                labels file, such as `slp_version` or `compression`.
 
         Returns:
             The resulting labels object referencing the trimmed data.
@@ -3504,7 +3523,7 @@ class Labels:
         trimmed_labels.suggestions = updated_suggestions
 
         # Save.
-        trimmed_labels.save(save_path)
+        trimmed_labels.save(save_path, **save_kwargs)
 
         return trimmed_labels
 

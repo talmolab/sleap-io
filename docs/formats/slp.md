@@ -1126,7 +1126,8 @@ rows are still in their loaded order. This covers the pose tables (`/points`,
   their `(owner_type, owner_id, catalog index)` values. Editing values in place is
   fine; adding, removing, replacing or reordering records is not;
 * otherwise (including when a table loses all its rows), and with
-  `legacy_format=True`, the columns are dropped with a warning.
+  `slp_version="v2"`, the columns are dropped with a warning. With the default
+  `slp_version="auto"`, unknown columns make the save write format 3.0.
 
 ### Compression
 
@@ -1171,33 +1172,72 @@ They are cleaned up when read, so that they train exactly as before:
   prediction files: `n_visible`, `is_empty`, `remove_empty_instances` and the
   dictionary and dataframe exports now count these points as hidden.
 
-### Writing the 2.x layout
+### Which layout a save writes
 
-Files written with format 3.0 can't be opened by sleap-io < 0.10 or by SLEAP. To
-share files with them, pass `legacy_format=True`:
+sleap-io reads both layouts. When it saves, it writes the 2.x layout that
+sleap-io < 0.10 and SLEAP can open, unless something needs format 3.0. The
+`slp_version` option of every function that saves an SLP file (`save_slp`,
+`Labels.save`, `save_file`, `LabelsSet.save`, `Labels.make_training_splits`,
+`Labels.trim`, `LabelImageWriter` and `merge_label_images`) and the
+`--slp-version` option of every `sio` command that writes one choose the layout:
+
+| `slp_version` | Command line | Layout written |
+| --- | --- | --- |
+| `"auto"` (default) | `--slp-version auto` | The 2.x layout, unless the rule below calls for format 3.0 |
+| `"v2"` | `--slp-version v2` or `--legacy-format` | Always the 2.x layout |
+| `"v3"` | `--slp-version v3` | Always format 3.0 |
+
+With `"auto"`, a save writes format 3.0 when:
+
+1. the format 3.0 defaults are on (see below);
+2. the labels were loaded from a format 3.0 file, so a file never changes layout
+   without being asked to (copies, extracts and splits of such labels count as
+   loaded from it); or
+3. the labels hold something only format 3.0 can store: points marked as not
+   labeled (`labeled=False`), metadata on instances, frames or bounding boxes
+   (see [Record Metadata](#record-metadata)), or unknown columns kept from a file
+   written by a newer sleap-io. The save then warns once
+   (`sio.SlpLayoutWarning`), naming what forced it.
+
+Hidden points that keep their coordinates don't need format 3.0: the 2.x layout
+has always stored them. COCO and Ultralytics imports that read `v=0` keypoints as
+not labeled, and merges that mark new nodes as not labeled, do need it.
+
+When one call writes several files (`LabelsSet.save`, `make_training_splits`,
+`sio split`), they share one layout: format 3.0 if any of them needs it, with
+one warning. `sio.resolve_slp_version(labels_list)` makes the same decision for
+code that writes several files itself.
 
 ```python
-sio.save_slp(labels, "labels.slp", legacy_format=True)
+sio.save_slp(labels, "labels.slp")                    # 2.x unless needed
+sio.save_slp(labels, "labels.slp", slp_version="v3")  # always format 3.0
+sio.save_slp(labels, "labels.slp", slp_version="v2")  # always the 2.x layout
 ```
 
-This writes compound `/points`, `/pred_points`, `/instances` and `/frames` tables,
-`/negative_frames`, and the 2.x `format_id` for the features used. The other
-tables are written in their 2.x layout too: the compound ROI, mask, label image,
-score map, identity and category link, and session tables, with the separate
-`roi_*`, `mask_*` and `label_image_*` string datasets (see
-[ROIs before 3.0](#rois-before-30), [Masks before 3.0](#masks-before-30) and
-[Label images before 3.0](#label-images-before-30)). In `/frames`,
-each embedded video is stored under its `videoN` number, as older readers expect;
-lazy labels are written from their raw tables without materializing frames. The
-2.x layout can't store unlabeled points, so they raise a `ValueError` by default;
-`unlabeled_as="absent"` saves them as hidden points with no location (labeled, not
-visible, NaN coordinates) with a warning. Hidden points keep whatever coordinates
-they hold in memory. It can't store metadata or unknown columns either, which are
-dropped with a warning. From the command line, use `sio convert --legacy-format`.
+**The 2.x layout, written strictly.** `slp_version="v2"` (or
+`legacy_format=True`) writes compound `/points`, `/pred_points`, `/instances`
+and `/frames` tables, `/negative_frames`, and the 2.x `format_id` for the
+features used. The other tables are written in their 2.x layout too: the
+compound ROI, mask, label image, score map, identity and category link, and
+session tables, with the separate `roi_*`, `mask_*` and `label_image_*` string
+datasets (see [ROIs before 3.0](#rois-before-30),
+[Masks before 3.0](#masks-before-30) and
+[Label images before 3.0](#label-images-before-30)). In `/frames`, each
+embedded video is stored under its `videoN` number, as older readers expect;
+lazy labels are written from their raw tables without materializing frames.
+Content the 2.x layout can't store is handled as follows:
 
-Format 3.0 stores instance, frame and bounding box metadata (in
-`/instances/metadata/`, `/frames/metadata/` and `/bboxes/metadata/`; see
-[Record Metadata](#record-metadata)). Only `legacy_format=True` drops it.
+* points marked as not labeled raise a `ValueError` before anything is written;
+  `unlabeled_as="absent"` (`--unlabeled-as absent`) saves them as hidden points
+  with no location (labeled, not visible, NaN coordinates), with a warning;
+* metadata and unknown columns are dropped, with a warning;
+* hidden points keep whatever coordinates they hold.
+
+**The format 3.0 defaults.** `sio.set_v3_defaults(True)`, the context manager
+`with sio.v3_defaults(): ...`, or the environment variable
+`SLEAP_IO_V3_DEFAULTS=1` turn on format 3.0 for every `"auto"` save of a
+process. Explicit options win over them: `slp_version="v2"` still writes the 2.x
+layout.
 
 ### Coordinate System
 
@@ -1301,7 +1341,7 @@ stored as a column of its table:
 * Lazy-loaded labels keep the instance and frame metadata columns beside the raw
   tables, so lazy saves write them back unchanged. Boxes are read into objects
   even by lazy loads, so their metadata travels with them.
-* `legacy_format=True` drops metadata with a warning.
+* The 2.x layout stores no metadata: `slp_version="auto"` writes format 3.0 when there is any, and `slp_version="v2"` drops it with a warning.
 
 ## Negative Frames
 
@@ -1582,7 +1622,7 @@ roi_dtype = np.dtype([
 ])
 ```
 
-`save_slp(..., legacy_format=True)` writes this layout. A 2.x file without `/roi_wkb` reads no ROIs, as it always has.
+The 2.x layout (written by default when nothing needs format 3.0, or with `slp_version="v2"`) is this one. A 2.x file without `/roi_wkb` reads no ROIs, as it always has.
 
 ### Static vs Temporal ROIs
 
@@ -1656,7 +1696,7 @@ mask_dtype = np.dtype([
 ])
 ```
 
-`save_slp(..., legacy_format=True)` writes this layout. A 2.x file without `/mask_rle` reads no masks, as it always has.
+The 2.x layout (written by default when nothing needs format 3.0, or with `slp_version="v2"`) is this one. A 2.x file without `/mask_rle` reads no masks, as it always has.
 
 ### Optional Group
 
@@ -1755,7 +1795,7 @@ Files before 3.0 store label images across separate root datasets:
 - `/label_image_data`: the pixel data, in either format above
 - `/label_image_sources`, `/label_image_obj_categories`, `/label_image_obj_names`: vlen strings (format 1.9+). Earlier files hold them as JSON attributes on `/label_images` (`@sources`) and `/label_image_objects` (`@categories`, `@names`).
 
-`save_slp(..., legacy_format=True)` writes this layout.
+The 2.x layout (written by default when nothing needs format 3.0, or with `slp_version="v2"`) is this one.
 
 ### Optional Group
 
@@ -1780,7 +1820,7 @@ Different data structures use different on-disk representations, chosen per subs
 
 ### Write is single-method; read is broader
 
-- **Write:** the Python library writes **exactly one native representation per data structure** by default, and **no compound dataset** since 3.0. `legacy_format=True` writes the 2.x layout instead (compound `/points`, `/pred_points`, `/instances`, `/frames`, `/negative_frames`, ROI, mask, label image, score map, link and session tables, and the separate `roi_*`, `mask_*` and `label_image_*` datasets) for older readers. It never writes the h5wasm flat-2D substitute.
+- **Write:** the Python library writes **exactly one native representation per data structure** in format 3.0, and **no compound dataset** there. The 2.x layout, which saves write unless a file needs format 3.0 or `slp_version="v3"` is given, is written instead (compound `/points`, `/pred_points`, `/instances`, `/frames`, `/negative_frames`, ROI, mask, label image, score map, link and session tables, and the separate `roi_*`, `mask_*` and `label_image_*` datasets) for older readers. It never writes the h5wasm flat-2D substitute.
 - **Read:** the **compound** readers *also* accept the flat-2D + `field_names` encoding that [sleap-io.js](https://github.com/talmolab/sleap-io.js) writes (h5wasm cannot create compound datasets), routed through `utils._read_dataset_from_open_file`. Every other kind (columnar / matrix / string / JSON) is read directly and is already h5wasm-native, so no conversion is needed. **`compound` is therefore the only kind with a browser-interop dependency** (see [Browser-side compatibility](#browser-side-compatibility-h5wasm-sleap-iojs)).
 
 ### Matrix
@@ -1834,7 +1874,7 @@ The SLP format has evolved through several versions, tracked by the `format_id` 
 
 sleap-io refuses files whose `format_id` is at or above `SLP_FORMAT_ID_LIMIT` (currently `4.0`), raising a `ValueError` that asks you to upgrade sleap-io before any table is read. Files without a `format_id` are not affected by this check. It also refuses files whose `/metadata` `required_features` attribute lists a feature it doesn't support.
 
-sleap-io 0.10 writes format 3.0 by default. `save_slp(..., legacy_format=True)` writes the 2.x layout and the 2.x `format_id` that the features in use call for (see below); sleap-io 0.9.x and SLEAP refuse 3.0 files.
+sleap-io 0.10 writes the 2.x layout, with the 2.x `format_id` that the features in use call for (see below), unless a file needs format 3.0 or format 3.0 is asked for (see [Which layout a save writes](#which-layout-a-save-writes)); sleap-io 0.9.x and SLEAP refuse 3.0 files.
 
 ### Format 1.0
 
@@ -2023,8 +2063,8 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Unknown columns are carried through re-saves, and `/metadata` gains an optional `required_features` attribute
 - Older files are cleaned up on read: hidden points lose their coordinates and visible points without coordinates become hidden
 - Pose and row columns are uncompressed by default; `compression="gzip"` or `"lzf"` compresses them
-- [`LabelImageWriter`][sleap_io.LabelImageWriter] and [`merge_label_images`][sleap_io.merge_label_images] write 3.0, and lazy saves write session tables loaded from older files as columns
-- sleap-io 0.9.x and SLEAP refuse to open 3.0 files; write `legacy_format=True` for them
+- [`LabelImageWriter`][sleap_io.LabelImageWriter] and [`merge_label_images`][sleap_io.merge_label_images] write 3.0 when asked (or when a merged source is 3.0), and lazy saves write session tables loaded from older files in the layout being saved
+- sleap-io 0.9.x and SLEAP refuse to open 3.0 files, so saves write the 2.x layout unless format 3.0 is needed or asked for (see [Which layout a save writes](#which-layout-a-save-writes))
 
 ## Browser-side compatibility (h5wasm / sleap-io.js)
 

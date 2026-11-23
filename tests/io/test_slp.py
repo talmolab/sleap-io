@@ -549,6 +549,7 @@ def test_write_labels(centered_pair, slp_real_data, tmp_path):
         assert len(saved_labels.suggestions) == len(labels.suggestions)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_negative_frames_roundtrip(tmp_path):
     """Test that negative frames survive save/load cycle."""
     skel = Skeleton(["A", "B"])
@@ -737,6 +738,7 @@ def test_negative_frames_lazy_user_labeled_frames(tmp_path):
     assert 2 not in frame_indices
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_negative_frames_lazy_write(tmp_path):
     """Test that lazy write path preserves negative frames."""
     skel = Skeleton(["A", "B"])
@@ -1310,6 +1312,7 @@ def _mask_frame(video, frame_idx, masks):
     return LabeledFrame(video=video, frame_idx=frame_idx, masks=masks)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_mask_identity_and_embedding_round_trip(tmp_path):
     """Per-mask identity links + embeddings round-trip via SLP (owner_type=3)."""
     video = Video(filename="test.mp4")
@@ -1384,6 +1387,7 @@ def test_mask_identity_round_trip_lazy_save(tmp_path):
     np.testing.assert_array_equal(rm.identity_embedding.vector, np.ones(5))
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_centroid_identity_and_embedding_round_trip(tmp_path):
     """Per-centroid identity links + embeddings round-trip via SLP (owner_type=2)."""
     video = Video(filename="test.mp4")
@@ -1634,6 +1638,7 @@ def test_embeddings_inconsistent_dim_raises(tmp_path):
         save_slp(labels, str(tmp_path / "bad.slp"), save_embedding_vectors=True)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_bbox_identity_and_embedding_round_trip(tmp_path):
     """Per-bbox identity links + embeddings round-trip via SLP (owner_type=4)."""
     video = Video(filename="test.mp4")
@@ -1667,6 +1672,7 @@ def test_bbox_identity_and_embedding_round_trip(tmp_path):
     assert lb[1].identity is None and lb[1].identity_embedding is None
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_roi_identity_and_embedding_round_trip(tmp_path):
     """Per-ROI identity links + embeddings round-trip via SLP (owner_type=5)."""
     from shapely.geometry import box
@@ -5836,6 +5842,7 @@ def _polygon_heavy_rois(n_rois=100, n_verts=64):
     return Labels(videos=[video], skeletons=[skeleton], rois=rois)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_slp_roi_wkb_gzip_compressed(tmp_path):
     """The `wkb` buffer is written with gzip compression (follow-up to #463)."""
     labels = _polygon_heavy_rois(n_rois=5, n_verts=8)
@@ -5849,6 +5856,7 @@ def test_slp_roi_wkb_gzip_compressed(tmp_path):
         assert wkb.chunks is not None  # gzip requires a chunked layout
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_slp_roi_wkb_compression_reduces_size(tmp_path):
     """Gzip meaningfully shrinks the `wkb` buffer on disk vs. its raw byte size."""
     labels = _polygon_heavy_rois(n_rois=100, n_verts=64)
@@ -5926,6 +5934,7 @@ def test_slp_roi_wkb_roundtrip_geometry_types(tmp_path):
         assert by_cat[cat].geometry.wkb == wkb
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_slp_roi_wkb_empty_geometry(tmp_path):
     """An empty-geometry ROI still packs non-empty WKB and round-trips gzip.
 
@@ -5993,6 +6002,7 @@ def _fragmented_mask():
     return ((x + y) % 2).astype(bool)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_slp_mask_rle_gzip_compressed(tmp_path):
     """The `rle` buffer is written with gzip compression (issue #463)."""
     video = Video(filename="test.mp4")
@@ -6013,6 +6023,7 @@ def test_slp_mask_rle_gzip_compressed(tmp_path):
         assert rle.chunks is not None  # gzip requires a chunked layout
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_slp_mask_rle_compression_reduces_size(tmp_path):
     """Gzip meaningfully shrinks the `rle` buffer on disk vs. its raw byte size."""
     video = Video(filename="test.mp4")
@@ -6055,6 +6066,7 @@ def test_slp_mask_rle_roundtrip_bit_identical(tmp_path):
     np.testing.assert_array_equal(reloaded_rle, original_rle)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_slp_mask_rle_empty_roundtrip(tmp_path):
     """A degenerate empty-RLE mask uses the uncompressed path and round-trips.
 
@@ -8657,6 +8669,7 @@ def test_slp_lazy_resave_preserves_group_metadata(tmp_path, camera_group_345):
 
 
 @pytest.mark.parametrize("legacy_format", [True, False])
+@pytest.mark.usefixtures("v3_defaults")
 def test_slp_columnar_missing_points_dataset(tmp_path, camera_group_345, legacy_format):
     """A file whose points_3d dataset was removed raises (3.0) or warns (2.x).
 
@@ -9943,6 +9956,7 @@ def test_slp_backward_compat_label_image_json_attrs(tmp_path):
     np.testing.assert_array_equal(li.data, data)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_label_image_writer_roundtrip(tmp_path):
     """Streaming writer produces a valid SLP that round-trips through load_slp."""
     video = Video(filename="test.mp4")
@@ -10502,6 +10516,7 @@ def test_label_image_writer_auto_collects_tracks(tmp_path):
     assert len(reloaded.label_images[0].tracks) == 2
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_write_label_images_blob_fallback_mixed_sizes(tmp_path):
     """Mixed frame sizes fall back to blob format."""
     video = Video(filename="test.mp4")
@@ -12508,6 +12523,7 @@ def test_save_slp_invalid_unlabeled_as(tmp_path, slp_minimal):
             save_slp(labels, str(tmp_path / "out.slp"), unlabeled_as="drop")
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_save_slp_warns_dropped_metadata(tmp_path):
     """Metadata on instances, frames or boxes is dropped with a warning (legacy)."""
     skeleton = Skeleton(["A"])
@@ -12558,6 +12574,7 @@ def test_save_slp_rejects_mixed_metadata_kinds(tmp_path):
 
 @pytest.mark.parametrize("lazy", [False, True])
 @pytest.mark.parametrize("legacy_format", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_verified_round_trip(tmp_path, lazy, legacy_format):
     """`verified` is stored (as `complete` in the legacy layout) and read back."""
     labels = _labels_with_unlabeled_point()
@@ -12819,6 +12836,7 @@ def test_hidden_complete_point_reads_without_location(slp_legacy_hidden_complete
 
 
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_h5wasm_legacy_file_reads(tmp_path, slp_legacy_h5wasm_flat, lazy):
     """An h5wasm-written file (flat arrays + `field_names`) reads and re-saves."""
     labels = load_slp(slp_legacy_h5wasm_flat, lazy=lazy)
@@ -12910,6 +12928,7 @@ def slp_with_unknown_point_columns(tmp_path, centered_pair):
     return str(path), extra, extra_pred
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_point_columns_survive_lazy_save(
     tmp_path, slp_with_unknown_point_columns
 ):
@@ -12925,6 +12944,7 @@ def test_unknown_point_columns_survive_lazy_save(
     _assert_unknown_point_columns(out, extra, extra_pred)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_point_columns_survive_unedited_eager_save(
     tmp_path, slp_with_unknown_point_columns
 ):
@@ -12949,6 +12969,7 @@ def test_unknown_point_columns_survive_unedited_eager_save(
 
 
 @pytest.mark.parametrize("edit", ["remove", "replace"])
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_point_columns_dropped_when_instances_change(
     tmp_path, slp_with_unknown_point_columns, edit
 ):
@@ -12972,6 +12993,7 @@ def test_unknown_point_columns_dropped_when_instances_change(
         assert_equal(f["pred_points/future_pair"][()], extra_pred)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_point_columns_dropped_by_extract(
     tmp_path, slp_with_unknown_point_columns
 ):
@@ -12983,6 +13005,7 @@ def test_unknown_point_columns_dropped_by_extract(
 
 
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_point_columns_dropped_by_legacy_format(
     tmp_path, slp_with_unknown_point_columns, lazy
 ):
@@ -12996,6 +13019,7 @@ def test_unknown_point_columns_dropped_by_legacy_format(
 
 
 @pytest.mark.parametrize("where", ["first", "last"])
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_point_columns_with_unowned_rows_are_dropped(
     tmp_path, slp_with_unknown_point_columns, where
 ):
@@ -13023,6 +13047,7 @@ def test_unknown_point_columns_with_unowned_rows_are_dropped(
         save_slp(labels, str(tmp_path / "out.slp"))
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_instance_type_is_skipped(tmp_path, slp_typical):
     """Instance rows of an unknown type are skipped, as before."""
     path = tmp_path / "labels.slp"
@@ -13052,6 +13077,7 @@ def test_required_features_are_checked(tmp_path, slp_minimal):
 
 @pytest.mark.parametrize("compression", ["gzip", "lzf"])
 @pytest.mark.parametrize("legacy_format", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_point_table_compression(tmp_path, centered_pair, compression, legacy_format):
     """`compression=` compresses the point tables and reads back identically."""
     labels = load_slp(centered_pair)
@@ -13121,11 +13147,12 @@ def test_lazy_save_of_pre_1_1_file_keeps_coordinates(tmp_path, slp_legacy_grid_l
     """A lazy re-save to 3.0 bakes in the pre-1.1 coordinate shift once."""
     expected = load_slp(slp_legacy_grid_labels).numpy()
     out = tmp_path / "resaved.slp"
-    save_slp(load_slp(slp_legacy_grid_labels, lazy=True), str(out))
+    save_slp(load_slp(slp_legacy_grid_labels, lazy=True), str(out), slp_version="v3")
     for lazy in (False, True):
         np.testing.assert_array_equal(load_slp(str(out), lazy=lazy).numpy(), expected)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_embedded_package_round_trip_columns(tmp_path, slp_minimal_pkg):
     """`.pkg.slp` files re-save as 3.0 with embedded frames and columnar points."""
     labels = load_slp(slp_minimal_pkg)
@@ -13140,6 +13167,7 @@ def test_embedded_package_round_trip_columns(tmp_path, slp_minimal_pkg):
     assert loaded[0].image is not None
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_embed_new_package_from_video(tmp_path, slp_real_data):
     """Embedding frames from a video writes a readable 3.0 package."""
     labels = load_slp(slp_real_data)
@@ -13246,6 +13274,7 @@ def _labels_with_links() -> Labels:
     return Labels(lfs, videos=[video], skeletons=[skeleton], tracks=[track])
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_instances_and_frames_written_as_columns(tmp_path):
     """The default writer stores /instances and /frames as groups of columns."""
     path = tmp_path / "labels.slp"
@@ -13302,7 +13331,7 @@ def test_instances_and_frames_round_trip(tmp_path, lazy):
     """Columnar instances and frames read back as written, eager and lazy."""
     labels = _labels_with_links()
     path = tmp_path / "labels.slp"
-    save_slp(labels, str(path))
+    save_slp(labels, str(path), slp_version="v3")
     loaded = load_slp(str(path), lazy=lazy)
     if lazy:
         loaded = loaded.materialize()
@@ -13342,6 +13371,7 @@ def test_instance_and_frame_compression(tmp_path, compression):
         "slp_mixed_layout",
     ],
 )
+@pytest.mark.usefixtures("v3_defaults")
 def test_legacy_fixtures_round_trip_through_columns(tmp_path, request, fixture):
     """Legacy fixtures read the same eager and lazy, and after a 3.0 re-save."""
     source = request.getfixturevalue(fixture)
@@ -13580,6 +13610,7 @@ def test_tracking_score_none_round_trips(tmp_path):
 
 
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_empty_pose_tables(tmp_path, lazy):
     """Files without frames or instances read, eager and lazy."""
     video = Video("test.mp4")
@@ -13628,6 +13659,7 @@ def _corrupt_columns(path, table: str, name: str, values) -> None:
     ],
 )
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_corrupt_ranges_raise_for_columns(tmp_path, table, name, values, match, lazy):
     """Inconsistent 3.0 pose tables raise, naming the table."""
     path = tmp_path / "labels.slp"
@@ -13637,6 +13669,7 @@ def test_corrupt_ranges_raise_for_columns(tmp_path, table, name, values, match, 
         load_slp(str(path), lazy=lazy)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_missing_required_instance_column_raises(tmp_path):
     """A 3.0 table missing a required column raises, naming it."""
     path = tmp_path / "labels.slp"
@@ -13648,6 +13681,7 @@ def test_missing_required_instance_column_raises(tmp_path):
         load_slp(str(path))
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_missing_optional_instance_and_frame_columns_take_defaults(tmp_path):
     """Optional 3.0 columns that are missing take their defaults."""
     path = tmp_path / "labels.slp"
@@ -13665,6 +13699,7 @@ def test_missing_optional_instance_and_frame_columns_take_defaults(tmp_path):
     assert not labels[1].is_negative
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_columns_of_any_numeric_type(tmp_path):
     """Integer and flag columns may be stored as any numeric type."""
     path = tmp_path / "labels.slp"
@@ -13728,7 +13763,7 @@ def test_corrupt_legacy_links_are_not_saved(tmp_path, legacy_format, lazy):
         labels = load_slp(str(path), lazy=lazy)
 
     resaved = tmp_path / "resaved.slp"
-    save_slp(labels, str(resaved), legacy_format=legacy_format)
+    save_slp(labels, str(resaved), slp_version="v2" if legacy_format else "v3")
     for reload_lazy in (False, True):
         with warnings.catch_warnings():
             warnings.simplefilter("error", UserWarning)
@@ -13761,7 +13796,7 @@ def test_corrupt_legacy_skeleton_warns_then_raises_when_read(tmp_path):
 def test_read_instances_checks_skeleton_and_track(tmp_path):
     """`read_instances` refuses a skeleton or track that isn't in its lists."""
     path = tmp_path / "labels.slp"
-    save_slp(_labels_with_links(), str(path))
+    save_slp(_labels_with_links(), str(path), slp_version="v3")
     skeletons = read_skeletons(str(path))
     tracks = read_tracks(str(path))
     points = read_points(str(path))
@@ -13784,7 +13819,7 @@ def test_untracked_instances_pass_the_checks(tmp_path, legacy_format, lazy):
             inst.track = None
     labels.tracks.clear()
     path = tmp_path / "labels.slp"
-    save_slp(labels, str(path), legacy_format=legacy_format)
+    save_slp(labels, str(path), slp_version="v2" if legacy_format else "v3")
     if not legacy_format:
         with h5py.File(path, "r+") as f:
             del f["instances/track"]
@@ -13801,7 +13836,7 @@ def test_valid_references_do_not_warn(tmp_path):
     labels.tracks.append(Track("unused"))
     for legacy_format in (False, True):
         path = tmp_path / f"labels_{legacy_format}.slp"
-        save_slp(labels, str(path), legacy_format=legacy_format)
+        save_slp(labels, str(path), slp_version="v2" if legacy_format else "v3")
         for lazy in (False, True):
             with warnings.catch_warnings():
                 warnings.simplefilter("error", UserWarning)
@@ -13878,6 +13913,7 @@ def _labels_with_metadata() -> Labels:
 
 
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_metadata_round_trips(tmp_path, lazy):
     """Instance and frame metadata of every kind survives, gaps included."""
     labels = _labels_with_metadata()
@@ -14348,6 +14384,7 @@ def test_legacy_tables_fixture_reads(slp_legacy_tables, lazy):
 
 @pytest.mark.parametrize("lazy", [False, True])
 @pytest.mark.parametrize("reload_lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_legacy_tables_round_trip_through_columns(
     tmp_path, slp_legacy_tables, lazy, reload_lazy
 ):
@@ -14477,6 +14514,7 @@ def test_h5wasm_legacy_tables_read(tmp_path, slp_legacy_tables, lazy):
     ],
 )
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_new_files_have_no_compound_datasets(tmp_path, request, fixture, lazy):
     """A file written by the default (3.0) writer holds no compound dataset."""
     path = request.getfixturevalue(fixture)
@@ -14486,6 +14524,7 @@ def test_new_files_have_no_compound_datasets(tmp_path, request, fixture, lazy):
         assert f["metadata"].attrs["format_id"] == SLP_FORMAT_ID
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_label_image_writer_and_merge_write_3_0(tmp_path, slp_legacy_tables):
     """`LabelImageWriter` and `merge_label_images` write SLP 3.0 tables."""
     video = Video(filename="cam1.mp4")
@@ -14601,6 +14640,7 @@ def _bump_last(values: np.ndarray, by: int = 1000) -> np.ndarray:
     ],
 )
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_corrupt_remaining_tables_raise(
     slp_tables_3_0, table, name, change, match, lazy
 ):
@@ -14610,6 +14650,7 @@ def test_corrupt_remaining_tables_raise(
         load_slp(slp_tables_3_0, lazy=lazy)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_label_image_pixel_data_must_cover_rows(slp_tables_3_0):
     """3.0 label image rows need a frame of pixel data each."""
     with h5py.File(slp_tables_3_0, "r+") as f:
@@ -14624,6 +14665,7 @@ def test_label_image_pixel_data_must_cover_rows(slp_tables_3_0):
         load_slp(slp_tables_3_0)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_label_image_blob_ranges_are_checked(tmp_path):
     """Flat pixel data ranges of 3.0 label images must fit the buffer."""
     video = Video(filename="v.mp4")
@@ -14637,6 +14679,7 @@ def test_label_image_blob_ranges_are_checked(tmp_path):
         load_slp(path)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_missing_buffers_raise_for_columns(slp_tables_3_0):
     """A 3.0 table whose rows index a missing byte buffer raises."""
     with h5py.File(slp_tables_3_0, "r+") as f:
@@ -14670,6 +14713,7 @@ def test_corrupt_legacy_remaining_tables_warn(
     assert len(labels.labeled_frames) == 2
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_missing_optional_remaining_columns_take_defaults(slp_tables_3_0):
     """Optional 3.0 columns that are missing take their defaults."""
     with h5py.File(slp_tables_3_0, "r+") as f:
@@ -14694,6 +14738,7 @@ def test_missing_optional_remaining_columns_take_defaults(slp_tables_3_0):
     assert li_pred.score_map_scale == (1.0, 1.5)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_missing_required_remaining_column_raises(slp_tables_3_0):
     """A 3.0 table missing a required column raises, naming it."""
     with h5py.File(slp_tables_3_0, "r+") as f:
@@ -14748,6 +14793,7 @@ def _unknown_remaining_columns(path) -> dict[str, np.ndarray]:
 
 
 @pytest.mark.parametrize("source", ["lazy", "eager", "materialized"])
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_remaining_columns_survive_saves(tmp_path, slp_tables_3_0, source):
     """Unknown columns of the remaining tables are carried through saves."""
     added = _add_unknown_remaining_columns(slp_tables_3_0)
@@ -14772,6 +14818,7 @@ def test_unknown_remaining_columns_survive_saves(tmp_path, slp_tables_3_0, sourc
         assert_equal(carried[table], data)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_remaining_columns_dropped_when_changed(tmp_path, slp_tables_3_0):
     """Unknown columns drop with a warning once their rows no longer line up."""
     _add_unknown_remaining_columns(slp_tables_3_0)
@@ -14801,6 +14848,7 @@ def test_unknown_remaining_columns_dropped_when_changed(tmp_path, slp_tables_3_0
 
 
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_remaining_columns_of_removed_tables_warn(
     tmp_path, slp_tables_3_0, lazy
 ):
@@ -14822,6 +14870,7 @@ def test_unknown_remaining_columns_of_removed_tables_warn(
 
 
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_unknown_remaining_columns_dropped_by_legacy_format(
     tmp_path, slp_tables_3_0, lazy
 ):
@@ -14851,6 +14900,7 @@ def _labels_with_box_metadata() -> Labels:
 
 
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.usefixtures("v3_defaults")
 def test_bbox_metadata_round_trips(tmp_path, lazy):
     """Box metadata is stored in /bboxes/metadata and survives saves."""
     path = str(tmp_path / "boxes.slp")
@@ -14896,6 +14946,7 @@ def test_lazy_save_rejects_mixed_bbox_metadata_kinds(tmp_path):
     assert not out.exists()
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_remaining_table_compression(tmp_path, slp_legacy_tables):
     """`compression=` also compresses the remaining tables' row columns."""
     out = _save(load_slp(slp_legacy_tables), tmp_path / "gz.slp", compression="gzip")
@@ -14976,6 +15027,7 @@ def test_unattributable_legacy_rows_drop_unknown_columns(tmp_path, slp_legacy_ta
     assert "future_x of /session_data/frame_groups were not saved" in messages
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_merge_label_images_checks_sources(tmp_path, slp_tables_3_0):
     """Inconsistent 3.0 sources raise in `merge_label_images` as on reading."""
     _replace_column(slp_tables_3_0, "label_images/score_maps", "data_end", _bump_last)

@@ -2071,6 +2071,7 @@ def test_lazy_category_embeddings_round_trip(tmp_path):
     )
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_lazy_save_persists_categories_and_embeddings(tmp_path):
     """Lazy save must persist categories + per-instance links + embeddings.
 

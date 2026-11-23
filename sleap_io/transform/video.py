@@ -374,6 +374,7 @@ def transform_labels(
     no_audio: bool = False,
     progress_callback: Callable[[str, int, int], None] | None = None,
     dry_run: bool = False,
+    save_kwargs: dict | None = None,
 ) -> "Labels":
     """Transform all videos in a Labels object and update coordinates.
 
@@ -393,6 +394,12 @@ def transform_labels(
         no_audio: If True, strips audio from output. Ignored for embedded videos.
         progress_callback: Optional callback called with (video_name, current, total).
         dry_run: If True, compute transforms but don't process videos.
+        save_kwargs: Arguments of `sleap_io.save_slp` for the SLP file this
+            function writes when the labels hold embedded videos (`slp_version`,
+            `legacy_format`, `compression`, `unlabeled_as`, and `image_format`
+            `"png"` or `"jpg"` for the transformed frames). Without embedded
+            videos it writes no SLP file, and the caller saves the returned
+            labels.
 
     Returns:
         New Labels object with transformed videos and adjusted coordinates.
@@ -424,6 +431,21 @@ def transform_labels(
 
     # Check if any videos are embedded
     has_embedded = any(_is_embedded_video(v) for v in labels.videos)
+
+    # Check the save options before any slow work.
+    save_kwargs = dict(save_kwargs or {})
+    embed_format = save_kwargs.pop("image_format", None) or "png"
+    if embed_format == "jpeg":
+        embed_format = "jpg"
+    if embed_format not in ("png", "jpg"):
+        raise ValueError(
+            f"Transformed embedded frames can be stored as png or jpg, not "
+            f"{embed_format!r}."
+        )
+    if save_kwargs.pop("image_quality", None) is not None and has_embedded:
+        raise ValueError(
+            "image_quality is not supported for transformed embedded frames."
+        )
 
     # Setup video output directory (for non-embedded videos)
     if video_output_dir is None:
@@ -552,7 +574,7 @@ def transform_labels(
     # 3. Update video references in the returned labels
     if embedded_videos_to_process and not dry_run:
         # Save labels first to create the HDF5 file
-        new_labels.save(str(output_path))
+        new_labels.save(str(output_path), **save_kwargs)
 
         # Now transform and embed each video
         embedded_video_map: dict[Video, Video] = {}
@@ -569,6 +591,7 @@ def transform_labels(
                 video_idx=video_idx,
                 transform=transform,
                 progress_callback=_progress,
+                image_format=embed_format,
             )
 
             embedded_video_map[new_labels.videos[video_idx]] = new_embedded_video

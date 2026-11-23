@@ -140,7 +140,8 @@ The `metadata` dictionary follows the same rules as
 across all boxes (checked by `Labels.check_metadata()` and when saving). `pad()` keeps it on the new box. SLP format 3.0
 stores it as typed columns of `/bboxes` (see
 [Record Metadata](../formats/slp.md#record-metadata)), including through lazy
-saves; `legacy_format=True` drops it with a warning.
+saves; a save with the default `slp_version="auto"` writes format 3.0 when there
+is any, and `slp_version="v2"` drops it with a warning.
 
 ```pycon
 >>> import sleap_io as sio
