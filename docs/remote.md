@@ -268,7 +268,12 @@ records them. Exactly these are masked:
 - A user name, a password or both in the link: `https://me:pw@host/...` becomes
   `https://***:***@host/...`. In `az://` and `abfs://` links the name before the
   `@` is the container (`abfs://<container>@<account>.dfs.core.windows.net/...`),
-  so it is kept unless it holds a `:`.
+  so it is kept unless it holds a `:`. The same goes for links that name a remote
+  store sleap-io doesn't open (`abfss://`, `wasb://`, `wasbs://`, `adl://`,
+  `s3a://`, `s3n://`, `oss://`, `ftp://`, `ftps://`, `sftp://`, `ssh://`,
+  `smb://`, `webdav://`, `webdavs://`, `dav://`, `davs://`): a user name alone is
+  kept and a `user:password` is masked. sleap-io takes such a link for a local
+  path, so it is saved with one slash after the scheme (`abfss:/...`).
 - The values of the query parameters `token`, `access_token`,
   `x-amz-security-token`, `sas` and `sig`, whatever their case (and, in a URL,
   their percent-encoding), also after a `#`: `?token=...` becomes `?token=***`.
@@ -305,8 +310,9 @@ nobody reopens a video from a message:
   another link's parameters: `https://me:pw@host/...` becomes
   `https://***:***@host/...`, also when the password holds `/`, `@`, `?` or `#`.
   As in saved files, `https://me:12/pw@host/` reads as host `me`, port `12` and
-  a path, as URL parsers read it, and the container of an `az://` or `abfs://`
-  link is kept.
+  a path, as URL parsers read it, and a name alone before the `@` is kept where
+  a saved file keeps it (the container of an `az://` or `abfs://` link, and the
+  user name of the remote-store links listed above).
 - The value of every query or fragment parameter (after `?`, `&`, `;` or `#`,
   also in text that isn't a whole link) whose name, read as a URL parser reads
   it and in any case, is one of the names masked in saved files, contains
