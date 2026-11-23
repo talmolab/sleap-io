@@ -31,7 +31,6 @@ See Also:
 from __future__ import annotations
 
 import copy
-import sys
 from typing import TYPE_CHECKING, Callable, Iterator, Literal
 
 import attrs
@@ -39,10 +38,7 @@ import numpy as np
 from attrs import Factory
 
 if TYPE_CHECKING:
-    if sys.version_info >= (3, 11):
-        from typing import Self
-    else:
-        from typing_extensions import Self
+    from typing import Self
 
     from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.instance import Instance, Track

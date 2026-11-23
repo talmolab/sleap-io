@@ -10,11 +10,10 @@ authors = [
     {name = "David Samy", email = "davidasamy@gmail.com"},
     {name = "Talmo Pereira", email = "talmo@salk.edu"}]
 description="Standalone utilities for working with pose data from SLEAP and other tools."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = ["sleap", "pose tracking", "pose estimation", "behavior"]
 license = {text = "BSD-3-Clause"}
 classifiers = [
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13"]
@@ -48,7 +47,10 @@ readme = {file = ["README.md"], content-type="text/markdown"}
 [project.optional-dependencies]
 # PEP 621: End-user installable extras
 opencv = ["opencv-python"]
-pyav = ["av<16.0.0"]
+# av>=18.1.1: earlier PyAV can deadlock when a frame-threaded decoder is freed
+# while one of its threads logs (PyAV-Org/PyAV#2440, fixed in 18.1.1). 19.0.0 to
+# 19.0.2 were released before that fix and do not have it.
+pyav = ["av>=18.1.1,!=19.0.0,!=19.0.1,!=19.0.2"]
 # scipy<1.18 pinned: scipy 1.18 breaks pymatreader 1.2.3's mat-struct parsing,
 # which fails the LEAP .mat reader. Drop once pymatreader supports scipy>=1.18.
 # See https://github.com/talmolab/sleap-io/issues/484.
@@ -57,7 +59,7 @@ polars = ["polars", "pyarrow"]
 cloud = ["s3fs>=2024.10.0", "gcsfs>=2024.10.0", "adlfs>=2024.10.0"]
 all = [
     "opencv-python",
-    "av<16.0.0",
+    "av>=18.1.1,!=19.0.0,!=19.0.1,!=19.0.2",  # see `pyav` extra
     "pymatreader",
     "scipy<1.18",  # see `mat` extra / issue #484
     "polars",
@@ -102,7 +104,7 @@ exclude = ["site"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = [

@@ -93,7 +93,7 @@ jobs:
         # starts no run: after retargeting one to `main`, push to it (or close
         # and reopen it) before merging, so that macOS runs.
         os: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref != 'main' && '["ubuntu-latest", "windows-latest"]' || '["ubuntu-latest", "windows-latest", "macos-latest"]') }}
-        python: ["3.10", "3.13"]
+        python: ["3.11", "3.13"]
 
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
@@ -126,7 +126,7 @@ jobs:
         env:
           # Use coverage's fast PEP 669 sys.monitoring core on Python 3.12+
           # (much lower overhead than the settrace-based C tracer). Empty on
-          # 3.10 -> coverage's default core.
+          # 3.11 -> coverage's default core.
           COVERAGE_CORE: ${{ matrix.python == '3.13' && 'sysmon' || '' }}
         run: |
           uv run pytest --cov=sleap_io --cov-report=xml --durations=-1 tests/
