@@ -6,7 +6,7 @@ sleap-io supports multiple CSV formats for exporting pose tracking data. Each fo
 
 | Format | Description | Best For |
 |--------|-------------|----------|
-| `sleap` | SLEAP Analysis CSV | Native SLEAP exports, one row per instance |
+| `sleap` | SLEAP Analysis CSV | Native SLEAP exports, one row per animal |
 | `dlc` | DeepLabCut format | DLC compatibility, multi-header structure |
 | `points` | One row per point | Database imports, normalized data |
 | `instances` | One row per instance | Analysis pipelines |
@@ -16,7 +16,7 @@ sleap-io supports multiple CSV formats for exporting pose tracking data. Each fo
 
 ### SLEAP Format (`sleap`)
 
-The default SLEAP Analysis CSV format produces one row per instance.
+The default SLEAP Analysis CSV format produces one row per animal per frame, like the Analysis HDF5 export. A user instance made from a prediction (for example with *Accept All Predictions* in SLEAP) keeps that prediction in the file; the CSV writes only the user instance. Predicted instances are dropped when a user instance in the same frame links to them (`from_predicted`) or is on the same track, and in single-instance projects any user instance replaces the frame's predictions. Use the `instances` format, or `to_dataframe(..., format="instances")`, to get every user and predicted instance.
 
 **Columns:**
 
