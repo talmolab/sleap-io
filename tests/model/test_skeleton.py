@@ -766,3 +766,18 @@ def test_skeleton_leaves_the_callers_lists_alone():
     # A list of nodes is used as given.
     nodes = [Node("a"), Node("b")]
     assert Skeleton(nodes).nodes is nodes
+    # One-pass inputs and tuples are read whole.
+    skeleton = Skeleton(
+        (name for name in ["a", "b", "c"]),
+        edges=zip(["a", "b"], ["b", "c"]),
+        symmetries=(pair for pair in [("a", "c")]),
+    )
+    assert skeleton.node_names == ["a", "b", "c"]
+    assert [(e.source.name, e.destination.name) for e in skeleton.edges] == [
+        ("a", "b"),
+        ("b", "c"),
+    ]
+    assert len(skeleton.symmetries) == 1
+    skeleton = Skeleton((Node("a"), Node("b")))
+    skeleton.add_node("c")
+    assert skeleton.node_names == ["a", "b", "c"]

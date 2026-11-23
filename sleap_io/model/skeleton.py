@@ -140,7 +140,9 @@ class Skeleton:
         """Convert nodes to `Node` objects if needed."""
         if isinstance(self.nodes, np.ndarray):
             object.__setattr__(self, "nodes", self.nodes.tolist())
-        elif any(type(node) is str for node in self.nodes):
+        elif not isinstance(self.nodes, list) or any(
+            type(node) is str for node in self.nodes
+        ):
             # Convert a copy, so the caller's list keeps its names.
             object.__setattr__(self, "nodes", list(self.nodes))
         for i, node in enumerate(self.nodes):
@@ -151,7 +153,9 @@ class Skeleton:
         """Convert list of edge names or integers to `Edge` objects if needed."""
         if isinstance(self.edges, np.ndarray):
             self.edges = self.edges.tolist()
-        elif any(type(edge) is not Edge for edge in self.edges):
+        elif not isinstance(self.edges, list) or any(
+            type(edge) is not Edge for edge in self.edges
+        ):
             # Convert a copy, so the caller's list is left as it was.
             self.edges = list(self.edges)
         node_names = self.node_names
@@ -189,7 +193,9 @@ class Skeleton:
         """Convert list of symmetric node names or integers to `Symmetry` objects."""
         if isinstance(self.symmetries, np.ndarray):
             self.symmetries = self.symmetries.tolist()
-        elif any(type(symmetry) is not Symmetry for symmetry in self.symmetries):
+        elif not isinstance(self.symmetries, list) or any(
+            type(symmetry) is not Symmetry for symmetry in self.symmetries
+        ):
             # Convert a copy, so the caller's list is left as it was.
             self.symmetries = list(self.symmetries)
 
