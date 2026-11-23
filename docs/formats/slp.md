@@ -1009,7 +1009,7 @@ When reading format < 1.1 files, the reader applies a -0.5 offset to convert coo
 ```python
 frame_dtype = np.dtype([
     ("frame_id", "u8"),           # Unique frame identifier
-    ("video", "u4"),              # Video index or sparse video ID
+    ("video", "u4"),              # Video ID (see Video ID Mapping)
     ("frame_idx", "u8"),          # Frame index within video
     ("instance_id_start", "u8"),  # Start index in instances array
     ("instance_id_end", "u8"),    # End index (exclusive)
@@ -1018,7 +1018,28 @@ frame_dtype = np.dtype([
 
 ### Video ID Mapping
 
-Modern SLP files use sequential video indices (0, 1, 2, ...), but legacy files may contain sparse video IDs derived from the embedded video group names (e.g., 0, 15, 29). The reader handles both cases transparently.
+The `video` column holds a number for each frame's video. Most files store the video's index in `videos_json` (0, 1, 2, ...). Older writers stored an embedded video's number from its `videoN/video` dataset instead (e.g., 0, 15, 29), and every other video's index.
+
+Unless `/frames` carries the attribute `video_ids = "index"`, readers work the numbering out from the ids: ids that are exactly `0..n-1` are indices; otherwise each embedded video's number is mapped to its index, and other ids are kept.
+
+An embedded video's number can equal another video's index, for example when a project refers to an external video and to frames embedded in a package, or after a package's videos are reordered or subset. The guess then puts frames on the wrong video. The writer therefore picks the ids by what readers do with them:
+
+1. Indices, when the guess reads them correctly. Every reader does then. This is always the case when no embedded number differs from its index, so ordinary saves store indices with no attribute.
+2. Otherwise, per video, its index if the guess reads that back onto it, else its embedded number.
+3. Otherwise the embedded numbers.
+4. If none of these is read correctly, indices with the attribute `video_ids = "index"` on `/frames` and `/negative_frames`, and a warning.
+
+A table with that attribute is read by index, with no guessing.
+
+Which older readers read which case:
+
+| Stored | Readers that guess from opened videos (sleap-io 0.9.5 and older, eager) | Readers that take ids as indices (sleap-io 0.9.5 lazy, or with `open_videos=False`) |
+| --- | --- | --- |
+| Case 1 | correct | correct |
+| Cases 2 and 3 | correct | wrong for the videos stored by embedded number (an error if the number is past the end of the list, the wrong video otherwise) |
+| Case 4 (marked) | wrong for some frames | correct |
+
+Cases 2 to 4 arise only when the saved file keeps referring to videos embedded in another file (`embed=False, restore_original_videos=False`).
 
 ## Negative Frames
 
@@ -1036,7 +1057,7 @@ Negative frames are stored in two places:
 
 ```python
 negative_frames_dtype = np.dtype([
-    ("video_id", "u4"),   # Sparse video ID (same as in /frames)
+    ("video_id", "u4"),   # Video ID as stored in /frames (see Video ID Mapping)
     ("frame_idx", "u8"),  # Frame index within video
 ])
 ```
