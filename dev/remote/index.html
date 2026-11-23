@@ -613,6 +613,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Authentication &amp; security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials-in-saved-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials in saved files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3779,6 +3796,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Authentication &amp; security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials-in-saved-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials in saved files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4139,19 +4173,52 @@ credentials to a third-party host. If a download redirects cross-origin
 target's query string rather than in <code>headers</code>.</p>
 </div>
 <p>Other security guarantees: TLS is always on; URLs are redacted (userinfo and
-token-like query parameters stripped) in error messages and tracebacks so
-credentials never leak into logs; and an identity <code>Accept-Encoding</code> is forced
+the values of the query parameters named under
+<a href="#credentials-in-saved-files">Credentials in saved files</a> stripped; S3 and GCS
+signatures are left in) in error messages and tracebacks; and an identity
+<code>Accept-Encoding</code> is forced
 so range reads stay byte-exact. Remote loading needs <code>aiohttp &gt;= 3.13.5</code> for
 the cross-origin header stripping — an older version emits a <code>RuntimeWarning</code>
 at import time.</p>
+<h3 id="credentials-in-saved-files">Credentials in saved files<a class="headerlink" href="#credentials-in-saved-files" title="Permanent link">&para;</a></h3>
+<p>Files get passed around, so a save masks a URL's credentials wherever it writes
+one. That covers a video's filename, its backend metadata and its source videos,
+and anything in provenance, for every <code>embed</code> setting and every format that
+records them. Exactly these are masked:</p>
+<ul>
+<li>A user name, a password or both in the link: <code>https://me:pw@host/...</code> becomes
+  <code>https://***:***@host/...</code>. In <code>az://</code> and <code>abfs://</code> links the name before the
+  <code>@</code> is the container (<code>abfs://&lt;container&gt;@&lt;account&gt;.dfs.core.windows.net/...</code>),
+  so it is kept unless it holds a <code>:</code>.</li>
+<li>The values of the query parameters <code>token</code>, <code>access_token</code>,
+  <code>x-amz-security-token</code>, <code>sas</code> and <code>sig</code>, whatever their case (and, in a URL,
+  their percent-encoding), also after a <code>#</code>: <code>?token=...</code> becomes <code>?token=***</code>.</li>
+</ul>
+<p>Nothing else is masked. <strong>S3 and GCS signed links are saved whole</strong>:
+<code>X-Amz-Signature</code>, <code>X-Amz-Credential</code> and the <code>X-Goog-...</code> parameters stay, so a
+saved file can hold a signed link that works until it expires (one signed with
+temporary credentials loses its <code>X-Amz-Security-Token</code> and stops working).
+Embedding the frames doesn't drop the link: an embedded video keeps it as its
+source. Before sharing such a file, point the video at a local copy
+(<code>video.replace_filename(path)</code>) and save again. The rest of the name is saved
+exactly as it was, and <code>headers=</code> are never saved.</p>
+<p>The labels in memory keep the whole URL, so they go on working after a save. But a
+video whose URL needs its credentials <strong>won't open from the saved file</strong>, just like
+an expired link: the labels load, and <code>video.exists()</code> is <code>False</code>, until you give it
+the link again.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"labels.slp"</span><span class="p">)</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">labels</span><span class="o">.</span><span class="n">videos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">replace_filename</span><span class="p">(</span><span class="s2">"https://host/video.mp4?token=..."</span><span class="p">)</span>
+</code></pre></div>
+<p>To have a saved file that opens by itself, embed the frames (<code>embed=True</code>) or point
+it at a local copy of the video.</p>
 <hr />
 <h2 id="embedded-pkgslp-streaming">Embedded pkg.slp streaming<a class="headerlink" href="#embedded-pkgslp-streaming" title="Permanent link">&para;</a></h2>
 <p>A <code>.pkg.slp</code> URL streams its embedded frames lazily: opening the file reads
 only metadata, and each embedded image is fetched on demand with a
 range-request (<code>blockcache</code>) when you index into the video.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Embedded frames stream over the network on access</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://example.com/project.pkg.slp"</span><span class="p">)</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">videos</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># range-reads just the bytes for frame 0</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Embedded frames stream over the network on access</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://example.com/project.pkg.slp"</span><span class="p">)</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">videos</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># range-reads just the bytes for frame 0</span>
 </code></pre></div>
 <p>This means you can inspect a remote packaged project without downloading the
 whole archive — the embedded video backends reopen the remote file using the
@@ -4162,9 +4229,9 @@ so an auth-gated <code>.pkg.slp</code> streams its frames without re-authenticat
 <p><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;load_video&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kwargs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../reference/sleap_io/#sleap_io.load_video"><code>load_video</code></a> (and <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;load_file&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;format&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sniff&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kwargs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../reference/sleap_io/#sleap_io.load_file"><code>load_file</code></a> for
 video extensions) reads a media video directly from an <code>http</code>/<code>https</code> URL.
 Frames are decoded on demand:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Reads frames lazily over the network; needs the [pyav] extra</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">"https://example.com/video.mp4"</span><span class="p">)</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># decoded on demand</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Reads frames lazily over the network; needs the [pyav] extra</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">"https://example.com/video.mp4"</span><span class="p">)</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># decoded on demand</span>
 </code></pre></div>
 <p>Supported container extensions match local media videos (<code>mp4</code>, <code>avi</code>, <code>mov</code>,
 <code>mj2</code>, <code>mkv</code>). Only <code>http</code>/<code>https</code> URLs are accepted — cloud schemes and Google
@@ -4183,7 +4250,10 @@ HTTP request headers or fsspec stream modes. Passing <code>headers=</code>,
 rather than silently returning an unauthenticated backend. To read an
 auth-gated remote video, use a <strong>pre-signed URL</strong> that embeds credentials in
 the query string (e.g. <code>https://host/video.mp4?X-Amz-...</code>), or download the
-file locally first.</p>
+file locally first. A saved file keeps an S3 or GCS signed link whole, even
+with its frames embedded (only the names listed in
+<a href="#credentials-in-saved-files">Credentials in saved files</a> are masked), so
+point the video at a local copy before sharing it.</p>
 </div>
 <div class="admonition danger">
 <p class="admonition-title">Security: remote video hands untrusted data to FFmpeg</p>
@@ -4206,14 +4276,14 @@ should:</p>
 <p>Google Drive <strong>file</strong> share links are recognized and resolved to a direct
 download, so you can pass a Drive URL straight to
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;load_slp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;open_videos&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lazy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;False&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;headers&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;stream_mode&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#x27;auto&#x27;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;cache_storage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;cache_expiry&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;block_size&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1048576&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;max_blocks&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;retries&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;_file_like&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../reference/sleap_io/#sleap_io.load_slp"><code>load_slp</code></a> or <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;load_file&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;format&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sniff&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kwargs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../reference/sleap_io/#sleap_io.load_file"><code>load_file</code></a>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Any of these Drive file-share shapes resolve to a direct download:</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://drive.google.com/file/d/&lt;FILE_ID&gt;/view"</span><span class="p">)</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://drive.google.com/uc?id=&lt;FILE_ID&gt;&amp;export=download"</span><span class="p">)</span>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://drive.google.com/open?id=&lt;FILE_ID&gt;"</span><span class="p">)</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
-<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># load_file resolves the link, sniffs the bytes to detect the format, and routes</span>
-<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># it. The sniffed bytes are reused, so the file is downloaded only once:</span>
-<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">"https://drive.google.com/file/d/&lt;FILE_ID&gt;/view"</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Any of these Drive file-share shapes resolve to a direct download:</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://drive.google.com/file/d/&lt;FILE_ID&gt;/view"</span><span class="p">)</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://drive.google.com/uc?id=&lt;FILE_ID&gt;&amp;export=download"</span><span class="p">)</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://drive.google.com/open?id=&lt;FILE_ID&gt;"</span><span class="p">)</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># load_file resolves the link, sniffs the bytes to detect the format, and routes</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># it. The sniffed bytes are reused, so the file is downloaded only once:</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">"https://drive.google.com/file/d/&lt;FILE_ID&gt;/view"</span><span class="p">)</span>
 </code></pre></div>
 <p>The file must be shared as <strong>"Anyone with the link"</strong> (no sign-in required).
 Because Drive download links carry no extension and reject the <code>HEAD</code>/range
@@ -4244,15 +4314,15 @@ downloaded only once whether you call <code>load_slp</code> or <code>load_file</
 <h2 id="error-handling">Error handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
 <p>Remote HTTP/cloud failures surface as
 <a class="autorefs autorefs-internal" href="../reference/sleap_io/#sleap_io.RemoteIOError"><code>RemoteIOError</code></a> (a subclass of <code>OSError</code>). It carries
-a <code>status</code> (HTTP code or <code>None</code>) and a credential-redacted <code>url</code>, so tokens
-never leak into logs or tracebacks:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://example.com/labels.slp"</span><span class="p">)</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="k">except</span> <span class="n">sio</span><span class="o">.</span><span class="n">RemoteIOError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">status</span><span class="p">)</span>  <span class="c1"># e.g. 404, 416, 503, or None for connection errors</span>
-<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">url</span><span class="p">)</span>     <span class="c1"># redacted URL (tokens/userinfo stripped)</span>
+a <code>status</code> (HTTP code or <code>None</code>) and a <code>url</code> with its credentials redacted as in
+error messages above, for logs and tracebacks:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">"https://example.com/labels.slp"</span><span class="p">)</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="k">except</span> <span class="n">sio</span><span class="o">.</span><span class="n">RemoteIOError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">status</span><span class="p">)</span>  <span class="c1"># e.g. 404, 416, 503, or None for connection errors</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">url</span><span class="p">)</span>     <span class="c1"># redacted URL (tokens/userinfo stripped)</span>
 </code></pre></div>
 <p>Only transient statuses (<code>429</code>, <code>500</code>, <code>502</code>, <code>503</code>, <code>504</code>) are retried (with
 exponential backoff, honoring an integer <code>Retry-After</code>); the retry count is
