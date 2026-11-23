@@ -13147,7 +13147,7 @@ def test_lazy_save_of_pre_1_1_file_keeps_coordinates(tmp_path, slp_legacy_grid_l
     """A lazy re-save to 3.0 bakes in the pre-1.1 coordinate shift once."""
     expected = load_slp(slp_legacy_grid_labels).numpy()
     out = tmp_path / "resaved.slp"
-    save_slp(load_slp(slp_legacy_grid_labels, lazy=True), str(out))
+    save_slp(load_slp(slp_legacy_grid_labels, lazy=True), str(out), slp_version="v3")
     for lazy in (False, True):
         np.testing.assert_array_equal(load_slp(str(out), lazy=lazy).numpy(), expected)
 
@@ -13331,7 +13331,7 @@ def test_instances_and_frames_round_trip(tmp_path, lazy):
     """Columnar instances and frames read back as written, eager and lazy."""
     labels = _labels_with_links()
     path = tmp_path / "labels.slp"
-    save_slp(labels, str(path))
+    save_slp(labels, str(path), slp_version="v3")
     loaded = load_slp(str(path), lazy=lazy)
     if lazy:
         loaded = loaded.materialize()
