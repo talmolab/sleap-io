@@ -120,6 +120,7 @@ import numpy as np
 import simplejson as json
 from tqdm import tqdm
 
+from sleap_io.io._remote import _mask_url_credentials_deep
 from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
 from sleap_io.io.utils import (
     _read_dataset_from_open_file,
@@ -794,6 +795,53 @@ def _read_source_video_json(source_grp: h5py.Group) -> dict:
     return json.loads(source_grp.attrs["json"])
 
 
+def _copy_video_group(
+    source_group: h5py.Group,
+    dest: h5py.File,
+    name: str,
+    skip: set[str] | frozenset[str] = frozenset(),
+) -> None:
+    """Copy an embedded video's group into another file, without a URL's credentials.
+
+    The group's ``source_video`` and legacy ``original_video`` hold their metadata as
+    they are in the source file, which may have been written before saves masked them.
+    These must never reach the new file, even to be overwritten: HDF5 doesn't clear
+    the space it frees, so the old bytes would still be there to find. A group with
+    nothing to mask is copied whole.
+
+    Args:
+        source_group: The ``video{i}`` group to copy.
+        dest: The file being written, open for writing.
+        name: The name of the group in ``dest``.
+        skip: Members of the group to leave out of the copy.
+    """
+    masked_lineage = {}
+    for key in ("source_video", "original_video"):
+        lineage = source_group.get(key)
+        if isinstance(lineage, h5py.Group) and (
+            "json" in lineage or "json" in lineage.attrs
+        ):
+            metadata = _read_source_video_json(lineage)
+            masked = _mask_url_credentials_deep(metadata)
+            if masked != metadata:
+                masked_lineage[key] = masked
+
+    if not masked_lineage and not (skip & set(source_group)):
+        source_group.file.copy(source_group, dest, name=name)
+        return
+
+    group = dest.create_group(name)
+    for key, value in source_group.attrs.items():
+        group.attrs[key] = value
+    for key in source_group:
+        if key in skip:
+            continue
+        if key in masked_lineage:
+            _write_source_video_json(group.create_group(key), masked_lineage[key])
+        else:
+            source_group.copy(key, group)
+
+
 def make_video(
     labels_path: str,
     video_json: dict,
@@ -1280,6 +1328,12 @@ def video_to_dict(
             "format": backend.format,
             "fps": fps,
         }
+
+    # A video's filename can be the URL it or its labels were opened from, credentials
+    # and all, because `Video.exists` and `Video.open` go back to it. A file gets passed
+    # around, so they stop here, which means a URL that needs them won't open from the
+    # saved file.
+    result = _mask_url_credentials_deep(result)
 
     # Add source_video metadata if present
     source_video = _source_to_record(getattr(video, "source_video", None), labels_path)
@@ -1968,12 +2022,16 @@ def _create_empty_embedded_video(
             ds = f.create_dataset(f"{group}/video", shape=(0,), dtype="int8")
             ds.attrs["format"] = "png"
             ds.attrs["channel_order"] = "RGB"
-            # Store video shape metadata from the source video
+            # Store video shape metadata from the source video, when known (a
+            # video that isn't open may only know it from its metadata).
             video_shape = video.shape
-            ds.attrs["frames"] = video_shape[0]
-            ds.attrs["height"] = video_shape[1]
-            ds.attrs["width"] = video_shape[2]
-            ds.attrs["channels"] = video_shape[3]
+            if video_shape is None:
+                video_shape = video.backend_metadata.get("shape")
+            if video_shape is not None and len(video_shape) == 4:
+                ds.attrs["frames"] = video_shape[0]
+                ds.attrs["height"] = video_shape[1]
+                ds.attrs["width"] = video_shape[2]
+                ds.attrs["channels"] = video_shape[3]
             # Store FPS if available
             if video.fps is not None:
                 ds.attrs["fps"] = video.fps
@@ -2353,20 +2411,25 @@ def write_videos(
 
                 with h5py.File(labels_path, "a") as dst_f:
                     # Copy the video group with all its datasets and attributes
-                    src_f.copy(source_group, dst_f, name=dest_group)
                     # When this save replaces a file, the copied source record
-                    # may name that file. Drop it only then: the pass below
+                    # may name that file. Leave it out only then: the pass below
                     # writes the record again from the video's own source (see
                     # `_source_to_record`). Any other copied record is kept as
-                    # it was.
-                    if "source_video" in dst_f[dest_group] and (
-                        _source_to_record(video.source_video, labels_path)
-                        is not video.source_video
-                        or _record_names_replaced_file(
-                            dst_f[dest_group]["source_video"], labels_path
+                    # it was, with a URL's credentials masked.
+                    src_group = src_f[source_group]
+                    skip = (
+                        {"source_video"}
+                        if "source_video" in src_group
+                        and (
+                            _source_to_record(video.source_video, labels_path)
+                            is not video.source_video
+                            or _record_names_replaced_file(
+                                src_group["source_video"], labels_path
+                            )
                         )
-                    ):
-                        del dst_f[dest_group]["source_video"]
+                        else set()
+                    )
+                    _copy_video_group(src_group, dst_f, dest_group, skip=skip)
 
             # Add to videos_to_write - the metadata will reference the copied data
             videos_to_write.append((video_ind, video))
@@ -4497,11 +4560,15 @@ def write_metadata(labels_path: str, labels: Labels, *, legacy_format: bool = Fa
     skeletons_dicts, nodes_dicts = serialize_skeletons(labels.skeletons)
 
     # Encode provenance into a JSON-safe dict (Path -> str). Build a copy so we
-    # never mutate the caller's ``labels.provenance``.
-    provenance = {
-        k: (v.as_posix() if isinstance(v, Path) else v)
-        for k, v in labels.provenance.items()
-    }
+    # never mutate the caller's ``labels.provenance``. A reader records where the
+    # labels came from here (``filename``, a merge's ``source_filename``), and a file's
+    # own provenance can quote any path, so a URL's credentials are masked.
+    provenance = _mask_url_credentials_deep(
+        {
+            k: (v.as_posix() if isinstance(v, Path) else v)
+            for k, v in labels.provenance.items()
+        }
+    )
 
     md = {
         "version": "2.0.0",
@@ -10765,6 +10832,7 @@ def _write_metadata_standalone(
     for k in provenance:
         if isinstance(provenance[k], Path):
             provenance[k] = provenance[k].as_posix()
+    provenance = _mask_url_credentials_deep(provenance)
 
     skeletons_dicts, nodes_dicts = serialize_skeletons(skeletons)
 

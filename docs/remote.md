@@ -258,6 +258,28 @@ so range reads stay byte-exact. Remote loading needs `aiohttp >= 3.13.5` for
 the cross-origin header stripping — an older version emits a `RuntimeWarning`
 at import time.
 
+### Saved files don't keep credentials
+
+Files get passed around, so a save masks a URL's credentials wherever it writes
+one: a password becomes `https://***:***@host/...`, and a token-like query
+parameter becomes `?token=***`. That covers a video's filename, its backend
+metadata and its source videos, and anything in provenance, for every `embed`
+setting and every format that records them. The rest of the name is saved exactly
+as it was, and `headers=` are never saved.
+
+The labels in memory keep the whole URL, so they go on working after a save. But a
+video whose URL needs its credentials **won't open from the saved file**, just like
+an expired link: the labels load, and `video.exists()` is `False`, until you give it
+the link again.
+
+```python
+labels = sio.load_slp("labels.slp")
+labels.videos[0].replace_filename("https://host/video.mp4?token=...")
+```
+
+To have a saved file that opens by itself, embed the frames (`embed=True`) or point
+it at a local copy of the video.
+
 ---
 
 ## Embedded pkg.slp streaming
@@ -308,7 +330,8 @@ raises an `ImportError` with the install hint.
     rather than silently returning an unauthenticated backend. To read an
     auth-gated remote video, use a **pre-signed URL** that embeds credentials in
     the query string (e.g. `https://host/video.mp4?X-Amz-...`), or download the
-    file locally first.
+    file locally first. A credential in a URL isn't kept in a saved file: see
+    [Saved files don't keep credentials](#saved-files-dont-keep-credentials).
 
 !!! danger "Security: remote video hands untrusted data to FFmpeg"
     Decoding a remote video streams bytes from the URL into FFmpeg (via pyav).

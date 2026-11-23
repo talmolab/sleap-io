@@ -12,6 +12,7 @@ from sleap_io import (
     Labels,
     PredictedInstance,
     Skeleton,
+    Track,
     Video,
     load_nwb,
     load_slp,
@@ -342,3 +343,42 @@ def test_occluded_points_round_trip_not_visible(tmp_path):
     assert rt_inst.points["visible"].tolist() == [True, False, False, False]
     np.testing.assert_array_equal(rt_inst.numpy()[0], [10.0, 20.0])
     assert np.isnan(rt_inst.numpy()[1:]).all()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://x.test/v.mp4?token=SECRET",
+        # A file's stem stops at a dot, and a token can have dots in it.
+        "https://x.test/v.mp4?token=SECRET.AND.MORE",
+        "https://me:SECRET@x.test/v.mp4",
+    ],
+)
+def test_write_nwb_holds_no_url_credentials(tmp_path, saved_bytes_without, url):
+    """Video paths, provenance and what's named after the video."""
+    video = Video(
+        filename=url, open_backend=False, backend_metadata={"shape": (9, 4, 4, 1)}
+    )
+    skeleton = Skeleton(["a", "b"], name="s")
+    track = Track("t")
+    instance = PredictedInstance.from_numpy(
+        np.ones((2, 2)),
+        skeleton=skeleton,
+        score=0.5,
+        point_scores=np.ones(2),
+        track=track,
+    )
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[instance])],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
+        provenance={"filename": url, "sleap_version": "1.0"},
+    )
+    path = tmp_path / "a.nwb"
+
+    write_nwb(labels=labels, nwbfile_path=path)
+
+    assert b"***" in saved_bytes_without(path)
+    assert video.filename == url
+    assert labels.provenance["filename"] == url

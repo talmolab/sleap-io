@@ -15,6 +15,7 @@ from tests.fixtures.labelstudio import *  # noqa: F403
 from tests.fixtures.leap import *  # noqa: F403
 from tests.fixtures.slp import *  # noqa: F403
 from tests.fixtures.ultralytics import *  # noqa: F403
+from tests.fixtures.url_credentials import *  # noqa: F403
 from tests.fixtures.videos import *  # noqa: F403
 
 

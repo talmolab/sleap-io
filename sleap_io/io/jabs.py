@@ -9,6 +9,7 @@ import warnings
 import h5py
 import numpy as np
 
+from sleap_io.io._remote import _mask_url_credentials
 from sleap_io.model.instance import PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -404,7 +405,8 @@ def write_labels(labels: Labels, pose_version: int, root_folder: str):
     for video in labels.videos:
         converted_labels = convert_labels(labels, video)
         out_filename = (
-            os.path.splitext(video.filename)[0] + f"_pose_est_v{pose_version}.h5"
+            os.path.splitext(_mask_url_credentials(video.filename))[0]
+            + f"_pose_est_v{pose_version}.h5"
         )
         if root_folder:
             out_filename = os.path.join(root_folder, out_filename)
