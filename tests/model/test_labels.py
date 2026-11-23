@@ -9609,3 +9609,126 @@ def test_merge_still_matches_same_video_under_different_roots():
         )
     )
     assert [Path(v.filename).parent.name for v in base.videos] == ["cam1", "cam2"]
+
+
+def _one_video_per_frame(filenames: list[str]) -> Labels:
+    """Labels whose frames each got their own Video, so a file is listed repeatedly."""
+    skeleton = Skeleton(["a", "b"])
+    return Labels(
+        [
+            LabeledFrame(
+                video=Video(filename, open_backend=False),
+                frame_idx=i,
+                instances=[
+                    Instance.from_numpy(np.array([[i, i], [1, 1.0]]), skeleton=skeleton)
+                ],
+            )
+            for i, filename in enumerate(filenames)
+        ]
+    )
+
+
+def test_merge_still_joins_duplicate_entries_of_one_file(tmp_path):
+    """Entries of one file listed several times in the incoming labels are joined."""
+    base = Labels(skeletons=[Skeleton(["a", "b"])])
+    base.merge(_one_video_per_frame(["/data/s/x.mp4"] * 3))
+    assert len(base.videos) == 1
+    assert len(base.labeled_frames) == 3
+
+    path = str(tmp_path / "merged.slp")
+    base.save(path)
+    assert len(sleap_io.load_slp(path).videos) == 1
+
+
+def test_merge_joins_duplicate_entries_to_base_under_another_root():
+    """Duplicate entries all join the base's copy of their file under another root."""
+    base = Labels(
+        videos=[Video("/mnt/a/data/s/x.mp4", open_backend=False)],
+        skeletons=[Skeleton(["a", "b"])],
+    )
+    base.merge(_one_video_per_frame(["/data/s/x.mp4"] * 3))
+    assert [v.filename for v in base.videos] == ["/mnt/a/data/s/x.mp4"]
+
+
+def test_merge_does_not_add_the_same_video_object_twice():
+    """A Video object listed twice in the incoming labels is added once."""
+    video = Video("/data/s/y.mp4", open_backend=False)
+    base = Labels()
+    base.merge(Labels(videos=[video, video]))
+    assert base.videos == [video]
+
+
+def test_merge_joins_duplicates_but_keeps_same_named_cameras_apart():
+    """Each camera's duplicate entries join; same-named cameras stay apart."""
+    filenames = ["/data/Camera1/0.mp4", "/data/Camera3/0.mp4"] * 2
+
+    base = Labels(skeletons=[Skeleton(["a", "b"])])
+    base.merge(_one_video_per_frame(filenames))
+    assert [v.filename for v in base.videos] == [
+        "/data/Camera1/0.mp4",
+        "/data/Camera3/0.mp4",
+    ]
+
+    base = Labels(
+        videos=[Video("/mnt/x/data/Camera1/0.mp4", open_backend=False)],
+        skeletons=[Skeleton(["a", "b"])],
+    )
+    base.merge(_one_video_per_frame(filenames))
+    assert [v.filename for v in base.videos] == [
+        "/mnt/x/data/Camera1/0.mp4",
+        "/data/Camera3/0.mp4",
+    ]
+
+
+def test_merge_keeps_duplicate_entries_with_conflicting_shapes_apart():
+    """Entries of one file whose recorded shapes conflict are not joined."""
+    skeleton = Skeleton(["a", "b"])
+    entries = [
+        Video(
+            "/data/s/x.mp4",
+            open_backend=False,
+            backend_metadata={"shape": [n, 32, 32, 1]},
+        )
+        for n in (100, 200)
+    ]
+    incoming = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=i,
+                instances=[
+                    Instance.from_numpy(np.array([[i, i], [1, 1.0]]), skeleton=skeleton)
+                ],
+            )
+            for i, video in enumerate(entries)
+        ]
+    )
+    base = Labels(skeletons=[skeleton])
+    base.merge(incoming)
+    assert len(base.videos) == 2
+
+
+def test_merge_keeps_embedded_videos_apart_without_source_or_backend():
+    """Embedded videos of one package with no source record stay apart.
+
+    They share the package's filename; with backends closed only the recorded
+    dataset tells them apart. Entries of the same dataset are still joined.
+    """
+
+    def embedded(dataset):
+        return Video(
+            "/data/cams.pkg.slp",
+            open_backend=False,
+            backend_metadata={"dataset": dataset},
+        )
+
+    base = Labels()
+    base.merge(Labels(videos=[embedded("video0/video"), embedded("video1/video")]))
+    assert [v.backend_metadata["dataset"] for v in base.videos] == [
+        "video0/video",
+        "video1/video",
+    ]
+
+    base = Labels()
+    base.merge(Labels(videos=[embedded("video0/video"), embedded("video0/video")]))
+    assert len(base.videos) == 1
