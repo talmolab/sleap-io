@@ -36,10 +36,15 @@ except ImportError:
     pass
 
 if "av" in sys.modules:  # pragma: no branch - pyav is an optional extra
+    from av.video.reformatter import VideoReformatter
     from imageio.plugins.pyav import PyAVPlugin
 
+    # pyav 17.0 started converting with the frame's own color tags and a shared,
+    # threaded reformatter; `_PyAVPlugin._unpack_frame` undoes both.
+    _PYAV_TAGGED_COLOR = int(sys.modules["av"].__version__.split(".")[0]) >= 17
+
     class _PyAVPlugin(PyAVPlugin):
-        """imageio's pyav plugin with a seek that works near the end of a video.
+        """imageio's pyav plugin with a fixed seek and the old color conversion.
 
         imageio (2.38.1 and its master as of 2026-10-22) finds the keyframe before
         the requested frame by decoding it, seeks back to it, and then keeps
@@ -53,7 +58,42 @@ if "av" in sys.modules:  # pragma: no branch - pyav is an optional extra
 
         This restarts the frame iterator after the seek back. Everything else,
         including which frame an index refers to, is imageio's.
+
+        It also converts frames to RGB as pyav did before 17.0 (see
+        `_unpack_frame`), so that reads return the same pixels as before.
         """
+
+        def _unpack_frame(self, frame, *, format: str | None = None) -> np.ndarray:
+            """Convert a decoded frame to an array, with pyav 15's color conversion.
+
+            From 17.0, pyav converts YUV to RGB with the color matrix and range the
+            frame is tagged with; before, it always used BT.601 with limited range
+            (full range only for the `yuvj` formats). This keeps the old conversion,
+            so 8-bit video reads back exactly as with pyav 15.
+
+            The conversion also runs on one thread with a reformatter owned by this
+            reader. pyav's default reformatter is shared per thread and keeps a pool
+            of worker threads, which a forked child process inherits without the
+            threads: a child that then reads a video through pyav hangs.
+            """
+            if (
+                _PYAV_TAGGED_COLOR
+                and format is not None
+                and frame.format.name != format
+            ):
+                if getattr(self, "_reformatter", None) is None:
+                    self._reformatter = VideoReformatter()
+                frame = self._reformatter.reformat(
+                    frame,
+                    format=format,
+                    src_colorspace="ITU601",
+                    src_color_range=(
+                        "JPEG" if frame.format.name.startswith("yuvj") else "MPEG"
+                    ),
+                    threads=1,
+                )
+                format = None
+            return super()._unpack_frame(frame, format=format)
 
         def _seek(self, index: int, *, constant_framerate: bool = True) -> None:
             """Seek so that the next decoded frame is the one at `index`."""

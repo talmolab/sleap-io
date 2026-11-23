@@ -2,7 +2,7 @@
 
 **sleap-io 0.10 is backwards compatible by default for SLP files.** It reads every SLP file older releases wrote and the new format 3.0, and it writes the 2.x layout that sleap-io 0.9 and SLEAP 1.6 open. Anything that would change what an SLP file holds, or what a default produces in one, is opt-in. A few changes to the in-memory model and to exports to other formats happen by default; they are listed below.
 
-This page lists what you can opt in to, the changes in behaviour that remain, and which versions work together.
+This page lists what you can opt in to, the changes in behaviour that remain, the Python and PyAV versions 0.10 needs, and which versions work together.
 
 ## Nothing changes unless you opt in
 
@@ -50,7 +50,7 @@ These hold whatever you opt in to. Only the last one can raise an error.
 ## Python and PyAV
 
 - **Python 3.11 or newer.** sleap-io 0.10 no longer supports Python 3.10; the 0.9.x releases remain available for it.
-- **PyAV 18.1.1 or newer** in the `pyav` and `all` extras (19.0.0 to 19.0.2 excluded). Older PyAV can hang for ever when a video read through PyAV is closed or freed right after a read, if another library (torchvision, for example) has turned on PyAV's logging; 18.1.1 fixes this, and 19.0.0 to 19.0.2 were released before the fix. Frames read with 18.1.1 were identical to those read with 15.1.0 in every comparison run for this change (H.264, HEVC and AV1). PyAV 18.1.1 has no wheel for Apple Silicon Macs on macOS 13 (it needs macOS 14 or newer there), so on such a Mac `pip` would try to build PyAV from source.
+- **PyAV 18.1.1 or newer** in the `pyav` and `all` extras (19.0.0 to 19.0.2 excluded). Older PyAV can hang forever when a video read through PyAV is closed or freed right after a read, if another library (torchvision, for example) has turned on PyAV's logging; 18.1.1 fixes that case, and 19.0.0 to 19.0.2 were released before the fix. sleap-io converts frames to RGB as it did with older PyAV, so 8-bit videos read back the same pixels as in 0.9. Videos with more than 8 bits per sample (10-bit H.264 or HEVC, for example) can read back slightly differently (about 2 levels on average, more on a few pixels), because the newer FFmpeg in PyAV 18 rounds them to 8 bits differently. PyAV 18.1.1 has no wheel for Apple Silicon Macs on macOS 13 (it needs macOS 14 or newer there), so on such a Mac `pip` would try to build PyAV from source.
 
 ## Which versions work together
 

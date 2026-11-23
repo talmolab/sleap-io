@@ -1,7 +1,11 @@
 """Tests for methods in the sleap_io.io.video_reading file."""
 
 import copy
+import os
 import pickle
+import signal
+import sys
+import time
 from pathlib import Path
 
 import attrs
@@ -3026,4 +3030,88 @@ def test_hdf5_video_chunk_cache_fits_a_few_chunks(tmp_path):
     video.dataset = "b"
     video.get_frame(1)
     assert video._open_dataset.name == "/b"
+    video.close()
+
+
+def _write_h264_clip(path, color_tags: dict) -> str:
+    """Write a 3-frame 64x48 color H.264 clip with pyav, tagged with `color_tags`.
+
+    The frames are the same for every call, so two clips differ only in their tags.
+    """
+    av = pytest.importorskip("av")
+    try:
+        av.codec.Codec("libx264", "w")
+    except Exception:
+        pytest.skip("pyav has no H.264 encoder")
+    with av.open(str(path), "w") as container:
+        stream = container.add_stream("libx264", rate=10)
+        stream.width, stream.height, stream.pix_fmt = 64, 48, "yuv420p"
+        for name, value in color_tags.items():
+            setattr(stream.codec_context, name, value)
+        for i in range(3):
+            rgb = np.zeros((48, 64, 3), dtype=np.uint8)
+            rgb[..., 0] = np.linspace(0, 255, 64, dtype=np.uint8)[None, :]
+            rgb[..., 1] = 60 * i + 30
+            rgb[..., 2] = np.linspace(255, 0, 48, dtype=np.uint8)[:, None]
+            frame = av.VideoFrame.from_ndarray(rgb, format="rgb24")
+            for packet in stream.encode(frame.reformat(format="yuv420p")):
+                container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+    return Path(path).as_posix()
+
+
+def test_pyav_reads_ignore_color_tags(tmp_path):
+    """Test that pyav reads convert to RGB as before pyav 17, ignoring color tags.
+
+    pyav 17 and later convert with the frame's tagged color matrix (here BT.709);
+    sleap-io keeps pyav 15's BT.601 conversion so that reads do not change.
+    """
+    av = pytest.importorskip("av")
+    untagged = _write_h264_clip(tmp_path / "untagged.mp4", {})
+    bt709 = {"colorspace": 1, "color_primaries": 1, "color_trc": 1, "color_range": 1}
+    tagged = _write_h264_clip(tmp_path / "bt709.mp4", bt709)
+    with av.open(tagged) as container:
+        assert int(container.streams.video[0].codec_context.colorspace) == 1
+
+    expected = sio.load_video(untagged, plugin="pyav", grayscale=False)[:]
+    frames = sio.load_video(tagged, plugin="pyav", grayscale=False)[:]
+    assert frames.shape == (3, 48, 64, 3)
+    assert_equal(frames, expected)
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="fork is only safe on Linux")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_pyav_read_in_forked_child(centered_pair_low_quality_path):
+    """Test that a forked child can read a video after the parent read one.
+
+    pyav's default reformatter keeps a pool of worker threads per thread, which a
+    forked child inherits without its threads; a child converting a frame with it
+    hangs. The reader's own single-threaded reformatter avoids that.
+    """
+    pytest.importorskip("av")
+    path = centered_pair_low_quality_path
+    video = sio.load_video(path, plugin="pyav", grayscale=False)
+    video[0]
+
+    pid = os.fork()
+    if pid == 0:  # pragma: no cover - runs in the child
+        code = 1
+        try:
+            sio.load_video(path, plugin="pyav", grayscale=False)[3]
+            code = 0
+        finally:
+            os._exit(code)
+
+    deadline = time.monotonic() + 60
+    while True:
+        done, status = os.waitpid(pid, os.WNOHANG)
+        if done:
+            break
+        if time.monotonic() > deadline:
+            os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
+            pytest.fail("the forked child hung reading a video through pyav")
+        time.sleep(0.05)
+    assert os.waitstatus_to_exitcode(status) == 0
     video.close()
