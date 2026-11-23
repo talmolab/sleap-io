@@ -33,8 +33,16 @@ to the keypoint `Instance`.
 
 COCO stores each keypoint as `x, y, v`. sleap-io maps the visibility code `v` onto
 the two [point flags](../model/poses.md#point-flags-and-states), `visible` and
-`labeled`, so occluded estimates and unlabeled keypoints both survive a round
-trip:
+`labeled`.
+
+**By default, codes are read as sleap-io 0.9 read them** (`visibility_encoding=
+"legacy"`): `v=0` is a hidden keypoint with no location (`ABSENT`), and every
+other code is visible with its coordinates. That reading creates no point marked
+as not labeled, so the labels save in the SLP 2.x layout that SLEAP opens.
+
+The COCO reading below keeps occluded estimates and unlabeled keypoints apart. It
+is an option, because points marked as not labeled can only be saved in
+[SLP format 3.0](slp.md#which-layout-a-save-writes):
 
 | `v` | Read as (`visibility_encoding="ternary"`) | `PointState` |
 | --- | --- | --- |
@@ -47,31 +55,36 @@ trip:
 Every labeled keypoint is marked `verified`, since COCO keypoints are human
 annotations.
 
-`load_coco` takes two options for files that don't follow COCO's encoding:
+`load_coco` takes two options for the reading:
 
 - `visibility_encoding`:
+    - `"legacy"`: `v=0` hidden with no location, any other code visible, as
+      sleap-io 0.9 read them.
     - `"ternary"`: COCO's 0/1/2 encoding (the table above).
     - `"binary"`: `v > 0` is visible. This is what `save_coco(...,
       visibility_encoding="binary")` writes. Use it for CrowdPose too, whose codes
       are effectively reversed.
-    - `"auto"` (the **default**): binary when some keypoint has `v=1` and none in
-      the file has `v=2`, with a warning; ternary otherwise.
-- `v0_as`: `"unlabeled"` reads `v=0` as unlabeled. `"absent"` reads it as labeled
-  and not visible with no location, which is what sleap-io did before 0.10. The
-  **default** (`None`) depends on the encoding: `"unlabeled"` for ternary and
-  `"absent"` for binary (including when `"auto"` picks binary), since a binary file
-  writes every hidden keypoint as `v=0`. An explicit `v0_as` always wins.
+    - `"auto"`: binary when some keypoint has `v=1` and none in the file has
+      `v=2`, with a warning; ternary otherwise.
+    - `None` (the **default**): `"legacy"`, or `"auto"` when `v0_as` is given or
+      the format 3.0 defaults are on (`sio.set_v3_defaults(True)` or
+      `SLEAP_IO_V3_DEFAULTS=1`).
+- `v0_as` (ternary and binary only): `"unlabeled"` reads `v=0` as unlabeled.
+  `"absent"` reads it as labeled and not visible with no location. Its default
+  (`None`) depends on the encoding: `"unlabeled"` for ternary and `"absent"` for
+  binary (including when `"auto"` picks binary), since a binary file writes every
+  hidden keypoint as `v=0`. An explicit `v0_as` always wins.
 
 ```python
 import sleap_io as sio
 
-labels = sio.load_coco("person_keypoints_val2017.json")  # v=0 -> unlabeled
+labels = sio.load_coco("person_keypoints_val2017.json")  # as sleap-io 0.9 read it
 
-# A binary file (no v=2 anywhere) is detected with a warning; be explicit instead:
+# COCO's own reading: v=0 unlabeled, v=1 occluded (saved in SLP format 3.0).
+labels = sio.load_coco("person_keypoints_val2017.json", visibility_encoding="auto")
+
+# A binary file (no v=2 anywhere):
 labels = sio.load_coco("crowdpose_val.json", visibility_encoding="binary")
-
-# Pre-0.10 behaviour: v=0 is a hidden keypoint, not an unlabeled one.
-labels = sio.load_coco("annotations.json", v0_as="absent")
 ```
 
 On write, `save_coco` encodes each point from its state:
@@ -97,12 +110,13 @@ as `ABSENT` too; pass `v0_as="unlabeled"` to read them as unlabeled instead.
 `visibility_encoding="binary"` explicitly for a binary file with no visible
 keypoints.
 
-!!! warning "Changed in 0.10"
-    Before 0.10, `v=0` read as a hidden keypoint and `v=1` as *visible*, so
-    occluded estimates were indistinguishable from visible keypoints. Now `v=0` is
-    unlabeled and `v=1` is occluded (hidden) with its coordinates kept.
+!!! note "New in 0.10, opt-in"
+    sleap-io 0.9 read `v=0` as a hidden keypoint and `v=1` as *visible*, so
+    occluded estimates were indistinguishable from visible keypoints. That is
+    still the default. With the ternary reading, `v=0` is unlabeled and `v=1` is
+    occluded (hidden) with its coordinates kept.
 
-    Because `v=1` points are no longer visible,
+    Because `v=1` points are then no longer visible,
     [`Instance.numpy()`][sleap_io.Instance.numpy] and
     [`Labels.numpy()`][sleap_io.Labels.numpy] now return NaN for them where they
     used to return their coordinates. Use `instance.numpy(invisible_as_nan=False)`
@@ -113,12 +127,13 @@ keypoints.
     and `v=1` joints train at their coordinates, as in HRNet. For **bottom-up**
     models, frames that mix labeled and unlabeled instances still treat `v=0`
     joints as hidden until spatial ignore masks exist. Pass `v0_as="absent"` to
-    keep the old reading of `v=0`.
+    keep the old reading of `v=0` with the ternary encoding.
 
 ## Annotation metadata
 
-COCO fields that have no place in the pose model are kept as
-[record metadata](../model/poses.md#metadata):
+With `keep_metadata=True` (or the format 3.0 defaults), COCO fields that have no
+place in the pose model are kept as [record metadata](../model/poses.md#metadata).
+Record metadata is saved only in SLP format 3.0, so it is off by default:
 
 | Record | Metadata keys | From |
 | --- | --- | --- |

@@ -6998,6 +6998,7 @@ def test_read_hdf5_dataset_1d_unchanged(tmp_path):
     np.testing.assert_array_equal(result, data)
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_read_h5wasm_points(tmp_path):
     """Test _points_from_hdf5_data works with flat arrays converted to structured."""
     path = str(tmp_path / "points.h5")
@@ -12775,9 +12776,13 @@ def test_point_table_with_mismatched_columns_raises(tmp_path):
         load_slp(str(path))
 
 
+@pytest.mark.parametrize("clean", [None, True])
 @pytest.mark.parametrize("path", LEGACY_SLP_FIXTURES)
-def test_legacy_fixtures_train_identically(tmp_path, path):
-    """Old files give the same `numpy()` as before, eagerly, lazily and re-saved."""
+def test_legacy_fixtures_train_identically(tmp_path, path, clean):
+    """Old files give the same `numpy()` as before, eagerly, lazily and re-saved.
+
+    That holds with the points as stored (the default) and with the clean-up.
+    """
     with h5py.File(path, "r") as f:
         format_id = float(f["metadata"].attrs["format_id"])
         frames = read_hdf5_dataset(path, "frames", _hdf5_file=f)
@@ -12798,12 +12803,12 @@ def test_legacy_fixtures_train_identically(tmp_path, path):
         expected.append(frame_instances)
 
     resaved = tmp_path / "resaved.slp"
-    save_slp(load_slp(path), str(resaved))
+    save_slp(load_slp(path, clean_legacy_points=clean), str(resaved))
     for labels in (
-        load_slp(path),
-        load_slp(path, lazy=True),
-        load_slp(str(resaved)),
-        load_slp(str(resaved), lazy=True),
+        load_slp(path, clean_legacy_points=clean),
+        load_slp(path, lazy=True, clean_legacy_points=clean),
+        load_slp(str(resaved), clean_legacy_points=clean),
+        load_slp(str(resaved), lazy=True, clean_legacy_points=clean),
     ):
         assert len(labels) == len(expected)
         for lf, frame_instances in zip(labels, expected):
@@ -12811,11 +12816,13 @@ def test_legacy_fixtures_train_identically(tmp_path, path):
             for inst, xy in zip(lf.instances, frame_instances):
                 assert_equal(inst.numpy(), xy)
                 assert inst.points["labeled"].all()
-                # Hidden points have no location after the cleanup.
-                hidden = ~inst.points["visible"]
-                assert np.isnan(inst.points["xy"][hidden]).all()
+                if clean:
+                    # Hidden points have no location after the cleanup.
+                    hidden = ~inst.points["visible"]
+                    assert np.isnan(inst.points["xy"][hidden]).all()
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_hidden_complete_point_reads_without_location(slp_legacy_hidden_complete):
     """A hidden point flagged `complete` loses its stale coordinates on read."""
     with h5py.File(slp_legacy_hidden_complete, "r") as f:
@@ -12862,6 +12869,7 @@ def test_h5wasm_legacy_file_reads(tmp_path, slp_legacy_h5wasm_flat, lazy):
         ("tests/data/slp/predictions_1.2.7_provenance_and_tracking.slp", 21),
     ],
 )
+@pytest.mark.usefixtures("v3_defaults")
 def test_legacy_prediction_files_hide_points_without_location(path, n_cleared):
     """Visible predicted points with NaN coordinates read as hidden."""
     raw = read_hdf5_dataset(path, "pred_points")

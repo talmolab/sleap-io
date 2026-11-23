@@ -77,10 +77,12 @@ Format version history:
             predictions) instead of compound datasets. A missing `labeled` column
             reads as True, and unknown columns are carried through re-saves. The
             optional `required_features` attribute on `/metadata` lists features a
-            reader must understand. Older files are cleaned up on read: hidden
-            points lose their (stale) coordinates and visible points without
-            coordinates become hidden. `save_slp(..., legacy_format=True)` still
-            writes the 2.x layout. `/instances` and `/frames` are groups of
+            reader must understand. Older files load with their points as
+            stored; `clean_legacy_points=True` clears hidden points' (stale)
+            coordinates and hides visible points without coordinates. Saves
+            write the 2.x layout unless the content needs 3.0 or
+            `slp_version="v3"` is given (see `resolve_slp_version`).
+            `/instances` and `/frames` are groups of
             columns too, without the id columns (the row number is the id):
             `/frames/video` is the index into the videos, `/frames/is_negative`
             replaces `/negative_frames`, and `metadata/` subgroups hold
@@ -106,6 +108,7 @@ import uuid
 import warnings
 import zlib
 from contextlib import contextmanager, nullcontext, suppress
+from contextvars import ContextVar
 from enum import Enum, IntEnum
 from functools import partial
 from pathlib import Path
@@ -257,18 +260,33 @@ def _label_image_file_is_legacy(slp_version: str, sources_v3: bool = False) -> b
     return version == "v2"
 
 
-def _remember_saved_layout(labels: Labels, legacy_format: bool) -> None:
-    """Record the layout labels were just saved in, as if loaded from that file.
+def _remember_saved_layout(labels: Labels, labels_path: str | Path) -> None:
+    """Record the format labels were just saved in, as if loaded from that file.
 
     The next save with `slp_version="auto"` then keeps the file's layout: labels
     saved in format 3.0 stay in format 3.0, and labels saved in the 2.x layout go
-    back to the content rule (see `resolve_slp_version`).
+    back to the content rule (see `resolve_slp_version`). `Labels.source_format_id`
+    reports it.
+
+    Labels saved in the 2.x layout keep a value below 3.0 they already had, and
+    otherwise get `None`: hidden points with coordinates written by this save are
+    what the labels held (occluded estimates of labels built in memory, say), so
+    they must not count as an old file's stale positions (see
+    `Labels.clean_legacy_points`).
 
     Args:
         labels: The labels as given to the save.
-        legacy_format: Whether the 2.x layout was written.
+        labels_path: The file just written.
     """
-    labels._source_format_id = None if legacy_format else SLP_FORMAT_ID
+    with h5py.File(labels_path, "r") as f:
+        written = _file_format_id(f)
+    if written is not None and written >= SLP_FORMAT_ID:
+        labels._source_format_id = written
+    else:
+        source = labels._source_format_id
+        labels._source_format_id = (
+            source if source is not None and source < SLP_FORMAT_ID else None
+        )
 
 
 def _loaded_as_v3(labels: Labels) -> bool:
@@ -498,6 +516,18 @@ def _file_format_id(f: h5py.File) -> float | None:
     if "metadata" in f and "format_id" in f["metadata"].attrs:
         return float(f["metadata"].attrs["format_id"])
     return None
+
+
+def _loaded_format_id(f: h5py.File) -> float | None:
+    """Return the format to record for labels loaded from a file.
+
+    The file's `format_id`, or 1.0 for an old file that has none but stores its
+    points in the 2.x compound layout.
+    """
+    format_id = _file_format_id(f)
+    if format_id is None and isinstance(f.get("points"), h5py.Dataset):
+        return 1.0
+    return format_id
 
 
 def _check_format_id(labels_path: str, f: h5py.File) -> None:
@@ -4722,6 +4752,48 @@ def _read_columns(
     return {name: data[name] for name in (data.dtype.names or ())}, True
 
 
+# Whether reading an SLP file older than 3.0 cleans up its points (see
+# `_normalize_points`). Set for the duration of one load by
+# `_legacy_points_cleanup`; `None` defers to the format 3.0 defaults.
+_CLEAN_LEGACY_POINTS: ContextVar[bool | None] = ContextVar(
+    "_CLEAN_LEGACY_POINTS", default=None
+)
+
+
+@contextmanager
+def _legacy_points_cleanup(clean: bool | None) -> Iterator[None]:
+    """Choose, within a `with` block, whether old files' points are cleaned up.
+
+    Args:
+        clean: `True` or `False`, or `None` for the default (see
+            `_cleans_legacy_points`).
+    """
+    if clean is not None and not isinstance(clean, bool):
+        raise TypeError(f"clean_legacy_points must be a bool or None, got {clean!r}.")
+    token = _CLEAN_LEGACY_POINTS.set(clean)
+    try:
+        yield
+    finally:
+        _CLEAN_LEGACY_POINTS.reset(token)
+
+
+def _cleans_legacy_points() -> bool:
+    """Return whether points of files older than 3.0 are cleaned up on read.
+
+    Returns:
+        The value chosen for the load in progress (`clean_legacy_points`), or, if
+        none was chosen, whether the format 3.0 defaults are on
+        (`sleap_io.set_v3_defaults`). Off by default, so an old file loads with
+        its points as stored.
+    """
+    clean = _CLEAN_LEGACY_POINTS.get()
+    if clean is not None:
+        return clean
+    from sleap_io.io.format_defaults import get_v3_defaults
+
+    return get_v3_defaults()
+
+
 def _normalize_points(
     columns: dict[str, np.ndarray],
     *,
@@ -4735,10 +4807,14 @@ def _normalize_points(
         columns: The table's columns by name (see `_read_columns`).
         is_predicted: If `True`, build `RAW_PRED_POINT_DTYPE` records (with
             `score`); otherwise `RAW_POINT_DTYPE` records.
-        is_legacy: If `True`, the columns come from a 2.x file and are cleaned up:
-            `complete` is read as `verified`, every point is labeled, hidden points
-            lose their coordinates (SLEAP keeps stale coordinates on hidden nodes),
-            and visible points without coordinates become hidden.
+        is_legacy: If `True`, the columns come from a 2.x file: `complete` is
+            read as `verified` and every point is labeled, which changes no point.
+            If the clean-up is on for this load (`clean_legacy_points=True`, or
+            the format 3.0 defaults; see `_cleans_legacy_points`), hidden points
+            also lose their coordinates (SLEAP keeps stale coordinates on hidden
+            nodes) and visible points without coordinates become hidden. It is
+            off by default, so an old file loads and saves back with the same
+            points.
         format_id: The file's `format_id`, or `None` if it has none. Files older
             than 1.1 used a coordinate system with the top-left of the first pixel
             at (0, 0), which is shifted here to the current pixel-center convention.
@@ -4780,10 +4856,11 @@ def _normalize_points(
 
     if is_legacy:
         points["labeled"] = True
-        points["visible"] &= ~(np.isnan(points["x"]) | np.isnan(points["y"]))
-        hidden = ~points["visible"]
-        points["x"][hidden] = np.nan
-        points["y"][hidden] = np.nan
+        if _cleans_legacy_points():
+            points["visible"] &= ~(np.isnan(points["x"]) | np.isnan(points["y"]))
+            hidden = ~points["visible"]
+            points["x"][hidden] = np.nan
+            points["y"][hidden] = np.nan
         if format_id is not None and format_id < 1.1:
             points["x"] -= 0.5
             points["y"] -= 0.5
@@ -5729,8 +5806,9 @@ def _read_pose_tables(
     """Read, normalise and check `/points`, `/pred_points`, `/instances`, `/frames`.
 
     Each table is read in its own layout (3.0 columns or 2.x compound), so files
-    mixing the two read too. 2.x tables are cleaned up by the normalisers, and
-    `/negative_frames` is read into `is_negative` for 2.x frame tables. The range
+    mixing the two read too. 2.x point tables are cleaned up by the normalisers
+    only when asked (see `_normalize_points`), and `/negative_frames` is read
+    into `is_negative` for 2.x frame tables. The range
     checks (`_check_pose_tables`) raise for 3.0 tables and warn for 2.x ones.
 
     Args:
@@ -8580,7 +8658,11 @@ def write_sessions_passthrough(
     return True
 
 
-def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
+def _read_labels_lazy(
+    labels_path: str,
+    open_videos: bool = True,
+    clean_legacy_points: bool | None = None,
+) -> Labels:
     """Read SLP file with lazy loading.
 
     This function reads raw HDF5 arrays into memory but defers creation of
@@ -8589,11 +8671,19 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     Args:
         labels_path: Path to .slp file.
         open_videos: Whether to open video backends.
+        clean_legacy_points: Whether to clean up the points of a file older than
+            3.0: hidden points lose their coordinates and visible points without
+            coordinates become hidden. `None` (the default) cleans up only when the
+            format 3.0 defaults are on (`sleap_io.set_v3_defaults`), so an old file
+            loads with its points as stored.
 
     Returns:
         Labels with LazyFrameList for labeled_frames.
     """
-    with h5py.File(labels_path, "r") as f:
+    with (
+        _legacy_points_cleanup(clean_legacy_points),
+        h5py.File(labels_path, "r") as f,
+    ):
         return _read_labels_lazy_from_open_file(labels_path, f, open_videos=open_videos)
 
 
@@ -8927,7 +9017,7 @@ def _read_labels_lazy_from_open_file(
     if annotation_only_frames:
         lazy_frames._supplementary.extend(annotation_only_frames)
     labels.provenance["filename"] = labels_path
-    labels._source_format_id = _file_format_id(f)
+    labels._source_format_id = _loaded_format_id(f)
 
     # Keep the HDF5 file handle alive for lazy label image data
     if li_file is not None:
@@ -11393,7 +11483,11 @@ def merge_label_images(
             f.close()
 
 
-def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
+def read_labels(
+    labels_path: str,
+    open_videos: bool = True,
+    clean_legacy_points: bool | None = None,
+) -> Labels:
     """Read a SLEAP labels file.
 
     Args:
@@ -11401,6 +11495,11 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         open_videos: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened (useful for reading metadata
             when the video files are not available).
+        clean_legacy_points: Whether to clean up the points of a file older than
+            3.0: hidden points lose their coordinates and visible points without
+            coordinates become hidden. `None` (the default) cleans up only when the
+            format 3.0 defaults are on (`sleap_io.set_v3_defaults`), so an old file
+            loads with its points as stored.
 
     Returns:
         The processed `Labels` object.
@@ -11409,7 +11508,10 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         ValueError: If the file's format is newer than this sleap-io can read (see
             `SLP_FORMAT_ID_LIMIT`).
     """
-    with h5py.File(labels_path, "r") as f:
+    with (
+        _legacy_points_cleanup(clean_legacy_points),
+        h5py.File(labels_path, "r") as f,
+    ):
         return _read_labels_from_open_file(labels_path, f, open_videos=open_videos)
 
 
@@ -11778,7 +11880,7 @@ def _read_labels_from_open_file(
         rois=undist_rois,
     )
     labels.provenance["filename"] = labels_path
-    labels._source_format_id = _file_format_id(f)
+    labels._source_format_id = _loaded_format_id(f)
 
     # Store the HDF5 file handle for lazy label image data (keeps it alive)
     if _li_file is not None:
@@ -11791,6 +11893,7 @@ def _read_labels_from_open_file(
 def read_labels_set(
     path: str | Path | list[str | Path] | dict[str, str | Path],
     open_videos: bool = True,
+    clean_legacy_points: bool | None = None,
 ) -> "LabelsSet":
     """Load a LabelsSet from multiple SLP files.
 
@@ -11801,6 +11904,8 @@ def read_labels_set(
             - A dictionary mapping names to .slp file paths
         open_videos: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened.
+        clean_legacy_points: Whether to clean up the points of files older than
+            3.0 (see `read_labels`).
 
     Returns:
         A LabelsSet containing the loaded Labels objects.
@@ -11822,7 +11927,11 @@ def read_labels_set(
     if isinstance(path, dict):
         # Dictionary of name -> path mappings
         for name, file_path in path.items():
-            labels_dict[name] = read_labels(str(file_path), open_videos=open_videos)
+            labels_dict[name] = read_labels(
+                str(file_path),
+                open_videos=open_videos,
+                clean_legacy_points=clean_legacy_points,
+            )
 
     elif isinstance(path, list):
         # List of paths - auto-generate names
@@ -11830,7 +11939,11 @@ def read_labels_set(
             file_path = Path(file_path)
             # Use filename without extension as key, or fall back to generic name
             name = file_path.stem if file_path.stem else f"labels_{i}"
-            labels_dict[name] = read_labels(str(file_path), open_videos=open_videos)
+            labels_dict[name] = read_labels(
+                str(file_path),
+                open_videos=open_videos,
+                clean_legacy_points=clean_legacy_points,
+            )
 
     else:
         # Directory path - find all .slp files
@@ -11845,7 +11958,11 @@ def read_labels_set(
         for slp_file in slp_files:
             # Use filename without extension as key
             name = slp_file.stem
-            labels_dict[name] = read_labels(str(slp_file), open_videos=open_videos)
+            labels_dict[name] = read_labels(
+                str(slp_file),
+                open_videos=open_videos,
+                clean_legacy_points=clean_legacy_points,
+            )
 
     return LabelsSet(labels=labels_dict)
 
@@ -12511,7 +12628,7 @@ def _write_labels_lazy(
             image_quality=image_quality,
         )
     _refresh_videos(labels.videos, stale_videos, labels_path)
-    _remember_saved_layout(labels, legacy_format)
+    _remember_saved_layout(labels, labels_path)
 
 
 def _write_lazy_tables(
@@ -13057,7 +13174,7 @@ def write_labels(
     # Videos of the given labels that read their frames from the file just
     # replaced now read them from the new one.
     _refresh_videos(given_labels.videos, stale_videos, labels_path)
-    _remember_saved_layout(given_labels, legacy_format)
+    _remember_saved_layout(given_labels, labels_path)
 
 
 def _write_eager_tables(

@@ -2771,11 +2771,14 @@ def _resolve_set_layout(slp_save: dict[str, Any], labels_list: list[Labels]) -> 
 @click.option(
     "--visibility-encoding",
     "visibility_encoding",
-    type=click.Choice(["auto", "ternary", "binary"]),
+    type=click.Choice(["auto", "ternary", "binary", "legacy"]),
     default=None,
     help=(
-        "How to read keypoint visibility codes: auto (the default), ternary "
-        "(0/1/2) or binary (0/1, e.g. CrowdPose). coco and ultralytics input only."
+        "How to read keypoint visibility codes: legacy (the default: v=0 hidden, "
+        "any other code visible, as sleap-io < 0.10 read them), ternary (0/1/2: "
+        "v=0 unlabeled, v=1 occluded), binary (0/1, e.g. CrowdPose) or auto "
+        "(ternary or binary from the codes; the default with --v0-as or "
+        "SLEAP_IO_V3_DEFAULTS=1). coco and ultralytics input only."
     ),
 )
 @click.option(
@@ -2889,7 +2892,7 @@ def convert(
         $ sio convert labels.slp -o labels.pkg.slp --embed user --image-format jpg
         $ sio convert labels.slp -o labels.v2.slp --slp-version v2
         $ sio convert labels.slp -o labels.v3.slp --slp-version v3
-        $ sio convert coco.json -o labels.v2.slp --slp-version v2 --unlabeled-as absent
+        $ sio convert coco.json -o v2.slp --slp-version v2 --unlabeled-as absent
         $ sio convert crowdpose.json -o labels.slp --visibility-encoding binary
         $ sio convert labels.slp -o dataset/ --to ultralytics
         $ sio convert labels.slp -o analysis.h5 --to analysis_h5

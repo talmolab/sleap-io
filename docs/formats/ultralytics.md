@@ -9,23 +9,29 @@ codes as COCO, and sleap-io maps them onto the
 [point flags](../model/poses.md#point-flags-and-states) the same way (see
 [COCO keypoint visibility](coco.md#keypoint-visibility)):
 
-- `v=2` reads as visible, `v=1` as occluded with its coordinates kept as an
-  estimate, and `v=0` (or `v<0`) as unlabeled. Labeled keypoints are marked
-  `verified`.
-- `visibility_encoding="binary"` reads `v>0` as visible. The default, `"auto"`,
-  picks binary with a warning when some keypoint in the split has `v=1` and none has
-  `v=2`.
-- `v0_as` sets how `v=0` reads. By default it is unlabeled for the ternary
-  encoding and hidden with no location (`ABSENT`) for the binary one, including
-  when `"auto"` picks binary. Pass `v0_as="absent"` or `v0_as="unlabeled"` to
-  choose explicitly; `"absent"` is how sleap-io read `v=0` before 0.10.
+- By default (`visibility_encoding=None`, which is `"legacy"`), codes are read as
+  sleap-io 0.9 read them: `v=0` is hidden with no location (`ABSENT`) and every
+  other code is visible. That creates no point marked as not labeled, so the
+  labels save in the SLP 2.x layout that SLEAP opens.
+- With `visibility_encoding="ternary"` or `"auto"`, `v=2` reads as visible, `v=1`
+  as occluded with its coordinates kept as an estimate, and `v=0` (or `v<0`) as
+  unlabeled. Labeled keypoints are marked `verified`. Points marked as not
+  labeled are saved only in [SLP format 3.0](slp.md#which-layout-a-save-writes).
+- `visibility_encoding="binary"` reads `v>0` as visible. `"auto"` picks binary
+  with a warning when some keypoint in the split has `v=1` and none has `v=2`.
+  `"auto"` is also what the default becomes when `v0_as` is given or the format
+  3.0 defaults are on (`sio.set_v3_defaults(True)` or `SLEAP_IO_V3_DEFAULTS=1`).
+- `v0_as` (ternary and binary only) sets how `v=0` reads. By default it is
+  unlabeled for the ternary encoding and hidden with no location (`ABSENT`) for
+  the binary one, including when `"auto"` picks binary.
 
-!!! warning "Changed in 0.10"
-    Before 0.10, `v=0` read as a hidden keypoint and `v=1` as *visible*, so
-    occluded estimates were indistinguishable from visible keypoints. Now `v=0` is
-    unlabeled and `v=1` is occluded (hidden) with its coordinates kept.
+!!! note "New in 0.10, opt-in"
+    sleap-io 0.9 read `v=0` as a hidden keypoint and `v=1` as *visible*, so
+    occluded estimates were indistinguishable from visible keypoints. That is
+    still the default. With the ternary reading, `v=0` is unlabeled and `v=1` is
+    occluded (hidden) with its coordinates kept.
 
-    Because `v=1` points are no longer visible,
+    Because `v=1` points are then no longer visible,
     [`Instance.numpy()`][sleap_io.Instance.numpy] and
     [`Labels.numpy()`][sleap_io.Labels.numpy] now return NaN for them where they
     used to return their coordinates. Use `instance.numpy(invisible_as_nan=False)`

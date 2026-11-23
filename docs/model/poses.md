@@ -402,10 +402,10 @@ A few rules keep these consistent:
    visible point always counts as labeled.
 2. **NaN means no location.** Factories that create points with no annotation
    ([`Instance.empty`][sleap_io.Instance.empty], dictionaries with missing nodes)
-   fill them as labeled, hidden and NaN. Nodes that are new or unmapped after a
-   skeleton change ([`replace_skeleton`](#changing-the-skeleton),
-   `update_skeleton`) or a [merge](../merging.md#skeleton-matching) are filled as
-   unlabeled instead. If you set `points["visible"] = False` directly, clear
+   fill them as labeled, hidden and NaN. So are nodes that are new or unmapped
+   after a skeleton change ([`replace_skeleton`](#changing-the-skeleton),
+   `update_skeleton`) or a [merge](../merging.md#skeleton-matching), unless
+   `unmapped="unlabeled"` asks for unlabeled. If you set `points["visible"] = False` directly, clear
    `points["xy"]` too unless the coordinates are a real estimate, or use
    [`set_hidden`][sleap_io.Instance.set_hidden]. One helper keeps coordinates on
    purpose: [`transform_labels`](../transforms.md#points-outside-the-frame)
@@ -475,10 +475,13 @@ When an instance moves to a skeleton with nodes it has no data for
 [`Labels.replace_skeleton`][sleap_io.Labels.replace_skeleton]), the `unmapped`
 argument decides how those nodes are filled:
 
-- `unmapped="unlabeled"` (default): the new nodes are unlabeled, so training
-  ignores them.
 - `unmapped="absent"`: the new nodes are labeled, hidden and NaN, i.e. annotated
-  as not present (the behavior before sleap-io 0.10).
+  as not present, as in sleap-io 0.9.
+- `unmapped="unlabeled"`: the new nodes are unlabeled, so training ignores them.
+  Points marked as not labeled are saved only in
+  [SLP format 3.0](../formats/slp.md#which-layout-a-save-writes).
+- `unmapped=None` (the **default**): `"absent"`, or `"unlabeled"` when the format
+  3.0 defaults are on (`sio.set_v3_defaults(True)` or `SLEAP_IO_V3_DEFAULTS=1`).
 
 ```pycon
 >>> import numpy as np

@@ -1,8 +1,10 @@
 """Tests for sleap_io.io.coco module."""
 
 import json
+import warnings
 from pathlib import Path
 
+import h5py
 import imageio.v3 as iio
 import numpy as np
 import pytest
@@ -83,8 +85,13 @@ class TestCOCOBasicLoading:
         assert points_array[0, 0] == 100.0  # x
         assert points_array[0, 1] == 100.0  # y
         assert points_array[0, 2] == 1.0  # visible (converted from visibility=2)
-        assert points_array[0, 3] == 1.0  # verified
+        assert points_array[0, 3] == 0.0  # not verified, as sleap-io 0.9 read it
         assert points_array[0, 4] == 1.0  # labeled
+        # The newer reading marks labeled keypoints as verified.
+        points_array = coco.decode_keypoints(
+            keypoints, len(skeleton.nodes), skeleton, visibility_encoding="ternary"
+        )
+        assert points_array[0, 3] == 1.0
 
 
 class TestCOCODatasetVariants:
@@ -160,6 +167,7 @@ class TestCOCODatasetVariants:
         assert "mouse" in skeleton_names
         assert "fly" in skeleton_names
 
+    @pytest.mark.usefixtures("v3_defaults")
     def test_visibility_binary(self, coco_visibility_binary):
         """Test loading binary visibility encoding."""
         with pytest.warns(UserWarning, match="read as binary"):
@@ -175,6 +183,7 @@ class TestCOCODatasetVariants:
         assert visible_count < total_points  # Some points should be invisible
         assert visible_count > 0  # Some points should be visible
 
+    @pytest.mark.usefixtures("v3_defaults")
     def test_visibility_ternary(self, coco_visibility_ternary):
         """Test loading ternary visibility encoding."""
         labels = coco.read_labels(Path(coco_visibility_ternary) / "annotations.json")
@@ -3554,6 +3563,7 @@ def _write_keypoint_coco(
     return json_path
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_decode_visibility_ternary():
     """Ternary codes map onto the flags; v<0 is unlabeled, other values visible."""
     xy = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0], [9.0, 10.0]])
@@ -3667,6 +3677,7 @@ def test_encode_visibility():
         coco.encode_visibility(inst.points, "auto")
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_ternary_round_trip(tmp_path):
     """v=0/1/2/-1 read as unlabeled/occluded/visible/unlabeled and write back."""
     json_path = _write_keypoint_coco(
@@ -3709,6 +3720,7 @@ def test_coco_v0_as_absent(tmp_path):
     assert inst.points["verified"].all()
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_binary_fixture_auto_detects(coco_annotations_binary_encoded):
     """A binary file is detected, with a warning, and read with v>0 visible."""
     with pytest.warns(UserWarning, match="read as binary"):
@@ -3736,6 +3748,7 @@ def test_coco_binary_fixture_auto_detects(coco_annotations_binary_encoded):
     assert labels[0].instances[0].point_states.tolist() == [1, 1, 0]
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_binary_write_read_round_trip(tmp_path, coco_binary_encoded):
     """A binary export reads back the same visible points."""
     json_path = Path(coco_binary_encoded) / "annotations.json"
@@ -3758,6 +3771,7 @@ def test_coco_binary_write_read_round_trip(tmp_path, coco_binary_encoded):
             )
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_binary_round_trip_keeps_hidden_points(tmp_path):
     """Hidden points come back hidden from a binary save, not unlabeled."""
     skeleton = sio.Skeleton(["a", "b", "c", "d"])
@@ -3807,6 +3821,7 @@ def test_coco_binary_export_drops_occluded_estimates(tmp_path):
     assert binary[0]["keypoints"] == [1.0, 2.0, 1, 0.0, 0.0, 0]
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_read_metadata(coco_annotations_binary_encoded):
     """Annotation and image fields are kept as record metadata."""
     labels = coco.read_labels(
@@ -3827,6 +3842,7 @@ def test_coco_read_metadata(coco_annotations_binary_encoded):
     assert labels.check_metadata()["instances"]["ann_id"] == "int"
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_read_metadata_skips_non_scalar_fields(tmp_path):
     """Fields that aren't scalars (null, lists) are not kept."""
     json_path = _write_keypoint_coco(
@@ -3836,6 +3852,7 @@ def test_coco_read_metadata_skips_non_scalar_fields(tmp_path):
     assert inst.metadata == {"ann_id": 1, "category_id": 1, "iscrowd": 0}
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_detection_box_metadata(tmp_path):
     """Annotations read without keypoints keep their metadata on the box."""
     iio.imwrite(tmp_path / "img.png", np.zeros((50, 60, 3), dtype=np.uint8))
@@ -3867,6 +3884,7 @@ def test_coco_detection_box_metadata(tmp_path):
     assert written["images"][0]["id"] == 7
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_crowd_annotation_round_trip(tmp_path):
     """A crowd annotation keeps `iscrowd` through a read and write."""
     json_path = _write_keypoint_coco(
@@ -3883,6 +3901,7 @@ def test_coco_crowd_annotation_round_trip(tmp_path):
     assert written["num_keypoints"] == 0
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_export_reuses_unique_ids(coco_annotations_binary_encoded):
     """Stored ids are reused when unique; new records get ids above them."""
     labels = coco.read_labels(
@@ -3900,6 +3919,7 @@ def test_coco_export_reuses_unique_ids(coco_annotations_binary_encoded):
     assert [ann["image_id"] for ann in written["annotations"]] == [11, 11, 12, 12]
 
 
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_merged_export_renumbers_ids(tmp_path):
     """Merging two COCO files makes ids collide, so the export renumbers them."""
     a_dir = tmp_path / "a"
@@ -4100,6 +4120,7 @@ def _write_fidelity_coco(tmp_path: Path) -> dict:
 
 
 @pytest.mark.parametrize("segmentation_format", ["mask", "roi"])
+@pytest.mark.usefixtures("v3_defaults")
 def test_coco_round_trip_keeps_annotation_fields(tmp_path, segmentation_format):
     """A COCO -> SLP -> COCO round trip keeps bbox, area, iscrowd and segmentation.
 
@@ -4166,3 +4187,72 @@ def test_load_coco_forwards_visibility_options(tmp_path):
         str(tmp_path), visibility_encoding="binary", v0_as="unlabeled"
     )
     assert split["annotations"][0].instances[0].point_states.tolist() == [2, 0, 2, 2]
+
+
+def test_coco_default_reading_is_the_pre_0_10_one(tmp_path):
+    """By default v=0 reads as hidden and v=1 as visible, with no metadata.
+
+    That creates nothing only SLP format 3.0 stores, so the labels save in the
+    2.x layout without a warning.
+    """
+    json_path = _write_keypoint_coco(
+        tmp_path, [[10, 11, 0, 20, 21, 1, 30, 31, 2, 40, 41, 2]], iscrowd=0, area=5.0
+    )
+    labels = coco.read_labels(json_path)
+    inst = labels[0].instances[0]
+    states = sio.PointState
+    np.testing.assert_array_equal(
+        inst.point_states,
+        [states.ABSENT, states.VISIBLE, states.VISIBLE, states.VISIBLE],
+    )
+    np.testing.assert_array_equal(inst.points["xy"][1], [20, 21])
+    assert inst.points["labeled"].all()
+    assert inst.metadata == {} and labels[0].metadata == {}
+
+    out = tmp_path / "labels.slp"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        sio.save_slp(labels, str(out))
+    with h5py.File(out, "r") as f:
+        assert f["metadata"].attrs["format_id"] < 3.0
+
+    # The same through `load_coco`, `load_file` and the explicit encoding.
+    for loaded in (
+        sio.load_coco(str(json_path)),
+        sio.load_file(str(json_path), format="coco"),
+        coco.read_labels(json_path, visibility_encoding="legacy"),
+    ):
+        np.testing.assert_array_equal(
+            loaded[0].instances[0].point_states, inst.point_states
+        )
+    with pytest.raises(ValueError, match="does not apply"):
+        coco.read_labels(json_path, visibility_encoding="legacy", v0_as="absent")
+
+
+def test_coco_newer_readings_are_opt_in(tmp_path):
+    """The ternary reading and the kept fields come with options or the switch."""
+    json_path = _write_keypoint_coco(
+        tmp_path, [[10, 11, 0, 20, 21, 1, 30, 31, 2, 40, 41, 2]], iscrowd=0
+    )
+    states = sio.PointState
+    ternary = [states.UNLABELED, states.OCCLUDED, states.VISIBLE, states.VISIBLE]
+
+    # An explicit v=0 reading asks for the newer encodings.
+    inst = coco.read_labels(json_path, v0_as="unlabeled")[0].instances[0]
+    np.testing.assert_array_equal(inst.point_states, ternary)
+    inst = coco.read_labels(json_path, visibility_encoding="auto")[0].instances[0]
+    np.testing.assert_array_equal(inst.point_states, ternary)
+    labels = coco.read_labels(json_path, keep_metadata=True)
+    assert labels[0].instances[0].metadata["iscrowd"] == 0
+    assert labels[0].metadata["image_id"] == 1
+
+    with sio.v3_defaults():
+        labels = coco.read_labels(json_path)
+        np.testing.assert_array_equal(labels[0].instances[0].point_states, ternary)
+        assert labels[0].instances[0].metadata["ann_id"] == 1
+        # Explicit options still win.
+        legacy = coco.read_labels(
+            json_path, visibility_encoding="legacy", keep_metadata=False
+        )
+        assert legacy[0].instances[0].metadata == {}
+        assert legacy[0].instances[0].point_states[0] == states.ABSENT

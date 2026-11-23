@@ -185,8 +185,55 @@ def resolve_image_path(
     )
 
 
-VISIBILITY_ENCODINGS = ("auto", "ternary", "binary")
-"""Keypoint visibility encodings accepted by the COCO and Ultralytics readers."""
+VISIBILITY_ENCODINGS = ("auto", "ternary", "binary", "legacy")
+"""Keypoint visibility encodings accepted by the COCO and Ultralytics readers.
+
+`"legacy"` is how sleap-io < 0.10 read keypoints: `v=0` is hidden with no
+location, and every other code is visible with its coordinates. It creates no
+point marked as not labeled, so the labels keep fitting the SLP 2.x layout.
+"""
+
+
+def default_visibility_options(
+    visibility_encoding: str | None, v0_as: str | None, new_reading: str = "auto"
+) -> str:
+    """Resolve the default keypoint reading of the COCO and Ultralytics readers.
+
+    Args:
+        visibility_encoding: The encoding asked for, or `None` for the default.
+        v0_as: The `v=0` reading asked for, or `None`.
+        new_reading: The encoding used when the newer reading applies: `"auto"`
+            for the file readers, `"ternary"` for the per-annotation helpers.
+
+    Returns:
+        `visibility_encoding` if given. Otherwise `new_reading` when `v0_as` is
+        given or the format 3.0 defaults are on (`sleap_io.set_v3_defaults`), so
+        that `v=0` can read as unlabeled and `v=1` as occluded, and `"legacy"`
+        (the reading of sleap-io < 0.10) otherwise.
+    """
+    if visibility_encoding is not None:
+        return visibility_encoding
+    from sleap_io.io.format_defaults import get_v3_defaults
+
+    return new_reading if v0_as is not None or get_v3_defaults() else "legacy"
+
+
+def default_keep_metadata(keep_metadata: bool | None) -> bool:
+    """Resolve whether the COCO reader keeps annotation fields as record metadata.
+
+    Args:
+        keep_metadata: `True` or `False`, or `None` for the default.
+
+    Returns:
+        `keep_metadata` if given, otherwise whether the format 3.0 defaults are on.
+        Record metadata is stored only by SLP format 3.0.
+    """
+    if keep_metadata is not None:
+        return keep_metadata
+    from sleap_io.io.format_defaults import get_v3_defaults
+
+    return get_v3_defaults()
+
 
 V0_MODES = ("unlabeled", "absent")
 """Ways to read a keypoint with visibility code 0 (see `decode_visibility`)."""
@@ -209,6 +256,11 @@ def _check_visibility_options(visibility_encoding: str, v0_as: str | None = None
         )
     if v0_as is not None and v0_as not in V0_MODES:
         raise ValueError(f"v0_as must be one of {V0_MODES}, got {v0_as!r}.")
+    if v0_as is not None and visibility_encoding == "legacy":
+        raise ValueError(
+            'v0_as does not apply to visibility_encoding="legacy", which reads v=0 '
+            "as hidden with no location."
+        )
 
 
 def resolve_visibility_encoding(
@@ -262,7 +314,7 @@ def resolve_visibility_encoding(
 def decode_visibility(
     xy: np.ndarray,
     visibility: np.ndarray,
-    visibility_encoding: str = "ternary",
+    visibility_encoding: str | None = None,
     v0_as: str | None = None,
 ) -> np.ndarray:
     """Map keypoint coordinates and visibility codes onto the point flags.
@@ -277,6 +329,10 @@ def decode_visibility(
 
     With `"binary"`, `v>0` is visible, `v=0` follows `v0_as`, and `v<0` is unlabeled.
 
+    With `"legacy"` (how sleap-io < 0.10 read keypoints), `v=0` is labeled and not
+    visible with no location, every other code is visible with its coordinates,
+    and no point is marked verified.
+
     `v0_as` defaults to `"unlabeled"` for the ternary encoding and to `"absent"` for
     the binary one. A binary file has no code for occluded keypoints, so sleap-io's
     own binary export writes every hidden keypoint as `v=0`, and reading those as
@@ -285,8 +341,11 @@ def decode_visibility(
     Args:
         xy: Coordinates of shape `(n_points, 2)`.
         visibility: Visibility codes of shape `(n_points,)`.
-        visibility_encoding: `"ternary"` or `"binary"`. `"auto"` is resolved from
-            these codes alone (see `resolve_visibility_encoding`).
+        visibility_encoding: `"ternary"`, `"binary"` or `"legacy"`. `"auto"` is
+            resolved from these codes alone (see `resolve_visibility_encoding`).
+            `None` (the default) is `"legacy"`, or `"ternary"` when `v0_as` is
+            given or the format 3.0 defaults are on (see
+            `default_visibility_options`).
         v0_as: `"unlabeled"` reads `v=0` as unlabeled. `"absent"` reads it as
             labeled and not visible with no location, as sleap-io did before 0.10.
             `None` (the default) picks `"absent"` for the binary encoding and
@@ -295,16 +354,29 @@ def decode_visibility(
     Returns:
         A `float64` array of shape `(n_points, 5)` with columns x, y, visible,
         verified and labeled, the column layout `Instance.from_numpy` accepts.
-        Points without a location have NaN coordinates, and every labeled point is
-        marked verified, since these codes come from human annotations.
+        Points without a location have NaN coordinates. Except with the legacy
+        reading, every labeled point is marked verified, since these codes come
+        from human annotations.
 
     Raises:
         ValueError: If `visibility_encoding` or `v0_as` is not an accepted value.
     """
+    visibility_encoding = default_visibility_options(
+        visibility_encoding, v0_as, new_reading="ternary"
+    )
     _check_visibility_options(visibility_encoding, v0_as)
     v = np.asarray(visibility, dtype="float64")
     if visibility_encoding == "auto":
         visibility_encoding = resolve_visibility_encoding("auto", [v.tolist()])
+    points = np.empty((len(v), 5), dtype="float64")
+    if visibility_encoding == "legacy":
+        # As sleap-io < 0.10 read them, with nothing marked as verified.
+        located = v != 0
+        points[:, :2] = np.where(located.reshape(-1, 1), xy, np.nan)
+        points[:, 2] = located
+        points[:, 3] = False
+        points[:, 4] = True
+        return points
     if v0_as is None:
         v0_as = "absent" if visibility_encoding == "binary" else "unlabeled"
 
@@ -316,7 +388,6 @@ def decode_visibility(
     if v0_as == "absent":
         labeled = labeled | (v == 0)
 
-    points = np.empty((len(v), 5), dtype="float64")
     points[:, :2] = np.where((v > 0).reshape(-1, 1), xy, np.nan)
     points[:, 2] = visible
     points[:, 3] = labeled
@@ -364,7 +435,7 @@ def decode_keypoints(
     keypoints: list[float],
     num_keypoints: int,
     skeleton: Skeleton,
-    visibility_encoding: str = "ternary",
+    visibility_encoding: str | None = None,
     v0_as: str | None = None,
 ) -> np.ndarray:
     """Decode COCO keypoint format to numpy array for Instance creation.
@@ -373,8 +444,8 @@ def decode_keypoints(
         keypoints: Flat list of [x1, y1, v1, x2, y2, v2, ...] values.
         num_keypoints: Number of keypoints (for validation).
         skeleton: Skeleton object defining the keypoint structure.
-        visibility_encoding: `"ternary"` (the default), `"binary"` or `"auto"`. See
-            `decode_visibility`.
+        visibility_encoding: `None` (the default), `"ternary"`, `"binary"`,
+            `"legacy"` or `"auto"`. See `decode_visibility`.
         v0_as: `"unlabeled"`, `"absent"` or `None` (the default, which depends on
             the encoding). See `decode_visibility`.
 
@@ -659,8 +730,9 @@ def read_labels(
     grayscale: bool = False,
     segmentation_format: str = "mask",
     category_as_track: bool = False,
-    visibility_encoding: str = "auto",
+    visibility_encoding: str | None = None,
     v0_as: str | None = None,
+    keep_metadata: bool | None = None,
 ) -> Labels:
     """Read COCO-style dataset and return a Labels object.
 
@@ -670,16 +742,22 @@ def read_labels(
     keypoints are stored as `Instance` objects while segmentation and bounding box
     data are stored as `ROI` or `SegmentationMask` objects.
 
-    Keypoint visibility codes map onto the point flags (see `decode_visibility`):
-    with the ternary encoding, `v=0` reads as unlabeled, `v=1` as occluded with its
-    coordinates kept, and `v=2` as visible. Every labeled keypoint is marked
-    `verified`.
+    Keypoint visibility codes map onto the point flags (see `decode_visibility`).
+    By default they are read as sleap-io < 0.10 read them: `v=0` is hidden with no
+    location and every other code is visible. With the ternary encoding, `v=0`
+    reads as unlabeled, `v=1` as occluded with its coordinates kept, and `v=2` as
+    visible. Every labeled keypoint is marked `verified`.
 
-    Annotation fields are kept as record `metadata`: `ann_id` (the annotation
-    `id`), `category_id`, `iscrowd`, `area` and `num_keypoints` go on the pose
-    instance (crowd annotations with keypoints included), or on the bounding box for
-    annotations read without keypoints. Each frame gets the image's `image_id` and
-    `file_name`. Annotations stored only as a mask or ROI keep no metadata.
+    With `keep_metadata=True`, annotation fields are kept as record `metadata`:
+    `ann_id` (the annotation `id`), `category_id`, `iscrowd`, `area` and
+    `num_keypoints` go on the pose instance (crowd annotations with keypoints
+    included), or on the bounding box for annotations read without keypoints. Each
+    frame gets the image's `image_id` and `file_name`. Annotations stored only as a
+    mask or ROI keep no metadata. `save_coco` reuses the kept ids.
+
+    Points marked as unlabeled and record metadata are stored only by SLP format
+    3.0, so both are off by default; the format 3.0 defaults
+    (`sleap_io.set_v3_defaults`) turn both on.
 
     Args:
         json_path: Path to the COCO annotation JSON file.
@@ -703,8 +781,12 @@ def read_labels(
         visibility_encoding: How to read keypoint visibility codes. ``"ternary"``
             is COCO's 0/1/2 encoding. ``"binary"`` reads ``v>0`` as visible, as
             written by ``save_coco(..., visibility_encoding="binary")``; use it for
-            CrowdPose too. ``"auto"`` (the default) picks binary, with a warning,
-            when some keypoint has ``v=1`` and none in the file has ``v=2``.
+            CrowdPose too. ``"auto"`` picks binary, with a warning, when some
+            keypoint has ``v=1`` and none in the file has ``v=2``, and ternary
+            otherwise. ``"legacy"`` reads ``v=0`` as hidden with no location and
+            every other code as visible, as sleap-io < 0.10 did. ``None`` (the
+            default) is ``"legacy"``, or ``"auto"`` when ``v0_as`` is given or the
+            format 3.0 defaults are on.
         v0_as: How to read keypoints with ``v=0``. ``"unlabeled"`` follows COCO.
             ``"absent"`` reads them as labeled and not visible with no location, as
             sleap-io did before 0.10, and as the binary encoding needs: it has no
@@ -712,6 +794,10 @@ def read_labels(
             visibility_encoding="binary")`` writes every hidden keypoint as
             ``v=0``. ``None`` (the default) picks ``"absent"`` when the encoding is
             (or ``"auto"`` resolves to) binary, and ``"unlabeled"`` otherwise.
+            Does not apply to the ``"legacy"`` encoding.
+        keep_metadata: Whether to keep annotation and image fields as record
+            `metadata` (see above). ``None`` (the default) keeps them only when the
+            format 3.0 defaults are on.
 
     Returns:
         Parsed labels as a Labels instance.
@@ -724,7 +810,9 @@ def read_labels(
         raise ValueError(
             f"segmentation_format must be 'mask' or 'roi', got {segmentation_format!r}."
         )
+    visibility_encoding = default_visibility_options(visibility_encoding, v0_as)
     _check_visibility_options(visibility_encoding, v0_as)
+    keep_metadata = default_keep_metadata(keep_metadata)
 
     # One shared Track per category name, created on first use.
     category_track_dict: dict[str, Track] = {}
@@ -871,7 +959,7 @@ def read_labels(
                 category_id = annotation["category_id"]
                 cat_name = category_names.get(category_id, "")
                 category = category_objs.get(category_id)
-                metadata = _annotation_metadata(annotation)
+                metadata = _annotation_metadata(annotation) if keep_metadata else {}
 
                 if _is_pose_annotation(annotation, skeletons):
                     # Pose annotation with keypoints
@@ -1014,7 +1102,7 @@ def read_labels(
             video=video,
             frame_idx=frame_idx,
             instances=instances,
-            metadata=_image_metadata(image_info),
+            metadata=_image_metadata(image_info) if keep_metadata else {},
         )
         labeled_frame.rois.extend(rois)
         labeled_frame.masks.extend(masks)
@@ -1035,8 +1123,9 @@ def read_labels_set(
     grayscale: bool = False,
     segmentation_format: str = "mask",
     category_as_track: bool = False,
-    visibility_encoding: str = "auto",
+    visibility_encoding: str | None = None,
     v0_as: str | None = None,
+    keep_metadata: bool | None = None,
 ) -> dict[str, Labels]:
     """Read multiple COCO annotation files and return a dictionary of Labels.
 
@@ -1057,10 +1146,13 @@ def read_labels_set(
             identity, creating one `Track` per category and assigning it to that
             category's annotations. See `read_labels` for details. Tracks are
             created independently per split. Default is False.
-        visibility_encoding: ``"auto"`` (the default), ``"ternary"`` or
-            ``"binary"``. ``"auto"`` is resolved per file. See `read_labels`.
+        visibility_encoding: ``None`` (the default), ``"auto"``, ``"ternary"``,
+            ``"binary"`` or ``"legacy"``. ``"auto"`` is resolved per file. See
+            `read_labels`.
         v0_as: ``"unlabeled"``, ``"absent"`` or ``None`` (the default, which
             depends on the encoding). See `read_labels`.
+        keep_metadata: Whether to keep annotation fields as record metadata. See
+            `read_labels`.
 
     Returns:
         Dictionary mapping split names to Labels objects.
@@ -1090,6 +1182,7 @@ def read_labels_set(
             category_as_track=category_as_track,
             visibility_encoding=visibility_encoding,
             v0_as=v0_as,
+            keep_metadata=keep_metadata,
         )
         labels_dict[split_name] = labels
 

@@ -9,6 +9,7 @@ estimated, such as confidence scores.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any
@@ -81,6 +82,68 @@ def compute_point_states(
     return states
 
 
+def _renamed_field(key, stacklevel: int = 3):
+    """Map the field name used before sleap-io 0.10 onto its new name, with a warning.
+
+    `complete` was renamed `verified` in sleap-io 0.10. It keeps working as an alias
+    of `verified` when indexing a points array, so code written against older
+    releases (such as the SLEAP app) runs unchanged.
+
+    Args:
+        key: An index into a points array.
+        stacklevel: The `stacklevel` of the warning, to name the caller's line.
+
+    Returns:
+        `key`, with `"complete"` (alone or in a list of field names) replaced by
+        `"verified"`.
+    """
+    if isinstance(key, str):
+        if key != "complete":
+            return key
+    elif not (
+        isinstance(key, list)
+        and any(isinstance(k, str) and k == "complete" for k in key)
+    ):
+        return key
+    warnings.warn(
+        'The points field "complete" is now called "verified" (sleap-io 0.10); '
+        '"complete" is an alias that will be removed in a future release.',
+        DeprecationWarning,
+        stacklevel=stacklevel,
+    )
+    if isinstance(key, str):
+        return "verified"
+    return ["verified" if k == "complete" else k for k in key]
+
+
+class _PointRecord(np.record):
+    """One point of a points array, accepting `"complete"` as an alias of `"verified"`.
+
+    `points[i]` and iterating over a points array give these records, so code that
+    reads `points[i]["complete"]` (written against sleap-io < 0.10) keeps working.
+    """
+
+    def __getitem__(self, key):
+        """Read a field, accepting `"complete"` as an alias of `"verified"`."""
+        if self.dtype.names and "complete" not in self.dtype.names:
+            key = _renamed_field(key, stacklevel=3)
+        return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        """Set a field, accepting `"complete"` as an alias of `"verified"`."""
+        if self.dtype.names and "complete" not in self.dtype.names:
+            key = _renamed_field(key, stacklevel=3)
+        super().__setitem__(key, value)
+
+
+def _point_record_dtype(fields: list) -> np.dtype:
+    """Return a points dtype whose single elements are `_PointRecord`s.
+
+    It compares equal to the plain structured dtype of the same fields.
+    """
+    return np.dtype((_PointRecord, np.dtype(fields)))
+
+
 class PointsArray(np.ndarray):
     """A specialized array for storing instance points data.
 
@@ -99,7 +162,28 @@ class PointsArray(np.ndarray):
           means the point is unlabeled and should be ignored by training. Defaults
           to `True`; a visible point is always treated as labeled.
         - name: An object dtype containing the name of the node
+
+    `points["complete"]` reads and writes `verified`, with a `DeprecationWarning`.
     """
+
+    def __getitem__(self, key):
+        """Index the array, accepting `"complete"` as an alias of `"verified"`."""
+        return super().__getitem__(self._field_key(key))
+
+    def __setitem__(self, key, value):
+        """Set values, accepting `"complete"` as an alias of `"verified"`."""
+        super().__setitem__(self._field_key(key), value)
+
+    def _field_key(self, key):
+        """Return `key` with the `complete` alias resolved (see `_renamed_field`).
+
+        An array that still has a real `complete` field (the dtype used before
+        sleap-io 0.10, while it is being upgraded) is indexed as it is.
+        """
+        names = self.dtype.names
+        if names is None or "complete" in names:
+            return key
+        return _renamed_field(key, stacklevel=4)
 
     @classmethod
     def _get_dtype(cls):
@@ -112,7 +196,7 @@ class PointsArray(np.ndarray):
         # Cache the dtype at the class level for performance
         # Use cls.__dict__ to check if defined on this class (not inherited)
         if "_cached_dtype" not in cls.__dict__:
-            cls._cached_dtype = np.dtype(
+            cls._cached_dtype = _point_record_dtype(
                 [
                     ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
                     ("visible", "bool"),
@@ -302,7 +386,7 @@ class PredictedPointsArray(PointsArray):
         # Cache the dtype at the class level for performance
         # Use cls.__dict__ to check if defined on this class (not inherited)
         if "_cached_dtype" not in cls.__dict__:
-            cls._cached_dtype = np.dtype(
+            cls._cached_dtype = _point_record_dtype(
                 [
                     ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
                     ("score", "<f8"),  # 64-bit (8-byte) little-endian double
@@ -445,20 +529,30 @@ class PredictedPointsArray(PointsArray):
 _UNMAPPED_MODES = ("unlabeled", "absent")
 
 
-def _check_unmapped(unmapped: str) -> None:
+def _check_unmapped(unmapped: str | None) -> str:
     """Validate the `unmapped` argument of the skeleton-changing methods.
 
     Args:
-        unmapped: How to fill nodes without a source point: `"unlabeled"` or
-            `"absent"`.
+        unmapped: How to fill nodes without a source point: `"unlabeled"`,
+            `"absent"`, or `None` for the default: `"absent"` (hidden, as sleap-io
+            < 0.10 did), or `"unlabeled"` when the format 3.0 defaults are on (see
+            `sleap_io.set_v3_defaults`).
+
+    Returns:
+        `"unlabeled"` or `"absent"`.
 
     Raises:
         ValueError: If `unmapped` is not one of the supported values.
     """
+    if unmapped is None:
+        from sleap_io.io.format_defaults import get_v3_defaults
+
+        return "unlabeled" if get_v3_defaults() else "absent"
     if unmapped not in _UNMAPPED_MODES:
         raise ValueError(
             f"unmapped must be one of {_UNMAPPED_MODES}, got {unmapped!r}."
         )
+    return unmapped
 
 
 def _has_flags(*flags: np.ndarray | bool | None) -> bool:
@@ -1317,18 +1411,20 @@ class Instance:
         if not keep_location:
             self.points["xy"][inds] = np.nan
 
-    def update_skeleton(self, names_only: bool = False, unmapped: str = "unlabeled"):
+    def update_skeleton(self, names_only: bool = False, unmapped: str | None = None):
         """Update or replace the skeleton associated with the instance.
 
         Args:
             names_only: If `True`, only update the node names in the points array. If
                 `False`, the points array will be updated to match the new skeleton.
             unmapped: How to fill nodes of the skeleton that have no point in the
-                instance (for example, newly added nodes). `"unlabeled"` (the default)
-                marks them as unlabeled. `"absent"` marks them as labeled but not
-                visible, with no location.
+                instance (for example, newly added nodes). `"absent"` marks them as
+                labeled but not visible, with no location (hidden, as sleap-io < 0.10
+                did). `"unlabeled"` marks them as unlabeled, which only SLP format
+                3.0 stores. `None` (the default) is `"absent"`, or `"unlabeled"`
+                when the format 3.0 defaults are on (`sleap_io.set_v3_defaults`).
         """
-        _check_unmapped(unmapped)
+        unmapped = _check_unmapped(unmapped)
         if names_only:
             # Update the node names.
             self.points["name"] = self.skeleton.node_names
@@ -1344,7 +1440,7 @@ class Instance:
         self,
         new_skeleton: Skeleton,
         node_names_map: dict[str, str] | None = None,
-        unmapped: str = "unlabeled",
+        unmapped: str | None = None,
     ):
         """Replace the skeleton associated with the instance.
 
@@ -1355,8 +1451,11 @@ class Instance:
                 If not provided, only nodes with identical names will be mapped. Points
                 associated with unmapped nodes will be removed.
             unmapped: How to fill nodes of the new skeleton that no old node maps to.
-                `"unlabeled"` (the default) marks them as unlabeled. `"absent"` marks
-                them as labeled but not visible, with no location.
+                `"absent"` marks them as labeled but not visible, with no location
+                (hidden, as sleap-io < 0.10 did). `"unlabeled"` marks them as
+                unlabeled, which only SLP format 3.0 stores. `None` (the default)
+                is `"absent"`, or `"unlabeled"` when the format 3.0 defaults are on
+                (`sleap_io.set_v3_defaults`).
 
         Notes:
             This method will update the `Instance.skeleton` attribute and the
@@ -1365,7 +1464,7 @@ class Instance:
             It is recommended to use `Labels.replace_skeleton` instead of this method if
             more flexible node mapping is required.
         """
-        _check_unmapped(unmapped)
+        unmapped = _check_unmapped(unmapped)
 
         # Update skeleton object.
         self.skeleton = new_skeleton

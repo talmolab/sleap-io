@@ -242,8 +242,9 @@ class Labels:
         default=None, init=False, repr=False, eq=False, hash=False
     )
 
-    # The `format_id` of the SLP file these labels were loaded from, or `None`. A
-    # save with `slp_version="auto"` keeps a format 3.0 file in format 3.0 (see
+    # The `format_id` of the SLP file these labels were loaded from or last saved
+    # to, or `None` (see `source_format_id`). A save with `slp_version="auto"`
+    # keeps a format 3.0 file in format 3.0 (see
     # `sleap_io.io.slp.resolve_slp_version`). Kept by `copy`, `extract` and
     # `materialize`.
     _source_format_id: "float | None" = field(
@@ -551,6 +552,84 @@ class Labels:
         )
         materialized_labels._source_format_id = getattr(self, "_source_format_id", None)
         return materialized_labels
+
+    @property
+    def source_format_id(self) -> float | None:
+        """The SLP `format_id` of the file the labels were loaded from or saved to.
+
+        `None` for labels built in memory, or loaded from another format. Below
+        3.0, the labels hold the points of an older file as stored, unless they
+        were loaded with `clean_legacy_points=True` or cleaned up since (see
+        `clean_legacy_points`; the value stays below 3.0 after a clean-up). A file
+        older than 3.0 with no `format_id` counts as 1.0.
+
+        It follows the labels through `copy`, `extract` (and so `split` and
+        `make_training_splits`) and `materialize`. `merge` keeps the value of the
+        labels merged into, whatever the other labels came from, so clean up each
+        old file before merging it into other labels. New `Labels` built from the
+        frames of loaded labels start with `None`. A save in format 3.0 sets it to
+        3.0; a save in the 2.x layout keeps a value below 3.0 and otherwise leaves
+        `None`, so labels built in memory are never taken for an old file.
+        """
+        return getattr(self, "_source_format_id", None)
+
+    def clean_legacy_points(self) -> int:
+        """Clean up the points of labels loaded from an SLP file older than 3.0.
+
+        Does in memory what `load_slp(..., clean_legacy_points=True)` does on load:
+        hidden points lose their coordinates (the SLEAP GUI leaves the last
+        position on a node it hides) and visible points without coordinates become
+        hidden. Use it to get sleap-io 0.9's results for `is_empty`,
+        `clean(empty_instances=True)` and the exports, or before training on old
+        files, where a hidden point's stored position is not an estimate.
+
+        It does nothing, and returns 0, unless `source_format_id` is below 3.0:
+        labels loaded from (or last saved as) format 3.0, and labels built in
+        memory, are left as they are, since their hidden points with coordinates
+        are occluded estimates.
+
+        Two limits come with the 2.x layout. Labels from an old file that are saved
+        as format 3.0 keep their stale hidden positions, which then read as
+        occluded estimates for good, so clean up first if they are stale. And an
+        occluded estimate saved in the 2.x layout can't be told from a stale
+        position when the file is read back, so this clears it; save as format 3.0
+        to keep occluded estimates.
+
+        After a `merge`, every instance is cleaned or not by the value of the labels
+        merged into (see `source_format_id`).
+
+        Returns:
+            The number of points changed. For lazily loaded labels the point
+            tables are cleaned in place: frames read afterwards are cleaned, and
+            frame objects read before keep their old points.
+        """
+        source = self.source_format_id
+        if source is None or source >= 3.0:
+            return 0
+        changed = 0
+        if self.is_lazy:
+            store = self._lazy_store
+            tables = [store.points_data, store.pred_points_data]
+            for rows in tables:
+                if rows is None or len(rows) == 0:
+                    continue
+                located = ~(np.isnan(rows["x"]) | np.isnan(rows["y"]))
+                visible = rows["visible"].astype(bool) & located
+                stale = ~visible & located
+                changed += int(np.count_nonzero((visible != rows["visible"]) | stale))
+                rows["visible"] = visible
+                rows["x"][stale] = np.nan
+                rows["y"][stale] = np.nan
+            return changed
+        for inst in self.instances:
+            points = inst.points
+            located = ~np.isnan(points["xy"]).any(axis=1)
+            visible = points["visible"].astype(bool) & located
+            stale = ~visible & located
+            changed += int(np.count_nonzero((visible != points["visible"]) | stale))
+            points["visible"] = visible
+            points["xy"][stale] = np.nan
+        return changed
 
     def __attrs_post_init__(self):
         """Update metadata lists."""
@@ -2809,7 +2888,7 @@ class Labels:
         new_skeleton: Skeleton,
         old_skeleton: Skeleton | None = None,
         node_map: dict[NodeOrIndex, NodeOrIndex] | None = None,
-        unmapped: str = "unlabeled",
+        unmapped: str | None = None,
     ):
         """Replace the skeleton in the labels.
 
@@ -2824,10 +2903,12 @@ class Labels:
                 names will be mapped. Points associated with unmapped nodes will be
                 removed.
             unmapped: How to fill nodes of the new skeleton that no old node maps to
-                (for example, newly added nodes). `"unlabeled"` (the default) marks
-                them as unlabeled, so training ignores them. `"absent"` marks them as
-                labeled but not visible, with no location (the behavior before
-                sleap-io 0.10).
+                (for example, newly added nodes). `"absent"` marks them as labeled
+                but not visible, with no location (hidden, as sleap-io < 0.10 did).
+                `"unlabeled"` marks them as unlabeled, so training ignores them;
+                only SLP format 3.0 stores that. `None` (the default) is
+                `"absent"`, or `"unlabeled"` when the format 3.0 defaults are on
+                (`sleap_io.set_v3_defaults`).
 
         Raises:
             ValueError: If there is more than one skeleton in the `Labels` but it is not
@@ -2838,7 +2919,7 @@ class Labels:
             have the old skeleton. **All point data associated with nodes not in the
             `node_map` will be lost.**
         """
-        _check_unmapped(unmapped)
+        unmapped = _check_unmapped(unmapped)
         if old_skeleton is None:
             if len(self.skeletons) != 1:
                 raise ValueError(
@@ -3913,6 +3994,7 @@ class Labels:
         progress_callback: Callable | None = None,
         error_mode: str = "continue",
         max_merge_history: int | None = DEFAULT_MERGE_HISTORY_LIMIT,
+        unmapped: str | None = None,
     ) -> "MergeResult":
         """Merge another Labels object into this one.
 
@@ -3964,6 +4046,12 @@ class Labels:
                 kept so provenance can't grow without bound across many merges.
                 Defaults to ``DEFAULT_MERGE_HISTORY_LIMIT``; pass ``None`` to keep
                 the full history.
+            unmapped: How to fill nodes of a matched skeleton that an incoming
+                instance has no point for. `"absent"` marks them as labeled but not
+                visible, with no location (hidden, as sleap-io < 0.10 did).
+                `"unlabeled"` marks them as unlabeled, which only SLP format 3.0
+                stores. `None` (the default) is `"absent"`, or `"unlabeled"` when
+                the format 3.0 defaults are on (`sleap_io.set_v3_defaults`).
 
         Returns:
             MergeResult object with statistics and any errors/conflicts.
@@ -4381,6 +4469,7 @@ class Labels:
                             identity_map=identity_map,
                             category_map=category_map,
                             memo=instance_memo,
+                            unmapped=unmapped,
                         )
                         new_frame.instances.append(new_inst)
                         result.instances_added += 1
@@ -4422,6 +4511,7 @@ class Labels:
                                 identity_map=identity_map,
                                 category_map=category_map,
                                 memo=instance_memo,
+                                unmapped=unmapped,
                             )
                             remapped_instances.append(remapped_inst)
                         else:
@@ -4714,6 +4804,7 @@ class Labels:
         identity_map: dict[int, Identity] | None = None,
         category_map: dict[int, Category] | None = None,
         memo: dict[int, Instance | PredictedInstance] | None = None,
+        unmapped: str | None = None,
     ) -> Instance | PredictedInstance:
         """Map an instance to use mapped skeleton, track, and identity.
 
@@ -4738,6 +4829,8 @@ class Labels:
                 links so a remapped user instance references the remapped source
                 prediction now in the merged frame (see
                 ``_relink_from_predicted``).
+            unmapped: How to fill nodes the source instance has no point for (see
+                `Labels.merge`).
 
         Returns:
             New instance with mapped skeleton and track.
@@ -4784,10 +4877,11 @@ class Labels:
             new_node_inds, old_node_inds = mapped_skeleton.match_nodes(
                 source_points["name"]
             )
-            # Nodes the source skeleton lacks are unlabeled, as in
-            # `Instance.replace_skeleton`'s default.
+            # Nodes the source skeleton lacks are filled as `unmapped` says, as in
+            # `Instance.replace_skeleton`.
             mapped_points = type(source_points).empty(len(mapped_skeleton))
-            mapped_points["labeled"] = False
+            if _check_unmapped(unmapped) == "unlabeled":
+                mapped_points["labeled"] = False
             mapped_points[new_node_inds] = source_points[old_node_inds]
             mapped_points["name"] = mapped_skeleton.node_names
 

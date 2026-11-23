@@ -36,6 +36,7 @@ def load_slp(
     block_size: int = 1 << 20,
     max_blocks: int = 32,
     retries: int = 3,
+    clean_legacy_points: bool | None = None,
     _file_like: Any | None = None,
 ) -> Labels:
     """Load a SLEAP dataset from a local path or HTTP/cloud URL.
@@ -73,6 +74,12 @@ def load_slp(
             32 (32 MiB cap per open file). Ignored for local paths.
         retries: Retry count for transient HTTP errors. Default: 3. Ignored for
             local paths.
+        clean_legacy_points: Whether to clean up the points of a file older than
+            SLP format 3.0: hidden points lose their coordinates (the SLEAP app
+            keeps stale coordinates on hidden nodes) and visible points without
+            coordinates become hidden. `None` (the default) cleans up only when
+            the format 3.0 defaults are on (`set_v3_defaults`), so an old file
+            loads, and saves back, with its points as stored.
 
     Returns:
         The dataset as a `Labels` object.
@@ -127,7 +134,10 @@ def load_slp(
             url_bytes = file_like.getvalue()
 
         try:
-            with h5py.File(file_like, "r") as f:
+            with (
+                slp._legacy_points_cleanup(clean_legacy_points),
+                h5py.File(file_like, "r") as f,
+            ):
                 reader = (
                     slp._read_labels_lazy_from_open_file
                     if lazy
@@ -154,8 +164,14 @@ def load_slp(
 
     # Local path - UNCHANGED behaviour; URL-specific kwargs are no-ops.
     if lazy:
-        return slp._read_labels_lazy(filename, open_videos=open_videos)
-    return slp.read_labels(filename, open_videos=open_videos)
+        return slp._read_labels_lazy(
+            filename,
+            open_videos=open_videos,
+            clean_legacy_points=clean_legacy_points,
+        )
+    return slp.read_labels(
+        filename, open_videos=open_videos, clean_legacy_points=clean_legacy_points
+    )
 
 
 def save_slp(
@@ -655,10 +671,13 @@ def load_ultralytics(
             - image_size: Tuple of (height, width) for coordinate denormalization.
               Defaults to
               (480, 640). Will attempt to infer from actual images if available.
-            - visibility_encoding: "auto" (default), "ternary" or "binary". With
-              "ternary", v=0 is unlabeled, v=1 occluded with its coordinates kept,
-              and v=2 visible. "auto" picks binary, with a warning, when some
-              keypoint has v=1 and none has v=2.
+            - visibility_encoding: None (default), "auto", "ternary", "binary" or
+              "legacy". "legacy" reads v=0 as hidden with no location and every
+              other code as visible, as sleap-io < 0.10 did. With "ternary", v=0
+              is unlabeled, v=1 occluded with its coordinates kept, and v=2
+              visible. "auto" picks binary, with a warning, when some keypoint has
+              v=1 and none has v=2. None is "legacy", or "auto" when v0_as is given
+              or the format 3.0 defaults are on (`set_v3_defaults`).
             - v0_as: "unlabeled", "absent" (the pre-0.10 reading) or None (the
               default): "absent" for the binary encoding, "unlabeled" otherwise.
 
@@ -970,8 +989,9 @@ def load_coco(
     grayscale: bool = False,
     segmentation_format: str = "mask",
     category_as_track: bool = False,
-    visibility_encoding: str = "auto",
+    visibility_encoding: str | None = None,
     v0_as: str | None = None,
+    keep_metadata: bool | None = None,
     **kwargs,
 ) -> Labels:
     """Load a COCO-style dataset and return a Labels object.
@@ -998,14 +1018,24 @@ def load_coco(
             coordinates kept, ``v=2`` visible). ``"binary"`` reads ``v>0`` as
             visible; use it for files saved with
             ``save_coco(..., visibility_encoding="binary")`` and for CrowdPose.
-            ``"auto"`` (the default) picks binary, with a warning, when some
-            keypoint has ``v=1`` and none in the file has ``v=2``.
+            ``"auto"`` picks binary, with a warning, when some keypoint has ``v=1``
+            and none in the file has ``v=2``. ``"legacy"`` reads ``v=0`` as hidden
+            with no location and every other code as visible, as sleap-io < 0.10
+            did. ``None`` (the default) is ``"legacy"``, or ``"auto"`` when
+            ``v0_as`` is given or the format 3.0 defaults are on
+            (`set_v3_defaults`). Unlabeled points are stored only by SLP format
+            3.0, which is why they are opt-in.
         v0_as: ``"unlabeled"`` reads ``v=0`` keypoints as unlabeled. ``"absent"``
             reads them as labeled and not visible with no location, as sleap-io did
             before 0.10. ``None`` (the default) picks ``"absent"`` when the encoding
             is (or ``"auto"`` resolves to) binary, since
             ``save_coco(..., visibility_encoding="binary")`` writes every hidden
             keypoint as ``v=0``, and ``"unlabeled"`` otherwise.
+        keep_metadata: Whether to keep annotation and image fields (ids,
+            ``iscrowd``, ``area``, file names) as record metadata, which
+            ``save_coco`` reuses. Record metadata is stored only by SLP format
+            3.0. ``None`` (the default) keeps them only when the format 3.0
+            defaults are on.
         **kwargs: Additional arguments (currently unused).
 
     Returns:
@@ -1021,6 +1051,7 @@ def load_coco(
         category_as_track=category_as_track,
         visibility_encoding=visibility_encoding,
         v0_as=v0_as,
+        keep_metadata=keep_metadata,
     )
 
 
@@ -1237,9 +1268,9 @@ def load_file(
               "roi" keeps them as vector `ROI` objects. category_as_track (bool): If
               True, treat each COCO category as a persistent identity, creating one
               `Track` per category. Default is False. visibility_encoding (str):
-              "auto" (default), "ternary" or "binary". v0_as (str): "unlabeled",
-              "absent" or None (default; depends on the encoding). See
-              `load_coco`.
+              None (default), "auto", "ternary", "binary" or "legacy". v0_as
+              (str): "unlabeled", "absent" or None (default; depends on the
+              encoding). keep_metadata (bool): None (default). See `load_coco`.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
             - For "analysis_h5" format: video (Optional[Video | str]): Video to
@@ -1909,7 +1940,8 @@ def load_labels_set(
         format: Optional format specification. If None, will try to infer from path.
             Supported formats: "slp", "ultralytics"
         open_videos: If `True` (the default), attempt to open video backends.
-        **kwargs: Additional format-specific arguments.
+        **kwargs: Additional format-specific arguments. For SLP files,
+            `clean_legacy_points` (see `load_slp`).
 
     Returns:
         A LabelsSet containing the loaded Labels objects.
@@ -1953,13 +1985,17 @@ def load_labels_set(
     if format == "slp":
         from sleap_io.io import slp
 
-        return slp.read_labels_set(path, open_videos=open_videos)
+        return slp.read_labels_set(
+            path,
+            open_videos=open_videos,
+            clean_legacy_points=kwargs.pop("clean_legacy_points", None),
+        )
     elif format == "ultralytics":
         # Extract ultralytics-specific kwargs
         splits = kwargs.pop("splits", None)
         skeleton = kwargs.pop("skeleton", None)
         image_size = kwargs.pop("image_size", (480, 640))
-        visibility_encoding = kwargs.pop("visibility_encoding", "auto")
+        visibility_encoding = kwargs.pop("visibility_encoding", None)
         v0_as = kwargs.pop("v0_as", None)
         # Remove verbose from kwargs if present (for backward compatibility)
         kwargs.pop("verbose", None)

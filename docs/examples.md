@@ -798,7 +798,7 @@ labels.save("labels_with_new_skeleton.slp")
 ```
 
 !!! warning
-    Nodes without correspondence in the `node_map` become [unlabeled](model/poses.md#point-flags-and-states) (NaN coordinates, `labeled=False`) in the resulting instances. Pass `unmapped="absent"` to `replace_skeleton` to mark them as labeled but hidden instead.
+    Nodes without correspondence in the `node_map` become hidden with no location (NaN coordinates) in the resulting instances. Pass `unmapped="unlabeled"` to `replace_skeleton` to mark them as [unlabeled](model/poses.md#point-flags-and-states) instead.
 
 !!! tip
     This is particularly useful when converting between different annotation tools or skeleton conventions.
