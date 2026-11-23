@@ -2287,7 +2287,8 @@ def test_load_video_url_reads_first_frame(httpserver, centered_pair_low_quality_
     """A frame read over http matches the frame read from the local file."""
     url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
 
-    local = sio.load_video(centered_pair_low_quality_path)
+    # Decode the local file with pyav, as remote videos are.
+    local = sio.load_video(centered_pair_low_quality_path, plugin="pyav")
     remote = sio.load_video(url)
 
     local_frame = local[0]
@@ -2332,7 +2333,8 @@ def test_load_video_url_full_shape(httpserver, centered_pair_low_quality_path):
 def test_load_video_url_get_frames(httpserver, centered_pair_low_quality_path):
     """Reading multiple frames over http matches the local frames."""
     url = _serve_video(httpserver, centered_pair_low_quality_path, "/video.mp4")
-    local = sio.load_video(centered_pair_low_quality_path)
+    # Decode the local file with pyav, as remote videos are.
+    local = sio.load_video(centered_pair_low_quality_path, plugin="pyav")
     remote = sio.load_video(url)
     assert_equal(remote[:3], local[:3])
 
