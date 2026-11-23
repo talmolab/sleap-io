@@ -190,10 +190,11 @@ _URL_IN_TEXT_PATTERN = re.compile(
 
 #: Pattern matching where a link of any scheme starts in a message (two letters
 #: or more, so a Windows drive isn't one; one slash is enough, as in
-#: :data:`_MASKED_URL_START_PATTERN`). A scheme starts where a word does, which
-#: also keeps the search linear in a long word.
+#: :data:`_MASKED_URL_START_PATTERN`, and a backslash counts as one, as a link
+#: that has been through a Windows path has them). A scheme starts where a word
+#: does, which also keeps the search linear in a long word.
 _MESSAGE_LINK_START_PATTERN = re.compile(
-    r"(?<![a-z0-9+.-])[a-z][a-z0-9+.-]+:/+", re.IGNORECASE
+    r"(?<![a-z0-9+.-])[a-z][a-z0-9+.-]+:[/\\]+", re.IGNORECASE
 )
 
 #: Pattern matching a link of any scheme in a message. It ends where a link ends
@@ -524,7 +525,13 @@ def _redact_names(value: Any) -> Any:
     if isinstance(value, list):
         return [_redact_names(v) for v in value]
     if isinstance(value, os.PathLike):
-        name = os.fspath(value)
+        # A link that has been through a path is read with its slashes forward,
+        # as it was written, on Windows too.
+        name = (
+            value.as_posix()
+            if isinstance(value, pathlib.PurePath)
+            else os.fspath(value)
+        )
         return (
             value
             if not isinstance(name, str) or _redact_url(name) == name

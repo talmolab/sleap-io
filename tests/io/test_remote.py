@@ -18,7 +18,7 @@ import traceback
 import urllib.parse
 import warnings
 from collections import namedtuple
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import aiohttp
 import pytest
@@ -239,6 +239,8 @@ def test_redact_url_userinfo_and_token_combined():
         ("https://me:a#SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
         ("https://me:%53ECRET%2F1@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
         ("https://me:SEC RET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
+        # A link written as a Windows path, with backslashes.
+        ("https:\\me:SECRET@x.test\\v.mp4", "https:\\***:***@x.test\\v.mp4"),
         # Every scheme, not only the ones sleap-io opens.
         ("ftp://me:SECRET@x.test/v.mp4", "ftp://***:***@x.test/v.mp4"),
         (
@@ -442,9 +444,16 @@ def test_redact_names_masks_each_filename():
     names = ["https://x.test/0.png?token=SECRET", "https://x.test/1.png"]
     assert _redact_names(names) == ["https://x.test/0.png?token=***", names[1]]
     assert _redact_names(Path("a/b.mp4")) == Path("a/b.mp4")
-    # A link that has been through `Path` keeps one slash.
+    # A link that has been through `Path` keeps one slash, read forward on
+    # Windows too.
     assert _redact_names(Path("https://me:SECRET@x.test/v.mp4")) == (
         "https:/***:***@x.test/v.mp4"
+    )
+    assert _redact_names(PureWindowsPath("https://me:SECRET@x.test/v.mp4")) == (
+        "https:/***:***@x.test/v.mp4"
+    )
+    assert _redact_names(PureWindowsPath("C:/data/v.mp4")) == PureWindowsPath(
+        "C:/data/v.mp4"
     )
     assert _redact_names(None) is None
 
@@ -452,7 +461,8 @@ def test_redact_names_masks_each_filename():
 def test_redact_exception_masks_args_filename_and_notes():
     """An exception from other code is masked in place and keeps its type."""
     error = FileNotFoundError(2, "No such file", "https://me:SECRET@x.test/v.mp4")
-    error.add_note("while reading https://x.test/v.mp4?token=SECRET")
+    # As `add_note` (Python 3.11+) would.
+    error.__notes__ = ["while reading https://x.test/v.mp4?token=SECRET"]
     assert _redact_exception(error) is error
     assert error.filename == "https://***:***@x.test/v.mp4"
     assert "SECRET" not in str(error)
