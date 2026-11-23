@@ -4256,7 +4256,7 @@ credentials to a third-party host. If a download redirects cross-origin
 target's query string rather than in <code>headers</code>.</p>
 </div>
 <p>Other security guarantees: TLS is always on; URLs are redacted (userinfo and
-the token-like query parameters listed under
+the values of the query parameters named under
 <a href="#credentials-in-saved-files">Credentials in saved files</a> stripped; S3 and GCS
 signatures are left in) in error messages and tracebacks; and an identity
 <code>Accept-Encoding</code> is forced
@@ -4280,9 +4280,11 @@ records them. Exactly these are masked:</p>
 <p>Nothing else is masked. <strong>S3 and GCS signed links are saved whole</strong>:
 <code>X-Amz-Signature</code>, <code>X-Amz-Credential</code> and the <code>X-Goog-...</code> parameters stay, so a
 saved file can hold a signed link that works until it expires (one signed with
-temporary credentials loses its <code>X-Amz-Security-Token</code> and stops working). Embed
-the frames or point the video at a local copy before sharing such a file. The
-rest of the name is saved exactly as it was, and <code>headers=</code> are never saved.</p>
+temporary credentials loses its <code>X-Amz-Security-Token</code> and stops working).
+Embedding the frames doesn't drop the link: an embedded video keeps it as its
+source. Before sharing such a file, point the video at a local copy
+(<code>video.replace_filename(path)</code>) and save again. The rest of the name is saved
+exactly as it was, and <code>headers=</code> are never saved.</p>
 <p>The labels in memory keep the whole URL, so they go on working after a save. But a
 video whose URL needs its credentials <strong>won't open from the saved file</strong>, just like
 an expired link: the labels load, and <code>video.exists()</code> is <code>False</code>, until you give it
@@ -4331,10 +4333,10 @@ HTTP request headers or fsspec stream modes. Passing <code>headers=</code>,
 rather than silently returning an unauthenticated backend. To read an
 auth-gated remote video, use a <strong>pre-signed URL</strong> that embeds credentials in
 the query string (e.g. <code>https://host/video.mp4?X-Amz-...</code>), or download the
-file locally first. A saved file keeps an S3 or GCS signed link whole (only
-the names listed in
-<a href="#credentials-in-saved-files">Credentials in saved files</a> are
-masked), so embed the frames before sharing it.</p>
+file locally first. A saved file keeps an S3 or GCS signed link whole, even
+with its frames embedded (only the names listed in
+<a href="#credentials-in-saved-files">Credentials in saved files</a> are masked), so
+point the video at a local copy before sharing it.</p>
 </div>
 <div class="admonition danger">
 <p class="admonition-title">Security: remote video hands untrusted data to FFmpeg</p>
@@ -4395,8 +4397,8 @@ downloaded only once whether you call <code>load_slp</code> or <code>load_file</
 <h2 id="error-handling">Error handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
 <p>Remote HTTP/cloud failures surface as
 <a class="autorefs autorefs-internal" href="../reference/sleap_io/#sleap_io.RemoteIOError"><code>RemoteIOError</code></a> (a subclass of <code>OSError</code>). It carries
-a <code>status</code> (HTTP code or <code>None</code>) and a credential-redacted <code>url</code> (redacted as in
-error messages above), so passwords and tokens stay out of logs and tracebacks:</p>
+a <code>status</code> (HTTP code or <code>None</code>) and a <code>url</code> with its credentials redacted as in
+error messages above, for logs and tracebacks:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
 <a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="k">try</span><span class="p">:</span>
