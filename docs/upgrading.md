@@ -2,7 +2,7 @@
 
 **sleap-io 0.10 is backwards compatible by default for SLP files.** It reads every SLP file older releases wrote and the new format 3.0, and it writes the 2.x layout that sleap-io 0.9 and SLEAP 1.6 open. Anything that would change what an SLP file holds, or what a default produces in one, is opt-in. A few changes to the in-memory model and to exports to other formats happen by default; they are listed below.
 
-This page lists what you can opt in to, the changes in behaviour that remain, and which versions work together.
+This page lists what you can opt in to, the changes in behaviour that remain, the Python and PyAV versions 0.10 needs, and which versions work together.
 
 ## Nothing changes unless you opt in
 
@@ -47,12 +47,17 @@ These hold whatever you opt in to. Only the last one can raise an error.
 - **Saved files mask URL passwords and tokens.** A video or labels file opened from a link with a password or a token-like parameter (`token`, `access_token`, `x-amz-security-token`, `sas`, `sig`) is saved with the secret masked, so a video whose link needs it won't reopen from the saved file until it is given the link again. S3 and GCS signed links are saved whole (see [Credentials in saved files](remote.md#credentials-in-saved-files)).
 - **`LabelsSet.save` passes SLP options on** to `save_slp`, so an argument it doesn't accept now raises a `TypeError` instead of being ignored.
 
+## Python and PyAV
+
+- **Python 3.11 or newer.** sleap-io 0.10 no longer supports Python 3.10; the 0.9.x releases remain available for it.
+- **PyAV 18.1.1 or newer** in the `pyav` and `all` extras (19.0.0 to 19.0.2 excluded). Older PyAV can hang forever when a video read through PyAV is closed or freed right after a read, if another library (torchvision, for example) has turned on PyAV's logging; 18.1.1 fixes that case, and 19.0.0 to 19.0.2 were released before the fix. sleap-io converts frames to RGB as it did with older PyAV, so 8-bit planar YUV (4:2:0, 4:2:2, 4:4:4), grayscale, RGB and palette videos read back the same pixels as in 0.9. Videos with 4:2:0 color at more than 8 bits per sample (most 10-bit H.264, HEVC and AV1), and the 8-bit NV12, NV21 and YUV410 layouts, read back with different colors along color edges: about 2 levels on average, but about 5% of pixels by more than 32 levels, while brightness changes much less. This comes from the newer FFmpeg in PyAV 18 upsampling the color planes differently, which sleap-io cannot undo. PyAV 18.1.1 has no wheel for Apple Silicon Macs on macOS 13 (it needs macOS 14 or newer there), so on such a Mac `pip` would try to build PyAV from source, which needs FFmpeg's development libraries and usually fails without them.
+
 ## Which versions work together
 
-| | Reads | Writes by default | Accepted by |
-| --- | --- | --- | --- |
-| sleap-io 0.9.5 | SLP up to 2.8; refuses 3.0 with a clear message | 2.x | SLEAP 1.6.4 and later, sleap-nn 0.3.1 and later (0.3.x) |
-| sleap-io 0.9.4 and older | SLP up to 2.x; fails on 3.0 with an h5py `TypeError` | 2.x | Check the release's requirements: SLEAP 1.6.4 and later and sleap-nn 0.3.1 and later accept 0.9.3 and 0.9.4 too |
-| sleap-io 0.10 | SLP 1.x, 2.x and 3.0 | 2.x, unless 3.0 is needed or asked for | sleap-nn 0.4.x. The SLEAP 1.6 app can't install it, but opens the 2.x files it writes. |
+| | Python | Reads | Writes by default | Accepted by |
+| --- | --- | --- | --- | --- |
+| sleap-io 0.9.5 | 3.10 and newer | SLP up to 2.8; refuses 3.0 with a clear message | 2.x | SLEAP 1.6.4 and later, sleap-nn 0.3.1 and later (0.3.x) |
+| sleap-io 0.9.4 and older | Check the release's requirements | SLP up to 2.x; fails on 3.0 with an h5py `TypeError` | 2.x | Check the release's requirements: SLEAP 1.6.4 and later and sleap-nn 0.3.1 and later accept 0.9.3 and 0.9.4 too |
+| sleap-io 0.10 | 3.11 and newer | SLP 1.x, 2.x and 3.0 | 2.x, unless 3.0 is needed or asked for | sleap-nn 0.4.x. The SLEAP 1.6 app can't install it, but opens the 2.x files it writes. |
 
 If you see `TypeError: Accessing a group is done with bytes or str, not <class 'tuple'>` when opening a file, it is a format 3.0 file read by sleap-io 0.9.4 or older: upgrade sleap-io, or save the file again with `slp_version="v2"`.
