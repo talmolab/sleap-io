@@ -270,7 +270,12 @@ records them. Exactly these are masked:
 - A user name, a password or both in the link: `https://me:pw@host/...` becomes
   `https://***:***@host/...`. In `az://` and `abfs://` links the name before the
   `@` is the container (`abfs://<container>@<account>.dfs.core.windows.net/...`),
-  so it is kept unless it holds a `:`.
+  so it is kept unless it holds a `:`. The same goes for links that name a remote
+  store sleap-io doesn't open (`abfss://`, `wasb://`, `wasbs://`, `adl://`,
+  `s3a://`, `s3n://`, `oss://`, `ftp://`, `ftps://`, `sftp://`, `ssh://`,
+  `smb://`, `webdav://`, `webdavs://`, `dav://`, `davs://`): a user name alone is
+  kept and a `user:password` is masked. sleap-io takes such a link for a local
+  path, so it is saved with one slash after the scheme (`abfss:/...`).
 - The values of the query parameters `token`, `access_token`,
   `x-amz-security-token`, `sas` and `sig`, whatever their case (and, in a URL,
   their percent-encoding), also after a `#`: `?token=...` becomes `?token=***`.

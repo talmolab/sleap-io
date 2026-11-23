@@ -65,6 +65,36 @@ _SENSITIVE_HEADERS = frozenset({"authorization", "cookie", "proxy-authorization"
 #: Azure secrets travel as a SAS query (``sig=``), which is masked as a parameter.
 _CONTAINER_AT_SCHEMES = frozenset({"az", "abfs"})
 
+#: Schemes that aren't in :data:`_URL_SCHEMES` (sleap-io doesn't open them, and a
+#: name that starts with one is a local path to it) but whose links are masked like a
+#: URL's when saved: other spellings fsspec, adlfs and Hadoop use for remote stores,
+#: and the usual ``user:password@host`` ones. Their name before the ``@`` is kept as
+#: in :data:`_CONTAINER_AT_SCHEMES` (``abfss://<container>@<account>/...``,
+#: ``sftp://<user>@<host>/...``): only a ``user:password`` is masked.
+_MASKED_ONLY_SCHEMES = frozenset(
+    {
+        "abfss",
+        "adl",
+        "wasb",
+        "wasbs",
+        "s3a",
+        "s3n",
+        "oss",
+        "ftp",
+        "ftps",
+        "sftp",
+        "ssh",
+        "smb",
+        "webdav",
+        "webdavs",
+        "dav",
+        "davs",
+    }
+)
+
+#: Every scheme whose links are masked when saved.
+_MASKED_SCHEMES = _URL_SCHEMES | _MASKED_ONLY_SCHEMES
+
 #: Query-string parameter names whose values are redacted by :func:`_redact_url`.
 _SENSITIVE_QUERY_PARAMS = frozenset(
     {"token", "access_token", "x-amz-security-token", "sas", "sig"}
@@ -100,11 +130,13 @@ _RETRY_BACKOFF_MAX = 30.0
 #: Pattern matching fsspec cache filenames (sha hex hashes, optional ``.tags``).
 _CACHE_KEY_PATTERN = re.compile(r"^[0-9a-f]{32,64}(\.tags)?$")
 
-#: Pattern matching the start of a value that is a URL as a whole. One slash is
-#: enough: a URL that has been through ``Path`` (an image sequence's names, for one)
-#: has lost the other.
-_URL_START_PATTERN = re.compile(
-    r"(?:" + "|".join(sorted(_URL_SCHEMES)) + r"):/+",
+#: Pattern matching the start of a value that is a link as a whole, for masking only:
+#: any of :data:`_MASKED_SCHEMES`, so not every match is a URL to sleap-io (that's
+#: :func:`_is_url`). One slash is enough: a link that has been through ``Path`` (an
+#: image sequence's names, or a name sleap-io takes for a local path) has lost the
+#: other.
+_MASKED_URL_START_PATTERN = re.compile(
+    r"(?:" + "|".join(sorted(_MASKED_SCHEMES)) + r"):/+",
     re.IGNORECASE,
 )
 
@@ -117,11 +149,17 @@ _URL_IN_TEXT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+#: :data:`_URL_IN_TEXT_PATTERN` for masking: any of :data:`_MASKED_SCHEMES`.
+_MASKED_URL_IN_TEXT_PATTERN = re.compile(
+    r"(?:" + "|".join(sorted(_MASKED_SCHEMES)) + r")://[^\s\"'<>]+",
+    re.IGNORECASE,
+)
+
 #: Pattern matching a sensitive query parameter and its value anywhere in text, URL
-#: or no URL: a space or a quote ends what :data:`_URL_IN_TEXT_PATTERN` can see of a
-#: URL, and a name cut from one (``y.slp?token=...``) no longer looks like one. The
-#: ``#`` is for the same parameter in a fragment. Punctuation at the end belongs to
-#: the sentence, not the value.
+#: or no URL: a space or a quote ends what :data:`_MASKED_URL_IN_TEXT_PATTERN` can
+#: see of a URL, and a name cut from one (``y.slp?token=...``) no longer looks like
+#: one. The ``#`` is for the same parameter in a fragment. Punctuation at the end
+#: belongs to the sentence, not the value.
 _SENSITIVE_PARAM_PATTERN = re.compile(
     r"([?&#](?:"
     + "|".join(re.escape(name) for name in sorted(_SENSITIVE_QUERY_PARAMS))
@@ -280,19 +318,23 @@ def _mask_url_userinfo(url: str) -> str:
 
     In ``abfs://`` and ``az://`` links the name before the ``@`` is the container
     (:data:`_CONTAINER_AT_SCHEMES`), so it stays unless it has a ``:`` as a
-    ``user:password`` would.
+    ``user:password`` would. The same goes for :data:`_MASKED_ONLY_SCHEMES`.
 
     Args:
-        url: A value that matches :data:`_URL_START_PATTERN`.
+        url: A value that matches :data:`_MASKED_URL_START_PATTERN`.
 
     Returns:
         The URL with any userinfo replaced by ``***:***``.
     """
-    start = _URL_START_PATTERN.match(url).end()
+    start = _MASKED_URL_START_PATTERN.match(url).end()
     authority = re.split(r"[/\\?#]", url[start:], maxsplit=1)[0]
     at = authority.rfind("@")
     scheme = url.partition(":")[0].lower()
-    if at >= 0 and scheme in _CONTAINER_AT_SCHEMES and ":" not in authority[:at]:
+    if (
+        at >= 0
+        and (scheme in _CONTAINER_AT_SCHEMES or scheme in _MASKED_ONLY_SCHEMES)
+        and ":" not in authority[:at]
+    ):
         return url
     if at < 0:
         port = authority.rpartition(":")[2] if ":" in authority else ""
@@ -329,7 +371,7 @@ def _mask_whole_url(url: str) -> str:
     """Mask the credentials of a value that is a URL from start to end.
 
     Args:
-        url: A value that matches :data:`_URL_START_PATTERN`.
+        url: A value that matches :data:`_MASKED_URL_START_PATTERN`.
 
     Returns:
         The URL with its credentials masked and every other character as it was.
@@ -362,9 +404,10 @@ def _mask_url_credentials(value: str | os.PathLike) -> str:
         value: The string about to be written.
 
     Returns:
-        The string with userinfo replaced by ``***:***`` (an Azure container is not
-        userinfo; see :func:`_mask_url_userinfo`) and the values of sensitive query
-        parameters (:data:`_SENSITIVE_QUERY_PARAMS`) replaced by ``***``.
+        The string with userinfo replaced by ``***:***`` (an Azure container, or a
+        user name alone in a link of :data:`_MASKED_ONLY_SCHEMES`, is kept; see
+        :func:`_mask_url_userinfo`) and the values of sensitive query parameters
+        (:data:`_SENSITIVE_QUERY_PARAMS`) replaced by ``***``.
     """
     if isinstance(value, os.PathLike):
         value = os.fspath(value)
@@ -372,10 +415,10 @@ def _mask_url_credentials(value: str | os.PathLike) -> str:
     # is many names.
     if "=" not in value and "@" not in value:
         return value
-    if _URL_START_PATTERN.match(value):
+    if _MASKED_URL_START_PATTERN.match(value):
         value = _mask_whole_url(value)
     value = _SENSITIVE_PARAM_PATTERN.sub(r"\1***", value)
-    return _URL_IN_TEXT_PATTERN.sub(lambda m: _mask_whole_url(m.group(0)), value)
+    return _MASKED_URL_IN_TEXT_PATTERN.sub(lambda m: _mask_whole_url(m.group(0)), value)
 
 
 def _mask_url_credentials_deep(value: Any) -> Any:
