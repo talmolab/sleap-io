@@ -1222,9 +1222,9 @@ sleap-io < 0.10 and SLEAP can open, unless something needs format 3.0. The
 With `"auto"`, a save writes format 3.0 when:
 
 1. the format 3.0 defaults are on (see below);
-2. the labels were loaded from a format 3.0 file, so a file never changes layout
-   without being asked to (copies, extracts and splits of such labels count as
-   loaded from it); or
+2. the labels were loaded from a format 3.0 file, or last saved as one, so a file
+   never changes layout without being asked to (copies, extracts and splits of
+   such labels count as loaded from it); or
 3. the labels hold something only format 3.0 can store: points marked as not
    labeled (`labeled=False`), metadata on instances, frames or bounding boxes
    (see [Record Metadata](#record-metadata)), or unknown columns kept from a file
