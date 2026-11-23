@@ -784,7 +784,9 @@ def test_load_video_url_reads_first_frame(httpserver, centered_pair_low_quality_
     )
     url = httpserver.url_for("/movie.mp4")
 
-    local = load_video(centered_pair_low_quality_path)
+    # Remote videos are decoded with pyav; decode the local file the same way, since
+    # other decoders (opencv on macOS) can differ by a few grey levels.
+    local = load_video(centered_pair_low_quality_path, plugin="pyav")
     remote = load_video(url)
     assert isinstance(remote, Video)
 
