@@ -15217,6 +15217,14 @@ def test_request_headers_stay_with_the_video_in_memory(
         ("https://x.test/v.mp4?token=SECRET.X.Y", "https://x.test/v.mp4?token=***"),
         ("https://me:SECRET@x.test/v.mp4", "https://***:***@x.test/v.mp4"),
         ("gs://bucket/v.mp4?sig=SECRET", "gs://bucket/v.mp4?sig=***"),
+        (
+            "abfs://videos@acct.dfs.core.windows.net/v.mp4",
+            "abfs://videos@acct.dfs.core.windows.net/v.mp4",
+        ),
+        (
+            "az://videos@acct.blob.core.windows.net/v.mp4?sig=SECRET",
+            "az://videos@acct.blob.core.windows.net/v.mp4?sig=***",
+        ),
         ("/some/dir/v.mp4?a=1&token=SECRET", "/some/dir/v.mp4?a=1&token=***"),
     ],
 )

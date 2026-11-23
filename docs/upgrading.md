@@ -44,7 +44,7 @@ These hold whatever you opt in to. Only the last one can raise an error.
 - **The points dtype has a `labeled` field.** Code that builds structured point arrays by hand needs it. `Instance.from_numpy` with five columns takes `x, y, visible, verified, labeled`.
 - **Exports and hidden points.** Label Studio skips hidden points. NWB predictions leaves a hidden point's frame out of that node's series (it reads back as NaN; 0.9 wrote the coordinates). NWB annotations writes occluded estimates with their coordinates and `node_visibility=False` (0.9 wrote NaN).
 - **`save_coco` writes the box area** instead of 0, which changes COCO keypoint similarity (OKS) scores computed from exported files.
-- **Saved files hold no URL credentials.** A video or labels file opened from a link with a password or token is saved with the secret masked, so a video whose link needs its token won't reopen from the saved file until it is given the link again (see [Saved files don't keep credentials](remote.md#saved-files-dont-keep-credentials)).
+- **Saved files mask URL passwords and tokens.** A video or labels file opened from a link with a password or a token-like parameter (`token`, `access_token`, `x-amz-security-token`, `sas`, `sig`) is saved with the secret masked, so a video whose link needs it won't reopen from the saved file until it is given the link again. S3 and GCS signed links are saved whole (see [Credentials in saved files](remote.md#credentials-in-saved-files)).
 - **`LabelsSet.save` passes SLP options on** to `save_slp`, so an argument it doesn't accept now raises a `TypeError` instead of being ignored.
 
 ## Which versions work together
