@@ -4,6 +4,7 @@ import copy
 import pickle
 from pathlib import Path
 
+import attrs
 import h5py
 import imageio.v3 as iio
 import numpy as np
@@ -2060,7 +2061,59 @@ def test_remote_video_open_error_redacts_url():
         video[0]
     message = str(exc_info.value)
     assert "supersecret" not in message
-    assert "token=%2A%2A%2A" in message
+    assert "token=***" in message
+
+
+@pytest.mark.parametrize(
+    "secret",
+    ["?X-Amz-Signature=SECRET&token=SECRET", "#token=SECRET", "?api_key=SECRET"],
+)
+def test_remote_video_decode_error_redacts_url(httpserver, secret):
+    """A remote video the decoder can't read raises with no credential shown.
+
+    Regression: imageio's error for the raw link was chained under the `OSError`,
+    so the traceback showed it whole.
+    """
+    import traceback
+
+    httpserver.expect_request("/v.mp4").respond_with_data(
+        b"not a video" * 100, content_type="video/mp4"
+    )
+    # Built here so that no line the traceback quotes holds the secret.
+    url = httpserver.url_for("/v.mp4") + secret.replace("SECRET", "SEC" + "RET")
+    video = sio.load_video(url)
+    with pytest.raises(OSError) as exc_info:
+        video[0]
+    text = "".join(traceback.format_exception(exc_info.value))
+    assert "SECRET" not in text
+    assert "/v.mp4" in text
+
+
+def test_backend_repr_redacts_url():
+    """A backend's repr shows its link without credentials."""
+    url = "https://me:a/SECRET@x.test/v.mp4?X-Amz-Signature=SECRET"
+    backend = MediaVideo.__new__(MediaVideo)
+    for field in attrs.fields(MediaVideo):
+        object.__setattr__(backend, field.name, None)
+    object.__setattr__(backend, "filename", url)
+    assert "SECRET" not in repr(backend)
+    assert "filename='https://***:***@x.test/v.mp4?X-Amz-Signature=***'" in repr(
+        backend
+    )
+
+    images = ImageVideo.__new__(ImageVideo)
+    for field in attrs.fields(ImageVideo):
+        object.__setattr__(images, field.name, None)
+    object.__setattr__(images, "filename", ["https://x.test/0.png#token=SECRET"])
+    assert "filename=['https://x.test/0.png#token=***']" in repr(images)
+
+
+def test_from_filename_unknown_type_redacts_url():
+    """An unknown video type is reported without the link's credentials."""
+    with pytest.raises(ValueError, match="Unknown video file type") as exc_info:
+        VideoBackend.from_filename("https://x.test/v.xyz#token=SECRET")
+    assert "SECRET" not in str(exc_info.value)
+    assert "https://x.test/v.xyz#token=***" in str(exc_info.value)
 
 
 def test_is_pyav_available_when_installed():

@@ -12337,6 +12337,15 @@ def test_request_headers_stay_with_the_video_in_memory(
             "az://videos@acct.blob.core.windows.net/v.mp4?sig=SECRET",
             "az://videos@acct.blob.core.windows.net/v.mp4?sig=***",
         ),
+        # Not a URL to sleap-io, so saved as a path (one slash), and still masked.
+        (
+            "abfss://me:SECRET@acct.dfs.core.windows.net/v.mp4",
+            "abfss:/***:***@acct.dfs.core.windows.net/v.mp4",
+        ),
+        (
+            "abfss://videos@acct.dfs.core.windows.net/v.mp4",
+            "abfss:/videos@acct.dfs.core.windows.net/v.mp4",
+        ),
         ("/some/dir/v.mp4?a=1&token=SECRET", "/some/dir/v.mp4?a=1&token=***"),
     ],
 )
