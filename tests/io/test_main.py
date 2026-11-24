@@ -957,6 +957,24 @@ def test_load_file_url_ambiguous_sniff_false_redacts_credentials():
     assert "example.com" in message
 
 
+def test_load_slp_url_too_new_redacts_credentials(httpserver, slp_minimal, tmp_path):
+    """A remote file too new for this version is named without the link's secrets."""
+    path = tmp_path / "newer.slp"
+    shutil.copy(slp_minimal, path)
+    with h5py.File(path, "r+") as f:
+        f["metadata"].attrs["format_id"] = 99.0
+    httpserver.expect_request("/newer.slp").respond_with_data(path.read_bytes())
+    # Built here so that no line a traceback quotes holds the secret.
+    url = httpserver.url_for("/newer.slp").replace("://", "://me:" + "SECRET@")
+    url += "?X-Amz-Signature=" + "SECRET" + "&token=" + "SECRET"
+    with pytest.raises(ValueError, match="uses SLP format 99") as exc_info:
+        load_slp(url)
+    message = str(exc_info.value)
+    assert "SECRET" not in message
+    assert "://***:***@" in message
+    assert "newer.slp?X-Amz-Signature=***&token=***" in message
+
+
 def test_load_file_url_unknown_extension_redacts_credentials():
     """A URL with an unrecognized extension raises with a redacted URL.
 
@@ -1216,6 +1234,21 @@ def test_load_file_gdrive_url_sniff_false_raises(slp_minimal):
     """`load_file(drive_url, sniff=False)` raises (no extension to fall back on)."""
     with pytest.raises(ValueError, match="Cannot infer format for a Google Drive"):
         load_file("https://drive.google.com/file/d/FILEID/view", sniff=False)
+    with pytest.raises(ValueError) as exc_info:
+        load_file(
+            "https://drive.google.com/file/d/FILEID/view?access_token=SECRET",
+            sniff=False,
+        )
+    assert "access_token=***" in str(exc_info.value)
+
+
+def test_save_file_unknown_format_redacts_url(slp_minimal):
+    """Saving to a link of unknown format raises without the link's credentials."""
+    labels = load_slp(slp_minimal)
+    with pytest.raises(ValueError, match="Unknown format") as exc_info:
+        save_file(labels, "https://me:a/SECRET@x.test/out.unknownext?token=SECRET")
+    assert "SECRET" not in str(exc_info.value)
+    assert "https://***:***@x.test/out.unknownext?token=***" in str(exc_info.value)
 
 
 def test_load_slp_gdrive_folder_url_raises(slp_minimal):

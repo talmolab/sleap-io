@@ -47,6 +47,21 @@ def test_video_repr(centered_pair_low_quality_video):
     )
 
 
+def test_video_repr_redacts_url():
+    """A video's repr shows its link without credentials, and the rest unchanged."""
+    video = Video("https://me:a/SECRET@x.test/v.mp4#token=SECRET", open_backend=False)
+    assert str(video) == (
+        'Video(filename="https://***:***@x.test/v.mp4#token=***", shape=None, '
+        "backend=NoneType)"
+    )
+    with pytest.raises(FileNotFoundError) as exc_info:
+        video.open()
+    assert "SECRET" not in str(exc_info.value)
+
+    video = Video("https://x.test/a b/v.mp4?version=3", open_backend=False)
+    assert 'filename="https://x.test/a b/v.mp4?version=3"' in str(video)
+
+
 def test_video_exists(centered_pair_low_quality_video, centered_pair_frame_paths):
     video = Video("test.mp4")
     assert video.exists() is False

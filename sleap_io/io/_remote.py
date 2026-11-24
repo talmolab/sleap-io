@@ -16,6 +16,7 @@ hot path.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib
 import io
 import os
@@ -26,7 +27,7 @@ import tempfile
 import time
 import urllib.parse
 import warnings
-from typing import Any
+from typing import Any, Callable, Iterator
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -65,9 +66,77 @@ _SENSITIVE_HEADERS = frozenset({"authorization", "cookie", "proxy-authorization"
 #: Azure secrets travel as a SAS query (``sig=``), which is masked as a parameter.
 _CONTAINER_AT_SCHEMES = frozenset({"az", "abfs"})
 
-#: Query-string parameter names whose values are redacted by :func:`_redact_url`.
+#: Schemes that aren't in :data:`_URL_SCHEMES` (sleap-io doesn't open them, and a
+#: name that starts with one is a local path to it) but whose links are masked like a
+#: URL's when saved: other spellings fsspec, adlfs and Hadoop use for remote stores,
+#: and the usual ``user:password@host`` ones. Their name before the ``@`` is kept as
+#: in :data:`_CONTAINER_AT_SCHEMES` (``abfss://<container>@<account>/...``,
+#: ``sftp://<user>@<host>/...``): only a ``user:password`` is masked.
+_MASKED_ONLY_SCHEMES = frozenset(
+    {
+        "abfss",
+        "adl",
+        "wasb",
+        "wasbs",
+        "s3a",
+        "s3n",
+        "oss",
+        "ftp",
+        "ftps",
+        "sftp",
+        "ssh",
+        "smb",
+        "webdav",
+        "webdavs",
+        "dav",
+        "davs",
+    }
+)
+
+#: Every scheme whose links are masked when saved.
+_MASKED_SCHEMES = _URL_SCHEMES | _MASKED_ONLY_SCHEMES
+
+#: Query-string parameter names whose values are masked in saved files (and, with
+#: :data:`_MESSAGE_SECRET_WORDS`, in messages).
 _SENSITIVE_QUERY_PARAMS = frozenset(
     {"token", "access_token", "x-amz-security-token", "sas", "sig"}
+)
+
+#: Words that make a query or fragment parameter a secret in a message: a name is
+#: split into words at punctuation and at lower-to-upper case changes
+#: (``X-Amz-Signature``, ``api_key``, ``accessToken``). Unlike a saved file, a
+#: message masks signed links' signatures too; nobody reopens a video from one.
+_MESSAGE_SECRET_WORDS = frozenset(
+    {
+        "token",
+        "sig",
+        "signature",
+        "sas",
+        "secret",
+        "password",
+        "passwd",
+        "pwd",
+        "credential",
+        "credentials",
+        "key",
+        "apikey",
+        "auth",
+        "authorization",
+    }
+)
+
+#: Parts that make a parameter a secret in a message wherever they appear in its
+#: name, written as one word or not (``apitoken``, ``secretkey``, ``passwd``). The
+#: short words (``key``, ``sig``, ``sas``, ``auth``) count only as whole words, so
+#: ``monkey`` and ``sigma`` stay.
+_MESSAGE_SECRET_PARTS = (
+    "token",
+    "secret",
+    "passw",
+    "signature",
+    "credential",
+    "apikey",
+    "accesskey",
 )
 
 #: Magic-byte prefixes mapped to a format family (checked in order).
@@ -100,11 +169,13 @@ _RETRY_BACKOFF_MAX = 30.0
 #: Pattern matching fsspec cache filenames (sha hex hashes, optional ``.tags``).
 _CACHE_KEY_PATTERN = re.compile(r"^[0-9a-f]{32,64}(\.tags)?$")
 
-#: Pattern matching the start of a value that is a URL as a whole. One slash is
-#: enough: a URL that has been through ``Path`` (an image sequence's names, for one)
-#: has lost the other.
-_URL_START_PATTERN = re.compile(
-    r"(?:" + "|".join(sorted(_URL_SCHEMES)) + r"):/+",
+#: Pattern matching the start of a value that is a link as a whole, for masking only:
+#: any of :data:`_MASKED_SCHEMES`, so not every match is a URL to sleap-io (that's
+#: :func:`_is_url`). One slash is enough: a link that has been through ``Path`` (an
+#: image sequence's names, or a name sleap-io takes for a local path) has lost the
+#: other.
+_MASKED_URL_START_PATTERN = re.compile(
+    r"(?:" + "|".join(sorted(_MASKED_SCHEMES)) + r"):/+",
     re.IGNORECASE,
 )
 
@@ -117,11 +188,42 @@ _URL_IN_TEXT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+#: Pattern matching where a link of any scheme starts in a message (two letters
+#: or more, so a Windows drive isn't one; one slash is enough, as in
+#: :data:`_MASKED_URL_START_PATTERN`, and a backslash counts as one, as a link
+#: that has been through a Windows path has them). A scheme starts where a word
+#: does, which also keeps the search linear in a long word.
+_MESSAGE_LINK_START_PATTERN = re.compile(
+    r"(?<![a-z0-9+.-])[a-z][a-z0-9+.-]+:[/\\]+", re.IGNORECASE
+)
+
+#: Pattern matching a link of any scheme in a message. It ends where a link ends
+#: in text.
+_MESSAGE_URL_PATTERN = re.compile(
+    _MESSAGE_LINK_START_PATTERN.pattern + r"[^\s\"'<>`]*", re.IGNORECASE
+)
+
+#: Pattern matching where a parameter's name starts in a message: after a ``?``,
+#: ``&``, ``;`` or ``#``, up to its ``=``. Its value is found separately, so a name
+#: inside another parameter's value is found too.
+_MESSAGE_PARAM_NAME_PATTERN = re.compile(r"[?&;#]([^=\s\"'<>`?&;#]+)=")
+
+#: Pattern matching the value after a parameter's ``=`` in a message's text: it
+#: ends at a space, a quote, the next parameter or a closing bracket. A sentence's
+#: last ``.``, ``:``, ``!`` or ``?`` is trimmed off it afterwards.
+_MESSAGE_PARAM_VALUE_PATTERN = re.compile(r"[^\s\"'<>`&;#,)\]}]*")
+
+#: :data:`_URL_IN_TEXT_PATTERN` for masking: any of :data:`_MASKED_SCHEMES`.
+_MASKED_URL_IN_TEXT_PATTERN = re.compile(
+    r"(?:" + "|".join(sorted(_MASKED_SCHEMES)) + r")://[^\s\"'<>]+",
+    re.IGNORECASE,
+)
+
 #: Pattern matching a sensitive query parameter and its value anywhere in text, URL
-#: or no URL: a space or a quote ends what :data:`_URL_IN_TEXT_PATTERN` can see of a
-#: URL, and a name cut from one (``y.slp?token=...``) no longer looks like one. The
-#: ``#`` is for the same parameter in a fragment. Punctuation at the end belongs to
-#: the sentence, not the value.
+#: or no URL: a space or a quote ends what :data:`_MASKED_URL_IN_TEXT_PATTERN` can
+#: see of a URL, and a name cut from one (``y.slp?token=...``) no longer looks like
+#: one. The ``#`` is for the same parameter in a fragment. Punctuation at the end
+#: belongs to the sentence, not the value.
 _SENSITIVE_PARAM_PATTERN = re.compile(
     r"([?&#](?:"
     + "|".join(re.escape(name) for name in sorted(_SENSITIVE_QUERY_PARAMS))
@@ -236,38 +338,309 @@ def _is_gdrive_url(url: str) -> bool:
     return host in _GDRIVE_HOSTS
 
 
-def _redact_url(url: str) -> str:
-    """Strip credentials from a URL for safe logging/error display.
-
-    ``https://user:pass@host/path?token=xyz`` becomes
-    ``https://***:***@host/path?token=%2A%2A%2A``. Userinfo is replaced and
-    token-like query parameters have their values redacted.
+def _is_message_secret(name: str) -> bool:
+    """Return True if a query or fragment parameter's value is hidden in a message.
 
     Args:
-        url: The URL to redact.
+        name: The parameter's name as written in the link (percent-encoded or not).
 
     Returns:
-        The redacted URL. If parsing fails, returns the input unchanged.
+        True if the decoded name is a saved-file name (:data:`_SENSITIVE_QUERY_PARAMS`),
+        has a word from :data:`_MESSAGE_SECRET_WORDS` or holds a part from
+        :data:`_MESSAGE_SECRET_PARTS`.
+    """
+    name = urllib.parse.unquote_plus(name)
+    lowered = name.lower()
+    if lowered in _SENSITIVE_QUERY_PARAMS:
+        return True
+    if any(part in lowered for part in _MESSAGE_SECRET_PARTS):
+        return True
+    words = re.split(r"[^0-9a-zA-Z]+|(?<=[a-z0-9])(?=[A-Z])", name)
+    return any(word.lower() in _MESSAGE_SECRET_WORDS for word in words)
+
+
+def _mask_message_userinfo(link: str, start: int, scheme: str) -> str:
+    """Mask the userinfo of a link that starts a value.
+
+    As :func:`_mask_url_userinfo` reads userinfo (everything up to the last ``@``
+    when what precedes the first ``/`` can't be a host and port; a name alone stays
+    in the schemes where a saved file keeps it), for a link of any scheme. Looking
+    for an ``@`` past the authority stops at the first space, so words after the
+    link are not read as a password.
+
+    Args:
+        link: A value that starts with a link (and may go on past its end).
+        start: Where the link's authority starts (after ``scheme:`` and slashes).
+        scheme: The link's scheme.
+
+    Returns:
+        The value with the link's userinfo replaced by ``***:***``.
+    """
+    rest = link[start:]
+    authority = re.split(r"[/\\?#]", rest, maxsplit=1)[0]
+    at = authority.rfind("@")
+    if (
+        at >= 0
+        and scheme.lower() in _CONTAINER_AT_SCHEMES | _MASKED_ONLY_SCHEMES
+        and ":" not in authority[:at]
+    ):
+        return link
+    if at < 0:
+        port = authority.rpartition(":")[2] if ":" in authority else ""
+        if authority.endswith("]") or port == "" or port.isdecimal():
+            return link
+        at = re.split(r"\s", rest, maxsplit=1)[0].rfind("@")
+        if at < 0:
+            return link
+    return link[:start] + "***:***" + link[start + at :]
+
+
+def _mask_links_in(token: str) -> str:
+    """Mask the userinfo of every link that starts inside one link-shaped token.
+
+    Args:
+        token: A match of :data:`_MESSAGE_URL_PATTERN`. Links inside its
+            parameters start inside it too.
+
+    Returns:
+        The token with each link's userinfo masked.
+    """
+    # Each link runs to where the next one (in its parameters) starts.
+    starts = list(_MESSAGE_LINK_START_PATTERN.finditer(token))
+    pieces = [token[: starts[0].start()]] if starts else [token]
+    for k, m in enumerate(starts):
+        end = starts[k + 1].start() if k + 1 < len(starts) else len(token)
+        scheme = m.group(0).split(":", 1)[0]
+        link = token[m.start() : end]
+        pieces.append(_mask_message_userinfo(link, m.end() - m.start(), scheme))
+    return "".join(pieces)
+
+
+def _redact_url(value: str) -> str:
+    """Mask the credentials of a link (or a name that may be one) for a message.
+
+    The rule, stricter than a saved file's (:func:`_mask_url_credentials`): a link of
+    any scheme, also one inside another link, loses its userinfo
+    (``https://***:***@host/...``; a name alone stays where a saved file keeps it,
+    such as an Azure container), and every query or
+    fragment parameter that names a secret (:func:`_is_message_secret`) loses its
+    value, signed links' signatures and credentials included. Every other character
+    stays as it was, so a link without credentials comes back unchanged.
+
+    A value that starts with a link is read as one link, so a parameter's value runs
+    to the next ``&`` whatever it holds, and so does a password. For a message that
+    may hold links among other words, use :func:`_redact_text`.
+
+    Args:
+        value: A link, a local path, or a name cut from a link.
+
+    Returns:
+        The value with each credential replaced by ``***``.
+    """
+    return _redact_message(value, whole=True)
+
+
+def _redact_text(value: str) -> str:
+    """Mask the credentials of every link in a message, by :func:`_redact_url`'s rule.
+
+    Each link ends where a link ends in text (a space, a quote or a backtick), and
+    a parameter's value also at a closing bracket, a comma or a ``;``; a sentence's
+    last ``.``, ``:``, ``!`` or ``?`` is not part of it.
+
+    Args:
+        value: A message, such as an exception's text.
+
+    Returns:
+        The message with each credential replaced by ``***``.
+    """
+    return _redact_message(value, whole=False)
+
+
+def _redact_message(value: str, whole: bool) -> str:
+    """Mask credentials in a link or a message; see :func:`_redact_url`.
+
+    Args:
+        value: The link or the message.
+        whole: Whether a value that starts with a link is one link as a whole.
+
+    Returns:
+        The value with each credential replaced by ``***``.
+    """
+    if isinstance(value, os.PathLike):
+        value = os.fspath(value)
+    if not isinstance(value, str) or ("@" not in value and "=" not in value):
+        return value
+    whole = whole and bool(_MESSAGE_URL_PATTERN.match(value))
+    if whole:
+        # Each parameter's value runs to the next `&`, as a URL parser reads it,
+        # whatever it holds (a space, a quote or a bracket).
+        head, hash_mark, fragment = value.partition("#")
+        base, question_mark, query = head.partition("?")
+        value = (
+            base
+            + question_mark
+            + _mask_query_params(query, _is_message_secret)
+            + hash_mark
+            + _mask_query_params(fragment, _is_message_secret)
+        )
+    if whole:
+        # A password may hold what ends a link in text (a space or a quote).
+        m = _MESSAGE_LINK_START_PATTERN.match(value)
+        value = _mask_message_userinfo(value, m.end(), m.group(0).split(":", 1)[0])
+    # Every link, those inside another one's parameters included.
+    pieces = []
+    last = 0
+    for m in _MESSAGE_URL_PATTERN.finditer(value):
+        pieces += [value[last : m.start()], _mask_links_in(m.group(0))]
+        last = m.end()
+    pieces.append(value[last:])
+    value = "".join(pieces)
+    # Every value of a parameter that names a secret.
+    pieces = []
+    last = 0
+    for m in _MESSAGE_PARAM_NAME_PATTERN.finditer(value):
+        if m.end() <= last or not _is_message_secret(m.group(1)):
+            continue
+        end = _MESSAGE_PARAM_VALUE_PATTERN.match(value, m.end()).end()
+        while end > m.end() and value[end - 1] in ".:!?":
+            end -= 1
+        if end > m.end():
+            pieces += [value[last : m.end()], "***"]
+            last = end
+    pieces.append(value[last:])
+    return "".join(pieces)
+
+
+def _redact_names(value: Any) -> Any:
+    """Apply :func:`_redact_url` to a filename or a list of them, for a message.
+
+    Args:
+        value: A video's filename: a string or a path, or a list of them (image
+            sequences). Anything else (``None``) is returned as it is.
+
+    Returns:
+        The value with each name's credentials masked. A path that held one comes
+        back as a string.
+    """
+    if isinstance(value, list):
+        return [_redact_names(v) for v in value]
+    if isinstance(value, os.PathLike):
+        # A link that has been through a path is read with its slashes forward,
+        # as it was written, on Windows too.
+        name = (
+            value.as_posix()
+            if isinstance(value, pathlib.PurePath)
+            else os.fspath(value)
+        )
+        return (
+            value
+            if not isinstance(name, str) or _redact_url(name) == name
+            else (_redact_url(name))
+        )
+    if isinstance(value, str):
+        return _redact_url(value)
+    return value
+
+
+def _redact_message_value(value: Any) -> Any:
+    """Mask the strings in an exception argument, inside tuples and lists too.
+
+    Args:
+        value: One of an exception's ``args``.
+
+    Returns:
+        The value with each string's credentials masked.
+    """
+    if isinstance(value, str):
+        return _redact_text(value)
+    if isinstance(value, tuple) and not hasattr(value, "_fields"):
+        return tuple(_redact_message_value(v) for v in value)
+    if isinstance(value, list):
+        return [_redact_message_value(v) for v in value]
+    return value
+
+
+def _redact_exception(error: BaseException) -> BaseException:
+    """Mask the credentials of links in an exception and its chain, in place.
+
+    Code that sleap-io calls (imageio, PyAV, aiohttp, ``open``) puts the link it
+    was given into its messages. The message rule of :func:`_redact_text` applies to
+    each exception in the chain and in an exception group; one whose text still
+    shows a credential after its arguments are masked (its ``__str__`` builds the
+    text from elsewhere) is cut from the chain, and if it is ``error`` itself it is
+    replaced by a :class:`RemoteIOError` carrying its redacted summary and its
+    traceback.
+
+    Args:
+        error: The exception being raised.
+
+    Returns:
+        The exception to raise: ``error`` itself, or its replacement.
+    """
+    seen: set[int] = set()
+
+    def leaks(e: BaseException) -> bool:
+        try:
+            e.args = tuple(_redact_message_value(a) for a in e.args)
+            if isinstance(e, OSError):
+                for attr in ("strerror", "filename", "filename2"):
+                    if isinstance(getattr(e, attr, None), str):
+                        setattr(e, attr, _redact_text(getattr(e, attr)))
+            notes = getattr(e, "__notes__", None)
+            if isinstance(notes, list):
+                e.__notes__ = [_redact_message_value(n) for n in notes]
+        except Exception:
+            pass  # An exception that won't take new arguments is judged by its text.
+        try:
+            text = str(e)
+            notes = getattr(e, "__notes__", None)
+            if isinstance(notes, list):
+                text += "".join(str(n) for n in notes)
+        except Exception:
+            return False
+        return _redact_text(text) != text
+
+    def walk(e: BaseException) -> None:
+        seen.add(id(e))
+        for attr in ("__cause__", "__context__"):
+            inner = getattr(e, attr)
+            if inner is None or id(inner) in seen:
+                continue
+            if leaks(inner):
+                setattr(e, attr, None)
+            else:
+                walk(inner)
+        for inner in getattr(e, "exceptions", ()):
+            if isinstance(inner, BaseException) and id(inner) not in seen:
+                leaks(inner)
+                walk(inner)
+
+    if leaks(error):
+        replacement = RemoteIOError(
+            type(error).__name__, cause_summary=_redacted_cause_summary(error)
+        )
+        return replacement.with_traceback(error.__traceback__)
+    walk(error)
+    return error
+
+
+@contextlib.contextmanager
+def _redacting_errors() -> Iterator[None]:
+    """Keep the credentials of links out of exceptions raised inside a block.
+
+    Usable as ``with _redacting_errors():`` and as a decorator. An exception that
+    shows no credential passes through untouched.
+
+    Yields:
+        Nothing; the block runs as it would without this.
     """
     try:
-        parsed = urllib.parse.urlparse(url)
-    except (ValueError, TypeError):  # pragma: no cover - urlparse is permissive
-        return url
-    netloc = parsed.netloc
-    if "@" in netloc:
-        netloc = "***:***@" + netloc.split("@", 1)[1]
-    if parsed.query:
-        params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
-        redacted_params = []
-        for k, v in params:
-            if k.lower() in _SENSITIVE_QUERY_PARAMS:
-                redacted_params.append((k, "***"))
-            else:
-                redacted_params.append((k, v))
-        new_query = urllib.parse.urlencode(redacted_params)
-    else:
-        new_query = ""
-    return urllib.parse.urlunparse(parsed._replace(netloc=netloc, query=new_query))
+        yield
+    except Exception as e:
+        redacted = _redact_exception(e)
+        if redacted is e:
+            raise
+        raise redacted from None
 
 
 def _mask_url_userinfo(url: str) -> str:
@@ -280,19 +653,23 @@ def _mask_url_userinfo(url: str) -> str:
 
     In ``abfs://`` and ``az://`` links the name before the ``@`` is the container
     (:data:`_CONTAINER_AT_SCHEMES`), so it stays unless it has a ``:`` as a
-    ``user:password`` would.
+    ``user:password`` would. The same goes for :data:`_MASKED_ONLY_SCHEMES`.
 
     Args:
-        url: A value that matches :data:`_URL_START_PATTERN`.
+        url: A value that matches :data:`_MASKED_URL_START_PATTERN`.
 
     Returns:
         The URL with any userinfo replaced by ``***:***``.
     """
-    start = _URL_START_PATTERN.match(url).end()
+    start = _MASKED_URL_START_PATTERN.match(url).end()
     authority = re.split(r"[/\\?#]", url[start:], maxsplit=1)[0]
     at = authority.rfind("@")
     scheme = url.partition(":")[0].lower()
-    if at >= 0 and scheme in _CONTAINER_AT_SCHEMES and ":" not in authority[:at]:
+    if (
+        at >= 0
+        and (scheme in _CONTAINER_AT_SCHEMES or scheme in _MASKED_ONLY_SCHEMES)
+        and ":" not in authority[:at]
+    ):
         return url
     if at < 0:
         port = authority.rpartition(":")[2] if ":" in authority else ""
@@ -304,7 +681,9 @@ def _mask_url_userinfo(url: str) -> str:
     return url[:start] + "***:***" + url[start + at :]
 
 
-def _mask_query_params(query: str) -> str:
+def _mask_query_params(
+    query: str, is_secret: Callable[[str], bool] | None = None
+) -> str:
     """Mask the values of sensitive parameters in a query string.
 
     A name is read as a URL parser reads it (``%74oken`` is ``token``), and a value
@@ -313,6 +692,8 @@ def _mask_query_params(query: str) -> str:
 
     Args:
         query: A query string or fragment, without its leading ``?`` or ``#``.
+        is_secret: Whether a parameter name (as written) holds a secret. Defaults
+            to the saved-file names, :data:`_SENSITIVE_QUERY_PARAMS`.
 
     Returns:
         The query string with each sensitive value replaced by ``***``.
@@ -320,7 +701,12 @@ def _mask_query_params(query: str) -> str:
     params = query.split("&")
     for i, param in enumerate(params):
         name, _, value = param.partition("=")
-        if value and urllib.parse.unquote_plus(name).lower() in _SENSITIVE_QUERY_PARAMS:
+        if not value:
+            continue
+        if is_secret is not None:
+            if is_secret(name):
+                params[i] = f"{name}=***"
+        elif urllib.parse.unquote_plus(name).lower() in _SENSITIVE_QUERY_PARAMS:
             params[i] = f"{name}=***"
     return "&".join(params)
 
@@ -329,7 +715,7 @@ def _mask_whole_url(url: str) -> str:
     """Mask the credentials of a value that is a URL from start to end.
 
     Args:
-        url: A value that matches :data:`_URL_START_PATTERN`.
+        url: A value that matches :data:`_MASKED_URL_START_PATTERN`.
 
     Returns:
         The URL with its credentials masked and every other character as it was.
@@ -362,9 +748,10 @@ def _mask_url_credentials(value: str | os.PathLike) -> str:
         value: The string about to be written.
 
     Returns:
-        The string with userinfo replaced by ``***:***`` (an Azure container is not
-        userinfo; see :func:`_mask_url_userinfo`) and the values of sensitive query
-        parameters (:data:`_SENSITIVE_QUERY_PARAMS`) replaced by ``***``.
+        The string with userinfo replaced by ``***:***`` (an Azure container, or a
+        user name alone in a link of :data:`_MASKED_ONLY_SCHEMES`, is kept; see
+        :func:`_mask_url_userinfo`) and the values of sensitive query parameters
+        (:data:`_SENSITIVE_QUERY_PARAMS`) replaced by ``***``.
     """
     if isinstance(value, os.PathLike):
         value = os.fspath(value)
@@ -372,10 +759,10 @@ def _mask_url_credentials(value: str | os.PathLike) -> str:
     # is many names.
     if "=" not in value and "@" not in value:
         return value
-    if _URL_START_PATTERN.match(value):
+    if _MASKED_URL_START_PATTERN.match(value):
         value = _mask_whole_url(value)
     value = _SENSITIVE_PARAM_PATTERN.sub(r"\1***", value)
-    return _URL_IN_TEXT_PATTERN.sub(lambda m: _mask_whole_url(m.group(0)), value)
+    return _MASKED_URL_IN_TEXT_PATTERN.sub(lambda m: _mask_whole_url(m.group(0)), value)
 
 
 def _mask_url_credentials_deep(value: Any) -> Any:
@@ -948,8 +1335,8 @@ def _redacted_cause_summary(e: BaseException) -> str:
     aiohttp / fsspec exceptions embed the raw request URL (which may include a
     userinfo password or a ``?token=`` query parameter) in their string form.
     This returns ``"<TypeName>: <redacted message>"`` so the summary can be
-    surfaced to users for debugging without leaking credentials. Every
-    URL-looking substring in the message is run through :func:`_redact_url`.
+    surfaced to users for debugging without leaking credentials. The message
+    is run through :func:`_redact_text`.
 
     Args:
         e: The underlying exception.
@@ -963,7 +1350,7 @@ def _redacted_cause_summary(e: BaseException) -> str:
         # Some exceptions (e.g. an aiohttp.ClientResponseError without a
         # request_info) raise from their own __str__; fall back to the type name.
         return type(e).__name__
-    redacted = _URL_IN_TEXT_PATTERN.sub(lambda m: _redact_url(m.group(0)), raw)
+    redacted = _redact_text(raw)
     redacted = redacted.replace("\n", " ").replace("\r", " ").strip()
     if redacted:
         return f"{type(e).__name__}: {redacted}"
@@ -1265,7 +1652,7 @@ def _download_callback(progress: bool, url: str):
         return fsspec.callbacks.DEFAULT_CALLBACK
     return fsspec.callbacks.TqdmCallback(
         tqdm_kwargs={
-            "desc": f"Downloading {_filename_from_url(url) or 'file'}",
+            "desc": f"Downloading {_filename_from_url(_redact_url(url)) or 'file'}",
             "unit": "B",
             "unit_scale": True,
             "unit_divisor": 1024,
