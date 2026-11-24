@@ -90,7 +90,7 @@ import numpy as np
 import simplejson as json
 from tqdm import tqdm
 
-from sleap_io.io._remote import _mask_url_credentials_deep
+from sleap_io.io._remote import _mask_url_credentials_deep, _redact_names
 from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
 from sleap_io.io.utils import (
     _read_dataset_from_open_file,
@@ -174,9 +174,9 @@ def _check_format_id(labels_path: str, f: h5py.File) -> None:
     format_id = float(f["metadata"].attrs["format_id"])
     if format_id >= SLP_FORMAT_ID_LIMIT:
         raise ValueError(
-            f"{labels_path} uses SLP format {format_id:g}, which is newer than this "
-            f"version of sleap-io supports (max {int(SLP_FORMAT_ID_LIMIT) - 1}.x); "
-            "upgrade sleap-io to read it."
+            f"{_redact_names(labels_path)} uses SLP format {format_id:g}, which is "
+            "newer than this version of sleap-io supports (max "
+            f"{int(SLP_FORMAT_ID_LIMIT) - 1}.x); upgrade sleap-io to read it."
         )
 
 
@@ -388,7 +388,8 @@ def _warn_if_video_id_marks_disagree(f: h5py.File, labels_path: str) -> None:
         != _frames_video_ids_are_indices(f["frames"])
     ):
         warnings.warn(
-            f"{labels_path}: /frames and /negative_frames don't agree on how their "
+            f"{_redact_names(labels_path)}: /frames and /negative_frames don't agree "
+            "on how their "
             "video ids are numbered (only one carries the `video_ids` mark), so "
             "some negative frame markers may be missing or on the wrong frame.",
             stacklevel=5,
@@ -1573,8 +1574,8 @@ def process_and_embed_frames(
             # project has more than one video.
             raise IndexError(
                 f"Frame index {frame_idx} out of range for video "
-                f"{frame_meta['video_ind']} ({video.filename}), which has "
-                f"{len(video)} frames."
+                f"{frame_meta['video_ind']} ({_redact_names(video.filename)}), "
+                f"which has {len(video)} frames."
             ) from e
 
         # Encode the frame to this group's format.
@@ -3900,7 +3901,8 @@ def read_metadata(labels_path: str, *, _hdf5_file: h5py.File | None = None) -> d
         md = read_hdf5_attrs(labels_path, "metadata", "json", _hdf5_file=_hdf5_file)
     except KeyError as e:
         raise ValueError(
-            f"The SLEAP labels file {labels_path!r} is missing its required "
+            f"The SLEAP labels file {_redact_names(labels_path)!r} is missing its "
+            "required "
             "metadata JSON blob (the 'metadata' HDF5 group has no readable 'json' "
             "attribute) and is likely corrupt. If you have a working .slp file "
             "with the same skeleton, you can copy the attribute into a BACKUP "
