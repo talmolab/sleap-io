@@ -692,6 +692,41 @@ def is_same_file(video1: Video, video2: Video) -> bool:
     return _crop_key(video1) == _crop_key(video2)
 
 
+def _is_duplicate_entry(video1: Video, video2: Video) -> bool:
+    """Check if two videos of one Labels are entries of the same video.
+
+    A Labels can list one video more than once (for example when each labeled
+    frame was given its own ``Video`` object). Merging may join such entries; it
+    does not join two videos of one Labels that this check tells apart.
+
+    Args:
+        video1: First video.
+        video2: Second video.
+
+    Returns:
+        True if both are the same object, or refer to the same file per
+        :func:`is_same_file` and do not record different embedded datasets.
+
+    Notes:
+        Embedded videos of one package that record no source video all share the
+        package's filename. With their backends closed (``open_videos=False``),
+        :func:`is_same_file` cannot compare their datasets, so the dataset names
+        recorded in ``backend_metadata`` are compared here. The same applies to
+        any video that records a dataset, such as one of several datasets of a
+        plain HDF5 file.
+    """
+    if video1 is video2:
+        return True
+    if not is_same_file(video1, video2):
+        return False
+    if video1.source_video is None and video2.source_video is None:
+        dataset1 = (video1.backend_metadata or {}).get("dataset")
+        dataset2 = (video2.backend_metadata or {}).get("dataset")
+        if dataset1 and dataset2 and dataset1 != dataset2:
+            return False
+    return True
+
+
 def _get_effective_shape(video: Video) -> tuple | None:
     """Get the effective shape for comparison purposes.
 
@@ -1267,7 +1302,32 @@ class VideoMatcher:
                     max((len(p) for _, p in all_existing_parts), default=0),
                 )
 
-                for depth in range(1, max_depth + 1):
+                # Start no shallower than the depth that tells `incoming` apart
+                # from its own siblings in the incoming labels. Cameras that share
+                # a file name in different folders (Camera1/x.mp4, Camera3/x.mp4)
+                # are then compared as "Camera3/x.mp4", never as just "x.mp4",
+                # which matched another camera whenever the originals could not be
+                # opened to tell them apart (#592). The same video stored under
+                # different absolute roots still matches on its shared suffix.
+                min_depth = 1
+                if labels_incoming is not None:
+                    sibling_parts = [
+                        get_path_parts(v)
+                        for v in labels_incoming.videos
+                        if v is not incoming
+                    ]
+                    # Siblings with the very same path cannot be told apart by
+                    # path at any depth, so they do not raise the starting depth;
+                    # _is_duplicate_entry() decides whether they are one video.
+                    sibling_parts = [p for p in sibling_parts if p != incoming_parts]
+                    while min_depth < len(incoming_parts) and any(
+                        len(p) >= min_depth
+                        and p[-min_depth:] == incoming_parts[-min_depth:]
+                        for p in sibling_parts
+                    ):
+                        min_depth += 1
+
+                for depth in range(min_depth, max_depth + 1):
                     if len(incoming_parts) < depth:
                         continue
                     incoming_leaf = "/".join(incoming_parts[-depth:])
