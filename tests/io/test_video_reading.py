@@ -3038,15 +3038,22 @@ def _write_h264_clip(path, color_tags: dict) -> str:
     """Write a 3-frame 64x48 color H.264 clip with pyav, tagged with `color_tags`.
 
     The frames are the same for every call, so two clips differ only in their tags.
+    Single-threaded encoding and reformatting keep both clips deterministic across
+    repeated calls on multi-core runners.
     """
     av = pytest.importorskip("av")
+    from av.video.reformatter import VideoReformatter
+
     try:
         av.codec.Codec("libx264", "w")
     except Exception:
         pytest.skip("pyav has no H.264 encoder")
+    reformatter = VideoReformatter()
     with av.open(str(path), "w") as container:
         stream = container.add_stream("libx264", rate=10)
         stream.width, stream.height, stream.pix_fmt = 64, 48, "yuv420p"
+        stream.codec_context.thread_count = 1
+        stream.options = {"crf": "0", "threads": "1"}
         for name, value in color_tags.items():
             setattr(stream.codec_context, name, value)
         for i in range(3):
@@ -3055,7 +3062,9 @@ def _write_h264_clip(path, color_tags: dict) -> str:
             rgb[..., 1] = 60 * i + 30
             rgb[..., 2] = np.linspace(255, 0, 48, dtype=np.uint8)[:, None]
             frame = av.VideoFrame.from_ndarray(rgb, format="rgb24")
-            for packet in stream.encode(frame.reformat(format="yuv420p")):
+            yuv = reformatter.reformat(frame, format="yuv420p", threads=1)
+            yuv.pts = i
+            for packet in stream.encode(yuv):
                 container.mux(packet)
         for packet in stream.encode():
             container.mux(packet)

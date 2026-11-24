@@ -3616,6 +3616,7 @@ class Labels:
         video: Video | int | None = None,
         tracks: list[Track] | None = None,
         create_missing: bool = True,
+        first_frame: int = 0,
     ):
         """Update instances from a numpy array of tracks.
 
@@ -3636,15 +3637,23 @@ class Labels:
             create_missing: If `True` (the default), creates new `PredictedInstance`s
                 for tracks that don't have corresponding instances in a frame. If
                 `False`, only updates existing instances.
+            first_frame: Frame index corresponding to row 0 of `tracks_arr`.
+                Default is `0` (so row `i` maps to `frame_idx = i`, matching
+                `Labels.numpy()` and `sleap_io.codecs.numpy.from_numpy()`). Pass a
+                non-zero offset when updating from a sliced array that begins at a
+                later frame.
 
         Raises:
+            RuntimeError: If called on a lazy-loaded `Labels` (call
+                `labels.materialize()` first).
             ValueError: If the video cannot be determined, or if tracks are not
                 specified and the number of tracks in the array doesn't match the number
                 of tracks in the labels.
 
         Notes:
             This method is the inverse of `Labels.numpy()`, and can be used to update
-            instance points after modifying the numpy array.
+            instance points after modifying the numpy array. Row `i` of `tracks_arr`
+            updates frame `i + first_frame`.
 
             If the array has a third dimension with shape 3 (tracks_arr.shape[-1] == 3),
             the last channel is assumed to be confidence scores.
@@ -3653,6 +3662,8 @@ class Labels:
             a point that was visible and clear its location; points that are already
             hidden or unlabeled are left unchanged.
         """
+        self._check_not_lazy("update_from_numpy")
+
         # Check dimensions
         if len(tracks_arr.shape) != 4:
             raise ValueError(
@@ -3694,12 +3705,6 @@ class Labels:
 
         # Get all labeled frames for the specified video
         lfs = [lf for lf in self.labeled_frames if lf.video == video]
-
-        # Figure out frame index range from existing labeled frames
-        # Default to 0 if no labeled frames exist
-        first_frame = 0
-        if lfs:
-            first_frame = min(lf.frame_idx for lf in lfs)
 
         # Ensure we have a skeleton
         if not self.skeletons:
