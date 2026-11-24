@@ -291,25 +291,48 @@ class Skeleton:
         ]
 
     def get_flipped_node_inds(self) -> list[int]:
-        """Returns node indices that should be switched when horizontally flipping.
+        """Return node indices that should be switched when horizontally flipping.
 
-        This is useful as a lookup table for flipping the landmark coordinates when
-        doing data augmentation.
+        This is useful as a lookup table for flipping landmark coordinate arrays
+        (such as the `(n_nodes, 2)` array returned by `Instance.numpy()`) when doing
+        data augmentation.
+
+        To swap symmetric keypoints directly on an `Instance` (or `Instance3D`),
+        use `Instance.swap_points()` or `Instance.permute_points()` instead.
+
+        Warning:
+            Do **not** index `inst.points` directly (for example,
+            `inst.points = inst.points[skel.get_flipped_node_inds()]`) without
+            restoring `inst.points["name"] = skel.node_names`. Because `"name"` is
+            stored inside the structured array, direct row reindexing also swaps
+            the stored node names, causing downstream name-based operations
+            (`Instance.update_skeleton()`, `Instance.replace_skeleton()`,
+            `Labels.reorder_nodes()`, `Labels.merge()`) to silently un-swap or
+            mis-map keypoints. Use `inst.swap_points()` or
+            `inst.permute_points(skel.get_flipped_node_inds())` instead.
+
+        Returns:
+            A list of node indices `perm` of length `len(self.nodes)` such that
+            `pose[perm]` swaps every symmetric pair in `self.symmetries`.
 
         Example:
             >>> skel = Skeleton(["A", "B_left", "B_right", "C", "D_left", "D_right"])
             >>> skel.add_symmetry("B_left", "B_right")
             >>> skel.add_symmetry("D_left", "D_right")
-            >>> skel.flipped_node_inds
+            >>> inds = skel.get_flipped_node_inds()
+            >>> inds
             [0, 2, 1, 3, 5, 4]
             >>> pose = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])
-            >>> pose[skel.flipped_node_inds]
+            >>> pose[inds]
             array([[0, 0],
                    [2, 2],
                    [1, 1],
                    [3, 3],
                    [5, 5],
                    [4, 4]])
+
+        See Also:
+            `Instance.swap_points`, `Instance.permute_points`
         """
         flip_idx = np.arange(len(self.nodes))
         if len(self.symmetries) > 0:

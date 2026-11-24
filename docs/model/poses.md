@@ -75,7 +75,8 @@ node's index in the skeleton:
 
 Symmetries record which nodes are left/right mirrors of each other. This is used
 during data augmentation (horizontal flipping) to swap the correct landmark
-indices.
+indices — call [`Instance.swap_points()`][sleap_io.Instance.swap_points] with no
+arguments to swap every symmetric pair on an instance in place.
 
 ```pycon
 >>> import sleap_io as sio
@@ -467,6 +468,47 @@ locations is **not** empty (even though `n_visible == 0`), so it survives
 
 ```
 
+### Swapping and permuting points
+
+To swap pairs of landmarks or apply a cyclic permutation to an instance in place,
+use [`Instance.swap_points`][sleap_io.Instance.swap_points] and
+[`Instance.permute_points`][sleap_io.Instance.permute_points]. Both move all
+point fields together (`xy`, `visible`, `verified`, `labeled`, and `score` on
+`PredictedInstance`) while keeping `points["name"]` aligned with
+`skeleton.node_names`:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> skel = sio.Skeleton(
+...     ["nose", "ear_L", "ear_R", "tail"],
+...     symmetries=[("ear_L", "ear_R")],
+... )
+>>> inst = sio.Instance.from_numpy(
+...     np.array([[10, 0], [5, 5], [15, 5], [10, 20]]),
+...     skeleton=skel,
+... )
+>>> inst.swap_points()  # swaps all skeleton symmetries (ear_L <-> ear_R)
+>>> print(inst["ear_L"]["xy"], inst["ear_R"]["xy"])
+>>> inst.permute_points({"nose": "ear_R", "ear_R": "tail", "tail": "nose"})
+>>> print(list(inst.points["name"]) == skel.node_names)
+
+```
+
+`swap_points()` accepts `None` (all skeleton symmetries), a single pair such as
+`("ear_L", "ear_R")` or a `Symmetry`, or an iterable of disjoint pairs.
+`permute_points()` accepts either a bijective `{src: dst}` dictionary (moving
+data from `src` into `dst` simultaneously, leaving unmentioned nodes untouched)
+or a full index permutation such as `skel.get_flipped_node_inds()`.
+
+!!! warning "Avoid reindexing `inst.points` directly"
+    Because `"name"` is stored inside `PointsArray`, naive reindexing such as
+    `inst.points = inst.points[skel.get_flipped_node_inds()]` also swaps the
+    stored node names. Downstream name-based operations (`update_skeleton`,
+    `replace_skeleton`, `Labels.reorder_nodes`, `Labels.merge`) will then
+    silently undo or mis-map the swap. Always use `swap_points()` or
+    `permute_points()` instead.
+
 ### Changing the skeleton
 
 When an instance moves to a skeleton with nodes it has no data for
@@ -603,6 +645,8 @@ classDiagram
         +is_empty: bool
         +set_hidden(nodes, keep_location)
         +set_unlabeled(nodes)
+        +swap_points(pairs)
+        +permute_points(mapping)
     }
 
     class PredictedInstance {

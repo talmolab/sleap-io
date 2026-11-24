@@ -10,7 +10,7 @@ estimated, such as confidence scores.
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any
 
@@ -26,7 +26,7 @@ from sleap_io.model.record_metadata import (
     set_attrs_state,
     to_metadata,
 )
-from sleap_io.model.skeleton import Node, Skeleton
+from sleap_io.model.skeleton import Node, NodeOrIndex, Skeleton, Symmetry
 
 if TYPE_CHECKING:
     from sleap_io.model.bbox import BoundingBox
@@ -598,6 +598,216 @@ def _apply_point_flags(
     ):
         if value is not None:
             points[name] = np.broadcast_to(np.asarray(value, dtype=bool), points.shape)
+
+
+def _is_node_spec(obj: Any) -> bool:
+    """Return whether `obj` is a single node specifier (`int`, `str`, or `Node`)."""
+    return isinstance(obj, (str, Node)) or (
+        isinstance(obj, (int, np.integer)) and not isinstance(obj, bool)
+    )
+
+
+def _resolve_node_index(skeleton: Skeleton, node: NodeOrIndex) -> int:
+    """Resolve a node index, name, or `Node` to a non-negative skeleton index.
+
+    Args:
+        skeleton: The `Skeleton` to resolve `node` against.
+        node: A node index (positive or negative integer), string name, or `Node`.
+
+    Returns:
+        A non-negative index in `range(len(skeleton))`.
+
+    Raises:
+        ValueError: If `node` is not a valid node specification, is not found in
+            `skeleton`, or is an out-of-range index.
+    """
+    n_nodes = len(skeleton)
+    if isinstance(node, (int, np.integer)) and not isinstance(node, bool):
+        idx = int(node)
+        if idx < 0:
+            idx += n_nodes
+        if not (0 <= idx < n_nodes):
+            raise ValueError(
+                f"Node index {int(node)} is out of range for skeleton with "
+                f"{n_nodes} nodes."
+            )
+        return idx
+    if isinstance(node, (str, Node)):
+        try:
+            return skeleton.index(node)
+        except KeyError as err:
+            raise ValueError(f"Node {node!r} not found in skeleton.") from err
+    raise ValueError(
+        f"Invalid node specification {node!r}; expected int, str, or Node."
+    )
+
+
+def _pairs_to_permutation(
+    skeleton: Skeleton,
+    pairs: (
+        tuple[NodeOrIndex, NodeOrIndex]
+        | Symmetry
+        | Iterable[tuple[NodeOrIndex, NodeOrIndex] | Symmetry]
+        | None
+    ),
+) -> list[int]:
+    """Build a pull-index permutation list from swap pairs or skeleton symmetries.
+
+    Args:
+        skeleton: The `Skeleton` defining the nodes and symmetries.
+        pairs: A single 2-tuple pair, a single `Symmetry`, an iterable of pairs or
+            `Symmetry` objects, or `None` to use `skeleton.symmetries`.
+
+    Returns:
+        A list `perm` of length `len(skeleton)` where `new[i] = old[perm[i]]`.
+
+    Raises:
+        ValueError: If `pairs is None` and `skeleton.symmetries` is empty, if any
+            pair is malformed, if any node is unknown or out of range, or if any
+            node appears in more than one pair.
+    """
+    if pairs is None:
+        if not skeleton.symmetries:
+            raise ValueError(
+                "Skeleton has no symmetries defined; pass explicit `pairs` to swap."
+            )
+        raw_pairs: Iterable[Any] = skeleton.symmetry_inds
+    elif isinstance(pairs, Symmetry):
+        raw_pairs = [pairs]
+    elif (
+        isinstance(pairs, tuple)
+        and len(pairs) == 2
+        and all(_is_node_spec(item) for item in pairs)
+    ):
+        raw_pairs = [pairs]
+    elif isinstance(pairs, (str, bytes, Mapping)) or not isinstance(pairs, Iterable):
+        raise ValueError(
+            f"Invalid `pairs` argument {pairs!r}; expected a 2-tuple, Symmetry, "
+            "or iterable of pairs."
+        )
+    else:
+        raw_pairs = pairs
+
+    perm = list(range(len(skeleton)))
+    seen: set[int] = set()
+    for pair in raw_pairs:
+        if isinstance(pair, Symmetry):
+            a_spec, b_spec = pair
+        else:
+            if isinstance(pair, (str, bytes)) or not isinstance(pair, Iterable):
+                raise ValueError(
+                    "Each swap pair must be a 2-element pair or Symmetry, "
+                    f"got {pair!r}."
+                )
+            pair_items = list(pair)
+            if len(pair_items) != 2:
+                raise ValueError(
+                    f"Each swap pair must contain exactly 2 nodes, got {pair!r}."
+                )
+            a_spec, b_spec = pair_items
+
+        a = _resolve_node_index(skeleton, a_spec)
+        b = _resolve_node_index(skeleton, b_spec)
+
+        if a == b:
+            if a in seen:
+                raise ValueError(
+                    f"Node {skeleton.nodes[a].name!r} (index {a}) appears in "
+                    "multiple swap pairs."
+                )
+            seen.add(a)
+            continue
+
+        if a in seen or b in seen:
+            dup = a if a in seen else b
+            raise ValueError(
+                f"Node {skeleton.nodes[dup].name!r} (index {dup}) appears in "
+                "multiple swap pairs."
+            )
+        seen.add(a)
+        seen.add(b)
+        perm[a] = b
+        perm[b] = a
+
+    return perm
+
+
+def _mapping_to_permutation(
+    skeleton: Skeleton,
+    mapping: Mapping[NodeOrIndex, NodeOrIndex] | Sequence[int] | np.ndarray,
+) -> list[int]:
+    """Build a pull-index permutation list from a node mapping or index sequence.
+
+    Args:
+        skeleton: The `Skeleton` defining the nodes.
+        mapping: Either a dictionary `{src_node: dst_node}` specifying a bijection
+            on a subset of nodes (moving data at `src_node` into `dst_node`), or a
+            1D sequence/array of length `len(skeleton)` containing a permutation of
+            `range(len(skeleton))` where `new[i] = old[mapping[i]]`.
+
+    Returns:
+        A list `perm` of length `len(skeleton)` where `new[i] = old[perm[i]]`.
+
+    Raises:
+        ValueError: If `mapping` is malformed, non-bijective, wrong length, or
+            references unknown or out-of-range nodes.
+    """
+    n_nodes = len(skeleton)
+    if isinstance(mapping, Mapping):
+        resolved: dict[int, int] = {}
+        for src, dst in mapping.items():
+            src_idx = _resolve_node_index(skeleton, src)
+            dst_idx = _resolve_node_index(skeleton, dst)
+            if src_idx in resolved:
+                raise ValueError(
+                    f"Duplicate source node in mapping: "
+                    f"{skeleton.nodes[src_idx].name!r} (index {src_idx})."
+                )
+            resolved[src_idx] = dst_idx
+        if set(resolved.keys()) != set(resolved.values()):
+            raise ValueError(
+                "Mapping must be a bijection on the mapped nodes "
+                "(source and destination node sets must match)."
+            )
+        perm = list(range(n_nodes))
+        for src_idx, dst_idx in resolved.items():
+            perm[dst_idx] = src_idx
+        return perm
+
+    if isinstance(mapping, (str, bytes)) or not isinstance(
+        mapping, (Sequence, np.ndarray)
+    ):
+        raise ValueError(
+            f"Invalid `mapping` argument {mapping!r}; expected a dict mapping "
+            "nodes or a sequence of node indices."
+        )
+
+    if isinstance(mapping, np.ndarray) and mapping.ndim != 1:
+        raise ValueError(
+            f"Permutation array must be 1-dimensional, got shape {mapping.shape}."
+        )
+
+    if len(mapping) != n_nodes:
+        raise ValueError(
+            f"Permutation length ({len(mapping)}) must match skeleton node count "
+            f"({n_nodes})."
+        )
+
+    perm = []
+    for elem in mapping:
+        if not isinstance(elem, (int, np.integer)) or isinstance(elem, bool):
+            raise ValueError(
+                f"Permutation entries must be integers, got {elem!r} "
+                f"({type(elem).__name__})."
+            )
+        perm.append(int(elem))
+
+    if set(perm) != set(range(n_nodes)):
+        raise ValueError(
+            f"Permutation must contain each index in range({n_nodes}) exactly "
+            f"once, got {perm}."
+        )
+    return perm
 
 
 @attrs.define(eq=False)
@@ -1411,6 +1621,91 @@ class Instance:
         if not keep_location:
             self.points["xy"][inds] = np.nan
 
+    def _apply_point_permutation(self, perm: list[int]) -> None:
+        """Permute all non-`name` fields of `self.points` in place.
+
+        Args:
+            perm: A validated permutation of `range(len(self.skeleton))` such that
+                `new[i] = old[perm[i]]`.
+        """
+        for field_name in self.points.dtype.names:
+            if field_name != "name":
+                self.points[field_name] = self.points[field_name][perm]
+
+    def swap_points(
+        self,
+        pairs: (
+            tuple[NodeOrIndex, NodeOrIndex]
+            | Symmetry
+            | Iterable[tuple[NodeOrIndex, NodeOrIndex] | Symmetry]
+            | None
+        ) = None,
+    ) -> None:
+        """Swap keypoint data between pairs of nodes in place.
+
+        Swaps all point fields (`xy`, `visible`, `verified`, `labeled`, and `score`
+        on `PredictedInstance`) while keeping `points["name"]` aligned with
+        `skeleton.node_names`.
+
+        Args:
+            pairs: Which pairs of nodes to swap:
+                - `None` (default): swap every symmetric pair in
+                  `self.skeleton.symmetries`.
+                - A single 2-tuple `(node_a, node_b)` of node indices, names, or
+                  `Node` objects, or a single `Symmetry`.
+                - An iterable of 2-tuples and/or `Symmetry` objects. An empty
+                  iterable is a no-op.
+
+                Pairs must be disjoint (no node may appear in more than one pair).
+                Self-pairs `(node, node)` are treated as a no-op (the node still
+                cannot appear in another pair).
+
+        Raises:
+            ValueError: If `pairs is None` and `self.skeleton.symmetries` is empty,
+                if any pair is malformed, if any node is unknown or out of range,
+                or if any node appears in more than one pair.
+
+        See Also:
+            `permute_points`, `Skeleton.get_flipped_node_inds`
+        """
+        perm = _pairs_to_permutation(self.skeleton, pairs)
+        if perm != list(range(len(perm))):
+            self._apply_point_permutation(perm)
+
+    def permute_points(
+        self,
+        mapping: Mapping[NodeOrIndex, NodeOrIndex] | Sequence[int] | np.ndarray,
+    ) -> None:
+        """Permute keypoint data across nodes in place.
+
+        Permutes all point fields (`xy`, `visible`, `verified`, `labeled`, and
+        `score` on `PredictedInstance`) atomically while keeping `points["name"]`
+        aligned with `skeleton.node_names`.
+
+        Args:
+            mapping: Either:
+                - A dictionary `{src_node: dst_node}` moving the point data
+                  currently at `src_node` into slot `dst_node` simultaneously
+                  (not sequentially). Keys and values may be node indices, names,
+                  or `Node` objects and must form a bijection on the touched subset
+                  of nodes (`set(resolved_keys) == set(resolved_values)`);
+                  untouched nodes remain in place.
+                - A sequence (or 1D numpy array) of length `len(self.skeleton)`
+                  containing a permutation of `range(len(self.skeleton))` with
+                  `new[i] = old[mapping[i]]`, matching
+                  `Skeleton.get_flipped_node_inds()`.
+
+        Raises:
+            ValueError: If `mapping` is malformed, non-bijective, wrong length, or
+                references unknown or out-of-range nodes.
+
+        See Also:
+            `swap_points`, `Skeleton.get_flipped_node_inds`
+        """
+        perm = _mapping_to_permutation(self.skeleton, mapping)
+        if perm != list(range(len(perm))):
+            self._apply_point_permutation(perm)
+
     def update_skeleton(self, names_only: bool = False, unmapped: str | None = None):
         """Update or replace the skeleton associated with the instance.
 
@@ -1973,6 +2268,83 @@ class Instance3D:
             return np.full((len(self.skeleton.nodes), 3), np.nan, dtype="float64")
         return self.points.copy()
 
+    def _apply_point_permutation(self, perm: list[int]) -> None:
+        """Permute 3D coordinates in place according to `perm`."""
+        if self.points is not None:
+            self.points[:] = self.points[perm]
+
+    def swap_points(
+        self,
+        pairs: (
+            tuple[NodeOrIndex, NodeOrIndex]
+            | Symmetry
+            | Iterable[tuple[NodeOrIndex, NodeOrIndex] | Symmetry]
+            | None
+        ) = None,
+    ) -> None:
+        """Swap 3D keypoint data between pairs of nodes in place.
+
+        Permutes `points` (when not `None`) and, on `PredictedInstance3D`, also
+        permutes `point_scores` (when not `None`) so scores stay aligned with
+        coordinates.
+
+        Args:
+            pairs: Which pairs of nodes to swap:
+                - `None` (default): swap every symmetric pair in
+                  `self.skeleton.symmetries`.
+                - A single 2-tuple `(node_a, node_b)` of node indices, names, or
+                  `Node` objects, or a single `Symmetry`.
+                - An iterable of 2-tuples and/or `Symmetry` objects. An empty
+                  iterable is a no-op.
+
+                Pairs must be disjoint (no node may appear in more than one pair).
+                Self-pairs `(node, node)` are treated as a no-op (the node still
+                cannot appear in another pair).
+
+        Raises:
+            ValueError: If `pairs is None` and `self.skeleton.symmetries` is empty,
+                if any pair is malformed, if any node is unknown or out of range,
+                or if any node appears in more than one pair.
+
+        See Also:
+            `permute_points`, `Instance.swap_points`
+        """
+        perm = _pairs_to_permutation(self.skeleton, pairs)
+        if perm != list(range(len(perm))):
+            self._apply_point_permutation(perm)
+
+    def permute_points(
+        self,
+        mapping: Mapping[NodeOrIndex, NodeOrIndex] | Sequence[int] | np.ndarray,
+    ) -> None:
+        """Permute 3D keypoint data across nodes in place.
+
+        Permutes `points` (when not `None`) and, on `PredictedInstance3D`, also
+        permutes `point_scores` (when not `None`) atomically so scores stay aligned
+        with coordinates.
+
+        Args:
+            mapping: Either:
+                - A dictionary `{src_node: dst_node}` moving the point data
+                  currently at `src_node` into slot `dst_node` simultaneously.
+                  Keys and values must form a bijection on the touched subset of
+                  nodes; untouched nodes remain in place.
+                - A sequence (or 1D numpy array) of length `len(self.skeleton)`
+                  containing a permutation of `range(len(self.skeleton))` with
+                  `new[i] = old[mapping[i]]`, matching
+                  `Skeleton.get_flipped_node_inds()`.
+
+        Raises:
+            ValueError: If `mapping` is malformed, non-bijective, wrong length, or
+                references unknown or out-of-range nodes.
+
+        See Also:
+            `swap_points`, `Instance.permute_points`
+        """
+        perm = _mapping_to_permutation(self.skeleton, mapping)
+        if perm != list(range(len(perm))):
+            self._apply_point_permutation(perm)
+
 
 @attrs.define(eq=False)
 class PredictedInstance3D(Instance3D):
@@ -1999,3 +2371,9 @@ class PredictedInstance3D(Instance3D):
         n_total = len(self.skeleton.nodes)
         score_str = f", score={self.score:.3f}" if self.score is not None else ""
         return f"PredictedInstance3D(n_points={n_valid}/{n_total}{score_str})"
+
+    def _apply_point_permutation(self, perm: list[int]) -> None:
+        """Permute 3D coordinates and per-point scores in place according to `perm`."""
+        super()._apply_point_permutation(perm)
+        if self.point_scores is not None:
+            self.point_scores[:] = self.point_scores[perm]
