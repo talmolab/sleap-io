@@ -9,7 +9,7 @@ import warnings
 import h5py
 import numpy as np
 
-from sleap_io.io._remote import _mask_url_credentials
+from sleap_io.io._remote import _mask_url_credentials, _redact_names
 from sleap_io.model.instance import PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -362,7 +362,8 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
                 ]
             else:
                 warnings.warn(
-                    f"Pose with unassigned track found on {label.video.filename} "
+                    "Pose with unassigned track found on "
+                    f"{_redact_names(label.video.filename)} "
                     f"frame {label.frame_idx} instance {instance_idx}. "
                     f"Assigning ID {last_unassigned_id}."
                 )
