@@ -9772,6 +9772,171 @@ def test_update_from_numpy_nan_keeps_hidden_points():
     assert other.point_states[1] == sleap_io.PointState.VISIBLE
 
 
+def test_update_from_numpy_nonzero_first_labeled_frame_round_trip():
+    """Round-tripping through numpy() keeps frame indices when frame 0 is unlabeled."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="dummy.mp4", backend_metadata={"shape": (30, 100, 100, 3)})
+    track = Track("mouse0")
+
+    def _make_labels():
+        lf10 = LabeledFrame(
+            video=video,
+            frame_idx=10,
+            instances=[
+                Instance.from_numpy(
+                    np.array([[10.0, 20.0], [30.0, 40.0]]),
+                    skeleton=skeleton,
+                    track=track,
+                )
+            ],
+        )
+        lf12 = LabeledFrame(
+            video=video,
+            frame_idx=12,
+            instances=[
+                Instance.from_numpy(
+                    np.array([[50.0, 60.0], [70.0, 80.0]]),
+                    skeleton=skeleton,
+                    track=track,
+                )
+            ],
+        )
+        return Labels(
+            [lf10, lf12], videos=[video], skeletons=[skeleton], tracks=[track]
+        )
+
+    # Default create_missing=True: edits land on frames 10 and 12 (not 20 and 22),
+    # and no frames are created beyond the 30-frame video.
+    labels = _make_labels()
+    arr = labels.numpy()
+    assert arr.shape == (30, 1, 2, 2)
+    arr[10, 0] = [[11.0, 21.0], [31.0, 41.0]]
+    labels.update_from_numpy(arr)
+
+    non_empty = {lf.frame_idx: lf for lf in labels if lf.instances}
+    assert sorted(non_empty) == [10, 12]
+    assert_equal(non_empty[10].instances[0].numpy(), [[11.0, 21.0], [31.0, 41.0]])
+    assert_equal(non_empty[12].instances[0].numpy(), [[50.0, 60.0], [70.0, 80.0]])
+    assert max(lf.frame_idx for lf in labels) == 29
+    assert labels.numpy().shape == (30, 1, 2, 2)
+    assert_equal(labels.numpy(), arr)
+
+    # create_missing=False updates frames 10 and 12 in place without creating frames.
+    labels_existing = _make_labels()
+    labels_existing.update_from_numpy(arr, create_missing=False)
+    assert [lf.frame_idx for lf in labels_existing] == [10, 12]
+    assert_equal(labels_existing[0].instances[0].numpy(), [[11.0, 21.0], [31.0, 41.0]])
+    assert_equal(labels_existing[1].instances[0].numpy(), [[50.0, 60.0], [70.0, 80.0]])
+
+
+def test_update_from_numpy_lazy_nonzero_first_labeled_frame_round_trip(tmp_path):
+    """A lazily loaded Labels with first labeled frame > 0 round-trips cleanly."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="dummy.mp4", backend_metadata={"shape": (30, 100, 100, 3)})
+    track = Track("mouse0")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=10,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[10.0, 20.0], [30.0, 40.0]]),
+                        skeleton=skeleton,
+                        track=track,
+                    )
+                ],
+            ),
+            LabeledFrame(
+                video=video,
+                frame_idx=12,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[50.0, 60.0], [70.0, 80.0]]),
+                        skeleton=skeleton,
+                        track=track,
+                    )
+                ],
+            ),
+        ],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
+    )
+    slp_path = tmp_path / "nonzero_start.slp"
+    labels.save(slp_path)
+
+    lazy = sleap_io.load_slp(slp_path, lazy=True, open_videos=False)
+    arr = lazy.numpy()
+    assert arr.shape == (30, 1, 2, 2)
+    arr[10, 0] = [[15.0, 25.0], [35.0, 45.0]]
+
+    # Updating a lazy Labels directly raises instead of silently discarding edits.
+    with pytest.raises(RuntimeError, match="update_from_numpy"):
+        lazy.update_from_numpy(arr, create_missing=False)
+
+    # Materializing and updating with the lazy numpy() array round-trips cleanly.
+    materialized = lazy.materialize()
+    materialized.update_from_numpy(arr, create_missing=False)
+
+    assert [lf.frame_idx for lf in materialized] == [10, 12]
+    assert_equal(materialized[0].instances[0].numpy(), [[15.0, 25.0], [35.0, 45.0]])
+    assert_equal(materialized[1].instances[0].numpy(), [[50.0, 60.0], [70.0, 80.0]])
+    assert_equal(materialized.numpy(), arr)
+
+
+def test_update_from_numpy_explicit_first_frame_offset():
+    """Passing first_frame=N maps row i to frame_idx = i + N."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="dummy.mp4", backend_metadata={"shape": (30, 100, 100, 3)})
+    track = Track("mouse0")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=video,
+                frame_idx=10,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[10.0, 20.0], [30.0, 40.0]]),
+                        skeleton=skeleton,
+                        track=track,
+                    )
+                ],
+            ),
+            LabeledFrame(
+                video=video,
+                frame_idx=12,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[50.0, 60.0], [70.0, 80.0]]),
+                        skeleton=skeleton,
+                        track=track,
+                    )
+                ],
+            ),
+        ],
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
+    )
+
+    sliced = np.array(
+        [
+            [[[12.0, 22.0], [32.0, 42.0]]],  # frame 10 (update existing)
+            [[[25.0, 35.0], [45.0, 55.0]]],  # frame 11 (create new)
+            [[[52.0, 62.0], [72.0, 82.0]]],  # frame 12 (update existing)
+        ],
+        dtype=np.float32,
+    )
+    labels.update_from_numpy(sliced, first_frame=10)
+
+    by_idx = {lf.frame_idx: lf for lf in labels}
+    assert sorted(by_idx) == [10, 11, 12]
+    assert_equal(by_idx[10].instances[0].numpy(), [[12.0, 22.0], [32.0, 42.0]])
+    assert_equal(by_idx[11].instances[0].numpy(), [[25.0, 35.0], [45.0, 55.0]])
+    assert_equal(by_idx[12].instances[0].numpy(), [[52.0, 62.0], [72.0, 82.0]])
+
+
 @pytest.mark.usefixtures("v3_defaults")
 def test_map_instance_fills_unlabeled_and_copies_metadata():
     """Merge remapping marks unplaced nodes unlabeled and copies metadata."""
