@@ -7,15 +7,17 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal, assert_equal
 
-from sleap_io import Skeleton
+from sleap_io import LabeledFrame, Labels, Node, Skeleton, Symmetry, Video, load_slp
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.centroid import PredictedCentroid, UserCentroid
 from sleap_io.model.identity import Identity
 from sleap_io.model.instance import (
     Instance,
+    Instance3D,
     PointsArray,
     PointState,
     PredictedInstance,
+    PredictedInstance3D,
     PredictedPointsArray,
     Track,
     compute_point_states,
@@ -1513,3 +1515,572 @@ def test_from_numpy_flags_do_not_modify_input(cls):
     inst = cls.from_numpy(points, skeleton=Skeleton(["A", "B"]), labeled=False)
     assert not inst.points["labeled"].any()
     assert points["labeled"].all()
+
+
+def _make_symmetric_skeleton() -> Skeleton:
+    return Skeleton(
+        nodes=["nose", "ear_L", "ear_R", "paw_L", "paw_R", "tail"],
+        symmetries=[("ear_L", "ear_R"), ("paw_L", "paw_R")],
+    )
+
+
+def test_swap_points_default_symmetries():
+    """`swap_points()` with `pairs=None` swaps all skeleton symmetries in place."""
+    skel = _make_symmetric_skeleton()
+    xy = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]], dtype=float)
+    inst = Instance.from_numpy(xy, skeleton=skel)
+    points_ref = inst.points
+
+    ret = inst.swap_points()
+    assert ret is None
+    assert inst.points is points_ref
+    assert_equal(inst.points["xy"], [[0, 0], [2, 2], [1, 1], [4, 4], [3, 3], [5, 5]])
+    assert list(inst.points["name"]) == skel.node_names
+
+
+@pytest.mark.parametrize(
+    "pair_factory",
+    [
+        lambda skel: ("ear_L", "ear_R"),
+        lambda skel: (skel.nodes[1], skel.nodes[2]),
+        lambda skel: (1, 2),
+        lambda skel: (-5, -4),
+        lambda skel: (np.int64(1), np.int32(2)),
+        lambda skel: ("ear_L", 2),
+        lambda skel: Symmetry({skel.nodes[1], skel.nodes[2]}),
+    ],
+)
+def test_swap_points_single_pair_forms(pair_factory):
+    """`swap_points` accepts a single 2-tuple or `Symmetry` in any node format."""
+    skel = _make_symmetric_skeleton()
+    xy = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]], dtype=float)
+    inst = Instance.from_numpy(xy, skeleton=skel)
+
+    inst.swap_points(pair_factory(skel))
+    assert_equal(inst.points["xy"], [[0, 0], [2, 2], [1, 1], [3, 3], [4, 4], [5, 5]])
+    assert list(inst.points["name"]) == skel.node_names
+
+
+def test_swap_points_iterable_forms():
+    """`swap_points` accepts lists, pair tuples, generators, arrays, and Symmetries."""
+    skel = _make_symmetric_skeleton()
+    xy = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]], dtype=float)
+    expected = [[0, 0], [2, 2], [1, 1], [4, 4], [3, 3], [5, 5]]
+
+    # Tuple of 2 pairs (must not be confused with a single 2-tuple pair).
+    inst = Instance.from_numpy(xy.copy(), skeleton=skel)
+    inst.swap_points((("ear_L", "ear_R"), ("paw_L", "paw_R")))
+    assert_equal(inst.points["xy"], expected)
+
+    # Generator mixing Symmetry and index tuple.
+    inst = Instance.from_numpy(xy.copy(), skeleton=skel)
+    gen = (item for item in [skel.symmetries[0], (3, 4)])
+    inst.swap_points(gen)
+    assert_equal(inst.points["xy"], expected)
+
+    # 2D numpy array of index pairs.
+    inst = Instance.from_numpy(xy.copy(), skeleton=skel)
+    inst.swap_points(np.array([[1, 2], [3, 4]]))
+    assert_equal(inst.points["xy"], expected)
+
+    # Subset of pairs leaves other symmetric pair untouched.
+    inst = Instance.from_numpy(xy.copy(), skeleton=skel)
+    inst.swap_points([("paw_L", "paw_R")])
+    assert_equal(inst.points["xy"], [[0, 0], [1, 1], [2, 2], [4, 4], [3, 3], [5, 5]])
+    assert list(inst.points["name"]) == skel.node_names
+
+
+def test_swap_points_empty_and_self_pairs():
+    """Empty `pairs` and self-pairs are clean no-ops even without symmetries."""
+    skel = Skeleton(["A", "B", "C"])
+    xy = np.array([[1, 2], [3, 4], [5, 6]], dtype=float)
+    inst = Instance.from_numpy(xy, skeleton=skel)
+
+    inst.swap_points([])
+    inst.swap_points(())
+    inst.swap_points(("A", "A"))
+    assert_equal(inst.points["xy"], xy)
+
+    # Self-pair alongside a real pair only swaps the real pair.
+    inst.swap_points([("A", "A"), ("B", "C")])
+    assert_equal(inst.points["xy"], [[1, 2], [5, 6], [3, 4]])
+    assert list(inst.points["name"]) == skel.node_names
+
+
+def test_swap_points_errors():
+    """`swap_points` validates symmetries, disjointness, node lookup, and types."""
+    skel_no_sym = Skeleton(["A", "B", "C"])
+    inst_no_sym = Instance.from_numpy(
+        np.array([[1, 2], [3, 4], [5, 6]], dtype=float), skeleton=skel_no_sym
+    )
+
+    with pytest.raises(ValueError, match="no symmetries"):
+        inst_no_sym.swap_points()
+
+    # Overlapping / duplicate pairs.
+    for bad_pairs in [
+        [("A", "B"), ("B", "C")],
+        [("A", "B"), ("A", "B")],
+        [("A", "B"), ("B", "A")],
+        [("A", "A"), ("A", "B")],
+        [("A", "B"), ("A", "A")],
+        [(0, 1), (-2, 2)],
+    ]:
+        with pytest.raises(ValueError, match="multiple swap pairs"):
+            inst_no_sym.swap_points(bad_pairs)
+
+    # Unknown node / Node from another skeleton / out-of-bounds index.
+    with pytest.raises(ValueError, match="not found"):
+        inst_no_sym.swap_points(("A", "missing"))
+    with pytest.raises(ValueError, match="not found"):
+        inst_no_sym.swap_points((skel_no_sym.nodes[0], Node("A")))
+    with pytest.raises(ValueError, match="out of range"):
+        inst_no_sym.swap_points((0, 3))
+    with pytest.raises(ValueError, match="out of range"):
+        inst_no_sym.swap_points((0, -4))
+
+    # Malformed pairs or node specs.
+    for malformed in [
+        "AB",
+        b"AB",
+        {"A": "B"},
+        123,
+        [(0, 1, 2)],
+        [0, 1],
+        ["AB"],
+        [(True, 0)],
+        [(0, 1.5)],
+    ]:
+        with pytest.raises(ValueError):
+            inst_no_sym.swap_points(malformed)
+
+    # Overlapping symmetries on the skeleton itself are also caught.
+    skel_bad_sym = Skeleton(["A", "B", "C"], symmetries=[("A", "B"), ("B", "C")])
+    inst_bad_sym = Instance.from_numpy(
+        np.array([[1, 2], [3, 4], [5, 6]], dtype=float), skeleton=skel_bad_sym
+    )
+    with pytest.raises(ValueError, match="multiple swap pairs"):
+        inst_bad_sym.swap_points()
+
+
+def test_swap_and_permute_preserve_all_point_states():
+    """All `PointState`s and `verified` flags move together with coordinates."""
+    skel = Skeleton(["vis", "occ", "abs", "unl"])
+    xy = np.array([[10, 20], [30, 40], [np.nan, np.nan], [np.nan, np.nan]])
+    inst = Instance.from_numpy(
+        xy,
+        skeleton=skel,
+        visible=[True, False, False, False],
+        labeled=[True, True, True, False],
+        verified=[True, False, True, False],
+    )
+    assert_equal(
+        inst.point_states,
+        [
+            PointState.VISIBLE,
+            PointState.OCCLUDED,
+            PointState.ABSENT,
+            PointState.UNLABELED,
+        ],
+    )
+
+    inst.swap_points([("vis", "occ"), ("abs", "unl")])
+    assert_equal(
+        inst.points["xy"],
+        [[30, 40], [10, 20], [np.nan, np.nan], [np.nan, np.nan]],
+    )
+    assert_equal(inst.points["visible"], [False, True, False, False])
+    assert_equal(inst.points["labeled"], [True, True, False, True])
+    assert_equal(inst.points["verified"], [False, True, False, True])
+    assert_equal(
+        inst.point_states,
+        [
+            PointState.OCCLUDED,
+            PointState.VISIBLE,
+            PointState.UNLABELED,
+            PointState.ABSENT,
+        ],
+    )
+    assert list(inst.points["name"]) == skel.node_names
+
+    # Cyclic permutation rotates all four states cleanly.
+    inst.permute_points({"vis": "occ", "occ": "abs", "abs": "unl", "unl": "vis"})
+    assert_equal(
+        inst.points["xy"],
+        [[np.nan, np.nan], [30, 40], [10, 20], [np.nan, np.nan]],
+    )
+    assert_equal(inst.points["visible"], [False, False, True, False])
+    assert_equal(inst.points["labeled"], [True, True, True, False])
+    assert_equal(inst.points["verified"], [True, False, True, False])
+    assert_equal(
+        inst.point_states,
+        [
+            PointState.ABSENT,
+            PointState.OCCLUDED,
+            PointState.VISIBLE,
+            PointState.UNLABELED,
+        ],
+    )
+    assert list(inst.points["name"]) == skel.node_names
+
+
+def test_predicted_instance_swap_and_permute_scores():
+    """Per-point scores move with coordinates while instance score is unchanged."""
+    skel = _make_symmetric_skeleton()
+    xy = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]], dtype=float)
+    scores = np.array([0.91, 0.82, 0.73, 0.64, 0.55, 0.46])
+    pred = PredictedInstance.from_numpy(
+        xy,
+        skeleton=skel,
+        point_scores=scores,
+        score=0.99,
+        visible=[True, True, False, True, False, True],
+        verified=[True, False, True, False, True, False],
+    )
+
+    pred.swap_points()
+    assert pred.score == 0.99
+    assert_equal(pred.points["xy"], [[0, 0], [2, 2], [1, 1], [4, 4], [3, 3], [5, 5]])
+    assert_equal(pred.points["score"], [0.91, 0.73, 0.82, 0.55, 0.64, 0.46])
+    assert_equal(pred.points["visible"], [True, False, True, False, True, True])
+    assert_equal(pred.points["verified"], [True, True, False, True, False, False])
+    assert list(pred.points["name"]) == skel.node_names
+
+    pred.permute_points({"nose": "ear_L", "ear_L": "tail", "tail": "nose"})
+    assert pred.score == 0.99
+    assert_equal(pred.points["xy"][0], [5, 5])
+    assert_equal(pred.points["xy"][1], [0, 0])
+    assert_equal(pred.points["xy"][5], [2, 2])
+    assert_equal(pred.points["score"][0], 0.46)
+    assert_equal(pred.points["score"][1], 0.91)
+    assert_equal(pred.points["score"][5], 0.73)
+    assert list(pred.points["name"]) == skel.node_names
+
+
+def test_permute_points_dict_cycles_and_partial():
+    """`permute_points` applies 3-cycle, 4-cycle, and partial dicts atomically."""
+    skel = Skeleton(["nose", "ear_R", "tail_base", "ear_L", "center"])
+    xy = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]], dtype=float)
+    inst = Instance.from_numpy(xy, skeleton=skel)
+
+    # 4-cycle: nose -> ear_R -> tail_base -> ear_L -> nose; center stays put.
+    ret = inst.permute_points(
+        {
+            "nose": "ear_R",
+            "ear_R": "tail_base",
+            "tail_base": "ear_L",
+            "ear_L": "nose",
+        }
+    )
+    assert ret is None
+    assert_equal(inst.points["xy"], [[3, 3], [0, 0], [1, 1], [2, 2], [4, 4]])
+    assert list(inst.points["name"]) == skel.node_names
+
+    # 3-cycle using mixed node specs (Node, str, negative int, np.integer).
+    inst = Instance.from_numpy(xy.copy(), skeleton=skel)
+    inst.permute_points({skel.nodes[0]: "ear_R", np.int64(1): -3, 2: 0})
+    assert_equal(inst.points["xy"], [[2, 2], [0, 0], [1, 1], [3, 3], [4, 4]])
+    assert list(inst.points["name"]) == skel.node_names
+
+    # Empty and identity dicts are clean no-ops.
+    inst_before = inst.points["xy"].copy()
+    inst.permute_points({})
+    inst.permute_points({"nose": "nose"})
+    assert_equal(inst.points["xy"], inst_before)
+
+
+def test_permute_points_sequence_and_flipped_inds():
+    """`permute_points` supports index sequences matching `get_flipped_node_inds()`."""
+    skel = _make_symmetric_skeleton()
+    xy = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]], dtype=float)
+
+    inst_perm = Instance.from_numpy(xy.copy(), skeleton=skel)
+    inst_swap = Instance.from_numpy(xy.copy(), skeleton=skel)
+
+    inst_perm.permute_points(skel.get_flipped_node_inds())
+    inst_swap.swap_points()
+    assert_array_equal(inst_perm.points, inst_swap.points)
+    assert list(inst_perm.points["name"]) == skel.node_names
+
+    # Non-involution sequence and 1D numpy array: new[i] = old[perm[i]].
+    inst = Instance.from_numpy(xy.copy(), skeleton=skel)
+    inst.permute_points(np.array([5, 0, 1, 2, 3, 4]))
+    assert_equal(inst.points["xy"], [[5, 5], [0, 0], [1, 1], [2, 2], [3, 3], [4, 4]])
+    assert list(inst.points["name"]) == skel.node_names
+
+    # Identity permutation sequence is a no-op.
+    before = inst.points["xy"].copy()
+    inst.permute_points([0, 1, 2, 3, 4, 5])
+    assert_equal(inst.points["xy"], before)
+
+
+def test_permute_points_errors():
+    """`permute_points` rejects non-bijective dicts and invalid index sequences."""
+    skel = Skeleton(["A", "B", "C", "D"])
+    inst = Instance.from_numpy(
+        np.array([[0, 0], [1, 1], [2, 2], [3, 3]], dtype=float), skeleton=skel
+    )
+
+    # Non-bijective dicts.
+    with pytest.raises(ValueError, match="bijection"):
+        inst.permute_points({"A": "B", "B": "C"})
+    with pytest.raises(ValueError, match="bijection"):
+        inst.permute_points({"A": "B", "B": "B"})
+
+    # Duplicate resolved source key via mixed key representations.
+    with pytest.raises(ValueError, match="Duplicate source node"):
+        inst.permute_points({"A": "B", 0: "B", "B": "A"})
+
+    # Unknown node or out-of-range index in dict.
+    with pytest.raises(ValueError, match="not found"):
+        inst.permute_points({"A": "X", "X": "A"})
+    with pytest.raises(ValueError, match="out of range"):
+        inst.permute_points({0: 9, 9: 0})
+
+    # Invalid index sequences / arrays / types.
+    for bad in [
+        [0, 1, 2],  # too short
+        [0, 1, 2, 3, 4],  # too long
+        [0, 1, 1, 3],  # duplicate
+        [0, 1, 2, 4],  # out of range
+        [0, 1, 2, -1],  # negative not in range(n)
+        [True, False, 2, 3],  # bools
+        ["A", "B", "C", "D"],  # strings instead of ints
+        [0.0, 1, 2, 3],  # float
+        np.array([[0, 1], [2, 3]]),  # 2D array
+        "ABCD",  # string
+        123,  # non-sequence
+        None,
+    ]:
+        with pytest.raises(ValueError):
+            inst.permute_points(bad)
+
+
+@pytest.mark.parametrize("cls", [Instance, PredictedInstance])
+@pytest.mark.parametrize("method", ["swap_points", "permute_points"])
+def test_name_invariant_survives_downstream_operations(cls, method, tmp_path):
+    """Swapped/permuted points keep `points['name']` intact across name-based ops."""
+
+    def _make_inst(skel: Skeleton):
+        xy = np.array([[10, 1], [20, 2], [30, 3], [40, 4]], dtype=float)
+        kwargs = dict(
+            skeleton=skel,
+            visible=[True, True, False, True],
+            verified=[True, False, True, False],
+        )
+        if cls is PredictedInstance:
+            return cls.from_numpy(
+                xy, point_scores=np.array([0.9, 0.8, 0.7, 0.6]), score=0.95, **kwargs
+            )
+        return cls.from_numpy(xy, **kwargs)
+
+    def _apply(inst):
+        if method == "swap_points":
+            inst.swap_points()
+            # ear_L(1) <-> ear_R(2)
+            return {
+                "nose": ([10, 1], True, True, 0.9),
+                "ear_L": ([30, 3], False, True, 0.7),
+                "ear_R": ([20, 2], True, False, 0.8),
+                "tail": ([40, 4], True, False, 0.6),
+            }
+        inst.permute_points({"nose": "ear_L", "ear_L": "ear_R", "ear_R": "nose"})
+        return {
+            "nose": ([30, 3], False, True, 0.7),
+            "ear_L": ([10, 1], True, True, 0.9),
+            "ear_R": ([20, 2], True, False, 0.8),
+            "tail": ([40, 4], True, False, 0.6),
+        }
+
+    def _assert_matches(inst, expected):
+        assert list(inst.points["name"]) == inst.skeleton.node_names
+        for node_name, (xy_exp, vis_exp, ver_exp, score_exp) in expected.items():
+            pt = inst[node_name]
+            assert_equal(pt["xy"], xy_exp)
+            assert bool(pt["visible"]) is vis_exp
+            assert bool(pt["verified"]) is ver_exp
+            if cls is PredictedInstance:
+                assert pt["score"] == pytest.approx(score_exp)
+
+    # 1. `Instance.update_skeleton()`
+    skel = Skeleton(["nose", "ear_L", "ear_R", "tail"], symmetries=[("ear_L", "ear_R")])
+    inst = _make_inst(skel)
+    expected = _apply(inst)
+    _assert_matches(inst, expected)
+    inst.update_skeleton()
+    _assert_matches(inst, expected)
+
+    # 2. `Instance.replace_skeleton()` (reordered nodes + extra node)
+    new_skel = Skeleton(["tail", "ear_R", "nose", "ear_L", "extra"])
+    inst.replace_skeleton(new_skel)
+    _assert_matches(inst, expected)
+
+    # 3. `Labels.reorder_nodes()`
+    skel2 = Skeleton(
+        ["nose", "ear_L", "ear_R", "tail"], symmetries=[("ear_L", "ear_R")]
+    )
+    inst2 = _make_inst(skel2)
+    expected2 = _apply(inst2)
+    video = Video.from_filename("dummy.mp4")
+    labels = Labels(
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[inst2])],
+        skeletons=[skel2],
+    )
+    labels.reorder_nodes(["tail", "ear_R", "ear_L", "nose"])
+    _assert_matches(labels[0][0], expected2)
+
+    # 4. `Labels.merge()` (both same-order and different-order target skeleton)
+    for target_nodes in [
+        ["nose", "ear_L", "ear_R", "tail"],
+        ["tail", "ear_R", "ear_L", "nose"],
+    ]:
+        src_skel = Skeleton(
+            ["nose", "ear_L", "ear_R", "tail"], symmetries=[("ear_L", "ear_R")]
+        )
+        src_inst = _make_inst(src_skel)
+        expected_src = _apply(src_inst)
+        src_labels = Labels(
+            labeled_frames=[
+                LabeledFrame(
+                    video=Video.from_filename("vid.mp4"),
+                    frame_idx=0,
+                    instances=[src_inst],
+                )
+            ],
+            skeletons=[src_skel],
+        )
+        dst_skel = Skeleton(target_nodes, symmetries=[("ear_L", "ear_R")])
+        dst_labels = Labels(skeletons=[dst_skel])
+        dst_labels.merge(src_labels)
+        _assert_matches(dst_labels[0][0], expected_src)
+
+    # 5. SLP save / load round-trip
+    skel_slp = Skeleton(
+        ["nose", "ear_L", "ear_R", "tail"], symmetries=[("ear_L", "ear_R")]
+    )
+    inst_slp = _make_inst(skel_slp)
+    expected_slp = _apply(inst_slp)
+    labels_slp = Labels(
+        labeled_frames=[
+            LabeledFrame(
+                video=Video.from_filename("roundtrip.mp4"),
+                frame_idx=0,
+                instances=[inst_slp],
+            )
+        ],
+        skeletons=[skel_slp],
+    )
+    slp_path = tmp_path / f"swapped_{cls.__name__}_{method}.slp"
+    labels_slp.save(slp_path)
+    loaded = load_slp(slp_path)
+    _assert_matches(loaded[0][0], expected_slp)
+
+
+def test_instance3d_swap_and_permute():
+    """`Instance3D.swap_points` and `permute_points` mutate 3D points in place."""
+    skel = Skeleton(["nose", "ear_L", "ear_R", "tail"], symmetries=[("ear_L", "ear_R")])
+    pts = np.array(
+        [[0.0, 0.0, 1.0], [-1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [np.nan, np.nan, np.nan]]
+    )
+    inst = Instance3D(points=pts, skeleton=skel, score=0.9)
+    pts_ref = inst.points
+
+    assert inst.swap_points() is None
+    assert inst.points is pts_ref
+    assert_equal(
+        inst.points,
+        [[0.0, 0.0, 1.0], [1.0, 2.0, 3.0], [-1.0, 2.0, 3.0], [np.nan, np.nan, np.nan]],
+    )
+    assert inst.score == 0.9
+
+    # Explicit empty pairs and identity perm are no-ops.
+    before = inst.points.copy()
+    inst.swap_points([])
+    inst.permute_points({})
+    assert_equal(inst.points, before)
+
+    # Cyclic dict permutation and index-list permutation.
+    inst.permute_points({"nose": "ear_L", "ear_L": "tail", "tail": "nose"})
+    assert_equal(
+        inst.points,
+        [[np.nan, np.nan, np.nan], [0.0, 0.0, 1.0], [-1.0, 2.0, 3.0], [1.0, 2.0, 3.0]],
+    )
+
+    inst.permute_points(skel.get_flipped_node_inds())
+    assert_equal(
+        inst.points,
+        [[np.nan, np.nan, np.nan], [-1.0, 2.0, 3.0], [0.0, 0.0, 1.0], [1.0, 2.0, 3.0]],
+    )
+
+
+def test_predicted_instance3d_swap_and_permute_lockstep():
+    """`PredictedInstance3D` keeps `points` and `point_scores` in lockstep."""
+    skel = Skeleton(["nose", "ear_L", "ear_R", "tail"], symmetries=[("ear_L", "ear_R")])
+    pts = np.array(
+        [[0.0, 0.0, 1.0], [-1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [np.nan, np.nan, np.nan]]
+    )
+    scores = np.array([0.95, 0.85, 0.75, np.nan])
+    pred = PredictedInstance3D(
+        points=pts, skeleton=skel, score=0.88, point_scores=scores
+    )
+    pts_ref = pred.points
+    scores_ref = pred.point_scores
+
+    pred.swap_points()
+    assert pred.points is pts_ref
+    assert pred.point_scores is scores_ref
+    assert pred.score == 0.88
+    assert_equal(
+        pred.points,
+        [[0.0, 0.0, 1.0], [1.0, 2.0, 3.0], [-1.0, 2.0, 3.0], [np.nan, np.nan, np.nan]],
+    )
+    assert_equal(pred.point_scores, [0.95, 0.75, 0.85, np.nan])
+
+    pred.permute_points({"nose": "ear_L", "ear_L": "ear_R", "ear_R": "nose"})
+    assert pred.score == 0.88
+    assert_equal(
+        pred.points,
+        [[-1.0, 2.0, 3.0], [0.0, 0.0, 1.0], [1.0, 2.0, 3.0], [np.nan, np.nan, np.nan]],
+    )
+    assert_equal(pred.point_scores, [0.85, 0.95, 0.75, np.nan])
+
+
+def test_instance3d_none_edge_cases():
+    """`Instance3D` and `PredictedInstance3D` handle `None` points/point_scores."""
+    skel = Skeleton(["A", "B", "C"], symmetries=[("A", "B")])
+
+    # Instance3D with points=None still validates inputs and stays None on valid swap.
+    inst_none = Instance3D(points=None, skeleton=skel)
+    inst_none.swap_points()
+    inst_none.permute_points([1, 0, 2])
+    assert inst_none.points is None
+    with pytest.raises(ValueError, match="not found"):
+        inst_none.swap_points(("A", "missing"))
+
+    # PredictedInstance3D with point_scores=None swaps points without crashing.
+    pred_no_scores = PredictedInstance3D(
+        points=np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]),
+        skeleton=skel,
+        point_scores=None,
+    )
+    pred_no_scores.swap_points(("A", "B"))
+    assert_equal(
+        pred_no_scores.points,
+        [[4.0, 5.0, 6.0], [1.0, 2.0, 3.0], [7.0, 8.0, 9.0]],
+    )
+    assert pred_no_scores.point_scores is None
+
+    # PredictedInstance3D with points=None but point_scores present permutes scores.
+    pred_only_scores = PredictedInstance3D(
+        points=None, skeleton=skel, point_scores=np.array([0.1, 0.2, 0.3])
+    )
+    pred_only_scores.swap_points(("A", "C"))
+    assert pred_only_scores.points is None
+    assert_equal(pred_only_scores.point_scores, [0.3, 0.2, 0.1])
+
+    # PredictedInstance3D with both None.
+    pred_both_none = PredictedInstance3D(points=None, skeleton=skel, point_scores=None)
+    pred_both_none.swap_points()
+    pred_both_none.permute_points({"A": "B", "B": "A"})
+    assert pred_both_none.points is None
+    assert pred_both_none.point_scores is None
