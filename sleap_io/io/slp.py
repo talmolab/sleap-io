@@ -121,6 +121,7 @@ import simplejson as json
 from tqdm import tqdm
 
 from sleap_io.io._remote import (
+    _is_url,
     _mask_url_credentials_deep,
     _redact_names,
     _redact_text,
@@ -167,6 +168,12 @@ from sleap_io.model.mask import (
     PredictedSegmentationMask,
     SegmentationMask,
     UserSegmentationMask,
+)
+from sleap_io.model.preview import (
+    DEFAULT_PREVIEW_MAX_SIZE,
+    DEFAULT_PREVIEW_QUALITY,
+    PREVIEW_FORMAT_VERSION,
+    PreviewFrame,
 )
 from sleap_io.model.record_metadata import metadata_column_kinds
 from sleap_io.model.roi import ROI, PredictedROI, UserROI
@@ -9077,6 +9084,8 @@ def _read_labels_lazy_from_open_file(
                 )
             )
 
+    preview_frames = read_preview(labels_path, videos, _hdf5_file=f)
+
     # Create Labels with lazy state (annotations are on the lazy store)
     labels = Labels(
         labeled_frames=lazy_frames,
@@ -9090,6 +9099,7 @@ def _read_labels_lazy_from_open_file(
         provenance=provenance,
         event_types=event_types,
         events=events,
+        preview_frames=preview_frames,
         lazy_store=lazy_store,
     )
 
@@ -11946,6 +11956,8 @@ def _read_labels_from_open_file(
         else:
             undist_rois.append(r)
 
+    preview_frames = read_preview(labels_path, videos, _hdf5_file=f)
+
     labels = Labels(
         labeled_frames=labeled_frames,
         videos=videos,
@@ -11958,6 +11970,7 @@ def _read_labels_from_open_file(
         provenance=provenance,
         event_types=event_types,
         events=events,
+        preview_frames=preview_frames,
         rois=undist_rois,
     )
     labels.provenance["filename"] = labels_path
@@ -12111,8 +12124,495 @@ _KNOWN_TOPLEVEL_HDF5_NAMES = frozenset(
         "label_image_obj_names",
         "label_image_score_map_index",
         "label_image_score_maps",
+        "preview",
     }
 )
+
+
+def _check_preview_option(preview: bool | str | int) -> tuple[str, int]:
+    """Validate and normalize the ``preview`` save option.
+
+    Args:
+        preview: One of ``"auto"``, ``True``, ``False``, or a non-negative integer
+            giving the maximum number of preview frames to store.
+
+    Returns:
+        Tuple of ``(mode, count)`` where ``mode`` is one of ``"off"``, ``"auto"``,
+        or ``"explicit"``.
+
+    Raises:
+        ValueError: If ``preview`` is not a valid option.
+    """
+    if isinstance(preview, bool):
+        return ("explicit", 1) if preview else ("off", 0)
+    if isinstance(preview, str):
+        if preview == "auto":
+            return ("auto", 1)
+        raise ValueError(
+            f"preview must be 'auto', a bool, or a non-negative int, got {preview!r}."
+        )
+    if isinstance(preview, (int, np.integer)):
+        count = int(preview)
+        if count < 0:
+            raise ValueError(f"preview count must be non-negative, got {count}.")
+        if count == 0:
+            return ("off", 0)
+        return ("explicit", count)
+    raise ValueError(
+        f"preview must be 'auto', a bool, or a non-negative int, got {preview!r}."
+    )
+
+
+def _unwrap_video_backend(video: Video) -> VideoBackend | None:
+    """Return the innermost backend for a Video (unwrapping CropVideoBackend)."""
+    backend = video.backend
+    while backend is not None and hasattr(backend, "backend"):
+        inner = getattr(backend, "backend", None)
+        if inner is None or inner is backend:
+            break
+        backend = inner
+    return backend
+
+
+def _is_embedded_video(video: Video) -> bool:
+    """Return whether ``video`` stores embedded image frames inside an SLP file."""
+    inner = _unwrap_video_backend(video)
+    if inner is not None and getattr(inner, "has_embedded_images", False):
+        return True
+    return bool(video.backend_metadata.get("has_embedded_images", False))
+
+
+def _is_remote_video(video: Video) -> bool:
+    """Return whether ``video`` points to a remote URL."""
+    fn = video.filename
+    if isinstance(fn, list):
+        return bool(fn) and isinstance(fn[0], str) and _is_url(fn[0])
+    return isinstance(fn, str) and _is_url(fn)
+
+
+def _is_video_reader_active(video: Video) -> bool:
+    """Return True if ``video`` already has an active local, non-embedded reader.
+
+    Used by ``preview="auto"`` so saving labels loaded with ``prefer_metadata=True``
+    never opens a fresh decoder just to create a preview thumbnail.
+    """
+    if video.backend is None or _is_embedded_video(video) or _is_remote_video(video):
+        return False
+    inner = _unwrap_video_backend(video)
+    if inner is None:
+        return False
+    if getattr(inner, "_open_reader", None) is not None:
+        return True
+    if (
+        isinstance(inner, ImageVideo)
+        and getattr(inner, "_cached_shape", None) is not None
+    ):
+        return True
+    return False
+
+
+def _select_preview_candidates(
+    labels: Labels,
+    videos: list[Video],
+    eligible_vid_indices: set[int],
+    target_count: int,
+    exclude_keys: set[tuple[int, int]] | None = None,
+) -> list[tuple[int, int]]:
+    """Choose up to ``target_count`` ``(video_idx, frame_idx)`` pairs for previews.
+
+    Prefers frames with user instances, then predicted instances or other
+    annotations, then any labeled frame, and finally frame 0 of each eligible
+    video. Works on both eager and lazy `Labels` without materializing.
+    """
+    if target_count <= 0 or not eligible_vid_indices:
+        return []
+    exclude = exclude_keys or set()
+
+    # Tiers ordered by visual richness: (user_inst, any_inst_or_ann, any_labeled)
+    tier0: list[tuple[int, int]] = []
+    tier1: list[tuple[int, int]] = []
+    tier2: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set(exclude)
+
+    def _add(tier: list[tuple[int, int]], key: tuple[int, int]) -> None:
+        if key not in seen:
+            seen.add(key)
+            tier.append(key)
+
+    if labels.is_lazy:
+        store = labels._lazy_store
+        frames_data = store.frames_data
+        if len(frames_data) > 0:
+            vids = frames_data["video"].tolist()
+            fidxs = frames_data["frame_idx"].tolist()
+            starts = frames_data["instance_id_start"].tolist()
+            ends = frames_data["instance_id_end"].tolist()
+            inst_types = (
+                store.instances_data["instance_type"]
+                if len(store.instances_data) > 0
+                else None
+            )
+            ann_keys: set[tuple[int, int]] = set()
+            for d in (
+                store._bbox_by_frame,
+                store._mask_by_frame,
+                store._centroid_by_frame,
+                store._roi_by_frame,
+                store._label_image_by_frame,
+            ):
+                ann_keys.update(d.keys())
+
+            rows = sorted(zip(vids, fidxs, starts, ends), key=lambda r: (r[0], r[1]))
+            for v_idx, f_idx, i_start, i_end in rows:
+                if v_idx not in eligible_vid_indices or f_idx < 0:
+                    continue
+                key = (int(v_idx), int(f_idx))
+                if i_end > i_start:
+                    has_user = inst_types is not None and bool(
+                        np.any(inst_types[i_start:i_end] == InstanceType.USER)
+                    )
+                    _add(tier0 if has_user else tier1, key)
+                elif key in ann_keys:
+                    _add(tier1, key)
+                else:
+                    _add(tier2, key)
+            for v_idx, f_idx in sorted(ann_keys):
+                if v_idx in eligible_vid_indices and f_idx >= 0:
+                    _add(tier1, (int(v_idx), int(f_idx)))
+    else:
+        video_ids = _identity_index(videos)
+        frame_rows: list[tuple[int, int, LabeledFrame]] = []
+        for lf in labels.labeled_frames:
+            v_idx = video_ids.get(id(lf.video), -1)
+            if v_idx in eligible_vid_indices and lf.frame_idx >= 0:
+                frame_rows.append((v_idx, int(lf.frame_idx), lf))
+        frame_rows.sort(key=lambda r: (r[0], r[1]))
+        for v_idx, f_idx, lf in frame_rows:
+            key = (v_idx, f_idx)
+            if lf.user_instances:
+                _add(tier0, key)
+            elif (
+                lf.instances
+                or lf.bboxes
+                or lf.masks
+                or lf.centroids
+                or lf.rois
+                or lf.label_images
+            ):
+                _add(tier1, key)
+            else:
+                _add(tier2, key)
+
+    # Fallback: frame 0 of each eligible video.
+    tier3: list[tuple[int, int]] = []
+    for v_idx in sorted(eligible_vid_indices):
+        _add(tier3, (v_idx, 0))
+
+    # Build ordered pool; for multiple previews, evenly space within each tier.
+    selected: list[tuple[int, int]] = []
+    for tier in (tier0, tier1, tier2, tier3):
+        remaining = target_count - len(selected)
+        if remaining <= 0:
+            break
+        if not tier:
+            continue
+        if len(tier) <= remaining:
+            selected.extend(tier)
+        elif remaining == 1:
+            selected.append(tier[0])
+        else:
+            # Evenly spaced indices across the tier (always including first).
+            idxs = np.linspace(0, len(tier) - 1, num=remaining, dtype=int)
+            used: set[int] = set()
+            for idx in idxs.tolist():
+                if idx not in used:
+                    used.add(idx)
+                    selected.append(tier[idx])
+            if len(selected) < target_count:
+                for idx, item in enumerate(tier):
+                    if idx not in used:
+                        selected.append(item)
+                        if len(selected) >= target_count:
+                            break
+    return selected[:target_count]
+
+
+def _resolve_preview_frames(
+    labels: Labels,
+    *,
+    preview: bool | str | int = "auto",
+    embed: bool | str | list[tuple[Video, int]] | None = None,
+    reference_mode: VideoReferenceMode = VideoReferenceMode.RESTORE_ORIGINAL,
+    max_size: int = DEFAULT_PREVIEW_MAX_SIZE,
+    quality: int = DEFAULT_PREVIEW_QUALITY,
+) -> list[PreviewFrame]:
+    """Resolve the list of `PreviewFrame` objects to write into ``/preview``.
+
+    Never raises on video decoding errors; preview capture is always best-effort
+    so saving labels can never fail due to a missing or unreadable video.
+    """
+    mode, target_count = _check_preview_option(preview)
+    if mode == "off" or target_count <= 0 or not labels.videos:
+        return []
+
+    output_is_embedded = (bool(embed) and embed != "source") or (
+        reference_mode == VideoReferenceMode.EMBED
+        and any(_is_embedded_video(v) for v in labels.videos)
+    )
+    if mode == "auto" and output_is_embedded:
+        return []
+
+    video_ids = _identity_index(labels.videos)
+
+    # Keep valid already-attached preview frames (loaded from disk or populated
+    # during inference / GUI editing) without touching any video backend.
+    existing: list[PreviewFrame] = []
+    existing_keys: set[tuple[int, int]] = set()
+    for pf in labels.preview_frames:
+        v_idx = video_ids.get(id(pf.video), -1)
+        if v_idx < 0 or not pf.data:
+            continue
+        if mode == "auto" and _is_embedded_video(pf.video) and output_is_embedded:
+            continue
+        key = (v_idx, int(pf.frame_idx))
+        if key in existing_keys:
+            continue
+        existing_keys.add(key)
+        existing.append(pf)
+
+    if mode == "auto" and existing:
+        return existing
+
+    if len(existing) >= target_count:
+        return existing[:target_count]
+
+    # Pick eligible videos for capturing new preview frame(s).
+    eligible_vid_indices: set[int] = set()
+    for idx, video in enumerate(labels.videos):
+        if mode == "auto":
+            if _is_video_reader_active(video):
+                eligible_vid_indices.add(idx)
+        else:
+            # Explicit preview=True / preview=N: allow any accessible local video.
+            if not _is_remote_video(video):
+                eligible_vid_indices.add(idx)
+
+    if not eligible_vid_indices:
+        return existing
+
+    needed = target_count - len(existing)
+    # Request a few extra candidates in case a frame fails to decode.
+    candidates = _select_preview_candidates(
+        labels,
+        labels.videos,
+        eligible_vid_indices,
+        max(needed, needed + 3),
+        exclude_keys=existing_keys,
+    )
+
+    result = list(existing)
+    for v_idx, f_idx in candidates:
+        if len(result) >= target_count:
+            break
+        video = labels.videos[v_idx]
+        read_video = video
+        # If saving with embed="source" / restore_original_videos, prefer reading
+        # from the original source video if the current video is an embedded proxy
+        # whose source is accessible locally, or fall back to the proxy itself.
+        if (
+            reference_mode == VideoReferenceMode.RESTORE_ORIGINAL
+            and _is_embedded_video(video)
+            and video.source_video is not None
+            and not _is_remote_video(video.source_video)
+        ):
+            try:
+                if video.source_video.exists():
+                    read_video = video.source_video
+            except Exception:
+                pass
+
+        had_backend = read_video.backend is not None
+        inner_before = _unwrap_video_backend(read_video)
+        had_open_reader = (
+            inner_before is not None
+            and getattr(inner_before, "_open_reader", None) is not None
+        )
+        try:
+            if not read_video.exists():
+                continue
+            img = read_video[f_idx]
+            if img is None:
+                continue
+            pf = PreviewFrame.from_image(
+                video=video,
+                frame_idx=f_idx,
+                image=img,
+                max_size=max_size,
+                quality=quality,
+            )
+            result.append(pf)
+        except Exception:
+            continue
+        finally:
+            # Avoid leaving a newly opened decoder resident after preview capture.
+            if not had_open_reader:
+                try:
+                    if not had_backend:
+                        read_video.close()
+                    elif read_video.backend is not None:
+                        read_video.backend.close()
+                except Exception:
+                    pass
+
+    return result
+
+
+def read_preview(
+    labels_path: str,
+    videos: list[Video],
+    *,
+    _hdf5_file: h5py.File | None = None,
+) -> list[PreviewFrame]:
+    """Read embedded preview frames from an SLP file's ``/preview`` group.
+
+    Args:
+        labels_path: Path to the ``.slp`` file.
+        videos: List of `Video` objects loaded from ``videos_json``.
+        _hdf5_file: Optional already-open `h5py.File` handle.
+
+    Returns:
+        List of `PreviewFrame` objects (empty if ``/preview`` is absent).
+    """
+    ctx = (
+        nullcontext(_hdf5_file)
+        if _hdf5_file is not None
+        else h5py.File(labels_path, "r")
+    )
+    with ctx as f:
+        if "preview" not in f:
+            return []
+        grp = f["preview"]
+        if not isinstance(grp, h5py.Group):
+            return []
+        required = (
+            "video",
+            "frame_idx",
+            "orig_width",
+            "orig_height",
+            "width",
+            "height",
+            "data_start",
+            "data_end",
+            "data",
+        )
+        if not all(name in grp for name in required):
+            return []
+
+        vid_idxs = np.asarray(grp["video"][:], dtype=np.int64)
+        frame_idxs = np.asarray(grp["frame_idx"][:], dtype=np.int64)
+        orig_widths = np.asarray(grp["orig_width"][:], dtype=np.int32)
+        orig_heights = np.asarray(grp["orig_height"][:], dtype=np.int32)
+        widths = np.asarray(grp["width"][:], dtype=np.int32)
+        heights = np.asarray(grp["height"][:], dtype=np.int32)
+        starts = np.asarray(grp["data_start"][:], dtype=np.int64)
+        ends = np.asarray(grp["data_end"][:], dtype=np.int64)
+        blob = np.asarray(grp["data"][:], dtype=np.uint8).tobytes()
+
+        n = min(
+            len(vid_idxs),
+            len(frame_idxs),
+            len(orig_widths),
+            len(orig_heights),
+            len(widths),
+            len(heights),
+            len(starts),
+            len(ends),
+        )
+        blob_len = len(blob)
+        result: list[PreviewFrame] = []
+        for i in range(n):
+            v_idx = int(vid_idxs[i])
+            if not (0 <= v_idx < len(videos)):
+                continue
+            s = int(starts[i])
+            e = int(ends[i])
+            if s < 0 or e <= s or e > blob_len:
+                continue
+            result.append(
+                PreviewFrame(
+                    video=videos[v_idx],
+                    frame_idx=int(frame_idxs[i]),
+                    orig_width=int(orig_widths[i]),
+                    orig_height=int(orig_heights[i]),
+                    width=int(widths[i]),
+                    height=int(heights[i]),
+                    data=blob[s:e],
+                )
+            )
+        return result
+
+
+def write_preview(
+    labels_path: str | Path,
+    preview_frames: list[PreviewFrame],
+    videos: list[Video],
+) -> None:
+    """Write ``PreviewFrame`` entries to an SLP file's ``/preview`` group.
+
+    Additive: omitted completely when ``preview_frames`` has no valid entries.
+    """
+    if not preview_frames or not videos:
+        return
+
+    video_ids = _identity_index(videos)
+    valid: list[tuple[int, PreviewFrame]] = []
+    for pf in preview_frames:
+        v_idx = video_ids.get(id(pf.video), -1)
+        if v_idx < 0 or not pf.data:
+            continue
+        valid.append((v_idx, pf))
+    if not valid:
+        return
+
+    n = len(valid)
+    vid_idxs = np.empty(n, dtype=np.int64)
+    frame_idxs = np.empty(n, dtype=np.int64)
+    orig_widths = np.empty(n, dtype=np.int32)
+    orig_heights = np.empty(n, dtype=np.int32)
+    widths = np.empty(n, dtype=np.int32)
+    heights = np.empty(n, dtype=np.int32)
+    starts = np.empty(n, dtype=np.int64)
+    ends = np.empty(n, dtype=np.int64)
+    chunks: list[bytes] = []
+    offset = 0
+    for i, (v_idx, pf) in enumerate(valid):
+        raw = bytes(pf.data)
+        vid_idxs[i] = v_idx
+        frame_idxs[i] = int(pf.frame_idx)
+        orig_widths[i] = int(pf.orig_width)
+        orig_heights[i] = int(pf.orig_height)
+        widths[i] = int(pf.width)
+        heights[i] = int(pf.height)
+        starts[i] = offset
+        offset += len(raw)
+        ends[i] = offset
+        chunks.append(raw)
+
+    blob = np.frombuffer(b"".join(chunks), dtype=np.uint8)
+    with h5py.File(labels_path, "a") as f:
+        if "preview" in f:
+            del f["preview"]
+        grp = f.create_group("preview")
+        grp.attrs["format_version"] = np.int64(PREVIEW_FORMAT_VERSION)
+        grp.create_dataset("video", data=vid_idxs)
+        grp.create_dataset("frame_idx", data=frame_idxs)
+        grp.create_dataset("orig_width", data=orig_widths)
+        grp.create_dataset("orig_height", data=orig_heights)
+        grp.create_dataset("width", data=widths)
+        grp.create_dataset("height", data=heights)
+        grp.create_dataset("data_start", data=starts)
+        grp.create_dataset("data_end", data=ends)
+        grp.create_dataset("data", data=blob)
 
 
 def _is_known_toplevel_name(name: str) -> bool:
@@ -12599,6 +13099,7 @@ def _write_labels_lazy(
     unlabeled_as: str = "error",
     image_format: str | None = None,
     image_quality: int | None = None,
+    preview: bool | str | int = "auto",
 ) -> None:
     """Write lazy Labels to SLP file using fast path.
 
@@ -12638,6 +13139,7 @@ def _write_labels_lazy(
             `write_labels`.
         image_format: Image format for re-embedded frames. See `write_labels`.
         image_quality: Encoder quality for re-embedded frames. See `write_labels`.
+        preview: Preview frame embedding mode. See `write_labels`.
 
     Raises:
         ValueError: If labels is not lazy.
@@ -12710,6 +13212,7 @@ def _write_labels_lazy(
             compression=compression,
             image_format=image_format,
             image_quality=image_quality,
+            preview=preview,
         )
     _refresh_videos(labels.videos, stale_videos, labels_path)
     _remember_saved_layout(labels, labels_path)
@@ -12730,6 +13233,7 @@ def _write_lazy_tables(
     compression: str | None,
     image_format: str | None,
     image_quality: int | None,
+    preview: bool | str | int = "auto",
 ) -> None:
     """Write every table of lazy labels to a new file (see `_write_labels_lazy`).
 
@@ -12748,6 +13252,7 @@ def _write_lazy_tables(
         compression: See `_write_labels_lazy`.
         image_format: See `_write_labels_lazy`.
         image_quality: See `_write_labels_lazy`.
+        preview: See `_write_labels_lazy`.
     """
     lazy_store = labels._lazy_store
 
@@ -13011,6 +13516,14 @@ def _write_lazy_tables(
     if not legacy_format:
         _warn_unconsumed_carry(lazy_store.annotation_carry)
 
+    resolved_previews = _resolve_preview_frames(
+        labels,
+        preview=preview,
+        embed=embed,
+        reference_mode=reference_mode,
+    )
+    write_preview(labels_path, resolved_previews, labels.videos)
+
     # Re-emit any unknown members captured from the source file.
     _restore_unknown_hdf5(labels_path, unknown_stash)
 
@@ -13034,6 +13547,7 @@ def write_labels(
     image_format: str | None = None,
     image_quality: int | None = None,
     slp_version: str = "auto",
+    preview: bool | str | int = "auto",
 ):
     """Write a SLEAP labels file.
 
@@ -13134,6 +13648,12 @@ def write_labels(
             unlabeled points follow `unlabeled_as`, and metadata and unknown
             columns are dropped with a warning. `"v3"` always writes SLP format
             3.0, where every table is a group of columns.
+        preview: Whether to embed lightweight downscaled JPEG preview frame(s) in
+            the optional `/preview` HDF5 group for fast out-of-band previews when
+            videos are external/linked. One of `"auto"` (default: preserve attached
+            previews, skip embedded `.pkg.slp` saves, or capture 1 frame if a
+            non-embedded video reader is already active), `True` (capture 1 frame),
+            `False` or `0` (omit `/preview`), or a positive integer frame count.
 
     Notes:
         The file is written to a temporary file beside `labels_path` (named
@@ -13164,6 +13684,7 @@ def write_labels(
     """
     # Check before touching the output file so a refused save leaves it intact.
     image_format = _check_embed_image_format(image_format, image_quality)
+    _check_preview_option(preview)
     if unlabeled_as not in _UNLABELED_AS_MODES:
         raise ValueError(
             f"unlabeled_as must be one of {_UNLABELED_AS_MODES}, got {unlabeled_as!r}."
@@ -13216,6 +13737,7 @@ def write_labels(
                 unlabeled_as=unlabeled_as,
                 image_format=image_format,
                 image_quality=image_quality,
+                preview=preview,
             )
             return
 
@@ -13254,6 +13776,7 @@ def write_labels(
             compression=compression,
             image_format=image_format,
             image_quality=image_quality,
+            preview=preview,
         )
     # Videos of the given labels that read their frames from the file just
     # replaced now read them from the new one.
@@ -13279,6 +13802,7 @@ def _write_eager_tables(
     compression: str | None,
     image_format: str | None,
     image_quality: int | None,
+    preview: bool | str | int = "auto",
 ) -> None:
     """Write every table of eager labels to a new file (see `write_labels`).
 
@@ -13303,6 +13827,7 @@ def _write_eager_tables(
         compression: See `write_labels`.
         image_format: See `write_labels`.
         image_quality: See `write_labels`.
+        preview: See `write_labels`.
     """
     labels_path = save.path
 
@@ -13520,6 +14045,14 @@ def _write_eager_tables(
     )
     if not legacy_format:
         _warn_unconsumed_carry(carry)
+
+    resolved_previews = _resolve_preview_frames(
+        labels,
+        preview=preview,
+        embed=embed,
+        reference_mode=reference_mode,
+    )
+    write_preview(labels_path, resolved_previews, labels.videos)
 
     # Re-emit any unknown members captured from the source file.
     _restore_unknown_hdf5(labels_path, unknown_stash)

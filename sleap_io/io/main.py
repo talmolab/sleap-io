@@ -192,6 +192,7 @@ def save_slp(
     image_format: str | None = None,
     image_quality: int | None = None,
     slp_version: str = "auto",
+    preview: bool | str | int = "auto",
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -282,6 +283,13 @@ def save_slp(
             always writes format 3.0, which sleap-io < 0.10 and SLEAP can't open.
             The format 3.0 defaults (`set_v3_defaults`) make `"auto"` write
             format 3.0. See `resolve_slp_version`.
+        preview: Whether to embed lightweight downscaled JPEG preview frame(s) in
+            the optional `/preview` HDF5 group for fast out-of-band previews (such
+            as macOS Finder Quick Look) when videos are external/linked. One of
+            `"auto"` (default: preserve attached previews, skip embedded `.pkg.slp`
+            saves, or capture 1 frame if a non-embedded video reader is already
+            active), `True` (capture 1 frame), `False` or `0` (omit `/preview`), or
+            a positive integer count of preview frames to store.
 
     Notes:
         The file is written to a temporary file in the same folder and renamed
@@ -313,6 +321,7 @@ def save_slp(
         image_format=image_format,
         image_quality=image_quality,
         slp_version=slp_version,
+        preview=preview,
     )
 
 
