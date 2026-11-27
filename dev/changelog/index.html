@@ -384,6 +384,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v0100a0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.10.0a0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v096" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.6
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v095" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -685,28 +707,6 @@
     <span class="md-ellipsis">
       
         v0.2.0
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v0110" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.10
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v019" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.9
       
     </span>
   </a>
@@ -3877,6 +3877,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v0100a0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.10.0a0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v096" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.6
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v095" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4184,28 +4206,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v0110" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.10
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v019" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.1.9
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -4225,6 +4225,210 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v0100a0"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.10.0a0">v0.10.0a0</a><a class="headerlink" href="#v0100a0" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.10.0a0 Release Notes</h1>
+<blockquote>
+<p><strong>First pre-release of 0.10.0.</strong> sleap-io 0.10 introduces <strong>SLP format 3.0</strong> — a new columnar HDF5 <code>.slp</code> layout that adds per-point <code>labeled</code> state (distinguishing unlabeled keypoints from hidden ones), per-record metadata, faster saves, and forward-compatible unknown columns. To preserve ecosystem compatibility, 0.10 reads both the existing 2.x layout and the new 3.0 layout, and <strong>writes the 2.x layout by default</strong> so sleap-io 0.9 and SLEAP 1.6 continue to open saved files. Everything that would change what gets saved in an SLP file is opt-in. See <a href="https://github.com/talmolab/sleap-io/blob/v0.10.0a0/docs/upgrading.md">Upgrading to 0.10</a>.</p>
+</blockquote>
+<h2>Requirements &amp; Breaking Platform Notes</h2>
+<div class="markdown-alert markdown-alert-warning"><p class="markdown-alert-title"><svg data-component="Octicon" class="octicon octicon-alert mr-2" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"><path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>Warning</p><p><strong>Check before installing on Python 3.10 or Apple Silicon Macs on macOS 13 (Ventura) and earlier:</strong></p>
+<ul>
+<li><strong>Python 3.11 or newer required (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6568029819" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/612" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/612/hovercard" href="https://github.com/talmolab/sleap-io/pull/612">#612</a>):</strong> sleap-io 0.10 drops Python 3.10. For Python 3.10, continue using <code>sleap-io 0.9.6</code>.</li>
+<li><strong>macOS 14+ (Sonoma) required for prebuilt Apple Silicon (<code>arm64</code>) <code>pyav</code> wheels (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6568029819" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/612" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/612/hovercard" href="https://github.com/talmolab/sleap-io/pull/612">#612</a>):</strong> The optional <code>pyav</code> extra (also included in <code>[all]</code>) requires <code>av&gt;=18.1.1,!=19.0.0,!=19.0.1,!=19.0.2</code> to fix a PyAV frame-threaded decoder deadlock (<code>PyAV#2440</code>). PyAV 16+ only publishes Apple Silicon wheels tagged <code>macosx_14_0_arm64</code> (Intel <code>x86_64</code> Macs still have <code>macosx_11_0_x86_64</code> wheels).</li>
+<li><strong>Apple Silicon macOS 13 (and earlier) workarounds — you do NOT need to upgrade macOS to use <code>sleap-io 0.10</code>:</strong>
+<ol>
+<li><strong>Skip <code>[pyav]</code> / <code>[all]</code> (recommended):</strong> Install base <code>sleap-io</code> (<code>imageio-ffmpeg</code>) or <code>sleap-io[opencv]</code> (OpenCV is the default local video backend; <code>pyav</code> is only needed for remote HTTP/HTTPS media video streaming or explicit <code>plugin="pyav"</code>).</li>
+<li><strong>Build <code>av</code> from source (if you specifically need <code>pyav</code>):</strong> Install FFmpeg development libraries first (<code>brew install ffmpeg pkg-config</code>), then install <code>sleap-io[pyav]</code>.</li>
+<li><strong>Stay on <code>sleap-io 0.9.6</code>:</strong> The 0.9.x line uses <code>av&lt;16.0.0</code>, which ships prebuilt <code>macosx_13_0_arm64</code> wheels via <code>av 15.1.0</code>.</li>
+</ol>
+</li>
+</ul>
+</div>
+<h2>Installation</h2>
+<p>Pre-releases are opt-in: plain <code>pip install sleap-io</code> and requirements like <code>sleap-io&lt;0.10</code> continue to install the 0.9.x line. To install this alpha:</p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Base install (works on all supported OSes, including macOS 13 Apple Silicon):
+pip install &quot;sleap-io&gt;=0.10.0a0&quot;
+# or with OpenCV video backend (recommended on macOS 13 Apple Silicon):
+pip install &quot;sleap-io[opencv]&gt;=0.10.0a0&quot;
+
+# With uv:
+uv pip install &quot;sleap-io&gt;=0.10.0a0&quot;
+
+# With all optional extras (includes PyAV &gt;=18.1.1 — requires macOS 14+ for prebuilt Apple Silicon wheels):
+uv pip install &quot;sleap-io[all]&gt;=0.10.0a0&quot;"><pre><span class="pl-c"><span class="pl-c">#</span> Base install (works on all supported OSes, including macOS 13 Apple Silicon):</span>
+pip install <span class="pl-s"><span class="pl-pds">"</span>sleap-io&gt;=0.10.0a0<span class="pl-pds">"</span></span>
+<span class="pl-c"><span class="pl-c">#</span> or with OpenCV video backend (recommended on macOS 13 Apple Silicon):</span>
+pip install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[opencv]&gt;=0.10.0a0<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> With uv:</span>
+uv pip install <span class="pl-s"><span class="pl-pds">"</span>sleap-io&gt;=0.10.0a0<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> With all optional extras (includes PyAV &gt;=18.1.1 — requires macOS 14+ for prebuilt Apple Silicon wheels):</span>
+uv pip install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]&gt;=0.10.0a0<span class="pl-pds">"</span></span></pre></div>
+<h2>Highlights</h2>
+<ul>
+<li><strong>SLP format 3.0 (opt-in).</strong> A columnar HDF5 layout storing every table one dataset per column, adding a per-point <code>labeled</code> column, per-record metadata, range checks on read, carried unknown columns across re-saves, and an optional <code>required_features</code> attribute. Saves are 2–10× faster than 0.9.x.</li>
+<li><strong>Backwards compatible by default.</strong> Saves write the SLP 2.x layout unless the labels were loaded from (or last saved as) format 3.0, or hold content only format 3.0 can store (unlabeled points, record metadata, unknown columns); then they write format 3.0 and warn once. Old files load with their points as stored. COCO and Ultralytics imports, skeleton changes, and merges behave as in 0.9.</li>
+<li><strong>One layout option everywhere SLP is saved:</strong> <code>slp_version="auto" | "v2" | "v3"</code> in every save function, and <code>--slp-version</code> on every <code>sio</code> command that writes SLP (alongside <code>--compression</code>, <code>--unlabeled-as</code>, <code>--image-format</code>, <code>--image-quality</code>). <code>legacy_format=True</code> / <code>--legacy-format</code> mean <code>"v2"</code>. Files written together (<code>LabelsSet.save</code>, <code>make_training_splits</code>, <code>sio split</code>) share one layout.</li>
+<li><strong>One switch for the new defaults:</strong> <code>sio.set_v3_defaults(True)</code>, <code>with sio.v3_defaults():</code>, or <code>SLEAP_IO_V3_DEFAULTS=1</code> enable format 3.0 and every newer opt-in reading for a process. Explicit options always win.</li>
+<li><strong>Unlabeled keypoints.</strong> Each point carries <code>visible</code>, <code>labeled</code>, and <code>verified</code> flags plus <code>xy</code>, giving four states (<code>sio.PointState</code>): <code>VISIBLE</code>, <code>OCCLUDED</code> (hidden, with an estimated location), <code>ABSENT</code> (hidden, location unknown), and <code>UNLABELED</code> (not annotated; ignored by training). Adds <code>Instance.point_states</code>, <code>set_unlabeled</code>, <code>set_hidden(keep_location=)</code>, <code>n_labeled</code>, <code>Instance.from_numpy(visible=, labeled=, verified=)</code>, and <code>numpy(return_states=True)</code>.</li>
+<li><strong>Safe keypoint swapping and permuting (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6573011665" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/616" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/616/hovercard" href="https://github.com/talmolab/sleap-io/pull/616">#616</a>).</strong> <code>Instance.swap_points()</code> and <code>Instance.permute_points()</code> (inherited by <code>PredictedInstance</code>), plus matching methods on <code>Instance3D</code> and <code>PredictedInstance3D</code>, swap skeleton symmetries or arbitrary disjoint node pairs and apply atomic cyclic or index permutations across all point fields (<code>xy</code>, <code>visible</code>, <code>verified</code>, <code>labeled</code>, <code>score</code> / <code>point_scores</code>) while keeping <code>points["name"]</code> aligned with <code>skeleton.node_names</code>.</li>
+<li><strong>Record metadata.</strong> <code>Instance</code>, <code>LabeledFrame</code>, and <code>BoundingBox</code> carry a <code>metadata</code> dict of scalars, persisted in format 3.0.</li>
+<li><strong>Compression and JPEG embedded frames.</strong> <code>compression="gzip" | "lzf"</code> on every save (<code>--compression</code>), plus <code>image_format="png" | "jpg"</code> and <code>image_quality</code> when embedding frames.</li>
+<li><strong>Opt-in newer readings:</strong> COCO/Ultralytics ternary visibility (<code>visibility_encoding="auto" | "ternary"</code>, <code>v0_as</code>), preserved COCO annotation fields (<code>keep_metadata=True</code>), unlabeled new nodes on skeleton change or merge (<code>unmapped="unlabeled"</code>), and cleanup of stale hidden coordinates in pre-3.0 files (<code>clean_legacy_points=True</code>).</li>
+<li><strong>Atomic saves and stricter integrity checks (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6547296875" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/598" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/598/hovercard" href="https://github.com/talmolab/sleap-io/pull/598">#598</a>).</strong> Saves write to a temporary file and rename it over the target so a failed or cancelled save keeps the previous file intact. Corrupt skeleton and track references are refused on read in format 3.0.</li>
+<li><strong>Faster video and image reads.</strong> Chunked embedded frame datasets stay open between reads; <code>ImageVideo.get_frame(downscale=2|4|8)</code> decodes large JPEGs at reduced resolution and <code>get_frame_size()</code> probes dimensions from file headers without full decoding (ignoring EXIF/TIFF orientation consistently across plugins).</li>
+<li><strong>Python 3.11+ and PyAV 18.1.1+ (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6568029819" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/612" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/612/hovercard" href="https://github.com/talmolab/sleap-io/pull/612">#612</a>).</strong> Raises the Python floor to 3.11 and requires <code>av&gt;=18.1.1,!=19.0.0,!=19.0.1,!=19.0.2</code> in the optional <code>pyav</code> and <code>all</code> extras to pull in the PyAV deadlock fix when freeing frame-threaded decoders.</li>
+</ul>
+<h2>Upgrading</h2>
+<p>Nothing changes in what gets saved in <code>.slp</code> files unless you opt in. Key requirement and behaviour changes relative to 0.9.6 (full guide in <a href="https://github.com/talmolab/sleap-io/blob/v0.10.0a0/docs/upgrading.md">docs/upgrading.md</a>):</p>
+<ul>
+<li><strong>Python 3.11+ and optional PyAV 18.1.1+ (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6568029819" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/612" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/612/hovercard" href="https://github.com/talmolab/sleap-io/pull/612">#612</a>):</strong> See <a href="#requirements--breaking-platform-notes">Requirements &amp; Breaking Platform Notes</a> above for the Apple Silicon macOS 14 wheel floor and macOS 13 workarounds.
+<ul>
+<li><strong>PyAV color nuance on 10-bit 4:2:0 and 8-bit NV12/NV21/YUV410:</strong> 8-bit planar YUV (4:2:0, 4:2:2, 4:4:4), grayscale, RGB, and palette videos decode to the same pixels as in 0.9. Videos with &gt;8-bit 4:2:0 color (most 10-bit H.264/HEVC/AV1) and 8-bit NV12, NV21, or YUV410 layouts can differ along color edges (about 2 levels on average; ~5% of pixels by &gt;32 levels, with much smaller luminance differences) due to FFmpeg's updated chroma upsampling in PyAV 18. OpenCV reads are unaffected.</li>
+</ul>
+</li>
+<li><strong>Hidden points with coordinates are occluded estimates.</strong> Old files keep the position the SLEAP GUI leaves on a node it hides. An instance whose points are all hidden that way is not <code>is_empty</code>, <code>Labels.clean(empty_instances=True)</code> keeps it, and the COCO and Ultralytics exports write those coordinates as occluded keypoints. <code>Instance.numpy()</code> still returns NaN for hidden points. <code>load_slp(..., clean_legacy_points=True)</code> gives 0.9's results.</li>
+<li><strong><code>is_empty</code> and <code>update_from_numpy</code>.</strong> An instance is empty when no labeled point has a location. <code>update_from_numpy</code> marks finite coordinates visible and labeled; NaN hides a visible point (it used to leave the point unchanged).</li>
+<li><strong>Lazy <code>numpy()</code> and <code>update_from_numpy()</code> both start at frame 0 (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6573231500" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/617" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/617/hovercard" href="https://github.com/talmolab/sleap-io/pull/617">#617</a>).</strong> In 0.9, lazy <code>numpy()</code> started at the first labeled frame and <code>update_from_numpy()</code> offset every row by the first labeled frame's index (double-shifting eager <code>numpy()</code> arrays when frame 0 was unlabeled). <code>update_from_numpy(..., first_frame=0)</code> now matches both eager and lazy <code>numpy()</code> and accepts an explicit <code>first_frame</code> offset for sliced arrays.</li>
+<li><strong><code>complete</code> is now <code>verified</code>.</strong> <code>points["complete"]</code> keeps working on arrays, single points, and instance rows with a <code>DeprecationWarning</code>.</li>
+<li><strong>The points dtype has a <code>labeled</code> field.</strong> <code>Instance.from_numpy</code> with five columns takes <code>x, y, visible, verified, labeled</code>.</li>
+<li><strong>Exports and hidden points.</strong> Label Studio skips hidden points; NWB predictions writes NaN; NWB annotations keeps occluded estimates with <code>node_visibility=False</code>. <code>save_coco</code> writes the box area instead of <code>0</code>. <code>tracking_score</code> NaN reads as <code>None</code> in format 3.0 files. The dictionary codec is 1.1.0; dataframe/CSV exports gain a <code>labeled</code> column; Analysis HDF5 gains <code>point_labeled</code>.</li>
+<li><strong><code>LabelsSet.save</code> forwards SLP options to <code>save_slp</code></strong>, so an unknown argument raises <code>TypeError</code>. <code>sio convert --legacy-format</code> to a non-SLP output fails instead of being ignored.</li>
+<li><strong>Older readers and format 3.0.</strong> sleap-io <strong>0.9.5 and later</strong> refuse format 3.0 files with a clear message; <strong>0.9.4 and older</strong> fail with <code>TypeError: Accessing a group is done with bytes or str, not &lt;class 'tuple'&gt;</code>. Files saved by 0.10 with the defaults open in both, unless they needed format 3.0.</li>
+</ul>
+<h2>Fixes</h2>
+<ul>
+<li><strong>Atomic saves (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6547296875" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/598" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/598/hovercard" href="https://github.com/talmolab/sleap-io/pull/598">#598</a>):</strong> A package saved over itself keeps its frames; a failed or cancelled save leaves the previous file in place.</li>
+<li><strong>Non-sequential ID links:</strong> Instance and frame ID links that are not row numbers are remapped on read and survive every save mode.</li>
+<li><strong>PyAV decoder deadlock and forked-child reads (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6568029819" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/612" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/612/hovercard" href="https://github.com/talmolab/sleap-io/pull/612">#612</a>):</strong> Requiring PyAV <code>&gt;=18.1.1</code> (excluding <code>19.0.0–19.0.2</code>) resolves hangs when closing or freeing a frame-threaded PyAV decoder while logging is active; a per-reader single-threaded reformatter preserves BT.601 color parity and avoids hangs in forked child processes.</li>
+<li><strong><code>Labels.update_from_numpy</code> frame-offset fix and lazy guard (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6573231500" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/617" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/617/hovercard" href="https://github.com/talmolab/sleap-io/pull/617">#617</a>):</strong> Row <code>i</code> maps to <code>frame_idx = i + first_frame</code> with <code>first_frame=0</code> by default (fixing double-shifted updates when frame 0 is unlabeled), and calling <code>update_from_numpy</code> on lazy <code>Labels</code> raises a clear <code>RuntimeError</code>.</li>
+<li><strong>Includes all fixes from <a href="https://github.com/talmolab/sleap-io/releases/tag/v0.9.6"><code>v0.9.6</code></a>:</strong> Merged-package video numbering (<code>#593</code>/<code>#599</code>), multi-camera package merges without original videos (<code>#594</code>, contributed by Stefan Oline), URL credential masking across store schemes and error/<code>repr()</code> redaction (<code>#588</code>/<code>#606</code>/<code>#608</code>/<code>#609</code>/<code>#613</code>, extended in 0.10 to the new <code>get_frame_size()</code> / <code>get_frame(downscale=)</code> methods), one-frame and PyAV end-seek fixes (<code>#587</code>), and SLEAP Analysis CSV one-row-per-animal output (<code>#591</code>).</li>
+</ul>
+<h2 id="v096"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.9.6">v0.9.6</a><a class="headerlink" href="#v096" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.9.6 Release Notes</h1>
+<h2>Summary</h2>
+<p>sleap-io v0.9.6 is a patch release of the 0.9 line. Its main fix: saving a project after merging in a training package (<code>.pkg.slp</code>), saving a subset of a package, or reordering videos before a save could store labels against the wrong video, with no error. It also keeps the cameras of a multi-camera package apart when the package is merged on a computer that can't open the original videos, masks a link's password or token in saved files (including <code>abfss://</code> and other store links) and redacts link credentials out of error messages, warnings, tracebacks, and <code>repr()</code>, reads one-frame videos, stops the PyAV reader returning the wrong frame near the end of a video, and makes the SLEAP Analysis CSV write one row per animal.</p>
+<p>There is no SLP format change: the writer still produces format <strong>2.8</strong> at most, and ordinary saves are byte-for-byte what 0.9.5 writes. Files saved by 0.9.6 open in sleap-io 0.9.5 and older. There are no breaking API changes.</p>
+<p><strong>Highlights:</strong></p>
+<ul>
+<li><strong>Merged projects save every label on its own video (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6306745692" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/593" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/593/hovercard" href="https://github.com/talmolab/sleap-io/pull/593">#593</a>).</strong> Each saved frame records its video as a number. That number came from the name of the image group the video was read from inside a package (<code>video0</code>, <code>video1</code>, ...), not from the video's place in the project being saved, so after a merge, a subset or a reorder, labels could land on another video. The numbers are now chosen so that every frame is read back on its own video, by 0.9.6 and by sleap-io 0.9.5 and older. Contributed by Stefan Oline.</li>
+<li><strong>Same-named cameras stay apart when a package is merged without its original videos (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6306746229" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/594" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/594/hovercard" href="https://github.com/talmolab/sleap-io/pull/594">#594</a>).</strong> Cameras whose videos share a file name in different folders (<code>Camera1/0.mp4</code>, <code>Camera3/0.mp4</code>) were joined into one video. Contributed by Stefan Oline.</li>
+<li><strong>Link passwords and tokens are masked in saved files and redacted from errors and <code>repr()</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6154947115" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/588" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/588/hovercard" href="https://github.com/talmolab/sleap-io/pull/588">#588</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a>).</strong> Original saved-file masking (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6154947115" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/588" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/588/hovercard" href="https://github.com/talmolab/sleap-io/pull/588">#588</a>) contributed by Stefan Oline; extended in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a> (backport of <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6554106473" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/608" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/608/hovercard" href="https://github.com/talmolab/sleap-io/pull/608">#608</a> and <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6554263293" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/609" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/609/hovercard" href="https://github.com/talmolab/sleap-io/pull/609">#609</a>) to mask passwords across <code>abfss://</code> and 15 other store/remote schemes and to redact all link credentials out of error messages, warnings, tracebacks, and <code>repr()</code>.</li>
+</ul>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.9.6 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.9.6 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span></pre></div>
+<hr>
+<h2>Fixes</h2>
+<ul>
+<li><strong>Saved frames point at the right video (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6306745692" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/593" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/593/hovercard" href="https://github.com/talmolab/sleap-io/pull/593">#593</a>).</strong> Contributed by Stefan Oline.
+<ul>
+<li>Affected saves: a project merged with a package and saved (<code>save_slp</code>, <code>Labels.save</code>, any <code>embed</code> setting), a subset of a package (for example a training split), and videos reordered before saving.</li>
+<li>What gets stored: each frame's video number is its video's position in the saved project, unless older readers would decode a position differently (they guess the number from the package's image groups). Then the writer stores the number those readers decode correctly. Ordinary saves (one or more plain videos, a package saved whole, <code>embed=True</code>) store exactly what 0.9.5 stores.</li>
+<li>Only when no numbering can be read correctly by every reader does the file get a new attribute, <code>video_ids = "index"</code>, on <code>/frames</code> (and <code>/negative_frames</code>), and the save warns. 0.9.6 reads such files correctly. This can only happen with <code>embed=False, restore_original_videos=False</code> (a save that keeps references into a package).</li>
+<li><strong>Who might still see a misread label:</strong> sleap-io 0.9.5 and older opening with <code>lazy=True</code> or <code>open_videos=False</code> (and SLEAP 1.4 and older), on a save that keeps references into a package, has a video without labeled frames, and lists the package's videos in a different order. Those readers take the number as a position. This is the same as with files 0.9.5 writes for that case. Open such files with 0.9.6 or later.</li>
+<li><strong>Files saved wrongly before 0.9.6 are not repaired.</strong> Redo the merge from the original projects with 0.9.6 and save again.</li>
+<li>Loading with <code>lazy=True</code> or <code>open_videos=False</code> now maps the video numbers of older files the same way the default loader does. A saved subset of a package that raised <code>IndexError</code> this way now opens, and one that put labels on another video now reads them on the right one.</li>
+<li>Loading lazily without opening videos (<code>lazy=True, open_videos=False</code>) and saving again keeps each frame on its video.</li>
+</ul>
+</li>
+<li><strong>Merging keeps same-named cameras of one package apart (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6306746229" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/594" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/594/hovercard" href="https://github.com/talmolab/sleap-io/pull/594">#594</a>).</strong> Contributed by Stefan Oline.
+<ul>
+<li>Cameras whose videos share a file name in different folders were joined into one video when a package was merged on a computer that can't open the original videos. They now stay apart, whether the package is opened with or without its videos.</li>
+<li>An incoming project that lists one video file more than once (a <code>Video</code> per frame, or one object twice) is still joined into one video, as before.</li>
+<li>Paths are compared at least as deep as needed to tell a video apart from its siblings: <code>Camera3/0.mp4</code>, never <code>0.mp4</code> alone. The same video stored under different roots (a cluster path and a Windows path) still merges.</li>
+<li>Also changed:
+<ul>
+<li><code>Labels.match()</code> (pairing ground truth with predictions) compares paths the same way: a prediction video that shares its file name with a sibling no longer matches a ground-truth video by file name alone.</li>
+<li>The explicit <code>video="path"</code>, <code>"basename"</code> and <code>"content"</code> merge modes no longer join two different videos of the incoming project.</li>
+<li>Different videos of one project that were joined by file name now stay apart: distinct files that share a name (<code>/data/s1/x.mp4</code>, <code>/data/s2/x.mp4</code>), image sequences that share only their first image, and two datasets of one HDF5 file.</li>
+<li>Two spellings of one file that can't be resolved to the same path (an absolute path and an unrelated relative one, or <code>C:\</code> and <code>C:/</code> in labels built in code) are kept as two videos. Files loaded from disk normalise slashes, so this mostly concerns labels built in code.</li>
+</ul>
+</li>
+<li>Not fixed: same-named cameras in two different packages (two sessions) can still be joined when the originals can't be opened and the videos have the same length.</li>
+</ul>
+</li>
+<li><strong>Saved files mask link passwords/tokens, and errors/<code>repr()</code> redact link credentials (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6154947115" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/588" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/588/hovercard" href="https://github.com/talmolab/sleap-io/pull/588">#588</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a>).</strong> Original <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6154947115" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/588" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/588/hovercard" href="https://github.com/talmolab/sleap-io/pull/588">#588</a> contributed by Stefan Oline; <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a> backports <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6554106473" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/608" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/608/hovercard" href="https://github.com/talmolab/sleap-io/pull/608">#608</a> and <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6554263293" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/609" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/609/hovercard" href="https://github.com/talmolab/sleap-io/pull/609">#609</a> from <code>release/0.10</code>.
+<ul>
+<li>Wherever a file records a video's name, its source videos, backend metadata or provenance (SLP, Analysis HDF5, CSV and its metadata file, COCO, Label Studio, NWB, JABS, transform output), the secret part of a link is masked: <code>https://***:***@host/...</code>, and the values of the query parameters <code>token</code>, <code>access_token</code>, <code>x-amz-security-token</code>, <code>sas</code> and <code>sig</code> become <code>***</code>. Everything else in the name is saved as it was.</li>
+<li>Password masking also covers 16 additional store and remote schemes (<code>abfss</code>, <code>adl</code>, <code>wasb</code>, <code>wasbs</code>, <code>s3a</code>, <code>s3n</code>, <code>oss</code>, <code>ftp</code>, <code>ftps</code>, <code>sftp</code>, <code>ssh</code>, <code>smb</code>, <code>dav</code>, <code>davs</code>, <code>webdav</code>, <code>webdavs</code>) when saving, without treating them as directly opened remote URLs (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a> / <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6554106473" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/608" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/608/hovercard" href="https://github.com/talmolab/sleap-io/pull/608">#608</a>).</li>
+<li>Bare container/user names without a password — including Azure <code>abfs://&lt;container&gt;@&lt;account&gt;/...</code>, <code>az://</code>, and <code>abfss://&lt;container&gt;@&lt;account&gt;/...</code> links — are preserved intact.</li>
+<li>Signed S3 and Cloud Storage links (<code>X-Amz-Signature</code>, <code>X-Goog-Signature</code>) are still saved whole in saved files, also when frames are embedded. Point the video at a local copy before sharing such a file.</li>
+<li><strong>Error messages, warnings, tracebacks, and <code>repr()</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a> / <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6554263293" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/609" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/609/hovercard" href="https://github.com/talmolab/sleap-io/pull/609">#609</a>):</strong> Every credential-bearing link form — including userinfo, signed S3/GCS/CloudFront queries (<code>X-Amz-Signature</code>, <code>X-Goog-Signature</code>, <code>Signature</code>, <code>Key-Pair-Id</code>), arbitrary query parameters (<code>?api_key=...</code>, <code>?password=...</code>), fragments (<code>#token=...</code>), and chained exceptions — is redacted before surfacing in error messages, warnings, tracebacks, or <code>Video</code>/<code>VideoBackend</code> <code>repr()</code>.</li>
+<li><strong>The cost:</strong> a video that needs its token won't open from the saved file until it is given the link again (<code>video.replace_filename(url)</code>). Labels open normally; <code>video.exists()</code> is <code>False</code>. A file saved before 0.9.6 that holds a token loses it the next time it is saved.</li>
+<li>Nothing changes for local paths, public links, or objects in memory (aside from redacted <code>repr()</code>).</li>
+</ul>
+</li>
+<li><strong>One-frame videos open, and PyAV no longer returns the wrong frame near the end of a video (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6139432485" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/587" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/587/hovercard" href="https://github.com/talmolab/sleap-io/pull/587">#587</a>).</strong> Contributed by Stefan Oline.
+<ul>
+<li>A one-frame video failed to open with the OpenCV and PyAV readers. OpenCV now reopens the video and reads again when a read after a seek fails.</li>
+<li>The PyAV reader could return the frame after the one asked for, or raise, for frames near the end of a video when a keyframe was close to the end (more likely with multi-threaded decoding, and with AV1). PyAV reads now use a corrected seek. Random-access speed is unchanged.</li>
+<li>Reading several frames with OpenCV now fails with "Failed to read frame index N" instead of a numpy shape error.</li>
+</ul>
+</li>
+<li><strong>SLEAP Analysis CSV writes one row per animal, like Analysis HDF5 (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6294995929" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/591" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/591/hovercard" href="https://github.com/talmolab/sleap-io/pull/591">#591</a>).</strong> Contributed by AmickL.
+<ul>
+<li>A user instance made from a prediction (Accept All Predictions, or double-clicking a prediction) keeps that prediction in the file. The SLEAP CSV export wrote both, so most frames had two near-identical rows, and the prediction's row still had coordinates for nodes the user marked not visible. It now picks instances the way Analysis HDF5 does.</li>
+<li><strong>What changes in exported CSV files:</strong> fewer rows wherever a prediction was accepted or replaced by a user label. When no predictions are left in the output (every prediction accepted), the <code>{node}.score</code> columns are no longer written, so the header changes. A script that expects those columns needs to handle their absence. Projects without accepted predictions export the same file as before.</li>
+<li>New option <code>prefer_user_instances</code> on <code>to_dataframe()</code> and <code>to_dataframe_iter()</code> for the <code>instances</code> format, default <code>False</code>: the general instances DataFrame, and the <code>instances</code> CSV format, are unchanged.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2>Compatibility</h2>
+<ul>
+<li>Saved files: format 2.8 at most, as in 0.9.5. Ordinary saves are byte-for-byte unchanged. What can differ:
+<ul>
+<li>the video numbers in <code>.slp</code> files saved after a merge, subset or reorder (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6306745692" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/593" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/593/hovercard" href="https://github.com/talmolab/sleap-io/pull/593">#593</a>, now correct); the attribute <code>video_ids = "index"</code>, with a warning at save time, appears only in the narrow case above;</li>
+<li>link names in every saved format, where a token or password is now <code>***</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6154947115" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/588" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/588/hovercard" href="https://github.com/talmolab/sleap-io/pull/588">#588</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a>), including <code>abfss://</code> and 15 other store/remote schemes;</li>
+<li>error messages, warnings, tracebacks, and <code>Video</code>/<code>VideoBackend</code> <code>repr()</code> strings for credential-bearing links, which now redact credentials (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a>);</li>
+<li>SLEAP Analysis CSV exports of projects with accepted predictions: fewer rows, and no <code>{node}.score</code> columns when no predictions remain (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6294995929" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/591" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/591/hovercard" href="https://github.com/talmolab/sleap-io/pull/591">#591</a>).</li>
+</ul>
+</li>
+<li>Reading: as in 0.9.5, files up to format 2.x open and format 3.0 files are refused with a clear message. sleap-io 0.10 reads the <code>video_ids</code> attribute the same way.</li>
+<li>Python 3.10 and later, as before.</li>
+</ul>
+<hr>
+<h2>Documentation</h2>
+<ul>
+<li><code>docs/formats/slp.md</code> describes how frames record their video and which readers decode which numbering (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6306745692" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/593" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/593/hovercard" href="https://github.com/talmolab/sleap-io/pull/593">#593</a>).</li>
+<li><code>docs/remote.md</code> documents how link credentials are masked in saved files (including store schemes) and redacted in error messages and <code>repr()</code> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a>).</li>
+<li>Docs site: a pre-release now gets the <code>prerelease</code> docs version, and a release of an older line published after a newer one no longer takes over the default (<code>latest</code>) docs (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6565555648" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/611" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/611/hovercard" href="https://github.com/talmolab/sleap-io/pull/611">#611</a>).</li>
+</ul>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6069200703" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/583" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/583/hovercard" href="https://github.com/talmolab/sleap-io/pull/583">#583</a>: ci: drop libglapi-mesa from the Ubuntu apt install</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6139432485" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/587" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/587/hovercard" href="https://github.com/talmolab/sleap-io/pull/587">#587</a>: Read one-frame videos, and stop pyav returning the wrong frame near the end of a video</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6294995929" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/591" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/591/hovercard" href="https://github.com/talmolab/sleap-io/pull/591">#591</a>: fix(csv): SLEAP Analysis CSV writes one row per animal, like Analysis HDF5</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6560394601" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/610" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/610/hovercard" href="https://github.com/talmolab/sleap-io/pull/610">#610</a>: test: read both frames with the same decoder in the remote-video tests</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6306745692" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/593" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/593/hovercard" href="https://github.com/talmolab/sleap-io/pull/593">#593</a>: Saving a merged project no longer moves a package's labels onto other videos</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6306746229" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/594" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/594/hovercard" href="https://github.com/talmolab/sleap-io/pull/594">#594</a>: Merging a package without its original videos keeps same-named cameras apart</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6154947115" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/588" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/588/hovercard" href="https://github.com/talmolab/sleap-io/pull/588">#588</a>: Keep a URL's token out of saved files</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6565555648" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/611" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/611/hovercard" href="https://github.com/talmolab/sleap-io/pull/611">#611</a>: Release 0.9.6: docs alias for older lines and pre-releases, version 0.9.6</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572240165" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/613" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/613/hovercard" href="https://github.com/talmolab/sleap-io/pull/613">#613</a>: Backport <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6554106473" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/608" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/608/hovercard" href="https://github.com/talmolab/sleap-io/pull/608">#608</a> and <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6554263293" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/609" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/609/hovercard" href="https://github.com/talmolab/sleap-io/pull/609">#609</a>: mask store-link passwords and redact credentials in errors/repr (synced to <code>release/0.9</code> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="6572448630" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/614" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/614/hovercard" href="https://github.com/talmolab/sleap-io/pull/614">#614</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/talmolab/sleap-io/compare/v0.9.5...v0.9.6">v0.9.5...v0.9.6</a></p>
 <h2 id="v095"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.9.5">v0.9.5</a><a class="headerlink" href="#v095" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.9.5 Release Notes</h1>
 <h2>Summary</h2>
@@ -11383,40 +11587,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Add more examples to docs by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2633978475" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/142" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/142/hovercard" href="https://github.com/talmolab/sleap-io/pull/142">#142</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.10...v0.2.0"><tt>v0.1.10...v0.2.0</tt></a></p>
-<h2 id="v0110"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.10">v0.1.10</a><a class="headerlink" href="#v0110" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Fix embedded video lookup by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2560431834" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/122" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/122/hovercard" href="https://github.com/talmolab/sleap-io/pull/122">#122</a></li>
-<li>Add better support for exporting and loading RGB videos from .pkg.slp files by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2562674721" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/125" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/125/hovercard" href="https://github.com/talmolab/sleap-io/pull/125">#125</a></li>
-<li>Fix video indexing when embedding from labels that already have embedded data by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2563055381" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/126" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/126/hovercard" href="https://github.com/talmolab/sleap-io/pull/126">#126</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.9...v0.1.10"><tt>v0.1.9...v0.1.10</tt></a></p>
-<h2 id="v019"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.9">v0.1.9</a><a class="headerlink" href="#v019" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Dependency management by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2554525972" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/118" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/118/hovercard" href="https://github.com/talmolab/sleap-io/pull/118">#118</a>
-<ul>
-<li>Drop <code>av</code> as a dependency since it's still a little buggy and doesn't have broad enough platform compatibility.</li>
-<li>Pin <code>ndx-pose</code> &lt; 0.2.0 until <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2405974168" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/104" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/104/hovercard" href="https://github.com/talmolab/sleap-io/pull/104">#104</a> is merged in.</li>
-<li>Remove livecov dev tool as it was interfering with VSCode debugging.</li>
-</ul>
-</li>
-<li>Safer video loading from SLP by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2554556719" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/119" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/119/hovercard" href="https://github.com/talmolab/sleap-io/pull/119">#119</a>
-<ul>
-<li>Added <code>sio.io.utils.is_file_accessible</code> to check for readability by actually reading a byte. This catches permission and other esoteric filesystem errors (addresses <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2526646029" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/116" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/116/hovercard" href="https://github.com/talmolab/sleap-io/issues/116">#116</a>).</li>
-<li>Explicit control over whether video files should be opened when loading labels with:<code>sio.load_slp(..., open_videos=False)</code></li>
-<li>Explicit control over whether backend is auto-initialized when creating or using <code>Video</code> objects with <code>Video(..., open_backend=False)</code>.</li>
-<li>More sanitization of filenames to posix/forward-slash safe forms when reading and writing SLP files.</li>
-</ul>
-</li>
-<li>Fix split calculation and allow for not embedding by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2554635054" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/120" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/120/hovercard" href="https://github.com/talmolab/sleap-io/pull/120">#120</a>
-<ul>
-<li><strong>Fix</strong>: The function now correctly splits the labels into training, validation, and test sets based on the specified proportions (fixes <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2553603857" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/117" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/117/hovercard" href="https://github.com/talmolab/sleap-io/issues/117">#117</a>). Previously, the validation fraction was being computed incorrectly in cases where its relative fraction was <code>1.0</code> after taking out the train split.</li>
-<li><strong>Enhancement</strong>: <code>Labels.make_training_splits(..., embed=False)</code>. Previously, the function would always embed the images, which could be slow for large projects. With this change, the <code>embed</code> parameter is introduced, allowing the user to choose whether to embed the images or save the labels with references to the source video files.</li>
-</ul>
-</li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.1.8...v0.1.9"><tt>v0.1.8...v0.1.9</tt></a></p>
 
 
 
