@@ -4,8 +4,10 @@ import copy
 import gc
 import os
 import pickle
+import platform
 import signal
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -3129,3 +3131,776 @@ def test_pyav_read_in_forked_child(centered_pair_low_quality_path):
         time.sleep(0.05)
     assert os.waitstatus_to_exitcode(status) == 0
     video.close()
+
+
+def _encode_synthetic_video(
+    path: Path,
+    frames_rgb: np.ndarray,
+    *,
+    codec: str = "libx264",
+    pix_fmt: str = "yuv420p",
+    fps: int = 25,
+    gop_size: int | None = None,
+) -> Path:
+    """Encode synthetic `(N, H, W, 3)` RGB uint8 frames with PyAV."""
+    import av
+
+    n, h, w, _ = frames_rgb.shape
+    with av.open(str(path), mode="w") as container:
+        stream = container.add_stream(codec, rate=fps)
+        stream.width = w
+        stream.height = h
+        stream.pix_fmt = pix_fmt
+        if gop_size is not None:
+            stream.codec_context.gop_size = gop_size
+        if codec == "libx264":
+            stream.options = {"crf": "18", "preset": "ultrafast"}
+        for arr in frames_rgb:
+            if pix_fmt in ("gray", "gray8"):
+                av_frame = av.VideoFrame.from_ndarray(arr[..., 0], format="gray")
+            else:
+                av_frame = av.VideoFrame.from_ndarray(arr, format="rgb24").reformat(
+                    format=pix_fmt
+                )
+            for packet in stream.encode(av_frame):
+                container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+    return path
+
+
+@pytest.mark.skipif(cv2 is None, reason="OpenCV not available")
+@pytest.mark.parametrize("keep_open", [True, False])
+def test_opencv_rgb_and_grayscale_c_contiguous_and_parity(tmp_path, keep_open):
+    """OpenCV RGB and grayscale reads are C-contiguous and bit-exact with BGR->RGB."""
+    pytest.importorskip("av")
+    h, w, n = 98, 130, 8  # non-16-divisible width
+
+    # Color video with distinct R/G/B spatial patterns per frame
+    color_frames = np.zeros((n, h, w, 3), dtype=np.uint8)
+    xs = np.linspace(20, 230, w, dtype=np.uint8)[None, :]
+    ys = np.linspace(30, 220, h, dtype=np.uint8)[:, None]
+    for i in range(n):
+        color_frames[i, :, :, 0] = np.clip(xs.astype(int) + i * 3, 0, 255)
+        color_frames[i, :, :, 1] = np.clip(ys.astype(int) + i * 2, 0, 255)
+        color_frames[i, :, :, 2] = 40 + i * 20
+    color_path = _encode_synthetic_video(
+        tmp_path / "color_130x98.mp4", color_frames, pix_fmt="yuv420p"
+    )
+
+    # Grayscale video (R == G == B)
+    gray_frames = np.repeat(color_frames[..., 0:1], 3, axis=-1)
+    gray_path = _encode_synthetic_video(
+        tmp_path / "gray_130x98.mp4", gray_frames, pix_fmt="yuv420p"
+    )
+
+    # Ground-truth raw OpenCV BGR reads
+    def _raw_bgr(p: Path) -> np.ndarray:
+        cap = cv2.VideoCapture(str(p))
+        out = []
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            out.append(frame)
+        cap.release()
+        return np.stack(out, axis=0)
+
+    raw_color_rgb = np.ascontiguousarray(_raw_bgr(color_path)[..., ::-1])
+    raw_gray_rgb = np.ascontiguousarray(_raw_bgr(gray_path)[..., ::-1])
+
+    # 1. Color video: RGB C-contiguous + bit-exact, forced grayscale keeps channel 0 (R)
+    b_color = MediaVideo(
+        str(color_path), plugin="opencv", keep_open=keep_open, grayscale=False
+    )
+    f0 = b_color.get_frame(0)
+    assert f0.shape == (h, w, 3)
+    assert f0.flags["C_CONTIGUOUS"]
+    assert f0.flags["WRITEABLE"]
+    assert_equal(f0, raw_color_rgb[0])
+
+    batch = b_color.get_frames([0, 3, 7, 2])
+    assert batch.shape == (4, h, w, 3)
+    assert batch.flags["C_CONTIGUOUS"]
+    assert_equal(batch, raw_color_rgb[[0, 3, 7, 2]])
+    b_color.close()
+
+    b_color_gray = MediaVideo(
+        str(color_path), plugin="opencv", keep_open=keep_open, grayscale=True
+    )
+    fg = b_color_gray.get_frame(2)
+    assert fg.shape == (h, w, 1)
+    assert fg.flags["C_CONTIGUOUS"]
+    assert_equal(fg, raw_color_rgb[2, ..., 0:1])
+
+    bg = b_color_gray.get_frames([0, 2, 5])
+    assert bg.shape == (3, h, w, 1)
+    assert bg.flags["C_CONTIGUOUS"]
+    assert_equal(bg, raw_color_rgb[[0, 2, 5], ..., 0:1])
+    b_color_gray.close()
+
+    # 2. Grayscale video: autodetect on get_frames and single-frame fast path
+    b_gray = MediaVideo(str(gray_path), plugin="opencv", keep_open=keep_open)
+    assert b_gray.grayscale is None
+    bg_auto = b_gray.get_frames([0, 1, 2, 3])
+    assert b_gray.grayscale is True
+    assert bg_auto.shape == (4, h, w, 1)
+    assert bg_auto.flags["C_CONTIGUOUS"]
+    assert_equal(bg_auto, raw_gray_rgb[:4, ..., 0:1])
+
+    fg_single = b_gray.get_frame(6)
+    assert fg_single.shape == (h, w, 1)
+    assert fg_single.flags["C_CONTIGUOUS"]
+    assert_equal(fg_single, raw_gray_rgb[6, ..., 0:1])
+    b_gray.close()
+
+
+# On ARM64, FFmpeg's aarch64 NEON yuv2rgb_neon.S uses lower-precision fixed-point
+# rounding that can differ by up to 2 LSB from C/x86_64 13-bit swscale (and from
+# the exact BT.601 MPEG-to-full-range luminance LUT).
+_IS_ARM64 = platform.machine().lower() in ("arm64", "aarch64")
+
+
+def test_pyav_y_plane_direct_extraction_formats_and_stride(monkeypatch):
+    """Direct Y-plane extraction handles padded strides, formats, and fallbacks."""
+    av = pytest.importorskip("av")
+    import sys
+
+    class _NoClosePyAVPlugin(video_reading._PyAVPlugin):
+        def __init__(self):
+            pass
+
+        def close(self):
+            pass
+
+    plugin = _NoClosePyAVPlugin()
+
+    # Test all direct Y-plane formats with non-16-divisible widths (line_size > width)
+    cases = [
+        ("yuv420p", 134, 66, 0),
+        ("yuvj420p", 134, 66, 0),
+        ("yuv422p", 134, 66, 0),
+        ("yuv444p", 133, 65, 1),
+        ("nv12", 134, 66, 1),  # compared against swscale gray (<= 1 LSB)
+        ("gray", 133, 65, 0),
+        ("gray8", 133, 65, 0),
+    ]
+    for fmt, w, h, max_tol in cases:
+        frame = av.VideoFrame(w, h, fmt)
+        plane = frame.planes[0]
+        assert plane.line_size > w, f"Expected padded stride for {fmt} width={w}"
+
+        # Distinct 2D gradient so any stride skew fails loudly
+        y_vals = (
+            (np.arange(h)[:, None] * 3 + np.arange(w)[None, :] * 5) % 220 + 16
+        ).astype(np.uint8)
+        y_buf = np.frombuffer(plane, dtype=np.uint8).reshape(h, plane.line_size)
+        y_buf[:, :w] = y_vals
+        y_buf[:, w:] = 255  # poison stride padding bytes
+        for idx in range(1, len(frame.planes)):
+            np.frombuffer(frame.planes[idx], dtype=np.uint8)[:] = 128
+
+        out = plugin._unpack_frame(frame, format="gray")
+        assert out.shape == (h, w)
+        assert out.dtype == np.uint8
+        assert out.flags["C_CONTIGUOUS"]
+        assert out.flags["WRITEABLE"]
+
+        # Direct Y-plane + LUT extraction must be bit-exact on every architecture.
+        expected_exact = (
+            y_vals
+            if fmt in video_reading._PYAV_Y_PLANE_FULL_RANGE
+            else video_reading._YUV_MPEG_TO_FULL_LUT[y_vals]
+        )
+        assert_equal(out, expected_exact)
+
+        # Compare against swscale reference (rgb24[..., 0] for YUV/gray, gray for nv12)
+        if fmt == "nv12":
+            ref = frame.reformat(format="gray").to_ndarray()
+        else:
+            ref = frame.reformat(format="rgb24").to_ndarray()[..., 0]
+        eff_tol = (
+            max(max_tol, 2) if (_IS_ARM64 and fmt not in ("gray", "gray8")) else max_tol
+        )
+        diff = np.abs(out.astype(np.int16) - ref.astype(np.int16)).max()
+        assert diff <= eff_tol, f"{fmt}: max_diff={diff} > {eff_tol}"
+
+        # Also verify pure-NumPy LUT path without cv2 matches cv2 path bit-for-bit
+        if fmt in video_reading._PYAV_Y_PLANE_LIMITED_RANGE:
+            monkeypatch.delitem(sys.modules, "cv2", raising=False)
+            out_nocv = plugin._unpack_frame(frame, format="gray")
+            assert out_nocv.flags["C_CONTIGUOUS"]
+            assert out_nocv.flags["WRITEABLE"]
+            assert_equal(out_nocv, out)
+            monkeypatch.undo()
+
+    # Test unusual formats fallback (10-bit YUV and RGB-native formats)
+    for fmt, w, h in [
+        ("yuv420p10le", 66, 34),
+        ("rgb24", 65, 33),
+        ("rgb24", 64, 32),  # ls == w fast path in gray fallback
+        ("bgr24", 65, 33),
+        ("gbrp", 65, 33),
+        ("rgba", 65, 33),
+        ("gray16le", 65, 33),
+    ]:
+        frame = av.VideoFrame(w, h, fmt)
+        out = plugin._unpack_frame(frame, format="gray")
+        assert out.shape == (h, w)
+        assert out.dtype == np.uint8
+        assert out.flags["C_CONTIGUOUS"]
+        assert out.flags["WRITEABLE"]
+
+        ref = frame.reformat(format="gray").to_ndarray()
+        assert_equal(out, ref)
+
+
+@pytest.mark.parametrize("keep_open", [True, False])
+def test_pyav_non_16_divisible_width_end_to_end(tmp_path, keep_open):
+    """End-to-end PyAV reads handle padded widths, Y-plane, RGB, and fallbacks."""
+    pytest.importorskip("av")
+
+    h, w, n = 98, 130, 6
+    grad = ((np.arange(h)[:, None] * 2 + np.arange(w)[None, :] * 3) % 200 + 20).astype(
+        np.uint8
+    )
+    gray_rgb = np.stack(
+        [
+            np.repeat(
+                np.clip(grad.astype(int) + i * 5, 0, 255).astype(np.uint8)[..., None],
+                3,
+                axis=-1,
+            )
+            for i in range(n)
+        ],
+        axis=0,
+    )
+
+    for tag, codec, pix_fmt, ext, tol, compare_gray in [
+        ("yuv420p", "libx264", "yuv420p", "mp4", 0, False),
+        ("yuvj420p", "libx264", "yuvj420p", "mp4", 0, True),
+        ("yuv422p", "libx264", "yuv422p", "mp4", 0, False),
+        ("yuv444p", "libx264", "yuv444p", "mp4", 1, False),
+        ("yuv420p10le", "libx264", "yuv420p10le", "mp4", 0, True),
+        ("png_gray", "png", "gray", "mov", 0, False),
+        ("png_rgb24", "png", "rgb24", "mov", 1, False),
+    ]:
+        vpath = _encode_synthetic_video(
+            tmp_path / f"{tag}.{ext}", gray_rgb, codec=codec, pix_fmt=pix_fmt
+        )
+        with iio.imopen(str(vpath), "r", plugin="pyav") as ref_reader:
+            ref_rgb = np.stack([ref_reader.read(index=i) for i in range(n)], axis=0)
+        if compare_gray:
+            with iio.imopen(str(vpath), "r", plugin="pyav") as ref_reader:
+                ref_gray = np.stack(
+                    [
+                        ref_reader.read(index=i, format="gray")[..., None]
+                        for i in range(n)
+                    ],
+                    axis=0,
+                )
+        else:
+            ref_gray = ref_rgb[..., 0:1]
+
+        eff_tol = (
+            max(tol, 2)
+            if (_IS_ARM64 and not compare_gray and pix_fmt != "gray")
+            else tol
+        )
+
+        # Grayscale path (direct Y-plane or fallback)
+        b_gray = MediaVideo(
+            str(vpath), plugin="pyav", keep_open=keep_open, grayscale=True
+        )
+        for i in range(n):
+            f = b_gray.get_frame(i)
+            assert f.shape == (h, w, 1)
+            assert f.dtype == np.uint8
+            assert f.flags["C_CONTIGUOUS"]
+            assert f.flags["WRITEABLE"]
+            diff = np.abs(f.astype(np.int16) - ref_gray[i].astype(np.int16)).max()
+            assert diff <= eff_tol, f"{tag} frame {i}: max_diff={diff} > {eff_tol}"
+
+        batch_g = b_gray.get_frames([0, 2, 5, 1])
+        assert batch_g.shape == (4, h, w, 1)
+        assert batch_g.flags["C_CONTIGUOUS"]
+        diff_b = np.abs(
+            batch_g.astype(np.int16) - ref_gray[[0, 2, 5, 1]].astype(np.int16)
+        ).max()
+        assert diff_b <= eff_tol
+        b_gray.close()
+
+        # RGB path (C-contiguous even for padded line_size)
+        b_rgb = MediaVideo(
+            str(vpath), plugin="pyav", keep_open=keep_open, grayscale=False
+        )
+        f_rgb = b_rgb.get_frame(3)
+        assert f_rgb.shape == (h, w, 3)
+        assert f_rgb.flags["C_CONTIGUOUS"]
+        assert_equal(f_rgb, ref_rgb[3])
+
+        batch_rgb = b_rgb.get_frames([0, 3, 5])
+        assert batch_rgb.shape == (3, h, w, 3)
+        assert batch_rgb.flags["C_CONTIGUOUS"]
+        assert_equal(batch_rgb, ref_rgb[[0, 3, 5]])
+        b_rgb.close()
+
+
+@pytest.mark.parametrize("keep_open", [True, False])
+@pytest.mark.parametrize("grayscale", [True, False])
+def test_pyav_multithreaded_sequential_and_random_seek(tmp_path, keep_open, grayscale):
+    """Multi-threaded PyAV sequential and random-access seeks return exact frames."""
+    pytest.importorskip("av")
+    n, h, w = 40, 98, 130
+    frames = np.zeros((n, h, w, 3), dtype=np.uint8)
+    for i in range(n):
+        val = 15 + i * 5
+        frames[i, :, :, :] = val
+        # Distinct bright block moving with frame index
+        x0 = 4 + (i * 2) % (w - 20)
+        frames[i, 10:30, x0 : x0 + 16, :] = 240
+    vpath = _encode_synthetic_video(
+        tmp_path / f"seek_{grayscale}_{keep_open}.mp4",
+        frames,
+        pix_fmt="yuv420p",
+        gop_size=8,
+    )
+
+    # Reference single sequential decode without seeking
+    ref_rgb = iio.imread(str(vpath), plugin="pyav")
+    ref = ref_rgb[..., 0:1] if grayscale else ref_rgb
+
+    backend = MediaVideo(
+        str(vpath), plugin="pyav", keep_open=keep_open, grayscale=grayscale
+    )
+    assert backend._imageio_read_kwargs == {"thread_type": "AUTO"}
+
+    # Sequential pass
+    seq_frames = []
+    for i in range(n):
+        f = backend.get_frame(i)
+        assert f.flags["C_CONTIGUOUS"]
+        if grayscale and _IS_ARM64:
+            diff = np.abs(f.astype(np.int16) - ref[i].astype(np.int16)).max()
+            assert diff <= 2, f"frame {i}: max_diff={diff} > 2"
+        else:
+            assert_equal(f, ref[i])
+        seq_frames.append(f)
+    seq = np.stack(seq_frames, axis=0)
+
+    # Random access (forward, backward, keyframe boundaries, last frame)
+    # must match sequential decode bit-for-bit on every architecture.
+    rand_inds = [n - 1, 0, 25, 7, 8, 9, n - 2, 1, n - 1, 15, 16, 0]
+    for i in rand_inds:
+        f = backend.get_frame(i)
+        assert f.flags["C_CONTIGUOUS"]
+        assert_equal(f, seq[i])
+
+    batch = backend.get_frames(rand_inds)
+    assert batch.flags["C_CONTIGUOUS"]
+    assert_equal(batch, seq[rand_inds])
+    backend.close()
+
+
+def test_pyav_plugin_thread_type_open_codec_safe(centered_pair_low_quality_path):
+    """Setting thread_type after codec open or on unsupported codecs does not fail."""
+    pytest.importorskip("av")
+    with iio.imopen(
+        centered_pair_low_quality_path, "r", plugin=video_reading._PyAVPlugin
+    ) as reader:
+        # Read frame 0 without thread_type (opens the codec context)
+        f0 = reader.read(index=0, format="rgb24")
+        assert f0.flags["C_CONTIGUOUS"]
+        # Subsequent read requesting thread_type="AUTO" must not raise on open codec
+        f1 = reader.read(index=1, format="rgb24", thread_type="AUTO")
+        assert f1.flags["C_CONTIGUOUS"]
+        assert f1.shape == f0.shape
+
+
+def test_real_test_videos_parity_and_contiguity(
+    centered_pair_low_quality_path, small_robot_path
+):
+    """Verify parity and C-contiguity on real test videos across backends."""
+    pytest.importorskip("av")
+
+    # Grayscale video (centered_pair_low_quality.mp4, yuv420p)
+    v_pyav = sio.load_video(centered_pair_low_quality_path, plugin="pyav")
+    assert v_pyav.shape == (1100, 384, 384, 1)
+    assert v_pyav.grayscale is True
+    f_pyav = v_pyav[0]
+    b_pyav = v_pyav[[0, 10, 500, 1099]]
+    assert f_pyav.flags["C_CONTIGUOUS"]
+    assert b_pyav.flags["C_CONTIGUOUS"]
+
+    # Compare against RGB24 channel 0 (0 LSB on x86_64; <= 2 LSB on ARM64 NEON)
+    f_pyav_rgb = v_pyav.backend._read_frame(0)
+    assert f_pyav_rgb.flags["C_CONTIGUOUS"]
+    if _IS_ARM64:
+        assert (
+            np.abs(
+                f_pyav.astype(np.int16) - f_pyav_rgb[..., 0:1].astype(np.int16)
+            ).max()
+            <= 2
+        )
+    else:
+        assert_equal(f_pyav, f_pyav_rgb[..., 0:1])
+
+    if cv2 is not None:
+        v_cv = sio.load_video(centered_pair_low_quality_path, plugin="opencv")
+        assert v_cv.grayscale is True
+        f_cv = v_cv[0]
+        b_cv = v_cv[[0, 10, 500, 1099]]
+        assert f_cv.flags["C_CONTIGUOUS"]
+        assert b_cv.flags["C_CONTIGUOUS"]
+        if _IS_ARM64:
+            assert np.abs(f_cv.astype(np.int16) - f_pyav.astype(np.int16)).max() <= 2
+            assert np.abs(b_cv.astype(np.int16) - b_pyav.astype(np.int16)).max() <= 2
+        else:
+            assert_equal(f_cv, f_pyav)
+            assert_equal(b_cv, b_pyav)
+        v_cv.close()
+    v_pyav.close()
+
+    # Color video with padded stride (small_robot_3_frame.mp4, 560x320 yuvj420p, ls=640)
+    v_rob_pyav = sio.load_video(small_robot_path, plugin="pyav")
+    assert v_rob_pyav.grayscale is False
+    rf_pyav = v_rob_pyav[0]
+    rb_pyav = v_rob_pyav[:]
+    assert rf_pyav.flags["C_CONTIGUOUS"]
+    assert rb_pyav.flags["C_CONTIGUOUS"]
+    ref_rob = iio.imread(small_robot_path, plugin="pyav")
+    assert_equal(rb_pyav, ref_rob)
+
+    if cv2 is not None:
+        v_rob_cv = sio.load_video(small_robot_path, plugin="opencv")
+        assert v_rob_cv.grayscale is False
+        rf_cv = v_rob_cv[0]
+        rb_cv = v_rob_cv[:]
+        assert rf_cv.flags["C_CONTIGUOUS"]
+        assert rb_cv.flags["C_CONTIGUOUS"]
+        if _IS_ARM64:
+            assert np.abs(rf_cv.astype(np.int16) - rf_pyav.astype(np.int16)).max() <= 2
+            assert np.abs(rb_cv.astype(np.int16) - rb_pyav.astype(np.int16)).max() <= 2
+        else:
+            assert_equal(rf_cv, rf_pyav)
+            assert_equal(rb_cv, rb_pyav)
+        v_rob_cv.close()
+    v_rob_pyav.close()
+
+
+@pytest.mark.skipif(cv2 is None, reason="OpenCV not available")
+def test_image_video_and_embedded_opencv_c_contiguous(
+    centered_pair_frame_paths, small_robot_path, tmp_path
+):
+    """ImageVideo and embedded HDF5Video OpenCV paths return C-contiguous frames."""
+    iv = ImageVideo(centered_pair_frame_paths, plugin="opencv")
+    img = iv[0]
+    assert img.flags["C_CONTIGUOUS"]
+
+    # Embedded RGB video decoded via OpenCV
+    video = sio.load_video(small_robot_path, plugin="opencv")
+    skeleton = sio.Skeleton(["a"])
+    inst = sio.Instance.from_numpy(np.array([[10.0, 10.0]]), skeleton=skeleton)
+    lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    pkg_path = str(tmp_path / "robot_contig.pkg.slp")
+    sio.Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton]).save(
+        pkg_path, embed="user"
+    )
+    video.close()
+
+    emb = sio.load_slp(pkg_path).video
+    emb_frame = emb[0]
+    assert emb_frame.shape[-1] == 3
+    assert emb_frame.flags["C_CONTIGUOUS"]
+    emb.close()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="fork is only safe on Linux")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_pyav_rgb_background_thread_fork_no_deadlock(small_robot_path):
+    """Background-thread PyAV RGB decoding must not deadlock os.fork() in main thread.
+
+    Simulates VideoProvider prefetching RGB frames in a background thread while the
+    main thread forks (e.g. torch.compile / DataLoader workers). A multi-threaded
+    swscale reformatter in the background thread would leave live worker mutexes
+    across fork and hang the child; per-thread single-threaded reformatting avoids it.
+    """
+    pytest.importorskip("av")
+    video = sio.load_video(small_robot_path, plugin="pyav", grayscale=False)
+    n_frames = len(video)
+    _ = video[0]
+    gc.collect()
+
+    started = threading.Event()
+    stop = threading.Event()
+
+    def _prefetch_worker() -> None:
+        idx = 0
+        while not stop.is_set():
+            _ = video[idx % n_frames]
+            idx += 1
+            if idx == 5:
+                started.set()
+
+    worker = threading.Thread(target=_prefetch_worker, daemon=True)
+    worker.start()
+    try:
+        assert started.wait(timeout=5.0), "background decode worker did not start"
+        # Let the worker decode continuously across the fork boundary.
+        time.sleep(0.01)
+
+        pid = os.fork()
+        if pid == 0:  # pragma: no cover - runs in child
+            code = 1
+            try:
+                frame = sio.load_video(
+                    small_robot_path, plugin="pyav", grayscale=False
+                )[1 % n_frames]
+                if frame.shape[-1] == 3 and frame.flags["C_CONTIGUOUS"]:
+                    code = 0
+            finally:
+                os._exit(code)
+
+        deadline = time.monotonic() + 5.0
+        while True:
+            done, status = os.waitpid(pid, os.WNOHANG)
+            if done:
+                break
+            if time.monotonic() > deadline:
+                os.kill(pid, signal.SIGKILL)
+                os.waitpid(pid, 0)
+                pytest.fail(
+                    "forked child hung (>5s) while background thread decoded PyAV RGB"
+                )
+            time.sleep(0.02)
+        assert os.waitstatus_to_exitcode(status) == 0
+    finally:
+        stop.set()
+        worker.join(timeout=5.0)
+        assert not worker.is_alive(), "background PyAV decode worker hung after fork"
+        video.close()
+
+
+def test_fast_decode_helpers_and_fallback_branches(
+    centered_pair_low_quality_path, small_robot_path, tmp_path, monkeypatch
+):
+    """Exercise helper edge cases, autodetect get_frames paths, and error fallbacks."""
+    # _to_single_channel: non-contiguous 1-channel, non-uint8, non-contiguous 4D, no cv2
+    ch1_nc = np.arange(24, dtype=np.uint8).reshape(4, 6, 1)[:, ::2, :]
+    assert not ch1_nc.flags["C_CONTIGUOUS"]
+    out_ch1 = video_reading._to_single_channel(ch1_nc)
+    assert out_ch1.flags["C_CONTIGUOUS"]
+    assert_equal(out_ch1, ch1_nc)
+
+    f32 = np.arange(36, dtype=np.float32).reshape(3, 4, 3)
+    out_f32 = video_reading._to_single_channel(f32)
+    assert out_f32.flags["C_CONTIGUOUS"]
+    assert_equal(out_f32, f32[..., 0:1])
+
+    batch_nc = np.arange(2 * 4 * 6 * 3, dtype=np.uint8).reshape(2, 4, 6, 3)[
+        :, :, ::2, :
+    ]
+    assert not batch_nc.flags["C_CONTIGUOUS"]
+    out_bnc = video_reading._to_single_channel(batch_nc)
+    assert out_bnc.flags["C_CONTIGUOUS"]
+    assert_equal(out_bnc, batch_nc[..., 0:1])
+
+    # _opencv_bgr_to_rgb / _opencv_bgr_to_gray edge shapes
+    if cv2 is not None:
+        img_2d = np.arange(12, dtype=np.uint8).reshape(3, 4)
+        assert_equal(video_reading._opencv_bgr_to_rgb(img_2d), img_2d[..., None])
+        assert_equal(video_reading._opencv_bgr_to_gray(img_2d), img_2d[..., None])
+
+        img_bgra = np.arange(48, dtype=np.uint8).reshape(3, 4, 4)
+        rgba = video_reading._opencv_bgr_to_rgb(img_bgra)
+        assert rgba.flags["C_CONTIGUOUS"]
+        assert_equal(rgba, img_bgra[..., [2, 1, 0, 3]])
+
+        img_1c = np.arange(12, dtype=np.uint8).reshape(3, 4, 1)
+        assert_equal(video_reading._opencv_bgr_to_rgb(img_1c), img_1c)
+        assert_equal(video_reading._opencv_bgr_to_gray(img_1c), img_1c)
+
+        # ImageVideo OpenCV RGB conversion path
+        rgb_png = tmp_path / "rgb_sample.png"
+        rgb_img = np.zeros((16, 20, 3), dtype=np.uint8)
+        rgb_img[..., 0] = 200
+        rgb_img[..., 2] = 50
+        cv2.imwrite(str(rgb_png), rgb_img[..., ::-1])
+        iv_rgb = ImageVideo([str(rgb_png)], plugin="opencv")
+        loaded_rgb = iv_rgb[0]
+        assert loaded_rgb.flags["C_CONTIGUOUS"]
+        assert_equal(loaded_rgb, rgb_img)
+
+    # MediaVideo autodetect get_frames (1-frame gray, 1-frame & multi color, empty)
+    av = pytest.importorskip("av")
+    mv_gray1 = MediaVideo(centered_pair_low_quality_path, plugin="pyav", keep_open=True)
+    assert mv_gray1.grayscale is None
+    g1 = mv_gray1.get_frames([0])
+    assert mv_gray1.grayscale is True
+    assert g1.shape == (1, 384, 384, 1)
+    assert g1.flags["C_CONTIGUOUS"]
+    mv_gray1.close()
+
+    mv_col1 = MediaVideo(small_robot_path, plugin="pyav", keep_open=True)
+    assert mv_col1.grayscale is None
+    c1 = mv_col1.get_frames([0])
+    assert mv_col1.grayscale is False
+    assert c1.shape == (1, 320, 560, 3)
+    assert c1.flags["C_CONTIGUOUS"]
+    # _read_frames with n == 1 and empty list
+    c1_again = mv_col1.get_frames([0])
+    assert c1_again.flags["C_CONTIGUOUS"]
+    assert_equal(c1_again, c1)
+    with pytest.raises(ValueError):
+        mv_col1.get_frames([])
+    with pytest.raises(ValueError):
+        mv_col1._read_frames([])
+    mv_col1.close()
+
+    mv_col_multi = MediaVideo(small_robot_path, plugin="pyav", keep_open=True)
+    assert mv_col_multi.grayscale is None
+    cm = mv_col_multi.get_frames([0, 1, 2])
+    assert mv_col_multi.grayscale is False
+    assert cm.shape == (3, 320, 560, 3)
+    assert cm.flags["C_CONTIGUOUS"]
+    mv_col_multi.close()
+
+    # Direct _read_frames_gray opening reader lazily when keep_open=True
+    mv_lazy = MediaVideo(
+        centered_pair_low_quality_path, plugin="pyav", keep_open=True, grayscale=True
+    )
+    assert mv_lazy._open_reader is None
+    bm = mv_lazy.get_frames([0, 1])
+    assert mv_lazy._open_reader is not None
+    assert bm.shape == (2, 384, 384, 1)
+    mv_lazy.close()
+
+    # Unknown plugin raises ValueError in _read_frames
+    mv_bad = MediaVideo(centered_pair_low_quality_path, plugin="pyav", keep_open=False)
+    object.__setattr__(mv_bad, "plugin", "unknown")
+    with pytest.raises(ValueError, match="Unknown plugin"):
+        mv_bad._read_frames([0])
+
+    # Reader failure & non-contiguous fallback branches in MediaVideo gray helpers
+    mv_pyav_err = MediaVideo(
+        centered_pair_low_quality_path, plugin="pyav", keep_open=True, grayscale=True
+    )
+
+    class _FakePyAVReader:
+        def __init__(self, responses):
+            self._responses = list(responses)
+
+        def read(self, **kwargs):
+            return self._responses.pop(0)
+
+    mv_pyav_err._open_reader = _FakePyAVReader([None])
+    with pytest.raises(IndexError):
+        mv_pyav_err._read_frame_pyav_gray(0)
+
+    nc_frame = np.arange(32, dtype=np.uint8).reshape(4, 8, 1)[:, ::2, :]
+    assert not nc_frame.flags["C_CONTIGUOUS"]
+    mv_pyav_err._open_reader = _FakePyAVReader([nc_frame])
+    contig = mv_pyav_err._read_frame_pyav_gray(0)
+    assert contig.flags["C_CONTIGUOUS"]
+    assert_equal(contig, nc_frame)
+
+    mv_pyav_err._open_reader = _FakePyAVReader([None])
+    with pytest.raises(IndexError):
+        mv_pyav_err._read_frames_gray([0, 1])
+
+    mv_pyav_err._open_reader = _FakePyAVReader([np.zeros((4, 4), dtype=np.uint8), None])
+    with pytest.raises(IndexError):
+        mv_pyav_err._read_frames_gray([0, 1])
+    mv_pyav_err._open_reader = None
+
+    if cv2 is not None:
+        mv_cv_err = MediaVideo(
+            centered_pair_low_quality_path,
+            plugin="opencv",
+            keep_open=False,
+            grayscale=True,
+        )
+        monkeypatch.setattr(
+            MediaVideo, "_opencv_read", lambda self, reader, idx: (reader, None)
+        )
+        with pytest.raises(IndexError):
+            mv_cv_err._read_frame_opencv_gray(0)
+        with pytest.raises(IndexError):
+            mv_cv_err._read_frames_gray([0])
+        monkeypatch.undo()
+
+    # _PyAVPlugin tagged-color single-threaded reformatter & non-rgb24 format branch
+    class _FakeReformatter:
+        def __init__(self):
+            self.calls = 0
+
+        def reformat(self, frame, *, format, **kwargs):
+            self.calls += 1
+            assert kwargs.get("threads") == 1
+            return frame.reformat(format=format)
+
+    class _NoClosePlugin(video_reading._PyAVPlugin):
+        def __init__(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(video_reading, "_PYAV_TAGGED_COLOR", True)
+    monkeypatch.setattr(video_reading, "VideoReformatter", _FakeReformatter)
+    plug = _NoClosePlugin()
+    rgb_frame = av.VideoFrame(32, 16, "rgb24")
+    bgr = plug._unpack_frame(rgb_frame, format="bgr24")
+    assert bgr.shape == (16, 32, 3)
+    # Second call reuses thread-local reformatter
+    bgr2 = plug._unpack_frame(rgb_frame, format="bgr24")
+    assert bgr2.shape == (16, 32, 3)
+    assert plug._reformatters.reformatter.calls == 2
+
+    # thread_type setter raising ValueError is swallowed cleanly
+    with iio.imopen(
+        centered_pair_low_quality_path, "r", plugin=video_reading._PyAVPlugin
+    ) as reader:
+        real_stream = reader._video_stream
+
+        class _RejectThreadTypeStream:
+            codec_context = real_stream.codec_context
+
+            @property
+            def thread_type(self):
+                return "NONE"
+
+            @thread_type.setter
+            def thread_type(self, value):
+                raise ValueError("unsupported thread_type")
+
+        reader._video_stream = _RejectThreadTypeStream()
+        monkeypatch.setattr(
+            video_reading.PyAVPlugin,
+            "read",
+            lambda self, **kw: np.zeros((4, 4, 3), dtype=np.uint8),
+        )
+        f = reader.read(index=0, format="rgb24", thread_type="AUTO")
+        assert f.flags["C_CONTIGUOUS"]
+        reader._video_stream = real_stream
+    monkeypatch.undo()
+
+    # HDF5Video RGB<->BGR flip without cv2
+    if cv2 is not None:
+        video = sio.load_video(small_robot_path, plugin="opencv")
+        skeleton = sio.Skeleton(["a"])
+        inst = sio.Instance.from_numpy(np.array([[10.0, 10.0]]), skeleton=skeleton)
+        lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
+        pkg_path = str(tmp_path / "robot_nocv2.pkg.slp")
+        sio.Labels(labeled_frames=[lf], videos=[video], skeletons=[skeleton]).save(
+            pkg_path, embed="user"
+        )
+        video.close()
+
+        emb = sio.load_slp(pkg_path).video
+        emb.backend.channel_order = "BGR"
+        monkeypatch.delitem(sys.modules, "cv2", raising=False)
+        flipped = emb[0]
+        assert flipped.flags["C_CONTIGUOUS"]
+        assert flipped.shape[-1] == 3
+        emb.close()
