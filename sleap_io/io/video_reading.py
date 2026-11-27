@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 import urllib.parse
 from io import BytesIO
 from pathlib import Path
@@ -33,10 +34,50 @@ except ImportError:
     pass
 
 if "av" in sys.modules:  # pragma: no branch - pyav is an optional extra
+    from av.video.reformatter import VideoReformatter
     from imageio.plugins.pyav import PyAVPlugin
 
+    # PyAV 17+ converts YUV using the frame's own color_range tag (earlier versions
+    # always treated non-yuvj formats as MPEG limited range [16, 235]) and 18.1.1+
+    # uses a shared per-thread reformatter with a worker thread pool (which hangs
+    # forked children if a background thread is decoding); `_PyAVPlugin` uses a
+    # per-reader, per-thread single-threaded (`threads=1`) reformatter on PyAV 17+
+    # while bypassing swscale altogether via direct Y-plane extraction for grayscale.
+    _PYAV_TAGGED_COLOR = int(sys.modules["av"].__version__.split(".")[0]) >= 17
+
+    # 8-bit pixel formats whose plane 0 is a full-range [0, 255] luminance plane.
+    _PYAV_Y_PLANE_FULL_RANGE = frozenset(
+        {
+            "gray",
+            "gray8",
+            "yuvj420p",
+            "yuvj422p",
+            "yuvj444p",
+            "yuvj440p",
+        }
+    )
+
+    # 8-bit YUV pixel formats whose plane 0 is a luminance plane that defaults to
+    # MPEG limited range [16, 235] (unless color_range == JPEG on PyAV >= 17).
+    _PYAV_Y_PLANE_LIMITED_RANGE = frozenset(
+        {
+            "yuv420p",
+            "yuv422p",
+            "yuv444p",
+            "nv12",
+            "nv21",
+        }
+    )
+
+    # Exact 256-entry LUT matching FFmpeg swscale's 13-bit fixed-point BT.601 MPEG
+    # limited-range [16, 235] -> full-range [0, 255] luminance expansion (c=9539 >> 13;
+    # bit-identical across FFmpeg 7 / PyAV 15 and FFmpeg 8 / PyAV 18).
+    _YUV_MPEG_TO_FULL_LUT = np.clip(
+        ((np.arange(256, dtype=np.int32) - 16) * 9539) >> 13, 0, 255
+    ).astype(np.uint8)
+
     class _PyAVPlugin(PyAVPlugin):
-        """imageio's pyav plugin with a seek that works near the end of a video.
+        """imageio's pyav plugin with fixed end-of-video seek and fast unpacking.
 
         imageio (2.38.1 and its master as of 2026-10-22) finds the keyframe before
         the requested frame by decoding it, seeks back to it, and then keeps
@@ -48,9 +89,116 @@ if "av" in sys.modules:  # pragma: no branch - pyav is an optional extra
         or raises `StopIteration` for the last frame. A one-frame video can only
         be read once per reader.
 
-        This restarts the frame iterator after the seek back. Everything else,
-        including which frame an index refers to, is imageio's.
+        This restarts the frame iterator after the seek back, applies codec
+        multi-threading (`thread_type="AUTO"`) safely when supported, and speeds up
+        frame unpacking by extracting the luminance Y plane directly for grayscale
+        reads and returning C-contiguous uint8 arrays with exact row-stride handling.
         """
+
+        def read(self, *, thread_type: str | None = None, **kwargs) -> np.ndarray:
+            """Read frame(s), applying `thread_type` safely when supported."""
+            if thread_type is not None and kwargs.get("index", ...) is not ...:
+                stream = self._video_stream
+                if stream is not None and not (
+                    stream.thread_type == thread_type
+                    or getattr(stream.thread_type, "name", None) == thread_type
+                ):
+                    if not stream.codec_context.is_open:
+                        try:
+                            stream.thread_type = thread_type
+                        except (ValueError, av.FFmpegError):
+                            pass
+                thread_type = None
+            return super().read(thread_type=thread_type, **kwargs)
+
+        def _reformat(self, frame, *, format: str):
+            """Reformat `frame` to `format` with fork-safe single-threaded swscale."""
+            if _PYAV_TAGGED_COLOR:
+                local = self.__dict__.setdefault("_reformatters", threading.local())
+                if getattr(local, "reformatter", None) is None:
+                    local.reformatter = VideoReformatter()
+                return local.reformatter.reformat(frame, format=format, threads=1)
+            return frame.reformat(format=format)
+
+        def _extract_y_plane(self, frame) -> np.ndarray:
+            """Extract an 8-bit C-contiguous `(H, W)` grayscale frame from `frame`.
+
+            For 8-bit YUV/grayscale formats, slices plane 0 directly with exact
+            row-stride handling (and applies the MPEG-to-full-range LUT when needed)
+            instead of converting YUV -> RGB24 via swscale and discarding 2 channels.
+            Falls back to swscale `"gray"` reformatting for 10-bit, RGB-native, or
+            other pixel formats.
+            """
+            fmt_name = frame.format.name
+            if (
+                fmt_name in _PYAV_Y_PLANE_FULL_RANGE
+                or fmt_name in _PYAV_Y_PLANE_LIMITED_RANGE
+            ):
+                plane = frame.planes[0]
+                h, w, ls = frame.height, frame.width, plane.line_size
+                buf = np.frombuffer(plane, dtype=np.uint8)
+                if ls >= w and len(buf) >= h * ls:
+                    y = (
+                        buf[: h * w].reshape(h, w)
+                        if ls == w
+                        else buf[: h * ls].reshape(h, ls)[:, :w]
+                    )
+                    is_full_range = fmt_name in _PYAV_Y_PLANE_FULL_RANGE or (
+                        _PYAV_TAGGED_COLOR and getattr(frame, "color_range", 0) == 2
+                    )
+                    if is_full_range:
+                        return y.copy() if ls == w else np.ascontiguousarray(y)
+                    if "cv2" in sys.modules:
+                        return cv2.LUT(y, _YUV_MPEG_TO_FULL_LUT)
+                    return _YUV_MPEG_TO_FULL_LUT.take(y)
+
+            # Fallback for 10-bit, RGB-native, or exotic pixel formats.
+            gray_frame = self._reformat(frame, format="gray")
+            plane = gray_frame.planes[0]
+            h, w, ls = gray_frame.height, gray_frame.width, plane.line_size
+            buf = np.frombuffer(plane, dtype=np.uint8)
+            if ls == w and len(buf) >= h * w:
+                return buf[: h * w].reshape(h, w)
+            if ls > w and len(buf) >= h * ls:
+                return np.ascontiguousarray(buf[: h * ls].reshape(h, ls)[:, :w])
+            return np.ascontiguousarray(super()._unpack_frame(gray_frame, format=None))
+
+        def _unpack_frame(self, frame, *, format: str | None = None) -> np.ndarray:
+            """Unpack a decoded `av.VideoFrame` into a C-contiguous numpy array.
+
+            Uses direct Y-plane extraction when `format` is `"gray"`/`"gray8"`, and
+            direct stride-aware plane unpacking for `"rgb24"` with fork-safe
+            single-threaded swscale on PyAV 17+, returning C-contiguous arrays even
+            for padded row strides (e.g., non-16-divisible widths).
+            """
+            if format in ("gray", "gray8"):
+                return self._extract_y_plane(frame)
+
+            if format == "rgb24":
+                reformatted = frame.format.name != "rgb24"
+                if reformatted:
+                    frame = self._reformat(frame, format="rgb24")
+                plane = frame.planes[0]
+                h, w, ls = frame.height, frame.width, plane.line_size
+                row_bytes = w * 3
+                buf = np.frombuffer(plane, dtype=np.uint8)
+                if ls == row_bytes and len(buf) >= h * row_bytes:
+                    arr = buf[: h * row_bytes].reshape(h, w, 3)
+                    return arr if reformatted else arr.copy()
+                if ls > row_bytes and len(buf) >= h * ls:
+                    return np.ascontiguousarray(
+                        buf[: h * ls].reshape(h, ls)[:, :row_bytes]
+                    ).reshape(h, w, 3)
+                return np.ascontiguousarray(super()._unpack_frame(frame, format=None))
+
+            if (
+                _PYAV_TAGGED_COLOR
+                and format is not None
+                and frame.format.name != format
+            ):
+                frame = self._reformat(frame, format=format)
+                format = None
+            return super()._unpack_frame(frame, format=format)
 
         def _seek(self, index: int, *, constant_framerate: bool = True) -> None:
             """Seek so that the next decoded frame is the one at `index`."""
@@ -450,6 +598,48 @@ def _fps_from_av_container(filename: str) -> float | None:
         return float(rate) if rate is not None else None
     finally:
         container.close()
+
+
+def _to_single_channel(arr: np.ndarray) -> np.ndarray:
+    """Return channel 0 as a C-contiguous single-channel array.
+
+    Matches `arr[..., [0]]` semantics while avoiding slow fancy indexing and
+    guaranteeing C-contiguity.
+    """
+    if arr.shape[-1] == 1:
+        return arr if arr.flags["C_CONTIGUOUS"] else np.ascontiguousarray(arr)
+    if "cv2" in sys.modules and arr.dtype == np.uint8 and arr.shape[-1] >= 3:
+        if arr.ndim == 3:
+            return cv2.extractChannel(arr, 0)[..., None]
+        if arr.ndim == 4 and arr.flags["C_CONTIGUOUS"]:
+            n, h, w, c = arr.shape
+            return cv2.extractChannel(arr.reshape(n * h, w, c), 0).reshape(n, h, w, 1)
+    return np.ascontiguousarray(arr[..., 0:1])
+
+
+def _opencv_bgr_to_rgb(img: np.ndarray) -> np.ndarray:
+    """Convert an OpenCV BGR frame to a C-contiguous RGB array."""
+    if img.ndim == 2:
+        return np.ascontiguousarray(img[..., None])
+    if img.shape[-1] == 3:
+        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    if img.shape[-1] == 4:
+        return cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+    return np.ascontiguousarray(img)
+
+
+def _opencv_bgr_to_gray(img: np.ndarray) -> np.ndarray:
+    """Extract a C-contiguous single-channel frame from an OpenCV BGR frame.
+
+    Channel 2 in BGR is the Red channel, matching sleap-io's `rgb[..., [0]]`
+    semantics bit-for-bit on both grayscale (B == G == R) and color videos while
+    avoiding full BGR -> RGB conversion and fancy indexing.
+    """
+    if img.ndim == 2:
+        return np.ascontiguousarray(img[..., None])
+    if img.shape[-1] >= 3:
+        return cv2.extractChannel(img, 2)[..., None]
+    return np.ascontiguousarray(img[..., 0:1])
 
 
 @attrs.define
@@ -878,7 +1068,7 @@ class VideoBackend:
             self.detect_grayscale(img)
 
         if self.grayscale:
-            img = img[..., [0]]
+            img = _to_single_channel(img)
 
         return img
 
@@ -911,7 +1101,7 @@ class VideoBackend:
             self.detect_grayscale(imgs[0])
 
         if self.grayscale:
-            imgs = imgs[..., [0]]
+            imgs = _to_single_channel(imgs)
 
         return imgs
 
@@ -1197,6 +1387,132 @@ class MediaVideo(VideoBackend):
             success, img = reader.read()
         return reader, (img if success else None)
 
+    def _opencv_get_reader(self) -> tuple[cv2.VideoCapture, bool]:
+        """Return `(reader, should_release)` for an OpenCV read."""
+        if self.keep_open:
+            if self._open_reader is None:
+                self._open_reader = cv2.VideoCapture(self.filename)
+            return self._open_reader, False
+        return cv2.VideoCapture(self.filename), True
+
+    def _read_frame_opencv_gray(self, frame_idx: int) -> np.ndarray:
+        """Read a single C-contiguous `(H, W, 1)` frame directly via OpenCV."""
+        reader, should_release = self._opencv_get_reader()
+        try:
+            reader, img = self._opencv_read(reader, frame_idx)
+        finally:
+            if should_release:
+                reader.release()
+        if img is None:
+            raise IndexError(f"Failed to read frame index {frame_idx}.")
+        return _opencv_bgr_to_gray(img)
+
+    def _read_frame_pyav_gray(self, frame_idx: int) -> np.ndarray:
+        """Read a single C-contiguous `(H, W, 1)` frame via PyAV direct Y-plane."""
+        kwargs = {**self._imageio_read_kwargs, "format": "gray"}
+        if self.keep_open:
+            img = self.reader.read(index=frame_idx, **kwargs)
+        else:
+            with iio.imopen(self.filename, "r", plugin=self._imageio_plugin) as reader:
+                img = reader.read(index=frame_idx, **kwargs)
+        if img is None:
+            raise IndexError(f"Failed to read frame index {frame_idx}.")
+        if img.ndim == 2:
+            img = img[..., None]
+        if not img.flags["C_CONTIGUOUS"]:
+            img = np.ascontiguousarray(img)
+        return img
+
+    def _read_frames_gray(self, frame_inds: list) -> np.ndarray:
+        """Read multiple C-contiguous `(N, H, W, 1)` grayscale frames directly."""
+        n = len(frame_inds)
+        if self.plugin == "opencv":
+            reader, should_release = self._opencv_get_reader()
+            try:
+                imgs = []
+                for idx in frame_inds:
+                    reader, img = self._opencv_read(reader, idx)
+                    if img is None:
+                        raise IndexError(f"Failed to read frame index {idx}.")
+                    imgs.append(_opencv_bgr_to_gray(img))
+                return np.stack(imgs, axis=0)
+            finally:
+                if should_release:
+                    reader.release()
+
+        # PyAV direct Y-plane batch read
+        kwargs = {**self._imageio_read_kwargs, "format": "gray"}
+
+        def _read_from(reader) -> np.ndarray:
+            first = reader.read(index=frame_inds[0], **kwargs)
+            if first is None:
+                raise IndexError(f"Failed to read frame index {frame_inds[0]}.")
+            first_2d = first[..., 0] if first.ndim == 3 else first
+            out = np.empty(
+                (n, first_2d.shape[0], first_2d.shape[1], 1), dtype=first_2d.dtype
+            )
+            out[0, :, :, 0] = first_2d
+            for k in range(1, n):
+                idx = frame_inds[k]
+                img = reader.read(index=idx, **kwargs)
+                if img is None:
+                    raise IndexError(f"Failed to read frame index {idx}.")
+                out[k, :, :, 0] = img[..., 0] if img.ndim == 3 else img
+            return out
+
+        if self.keep_open:
+            if self._open_reader is None:
+                self._open_reader = iio.imopen(
+                    self.filename, "r", plugin=self._imageio_plugin
+                )
+            return _read_from(self._open_reader)
+        with iio.imopen(self.filename, "r", plugin=self._imageio_plugin) as reader:
+            return _read_from(reader)
+
+    def get_frame(self, frame_idx: int) -> np.ndarray:
+        """Read a single frame, using fast grayscale paths when `grayscale=True`."""
+        if not self.has_frame(frame_idx):
+            raise IndexError(f"Frame index {frame_idx} out of range.")
+
+        if self.grayscale is True:
+            if self.plugin == "opencv":
+                return self._read_frame_opencv_gray(frame_idx)
+            if self.plugin == "pyav":
+                return self._read_frame_pyav_gray(frame_idx)
+
+        return super().get_frame(frame_idx)
+
+    def get_frames(self, frame_inds: list[int]) -> np.ndarray:
+        """Read a list of frames, using fast grayscale paths when `grayscale=True`."""
+        frame_inds = list(frame_inds)
+        if not frame_inds:
+            return super().get_frames(frame_inds)
+
+        if self.grayscale is None and self.plugin in ("opencv", "pyav"):
+            first_rgb = self._read_frame(frame_inds[0])
+            self.detect_grayscale(first_rgb)
+            if self.grayscale:
+                first = _to_single_channel(first_rgb)
+                if len(frame_inds) == 1:
+                    return np.ascontiguousarray(first[None, ...])
+                rest = self._read_frames_gray(frame_inds[1:])
+                out = np.empty((len(frame_inds), *first.shape), dtype=first.dtype)
+                out[0] = first
+                out[1:] = rest
+                return out
+            if len(frame_inds) == 1:
+                return np.ascontiguousarray(first_rgb[None, ...])
+            rest = self._read_frames(frame_inds[1:])
+            out = np.empty((len(frame_inds), *first_rgb.shape), dtype=first_rgb.dtype)
+            out[0] = first_rgb
+            out[1:] = rest
+            return out
+
+        if self.grayscale is True and self.plugin in ("opencv", "pyav"):
+            return self._read_frames_gray(frame_inds)
+
+        return super().get_frames(frame_inds)
+
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.
 
@@ -1204,25 +1520,24 @@ class MediaVideo(VideoBackend):
             frame_idx: Index of frame to read.
 
         Returns:
-            The frame as a numpy array of shape `(height, width, channels)`.
+            The frame as a C-contiguous numpy array of shape
+            `(height, width, channels)`.
 
         Notes:
             This does not apply grayscale conversion. It is recommended to use the
             `get_frame` method of the `VideoBackend` class instead.
         """
         if self.plugin == "opencv":
-            if self.keep_open:
-                if self._open_reader is None:
-                    self._open_reader = cv2.VideoCapture(self.filename)
-                reader = self._open_reader
-            else:
-                reader = cv2.VideoCapture(self.filename)
-
-            _, img = self._opencv_read(reader, frame_idx)
+            reader, should_release = self._opencv_get_reader()
+            try:
+                reader, img = self._opencv_read(reader, frame_idx)
+            finally:
+                if should_release:
+                    reader.release()
             success = img is not None
 
             if success:
-                img = img[..., ::-1]  # BGR -> RGB
+                img = _opencv_bgr_to_rgb(img)
 
         elif self.plugin == "pyav" or self.plugin == "FFMPEG":
             if self.keep_open:
@@ -1246,49 +1561,57 @@ class MediaVideo(VideoBackend):
             frame_inds: List of indices of frames to read.
 
         Returns:
-            The frame as a numpy array of shape `(frames, height, width, channels)`.
+            The frames as a C-contiguous numpy array of shape
+            `(frames, height, width, channels)`.
 
         Notes:
             This does not apply grayscale conversion. It is recommended to use the
             `get_frames` method of the `VideoBackend` class instead.
         """
+        frame_inds = list(frame_inds)
+        if not frame_inds:
+            return np.stack([], axis=0)
+
+        n = len(frame_inds)
         if self.plugin == "opencv":
-            if self.keep_open:
-                if self._open_reader is None:
-                    self._open_reader = cv2.VideoCapture(self.filename)
-                reader = self._open_reader
-            else:
-                reader = cv2.VideoCapture(self.filename)
-
-            imgs = []
-            for idx in frame_inds:
-                reader, img = self._opencv_read(reader, idx)
-                if img is None:
-                    raise IndexError(f"Failed to read frame index {idx}.")
-                imgs.append(img)
-            imgs = np.stack(imgs, axis=0)
-
-            imgs = imgs[..., ::-1]  # BGR -> RGB
+            reader, should_release = self._opencv_get_reader()
+            try:
+                imgs = []
+                for idx in frame_inds:
+                    reader, img = self._opencv_read(reader, idx)
+                    if img is None:
+                        raise IndexError(f"Failed to read frame index {idx}.")
+                    imgs.append(_opencv_bgr_to_rgb(img))
+                return np.stack(imgs, axis=0)
+            finally:
+                if should_release:
+                    reader.release()
 
         elif self.plugin == "pyav" or self.plugin == "FFMPEG":
             kwargs = self._imageio_read_kwargs
+
+            def _read_from(reader) -> np.ndarray:
+                first = reader.read(index=frame_inds[0], **kwargs)
+                if n == 1:
+                    return np.ascontiguousarray(first[None, ...])
+                out = np.empty((n, *first.shape), dtype=first.dtype)
+                out[0] = first
+                for k in range(1, n):
+                    out[k] = reader.read(index=frame_inds[k], **kwargs)
+                return out
+
             if self.keep_open:
                 if self._open_reader is None:
                     self._open_reader = iio.imopen(
                         self.filename, "r", plugin=self._imageio_plugin
                     )
-                reader = self._open_reader
-                imgs = np.stack(
-                    [reader.read(index=idx, **kwargs) for idx in frame_inds], axis=0
-                )
+                return _read_from(self._open_reader)
             else:
                 with iio.imopen(
                     self.filename, "r", plugin=self._imageio_plugin
                 ) as reader:
-                    imgs = np.stack(
-                        [reader.read(index=idx, **kwargs) for idx in frame_inds], axis=0
-                    )
-        return imgs
+                    return _read_from(reader)
+        raise ValueError(f"Unknown plugin: {self.plugin}")
 
 
 @attrs.define
@@ -1683,7 +2006,10 @@ class HDF5Video(VideoBackend):
         # Convert channel order if needed
         # If the stored order doesn't match the decoder order, flip channels
         if img.shape[-1] == 3 and self.channel_order != decoder_order:
-            img = img[..., ::-1]  # Flip RGB <-> BGR
+            if "cv2" in sys.modules and img.dtype in (np.uint8, np.uint16, np.float32):
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            else:
+                img = np.ascontiguousarray(img[..., ::-1])  # Flip RGB <-> BGR
 
         return img
 
@@ -2190,7 +2516,7 @@ class ImageVideo(VideoBackend):
             if img is None:
                 raise ValueError(f"Failed to read image: {self.filename[frame_idx]}")
             if img.ndim == 3 and img.shape[-1] == 3:
-                img = img[..., ::-1]  # BGR -> RGB
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         else:  # imageio
             # imageio reads as RGB natively
             img = iio.imread(self.filename[frame_idx])
