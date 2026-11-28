@@ -58,6 +58,7 @@ if TYPE_CHECKING:
         TrackMatcher,
         VideoMatcher,
     )
+    from sleap_io.model.preview import PreviewFrame
     from sleap_io.model.roi import ROI
 
 
@@ -221,6 +222,13 @@ class Labels:
     # `female_fly`, `fur_shaved`). Keyword-only so the positional constructor
     # signature is unchanged (mirrors `identities`, kept out of the positional block).
     categories: list[Category] = field(factory=list, kw_only=True)
+
+    # Embedded preview thumbnail frames (stored in `/preview` in SLP files) for fast
+    # out-of-band previews when videos are external/linked. Keyword-only and excluded
+    # from value equality so previews never affect dataset comparisons.
+    preview_frames: list["PreviewFrame"] = field(
+        factory=list, kw_only=True, repr=False, eq=False
+    )
 
     # Static ROIs: ROIs not tied to any specific frame (e.g., arena boundaries).
     # Accepted via constructor with alias="rois" for backward compatibility.
@@ -538,6 +546,13 @@ class Labels:
             static_rois.append(new)
             copied_rois[id(orig)] = new
 
+        # Deep copy preview frames and relink videos
+        new_preview_frames = []
+        for pf in self.preview_frames:
+            new_pf = deepcopy(pf)
+            new_pf.video = video_map.get(id(pf.video), new_pf.video)
+            new_preview_frames.append(new_pf)
+
         materialized_labels = Labels(
             labeled_frames=labeled_frames,
             videos=new_videos,
@@ -545,6 +560,7 @@ class Labels:
             tracks=new_tracks,
             suggestions=new_suggestions,
             provenance=deepcopy(self.provenance),
+            preview_frames=new_preview_frames,
             rois=static_rois,
         )
         materialized_labels._carried_columns = self._lazy_store.column_carry(
@@ -1072,6 +1088,7 @@ class Labels:
             for old_obj, new_obj in zip(self.event_types, new_event_types):
                 memo[id(old_obj)] = new_obj
             new_events = [deepcopy(ev, memo) for ev in self.events]
+            new_preview_frames = [deepcopy(pf, memo) for pf in self.preview_frames]
 
             labels_copy = Labels(
                 labeled_frames=new_lazy_frames,
@@ -1085,6 +1102,7 @@ class Labels:
                 event_types=new_event_types,
                 events=new_events,
                 categories=new_categories,
+                preview_frames=new_preview_frames,
                 lazy_store=new_store,
             )
             labels_copy._source_format_id = getattr(self, "_source_format_id", None)
@@ -3038,6 +3056,11 @@ class Labels:
             if ev.video in video_map:
                 ev.video = video_map[ev.video]
 
+        # Update preview frame video references.
+        for pf in self.preview_frames:
+            if pf.video in video_map:
+                pf.video = video_map[pf.video]
+
         # Update the list of videos.
         self.videos = [video_map.get(video, video) for video in self.videos]
 
@@ -3351,6 +3374,20 @@ class Labels:
                     break
 
         labels.suggestions.extend(suggestions)
+
+        # Also copy preview frames belonging to the extracted videos.
+        extracted_previews = [
+            pf for pf in self.preview_frames if pf.video in extracted_videos
+        ]
+        if copy:
+            extracted_previews = deepcopy(extracted_previews)
+        for pf in extracted_previews:
+            for vid in labels.videos:
+                if vid.matches_content(pf.video) and vid.matches_path(pf.video):
+                    pf.video = vid
+                    break
+        labels.preview_frames.extend(extracted_previews)
+
         labels.update()
 
         # Copy the source provenance, minus "filename": the extracted labels were

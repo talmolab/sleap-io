@@ -126,6 +126,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         ],
         "model.labels_set": ["LabelsSet"],
         "model.matching": ["MatchResult"],
+        "model.preview": ["PreviewFrame"],
         "model.roi": ["AnnotationType", "ROI", "UserROI", "PredictedROI"],
         "model.skeleton": [
             "Edge",
